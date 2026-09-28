@@ -12,12 +12,18 @@ import { IntuitionPanel } from './intuition-panel.js';
 export async function initMaiaExtension() {
   console.log('[Maia-3] 🚀 Starting Human Intuition Extension (Scheme 0 Standalone)...');
 
-  const engine = new MaiaEngine();
-  const overlay = new HeatmapOverlay();
   let currentFen = null;
   let currentOrientation = 'white';
+  const overlay = new HeatmapOverlay();
+  let panel = null;
 
-  const panel = new IntuitionPanel({
+  const engine = new MaiaEngine((status) => {
+    if (panel) {
+      panel.updateEngineStatus(status);
+    }
+  });
+
+  panel = new IntuitionPanel({
     onEloChange: async (elo) => {
       engine.setElo(elo);
       if (currentFen) {
@@ -31,11 +37,30 @@ export async function initMaiaExtension() {
       overlay.setHoverMove(moveUci);
     },
     onModelLoaded: async () => {
-      if (currentFen) {
-        await runPrediction(currentFen);
+      try {
+        await engine.reinitialize();
+        if (currentFen) {
+          await runPrediction(currentFen);
+        }
+      } catch (e) {
+        console.error('[Maia-3] Re-init error:', e);
+      }
+    },
+    onCdnSave: async (newUrl) => {
+      console.log('[Maia-3] Custom CDN updated:', newUrl);
+      try {
+        await engine.reinitialize(newUrl);
+        if (currentFen) {
+          await runPrediction(currentFen);
+        }
+      } catch (e) {
+        console.error('[Maia-3] Re-init error with custom CDN:', e);
       }
     }
   });
+
+  // Notify initial status
+  panel.updateEngineStatus(engine.status);
 
   async function runPrediction(fen) {
     const t0 = performance.now();
@@ -50,6 +75,15 @@ export async function initMaiaExtension() {
     }
   }
 
+  // When Stockfish is ready, immediately compute best move if a position is on board
+  engine.stockfishInBrowser.onReadyCallback = () => {
+    engine.status.stockfish.state = 'ready';
+    engine.notifyStatus();
+    if (currentFen) {
+      runPrediction(currentFen);
+    }
+  };
+
   // Start dual-engine initialization asynchronously
   engine.initialize().then(() => {
     console.log('[Maia-3] ✅ Dual Engine (Maia 3 + Stockfish) fully ready in browser!');
@@ -57,7 +91,7 @@ export async function initMaiaExtension() {
       runPrediction(currentFen);
     }
   }).catch(err => {
-    console.error('[Maia-3] ❌ Engine initialization error:', err);
+    console.warn('[Maia-3] Engine initialization notice:', err?.message || err);
   });
 
   const detector = new BoardDetector(async ({ fen, orientation, platform }) => {

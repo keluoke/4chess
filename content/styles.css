@@ -133,74 +133,129 @@
   gap: 13px;
 }
 
-/* Model Box */
-.maia-model-box {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 10px;
+/* Dual Engine Status Box */
+.maia-dual-status-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.maia-model-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.maia-model-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-}
-
-.maia-model-actions {
+.maia-status-row {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.maia-action-btn {
-  background: rgba(99, 102, 241, 0.18);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: #c7d2fe;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.15s ease;
-}
-
-.maia-action-btn:hover {
-  background: rgba(99, 102, 241, 0.3);
-  color: #ffffff;
-  border-color: rgba(99, 102, 241, 0.5);
-}
-
-.maia-action-btn.secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
-}
-
-.maia-action-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-}
-
-.maia-progress-container {
+.maia-status-item {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
 }
 
-.maia-progress-text {
-  font-size: 10.5px;
+.maia-status-title {
   color: #94a3b8;
+  font-weight: 600;
+}
+
+.maia-status-val {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.maia-status-dot {
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-ready {
+  background-color: #10b981;
+  box-shadow: 0 0 7px #10b981;
+}
+
+.status-loading {
+  background-color: #f59e0b;
+  box-shadow: 0 0 7px #f59e0b;
+  animation: maia-pulse-dot 1.2s infinite ease-in-out;
+}
+
+.status-error {
+  background-color: #ef4444;
+  box-shadow: 0 0 7px #ef4444;
+}
+
+@keyframes maia-pulse-dot {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Cloudflare CDN Progress Card */
+.cdn-progress-card {
+  margin-top: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.cdn-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.cdn-label {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.cdn-speed {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 10.5px;
+}
+
+.cdn-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.cdn-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);
+  border-radius: 9999px;
+  transition: width 0.15s ease;
+}
+
+.cdn-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.sf-eval-chip {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 /* Sections */

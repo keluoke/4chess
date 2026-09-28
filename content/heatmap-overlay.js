@@ -153,7 +153,22 @@ export class HeatmapOverlay {
     if (sfArrowsGroup) sfArrowsGroup.innerHTML = '';
     trapsGroup.innerHTML = '';
 
-    // If engine is not available, render nothing!
+    // If Stockfish has bestMove, draw Stockfish arrow immediately regardless of Maia state
+    if (this.showArrows && predictionData?.stockfish?.bestMove && sfArrowsGroup && !predictionData.isAvailable) {
+      const bm = predictionData.stockfish.bestMove;
+      this.drawArrow(sfArrowsGroup, {
+        from: bm.fromSq !== undefined ? bm.fromSq : bm.from,
+        to: bm.toSq !== undefined ? bm.toSq : bm.to,
+        color: '#10b981',
+        width: 7.5,
+        dashed: true,
+        marker: 'maia-arrow-sf',
+        label: `🐟 ${bm.san} (${predictionData.stockfish.score})`,
+        opacity: 0.90
+      });
+    }
+
+    // If Maia-3 engine is not available, return after drawing Stockfish
     if (!predictionData || !predictionData.isAvailable) {
       return;
     }

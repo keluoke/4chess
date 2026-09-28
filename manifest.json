@@ -22,7 +22,8 @@
   ],
   "host_permissions": [
     "https://lichess.org/*",
-    "https://*.chess.com/*"
+    "https://*.chess.com/*",
+    "https://*/*"
   ],
   "content_scripts": [
     {

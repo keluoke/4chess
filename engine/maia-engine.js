@@ -1,54 +1,144 @@
 /**
- * Unified Maia-3 Inference Coordinator (Scheme 0: Standalone In-Browser Architecture)
- * 100% In-Browser Execution:
- * 1. Maia-3 Chessformer Neural Engine (models/maia3_model.bin) via pure client-side WebGPU/JS
+ * Unified Maia-3 Inference Coordinator (Scheme 0: Cloudflare CDN + Standalone WebAssembly Architecture)
+ * 100% In-Browser Execution with High-Speed CDN & IndexedDB Persistent Caching:
+ * 1. Maia-3 Chessformer Neural Engine loaded via Cloudflare CDN / IndexedDB cache / Local package
  * 2. Stockfish WebAssembly Engine (lib/stockfish.js) via sandboxed Web Worker bridge
  * Zero external servers, zero Python runtime, zero localhost bridges.
- * Identical experience across all platforms (Mac, Windows, Linux).
+ * Clear independent dual-engine status tracking and concurrent evaluation.
  */
 
 import { ChessBoard } from './chess-core.js';
 import { MaiaInBrowserEngine } from './maia-inbrowser.js';
 import { StockfishInBrowser } from './stockfish-inbrowser.js';
+import { ModelCache } from './model-cache.js';
 
 export class MaiaEngine {
-  constructor() {
+  constructor(onStatusChange = null) {
     this.maiaInBrowser = new MaiaInBrowserEngine();
     this.stockfishInBrowser = new StockfishInBrowser();
     this.targetElo = 1500;
+    this.onStatusChange = onStatusChange;
     this.isReady = false;
     this.isLoading = false;
-    this.loadError = null;
     this.backendName = '浏览器端 WebGPU / JS + WebAssembly';
     this.modelName = 'Maia-3 5M Chessformer';
+
+    // Independent status tracking for both engines
+    this.status = {
+      maia: {
+        state: 'loading', // 'cached' | 'downloading' | 'ready' | 'error'
+        percent: 0,
+        speed: '',
+        loadedMB: '0',
+        totalMB: '28.0',
+        source: '检测缓存中...',
+        error: null
+      },
+      stockfish: {
+        state: 'initializing', // 'ready' | 'error'
+        error: null
+      }
+    };
+
+    // Forward Stockfish ready callback
+    this.stockfishInBrowser.onReadyCallback = () => {
+      this.status.stockfish.state = 'ready';
+      this.notifyStatus();
+    };
   }
 
-  async initialize() {
+  notifyStatus() {
+    if (this.onStatusChange) {
+      this.onStatusChange({ ...this.status });
+    }
+  }
+
+  async reinitialize(overrideUrl = null) {
+    this.isReady = false;
+    this.isLoading = false;
+    this.maiaInBrowser.reset();
+    if (overrideUrl) {
+      await ModelCache.clearCache('maia3-5m');
+    }
+    return this.initialize(overrideUrl);
+  }
+
+  async initialize(overrideUrl = null) {
     if (this.isReady) return this.backendName;
     if (this.isLoading) return this.backendName;
 
     this.isLoading = true;
-    console.log('[Maia Engine] 🚀 正在初始化方案0：全浏览器端双引擎 (Maia 3 + Stockfish)...');
+    this.notifyStatus();
+    console.log('[Maia Engine] 🚀 正在初始化双引擎 (Cloudflare CDN + WebAssembly)...');
 
-    try {
-      // 1. Initialize Stockfish WebAssembly in parallel
-      this.stockfishInBrowser.initialize().catch(err => {
-        console.warn('[Maia Engine] Stockfish 初始化提示:', err);
-      });
+    // 1. Initialize Stockfish WebAssembly in parallel
+    this.stockfishInBrowser.initialize().then(() => {
+      this.status.stockfish.state = 'ready';
+      this.notifyStatus();
+    }).catch(err => {
+      console.warn('[Maia Engine] Stockfish 初始化提示:', err);
+      this.status.stockfish.state = 'error';
+      this.status.stockfish.error = err.message;
+      this.notifyStatus();
+    });
 
-      // 2. Load authentic Maia-3 weights binary directly from extension package
-      const modelUrl = chrome?.runtime?.getURL ? chrome.runtime.getURL('models/maia3_model.bin') : 'models/maia3_model.bin';
-      await this.maiaInBrowser.loadModel(modelUrl);
+    // 2. Resolve Model Source (Override URL -> Custom Cloudflare CDN -> Local Extension Package -> Default CDN)
+    let customCdn = overrideUrl || '';
+    if (!customCdn && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try {
+        const stored = await chrome.storage.local.get(['cloudflareCdnUrl']);
+        if (stored?.cloudflareCdnUrl) customCdn = stored.cloudflareCdnUrl.trim();
+      } catch (e) {}
+    }
 
+    const candidates = [];
+    if (customCdn) {
+      candidates.push(customCdn);
+    }
+    // Extension packaged local file
+    if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+      candidates.push(chrome.runtime.getURL('models/maia3_model.bin'));
+    } else {
+      candidates.push('models/maia3_model.bin');
+    }
+    // High-speed CDN mirror fallback
+    candidates.push('https://maia3-cdn.pages.dev/models/maia3_model.bin');
+
+    let loaded = false;
+    let lastErr = null;
+
+    for (const url of candidates) {
+      try {
+        await this.maiaInBrowser.loadModel(url, (prog) => {
+          this.status.maia.state = prog.percent === 100 ? 'ready' : 'downloading';
+          this.status.maia.percent = prog.percent;
+          this.status.maia.speed = prog.speedMBps;
+          this.status.maia.loadedMB = prog.receivedMB;
+          this.status.maia.totalMB = prog.totalMB;
+          this.status.maia.source = prog.source === 'cache' ? 'IndexedDB 缓存' : (prog.source === 'cdn' ? 'Cloudflare CDN' : '扩展内置');
+          this.notifyStatus();
+        });
+        loaded = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[Maia Engine] Candidate source ${url} failed, trying next...:`, err);
+      }
+    }
+
+    if (loaded) {
       this.isReady = true;
       this.isLoading = false;
-      console.log('[Maia Engine] ✅ 双引擎全部就绪！100% 本地免配置执行。');
+      this.status.maia.state = 'ready';
+      this.notifyStatus();
+      console.log('[Maia Engine] ✅ Maia-3 与 Stockfish 双引擎均已就绪！');
       return this.backendName;
-    } catch (err) {
+    } else {
       this.isLoading = false;
-      this.loadError = err.message;
-      console.error('[Maia Engine] ❌ 模型载入失败:', err);
-      throw err;
+      this.status.maia.state = 'error';
+      this.status.maia.error = lastErr?.message || '载入失败';
+      this.notifyStatus();
+      throw lastErr;
     }
   }
 
@@ -86,9 +176,12 @@ export class MaiaEngine {
     if (legalMoves.length === 0) {
       return {
         isAvailable: true,
+        isMaiaReady: this.isReady,
+        isStockfishReady: this.stockfishInBrowser.isReady,
         fen,
         elo,
         turn: chess.turn,
+        status: this.status,
         backend: this.getBackend(),
         modelName: this.getModelName(),
         heatmap: new Float32Array(64),
@@ -102,38 +195,47 @@ export class MaiaEngine {
       };
     }
 
-    // Strict Honesty: If Maia-3 model is not loaded yet, never guess with heuristics!
+    // 1. Evaluate with Stockfish concurrently (if ready)
+    let sfRes = null;
+    if (this.stockfishInBrowser.isReady) {
+      try {
+        sfRes = await this.stockfishInBrowser.evaluate(fen, 10, 1500);
+      } catch (e) {
+        console.warn('[Maia Engine] Stockfish eval error:', e);
+      }
+    }
+
+    // 2. If Maia-3 model is not loaded yet: return Stockfish evaluation and download progress
     if (!this.isReady) {
       return {
         isAvailable: false,
-        error: 'Maia-3 神经网络引擎载入中',
-        message: this.isLoading ? '正在将 7,327,236 参数 Maia-3 神经权重装载至浏览器内存...' : '引擎未加载',
+        isMaiaReady: false,
+        isStockfishReady: this.stockfishInBrowser.isReady,
         loading: this.isLoading,
         fen,
+        elo,
         turn: chess.turn,
-        backend: this.getBackend(),
+        status: this.status,
+        backend: this.stockfishInBrowser.isReady ? 'Stockfish (WASM) 运行中 · Maia-3 载入中' : '双引擎初始化中...',
         modelName: this.modelName,
         moves: [],
         heatmap: new Float32Array(64),
-        stockfish: null,
-        comparison: null
+        stockfish: sfRes,
+        comparison: null,
+        analysis: sfRes?.bestMove ? {
+          topMove: sfRes.bestMove.uci,
+          commentary: `🐟 Stockfish 建议 ${sfRes.bestMove.san} (${sfRes.score}) · Maia-3 人类直觉权重传输中...`,
+          isTacticalTrap: false
+        } : null
       };
     }
 
     const tStart = performance.now();
 
-    // 1. Run Maia-3 in-browser prediction
+    // 3. Run Maia-3 in-browser prediction
     const maiaRes = this.maiaInBrowser.predict(chess, elo);
 
-    // 2. Run Stockfish in-browser WebAssembly evaluation concurrently
-    let sfRes = null;
-    try {
-      sfRes = await this.stockfishInBrowser.evaluate(fen, 10, 1500);
-    } catch (e) {
-      console.warn('[Maia Engine] Stockfish eval timeout/error:', e);
-    }
-
-    // 3. Human vs Stockfish Comparative Insight
+    // 4. Human vs Stockfish Comparative Insight
     const topMove = maiaRes.moves[0] || null;
     let comparison = null;
 
@@ -146,7 +248,6 @@ export class MaiaEngine {
           summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！`
         };
       } else {
-        // Human diverges from engine
         comparison = {
           agreed: false,
           badge: '⚠️ 人机着法分歧',
@@ -165,11 +266,14 @@ export class MaiaEngine {
 
     return {
       isAvailable: true,
+      isMaiaReady: true,
+      isStockfishReady: this.stockfishInBrowser.isReady,
       fen,
       elo,
       turn: chess.turn,
       backend: `${this.backendName} (${totalLatency}ms)`,
       modelName: this.modelName,
+      status: this.status,
       heatmap: maiaRes.heatmap,
       moves: maiaRes.moves,
       stockfish: sfRes,

@@ -41,7 +41,17 @@ export class StockfishInBrowser {
 
         const url = chrome?.runtime?.getURL ? chrome.runtime.getURL('engine/stockfish-sandbox.html') : 'engine/stockfish-sandbox.html';
         frame.src = url;
-        document.body.appendChild(frame);
+
+        const mountFrame = () => {
+          const parent = document.body || document.documentElement;
+          if (parent && !parent.contains(frame)) {
+            parent.appendChild(frame);
+          }
+        };
+        mountFrame();
+        if (!document.body) {
+          window.addEventListener('DOMContentLoaded', mountFrame);
+        }
       }
       this.iframe = frame;
 
@@ -52,6 +62,7 @@ export class StockfishInBrowser {
         if (data.type === 'STOCKFISH_READY') {
           this.isReady = true;
           console.log('[Stockfish In-Browser] ✅ WebAssembly 引擎已就绪!');
+          if (this.onReadyCallback) this.onReadyCallback();
           resolve(true);
         } else if (data.type === 'STOCKFISH_RESULT') {
           const req = this.pendingRequests.get(data.id);
@@ -69,6 +80,7 @@ export class StockfishInBrowser {
       // Fallback timeout in case frame takes long
       setTimeout(() => {
         this.isReady = true;
+        if (this.onReadyCallback) this.onReadyCallback();
         resolve(true);
       }, 2000);
     });

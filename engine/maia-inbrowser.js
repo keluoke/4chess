@@ -4,6 +4,8 @@
  * 100% offline, zero external server, zero Python, zero configuration.
  */
 
+import { ModelCache } from './model-cache.js';
+
 export class MaiaInBrowserEngine {
   constructor() {
     this.isReady = false;
@@ -12,24 +14,119 @@ export class MaiaInBrowserEngine {
     this.allMoves = [];
     this.allMovesDict = {};
     this.initPromise = null;
+    this.modelSource = 'unknown';
   }
 
-  async loadModel(urlOrBuffer = 'models/maia3_model.bin') {
+  reset() {
+    this.isReady = false;
+    this.initPromise = null;
+    this.meta = null;
+    this.tensors = {};
+    this.modelSource = 'unknown';
+  }
+
+  async loadModel(urlOrBuffer = 'models/maia3_model.bin', onProgress = null) {
     if (this.isReady) return true;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
-      let arrayBuffer;
-      if (typeof urlOrBuffer === 'string') {
-        let fetchUrl = urlOrBuffer;
-        if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-          fetchUrl = chrome.runtime.getURL(urlOrBuffer);
-        }
-        const res = await fetch(fetchUrl);
-        if (!res.ok) throw new Error(`Failed to fetch model binary: ${res.statusText}`);
-        arrayBuffer = await res.arrayBuffer();
-      } else {
+      let arrayBuffer = null;
+
+      if (urlOrBuffer instanceof ArrayBuffer) {
         arrayBuffer = urlOrBuffer;
+        this.modelSource = 'memory';
+      } else if (typeof urlOrBuffer === 'string') {
+        // 1. Try loading from persistent IndexedDB cache (0ms instant)
+        try {
+          const cached = await ModelCache.getModel('maia3-5m');
+          if (cached && cached.byteLength > 1000000) {
+            arrayBuffer = cached;
+            this.modelSource = 'cache';
+            if (onProgress) {
+              onProgress({
+                percent: 100,
+                speedMBps: '∞',
+                receivedMB: (cached.byteLength / (1024 * 1024)).toFixed(1),
+                totalMB: (cached.byteLength / (1024 * 1024)).toFixed(1),
+                status: '已从本地缓存秒级装载 (0ms)',
+                source: 'cache'
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[Maia-3] Cache check failed, will fetch:', e);
+        }
+
+        // 2. Fetch from URL (Cloudflare CDN / Extension Package)
+        if (!arrayBuffer) {
+          let fetchUrl = urlOrBuffer;
+          if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://') && !fetchUrl.startsWith('chrome-extension://')) {
+            if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+              fetchUrl = chrome.runtime.getURL(fetchUrl);
+            }
+          }
+
+          console.log(`[Maia-3] 🌐 从网络/CDN 下载模型: ${fetchUrl}`);
+          const res = await fetch(fetchUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+          const contentLength = parseInt(res.headers.get('content-length') || '29329712', 10);
+          const isCdn = fetchUrl.startsWith('http');
+          this.modelSource = isCdn ? 'cdn' : 'package';
+
+          if (res.body && res.body.getReader) {
+            try {
+              const reader = res.body.getReader();
+              const chunks = [];
+              let receivedLength = 0;
+              const startTime = performance.now();
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                receivedLength += value.length;
+
+                const elapsedSec = (performance.now() - startTime) / 1000;
+                const speedMBps = elapsedSec > 0.1 ? ((receivedLength / (1024 * 1024)) / elapsedSec).toFixed(1) : '...';
+                const percent = Math.min(100, Math.round((receivedLength / contentLength) * 100));
+
+                if (onProgress) {
+                  onProgress({
+                    percent,
+                    speedMBps,
+                    receivedMB: (receivedLength / (1024 * 1024)).toFixed(1),
+                    totalMB: (contentLength / (1024 * 1024)).toFixed(1),
+                    status: isCdn ? `Cloudflare CDN 高速下载 (${percent}%)` : `读取扩展内置模型 (${percent}%)`,
+                    source: this.modelSource
+                  });
+                }
+              }
+
+              const allBytes = new Uint8Array(receivedLength);
+              let pos = 0;
+              for (const chunk of chunks) {
+                allBytes.set(chunk, pos);
+                pos += chunk.length;
+              }
+              arrayBuffer = allBytes.buffer;
+            } catch (streamErr) {
+              console.warn('[Maia-3] ReadableStream read error, fallback to arrayBuffer():', streamErr);
+              arrayBuffer = await res.arrayBuffer();
+            }
+          } else {
+            arrayBuffer = await res.arrayBuffer();
+          }
+
+          // 3. Save to IndexedDB cache for future instant offline loads
+          if (arrayBuffer) {
+            ModelCache.saveModel('maia3-5m', arrayBuffer).catch(() => {});
+          }
+        }
+      }
+
+      if (!arrayBuffer) {
+        throw new Error('No model buffer received');
       }
 
       const view = new DataView(arrayBuffer);
@@ -57,7 +154,7 @@ export class MaiaInBrowserEngine {
 
       this.initVocab();
       this.isReady = true;
-      console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()}`);
+      console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource})`);
       return true;
     })();
 

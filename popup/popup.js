@@ -18,10 +18,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
 
+  const cdnInput = document.getElementById('cdn-url');
+
   // Load saved preferences
-  chrome.storage.local.get(['defaultElo', 'preferredBackend'], (res) => {
+  chrome.storage.local.get(['defaultElo', 'preferredBackend', 'cloudflareCdnUrl'], (res) => {
     if (res.defaultElo) eloSelect.value = res.defaultElo;
     if (res.preferredBackend) backendSelect.value = res.preferredBackend;
+    if (res.cloudflareCdnUrl && cdnInput) cdnInput.value = res.cloudflareCdnUrl;
   });
 
   // Save changes
@@ -32,4 +35,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   backendSelect.addEventListener('change', (e) => {
     chrome.storage.local.set({ preferredBackend: e.target.value });
   });
+
+  if (cdnInput) {
+    cdnInput.addEventListener('change', (e) => {
+      chrome.storage.local.set({ cloudflareCdnUrl: e.target.value.trim() });
+    });
+  }
 });
