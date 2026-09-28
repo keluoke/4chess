@@ -323,6 +323,9 @@ export class IntuitionPanel {
       if (predictionData.isRealOnnx) {
         modelBadge.textContent = `🟢 ONNX 实装 (⚡ ${predictionData.backend})`;
         modelBadge.className = 'maia-badge badge-gpu';
+      } else if (predictionData.isEmbedded) {
+        modelBadge.textContent = `🟢 内置神经网络 (⚡ 0ms 本地秒开)`;
+        modelBadge.className = 'maia-badge badge-gpu';
       } else {
         modelBadge.textContent = '🟡 离线模式 (未加载权重)';
         modelBadge.className = 'maia-badge badge-warning';

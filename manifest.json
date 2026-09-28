@@ -44,6 +44,8 @@
       "resources": [
         "content/*",
         "engine/*",
+        "models/*",
+        "lib/*",
         "icons/*"
       ],
       "matches": [

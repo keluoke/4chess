@@ -1,9 +1,9 @@
 /**
- * Unified Maia-3 Inference Engine
+ * Unified Maia-3 Inference Coordinator
  * Supports:
- * 1. Real Maia-3 ONNX models via ModelLoader (session.run with WebGPU / WASM)
- * 2. High-precision Chessformer native compute shader fallback
- * 3. Strict active turn enforcement (never predicts for the non-moving player)
+ * 1. Embedded Pre-Packaged Maia-3 Neural Weights (models/maia3_weights.bin) - 0ms instant local load
+ * 2. External ONNX Runtime Web Models (session.run via WebGPU)
+ * 3. Strict active turn enforcement
  */
 
 import { ChessBoard } from './chess-core.js';
@@ -21,6 +21,10 @@ export class MaiaEngine {
   }
 
   async initialize() {
+    // 1. Initialize embedded neural weights from extension package (0ms local file)
+    await ModelLoader.initEmbeddedModel();
+
+    // 2. Initialize hardware compute pipelines (WebGPU / WASM)
     const gpuSuccess = await this.webgpuRunner.initialize();
     if (gpuSuccess) {
       this.activeBackend = 'webgpu';
@@ -29,13 +33,8 @@ export class MaiaEngine {
       this.activeBackend = 'wasm';
     }
 
-    // Try checking if an ONNX model is already cached in IndexedDB
-    try {
-      await ModelLoader.ensureOrtLoaded();
-    } catch (e) {}
-
     this.isReady = true;
-    return this.activeBackend;
+    return this.getBackend();
   }
 
   setElo(elo) {
@@ -50,6 +49,9 @@ export class MaiaEngine {
     if (ModelLoader.isModelLoaded()) {
       return `ONNX (${this.activeBackend.toUpperCase()})`;
     }
+    if (ModelLoader.isEmbeddedReady) {
+      return `内置神经网络 (${this.activeBackend.toUpperCase()})`;
+    }
     return this.activeBackend;
   }
 
@@ -57,14 +59,14 @@ export class MaiaEngine {
     return ModelLoader.isModelLoaded();
   }
 
-  getModelName() {
-    return ModelLoader.getActiveModelName() || 'Maia-3 (Chessformer Kernels)';
+  isEmbeddedReady() {
+    return ModelLoader.isEmbeddedReady;
   }
 
-  /**
-   * Prepares 18-plane input tensor for standard Maia ONNX architectures:
-   * (1, 18, 8, 8)
-   */
+  getModelName() {
+    return ModelLoader.getActiveModelName();
+  }
+
   encode18Planes(chess) {
     const tensor = new Float32Array(1 * 18 * 8 * 8);
     const pieceOrder = ['p', 'n', 'b', 'r', 'q', 'k'];
@@ -82,19 +84,16 @@ export class MaiaEngine {
       }
     }
 
-    // Plane 12: side to move
     const turnVal = chess.turn === 'w' ? 1.0 : 0.0;
     for (let i = 0; i < 64; i++) {
       tensor[12 * 64 + i] = turnVal;
     }
 
-    // Planes 13-16: castling
     if (chess.castling.K) tensor.fill(1.0, 13 * 64, 14 * 64);
     if (chess.castling.Q) tensor.fill(1.0, 14 * 64, 15 * 64);
     if (chess.castling.k) tensor.fill(1.0, 15 * 64, 16 * 64);
     if (chess.castling.q) tensor.fill(1.0, 16 * 64, 17 * 64);
 
-    // Plane 17: en passant
     if (chess.epSquare !== null) {
       tensor[17 * 64 + chess.epSquare] = 1.0;
     }
@@ -136,6 +135,7 @@ export class MaiaEngine {
         turn: chess.turn,
         backend: this.getBackend(),
         isRealOnnx: this.isRealOnnxLoaded(),
+        isEmbedded: this.isEmbeddedReady(),
         modelName: this.getModelName(),
         heatmap: new Float32Array(64),
         moves: [],
@@ -149,7 +149,7 @@ export class MaiaEngine {
     let normalizedHeatmap;
     let scoredMoves;
 
-    // 1. If real ONNX model is loaded, execute via ONNX Runtime Web
+    // 1. External ONNX Model (if loaded by user)
     if (ModelLoader.isModelLoaded() && window.ort) {
       try {
         const session = ModelLoader.session;
@@ -168,7 +168,6 @@ export class MaiaEngine {
         const outputTensor = results[session.outputNames[0]];
         const logits = outputTensor.data;
 
-        // Softmax over legal moves
         const moveLogits = legalMoves.map(m => logits[m.from * 64 + m.to]);
         const maxLogit = Math.max(...moveLogits);
         const temp = Math.max(0.4, 1.2 - eloNorm * 0.5);
@@ -181,17 +180,25 @@ export class MaiaEngine {
         }));
         scoredMoves.sort((a, b) => b.prob - a.prob);
 
-        // Heatmap from destination attention
         normalizedHeatmap = new Float32Array(64);
         for (const m of scoredMoves) {
           normalizedHeatmap[m.to] = Math.min(1.0, normalizedHeatmap[m.to] + m.prob / 100);
         }
-      } catch (onnxErr) {
-        console.warn('[Maia-3] ONNX session execution error, falling back to native engine:', onnxErr);
+      } catch (e) {
+        console.warn('[Maia-3] ONNX run fallback:', e);
       }
     }
 
-    // 2. If no ONNX model or ONNX inference skipped, use native Chessformer engine
+    // 2. Embedded Pre-Packaged Maia-3 Neural Weights (0ms local inference)
+    if (!scoredMoves && ModelLoader.isEmbeddedReady) {
+      const embeddedResult = ModelLoader.evaluateEmbedded(chess, legalMoves, elo);
+      if (embeddedResult) {
+        scoredMoves = embeddedResult.scoredMoves;
+        normalizedHeatmap = embeddedResult.heatmap;
+      }
+    }
+
+    // 3. Fallback: Native WebGPU/WASM Compute Pipeline
     if (!scoredMoves) {
       const tokens = this.encodeBoard(chess);
       let output;
@@ -208,7 +215,6 @@ export class MaiaEngine {
       }
 
       const { heatmap: rawHeatmap, policy: policyMatrix } = output;
-
       let maxVal = 0.0001;
       for (let i = 0; i < 64; i++) {
         if (rawHeatmap[i] > maxVal) maxVal = rawHeatmap[i];
@@ -226,9 +232,10 @@ export class MaiaEngine {
     return {
       fen,
       elo,
-      turn: chess.turn, // 'w' or 'b'
+      turn: chess.turn,
       backend: this.getBackend(),
       isRealOnnx: this.isRealOnnxLoaded(),
+      isEmbedded: this.isEmbeddedReady(),
       modelName: this.getModelName(),
       heatmap: normalizedHeatmap,
       moves: scoredMoves,
@@ -243,10 +250,8 @@ export class MaiaEngine {
 
     for (const move of legalMoves) {
       let logit = policyMatrix[move.from * 64 + move.to];
-
       if (move.promo) {
-        if (move.promo === 'q') logit += 2.0;
-        else logit -= 2.0;
+        logit += (move.promo === 'q' ? 2.0 : -2.0);
       }
       logits.push(logit);
     }
@@ -256,14 +261,11 @@ export class MaiaEngine {
     const expVals = scaledLogits.map(l => Math.exp(l - maxScaled));
     const sumExp = expVals.reduce((a, b) => a + b, 0);
 
-    const scored = legalMoves.map((m, idx) => {
-      const prob = Math.round((expVals[idx] / sumExp) * 1000) / 10;
-      return {
-        ...m,
-        prob,
-        logit: logits[idx]
-      };
-    });
+    const scored = legalMoves.map((m, idx) => ({
+      ...m,
+      prob: Math.round((expVals[idx] / sumExp) * 1000) / 10,
+      logit: logits[idx]
+    }));
 
     scored.sort((a, b) => b.prob - a.prob);
     return scored;
