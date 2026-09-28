@@ -22,7 +22,7 @@ def export_checkpoint(ckpt_path, output_path, fp16=False):
 
     # Determine architecture
     dim_vit = sd["token_projection.weight"].shape[0]
-    num_heads = 8 if dim_vit == 256 else 32
+    num_heads = dim_vit // 32
     num_blocks = 8
     print(f"[Exporter] 🧠 Detected architecture: dim_vit={dim_vit}, num_heads={num_heads}, num_blocks={num_blocks}, dtype={dtype}")
 
@@ -79,16 +79,21 @@ def export_checkpoint(ckpt_path, output_path, fp16=False):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Export Maia-3 checkpoint to zero-copy binary")
-    parser.add_argument("--model", choices=["5m", "79m", "both"], default="5m", help="Model size to export")
+    parser.add_argument("--model", choices=["5m", "23m", "79m", "all"], default="5m", help="Model size to export")
     parser.add_argument("--fp16", action="store_true", help="Export in float16 to reduce file size by 50%")
     args = parser.parse_args()
 
-    if args.model in ["5m", "both"]:
+    if args.model in ["5m", "all"]:
         src5 = MODELS_DIR / "maia3-5m.pt"
         if src5.exists():
             export_checkpoint(src5, MODELS_DIR / "maia3_5m.bin", fp16=args.fp16)
             export_checkpoint(src5, MODELS_DIR / "maia3_model.bin", fp16=args.fp16)
-    if args.model in ["79m", "both"]:
+    if args.model in ["23m", "all"]:
+        src23 = MODELS_DIR / "maia3-23m.pt"
+        if src23.exists():
+            out_name = "maia3_23m_fp16.bin" if args.fp16 else "maia3_23m.bin"
+            export_checkpoint(src23, MODELS_DIR / out_name, fp16=args.fp16)
+    if args.model in ["79m", "all"]:
         src79 = MODELS_DIR / "maia3-79m.pt"
         if src79.exists():
             out_name = "maia3_79m_fp16.bin" if args.fp16 else "maia3_79m.bin"
