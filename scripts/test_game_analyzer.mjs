@@ -63,4 +63,38 @@ result.keyMoments.forEach((km, i) => {
   console.log(`    #${i + 1}: Ply ${km.ply} (${km.turn === 'w' ? 'White' : 'Black'} ${km.san}) | Loss: ${km.lossPawns} pawns | Severity: ${km.severity} | Best: ${km.bestSan}`);
 });
 
-console.log('\n✅ GameAnalyzer tests completed successfully!');
+console.log('\n--- Testing GameAnalyzer Cache Hit ---');
+const cacheKey = GameAnalyzer.getGameKey(sampleMoves);
+console.log('Deterministic game key:', cacheKey);
+
+let hitCache = false;
+const cachedResult = await analyzer.analyzeGame(sampleMoves, {
+  onProgress: (prog) => {
+    if (prog.fromCache) hitCache = true;
+  }
+});
+
+if (hitCache && cachedResult && cachedResult.totalMoves === 10) {
+  console.log('✅ Persistent Cache Hit verified (0ms instant return)!');
+} else {
+  console.error('❌ Cache hit failed!');
+  process.exit(1);
+}
+
+console.log('\n--- Testing forceRefresh ---');
+let reevaluated = false;
+await analyzer.analyzeGame(sampleMoves, {
+  forceRefresh: true,
+  onProgress: (prog) => {
+    if (prog.phase === 'evaluating') reevaluated = true;
+  }
+});
+if (reevaluated) {
+  console.log('✅ forceRefresh successfully bypassed cache and re-analyzed!');
+} else {
+  console.error('❌ forceRefresh failed to re-evaluate!');
+  process.exit(1);
+}
+
+console.log('\n✅ All GameAnalyzer tests completed successfully!');
+

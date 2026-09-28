@@ -62,7 +62,7 @@ export async function initMaiaExtension() {
         console.error('[Maia-3] Re-init error with custom CDN:', e);
       }
     },
-    onAnalyzeGame: async () => {
+    onAnalyzeGame: async (forceRefresh = false) => {
       if (FairPlayGuard.isLiveGameInProgress()) {
         throw new Error(panel.lang === 'zh'
           ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
@@ -74,8 +74,9 @@ export async function initMaiaExtension() {
         throw new Error(panel.lang === 'zh' ? '当前页面未检测到棋步记录，请在对局或复盘页面使用。' : 'No move list detected on current page.');
       }
       return await analyzer.analyzeGame(moves, {
-        depth: 8,
+        depth: 6,
         elo: panel.currentElo,
+        forceRefresh,
         onProgress: (prog) => {
           panel.updateReviewProgress(prog);
         }

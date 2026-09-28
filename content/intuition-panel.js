@@ -818,7 +818,7 @@ export class IntuitionPanel {
     }
   }
 
-  async startReview() {
+  async startReview(forceRefresh = false) {
     if (this.isFairPlayLocked) {
       alert(this.lang === 'zh'
         ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
@@ -855,7 +855,7 @@ export class IntuitionPanel {
       if (!this.onAnalyzeGame) {
         throw new Error(this.lang === 'zh' ? '未配置全局分析器' : 'Review analyzer not configured');
       }
-      const results = await this.onAnalyzeGame();
+      const results = await this.onAnalyzeGame(forceRefresh);
       if (results) {
         this.lastReviewResult = results;
         this.renderReviewResults(results);
@@ -869,7 +869,7 @@ export class IntuitionPanel {
           <button type="button" class="weui-btn-primary" style="margin-top: 8px; align-self: center;" id="btn-retry-review">${this.lang === 'zh' ? '重试复盘' : 'Retry'}</button>
         </div>
       `;
-      reviewBody.querySelector('#btn-retry-review')?.addEventListener('click', () => this.startReview());
+      reviewBody.querySelector('#btn-retry-review')?.addEventListener('click', () => this.startReview(true));
     }
   }
 
@@ -985,10 +985,10 @@ export class IntuitionPanel {
       });
     });
 
-    // Bind Re-analyze click
+    // Bind Re-analyze click (force fresh computation)
     reviewBody.querySelector('#btn-reanalyze-review')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.startReview();
+      this.startReview(true);
     });
 
     // Bind Jump-to-move clicks on blunder cards

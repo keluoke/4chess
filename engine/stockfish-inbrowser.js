@@ -90,7 +90,7 @@ export class StockfishInBrowser {
     return this.initPromise;
   }
 
-  async evaluate(fen, depth = 10, timeoutMs = 2000) {
+  async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1) {
     if (!this.isReady) {
       await this.initialize();
     }
@@ -158,7 +158,8 @@ export class StockfishInBrowser {
         type: 'EVALUATE',
         id: reqId,
         fen,
-        depth
+        depth,
+        multipv
       }, '*');
     });
   }

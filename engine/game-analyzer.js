@@ -502,6 +502,118 @@ export class GameAnalyzer {
     return positions;
   }
 
+  static memoryCache = new Map();
+
+  /**
+   * Generates a stable unique cache key for the current game
+   */
+  static getGameKey(moves) {
+    if (typeof window !== 'undefined') {
+      const href = window.location.href;
+      // Lichess game ID: 8 characters (e.g. lichess.org/38uTqNdksSRF -> lichess_38uTqNdk)
+      if (href.includes('lichess.org')) {
+        const m = window.location.pathname.match(/^\/([a-zA-Z0-9]{8})/);
+        if (m && m[1]) return `lichess_${m[1]}`;
+      }
+      // Chess.com game ID (e.g. /game/live/184446398482 or /analysis/game/live/184446398482)
+      if (href.includes('chess.com')) {
+        const m = window.location.pathname.match(/\b(\d{8,15})\b/);
+        if (m && m[1]) return `chesscom_${m[1]}`;
+      }
+    }
+
+    // Universal fallback: deterministic signature from moves SAN
+    if (moves && moves.length > 0) {
+      const total = moves.length;
+      const head = moves.slice(0, 5).map(m => m.san).join('');
+      const tail = moves.slice(-5).map(m => m.san).join('');
+      return `sig_${total}_${head}_${tail}`;
+    }
+
+    return null;
+  }
+
+  /**
+   * Retrieves cached review result from persistent storage (L1 memory, L2 chrome.storage)
+   */
+  static async getCachedReview(cacheKey) {
+    if (!cacheKey) return null;
+    try {
+      const storageKey = `maia3_review_${cacheKey}`;
+      // L1: Memory Cache
+      if (GameAnalyzer.memoryCache.has(storageKey)) {
+        return GameAnalyzer.memoryCache.get(storageKey);
+      }
+
+      // L2: Persistent chrome.storage.local
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const data = await new Promise(resolve => {
+          chrome.storage.local.get([storageKey], resolve);
+        });
+        if (data && data[storageKey] && data[storageKey].result) {
+          const res = data[storageKey].result;
+          GameAnalyzer.memoryCache.set(storageKey, res);
+          console.log(`[GameAnalyzer] ⚡ Loaded review from persistent cache for ${cacheKey}`);
+          return res;
+        }
+      } else if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.result) {
+            GameAnalyzer.memoryCache.set(storageKey, parsed.result);
+            return parsed.result;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GameAnalyzer] Failed to read cached review:', e);
+    }
+    return null;
+  }
+
+  /**
+   * Saves review result to persistent storage (excluding DOM node handles)
+   */
+  static async saveCachedReview(cacheKey, result) {
+    if (!cacheKey || !result) return;
+    try {
+      const storageKey = `maia3_review_${cacheKey}`;
+      const cleanResult = {
+        totalMoves: result.totalMoves,
+        blundersCount: result.blundersCount,
+        mistakesCount: result.mistakesCount,
+        inaccuraciesCount: result.inaccuraciesCount,
+        acplWhite: result.acplWhite,
+        acplBlack: result.acplBlack,
+        cachedAt: Date.now(),
+        allMoves: (result.allMoves || []).map(m => ({
+          ...m,
+          element: null
+        })),
+        keyMoments: (result.keyMoments || []).map(m => ({
+          ...m,
+          element: null
+        }))
+      };
+
+      // Save to L1 Memory Cache
+      GameAnalyzer.memoryCache.set(storageKey, cleanResult);
+
+      // Save to L2 Persistent Storage
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        await new Promise(resolve => {
+          chrome.storage.local.set({ [storageKey]: { result: cleanResult } }, resolve);
+        });
+        console.log(`[GameAnalyzer] 💾 Persisted review to storage for ${cacheKey}`);
+      } else if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(storageKey, JSON.stringify({ result: cleanResult }));
+      }
+    } catch (e) {
+      console.warn('[GameAnalyzer] Failed to save cached review:', e);
+    }
+  }
+
   /**
    * Run full game analysis
    */
@@ -511,10 +623,32 @@ export class GameAnalyzer {
     this.isCancelled = false;
 
     const {
-      depth = 8,
+      depth = 6,
       elo = 1900,
+      forceRefresh = false,
       onProgress = null
     } = options;
+
+    const cacheKey = GameAnalyzer.getGameKey(moves);
+
+    // 1. Instant Cache Hit Check (0ms response)
+    if (!forceRefresh && cacheKey) {
+      const cached = await GameAnalyzer.getCachedReview(cacheKey);
+      if (cached) {
+        this.lastReviewResult = cached;
+        this.isAnalyzing = false;
+        if (onProgress) {
+          onProgress({
+            phase: 'done',
+            current: cached.totalMoves,
+            total: cached.totalMoves,
+            percent: 100,
+            fromCache: true
+          });
+        }
+        return cached;
+      }
+    }
 
     try {
       if (!moves || moves.length === 0) {
@@ -546,7 +680,8 @@ export class GameAnalyzer {
           });
         }
 
-        const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 1500);
+        // Fast evaluation with depth 6, 1500ms timeout, and multipv 1
+        const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 1500, 1);
         evals.push(evalRes || {
           scoreCp: 0,
           score: '0.00',
@@ -580,8 +715,10 @@ export class GameAnalyzer {
         
         let lossCp = 0;
         if (!isBest && evalBefore && evalAfter) {
-          // Both scores are from side-to-move's perspective
-          lossCp = Math.max(0, evalBefore.scoreCp + evalAfter.scoreCp);
+          // Clamp scores to [-1000, 1000] to handle checkmates smoothly
+          const cpBefore = Math.max(-1000, Math.min(1000, evalBefore.scoreCp || 0));
+          const cpAfter = Math.max(-1000, Math.min(1000, evalAfter.scoreCp || 0));
+          lossCp = Math.max(0, cpBefore + cpAfter);
         }
 
         if (turn === 'w') {
@@ -681,6 +818,12 @@ export class GameAnalyzer {
 
       this.lastReviewResult = result;
       this.isAnalyzing = false;
+
+      // Save to Persistent Cache
+      if (cacheKey) {
+        await GameAnalyzer.saveCachedReview(cacheKey, result);
+      }
+
       return result;
     } catch (err) {
       this.isAnalyzing = false;
@@ -714,22 +857,12 @@ export class GameAnalyzer {
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
     };
 
-    // Helper: simulate arrow keys on all board/document event targets
-    const dispatchArrow = (dir) => {
-      const key = dir === 'left' ? 'ArrowLeft' : 'ArrowRight';
-      const keyCode = dir === 'left' ? 37 : 39;
-      const targets = [document.body, document.documentElement, document, window];
-      const boardEl = document.querySelector('wc-chess-board, chess-board, cg-board');
-      if (boardEl) targets.unshift(boardEl);
-
-      for (const t of targets) {
-        if (!t) continue;
-        try {
-          t.dispatchEvent(new KeyboardEvent('keydown', { key, code: key, keyCode, which: keyCode, bubbles: true, cancelable: true, composed: true, view: window }));
-          t.dispatchEvent(new KeyboardEvent('keyup', { key, code: key, keyCode, which: keyCode, bubbles: true, cancelable: true, composed: true, view: window }));
-        } catch (e) {}
-      }
-    };
+    // If original DOM element is available and still connected, directly click it
+    if (targetPly === null && moveItem.element && typeof document !== 'undefined' && document.contains(moveItem.element)) {
+      dispatchSyntheticClick(moveItem.element);
+      moveItem.element.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+      return true;
+    }
 
     // -------------------------------------------------------------
     // Platform 1: Lichess
@@ -768,7 +901,7 @@ export class GameAnalyzer {
     }
 
     // -------------------------------------------------------------
-    // Platform 2: Chess.com Multi-Tier Strategy
+    // Platform 2: Chess.com Multi-Tier Strategy (Without URL Conflict)
     // -------------------------------------------------------------
     if (isChesscom) {
       // Tier 1: Main World Injected Bridge (native chess-board controller API)
@@ -804,14 +937,15 @@ export class GameAnalyzer {
           return true;
         }
       } else {
-        const moveSelectors = [
+        // Direct data-ply attribute match
+        const plySelectors = [
           `[data-ply="${ply}"]`,
           `wc-vertical-move-list [data-ply="${ply}"]`,
           `.vertical-move-list [data-ply="${ply}"]`,
           `.move-list-wrapper [data-ply="${ply}"]`,
           `.main-line-row [data-ply="${ply}"]`
         ];
-        for (const sel of moveSelectors) {
+        for (const sel of plySelectors) {
           const el = document.querySelector(sel);
           if (el) {
             dispatchSyntheticClick(el);
@@ -821,14 +955,42 @@ export class GameAnalyzer {
           }
         }
 
-        // Sequential index search among all move nodes
-        const allNodes = Array.from(document.querySelectorAll('.vertical-move-list .node, .move-list-wrapper .node, .keyboard-move-list .node, [data-ply], .main-line-row .node, wc-vertical-move-list .node'));
-        if (allNodes.length >= ply) {
-          const targetNode = allNodes[ply - 1];
-          if (targetNode) {
-            dispatchSyntheticClick(targetNode);
-            targetNode.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-            console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via allNodes[${ply - 1}]`);
+        // Sequential index matching in move list:
+        // Filter out move-number labels (e.g. "1.", "2.", "15.") so array is strictly half-moves [ply1, ply2, ply3, ...]
+        const moveContainers = document.querySelectorAll('wc-vertical-move-list, .vertical-move-list, .move-list-wrapper, .keyboard-move-list, .main-line-row');
+        for (const container of moveContainers) {
+          const nodes = Array.from(container.querySelectorAll('.node, [class*="move-node"], [class*="node-text"]')).filter(el => {
+            if (el.classList.contains('node-number') || el.classList.contains('move-number') || el.classList.contains('round-number')) return false;
+            const text = (el.textContent || '').trim();
+            if (/^\d+\.?$/.test(text)) return false;
+            return text.length > 0 || el.querySelector('[class*="piece"], [data-piece]');
+          });
+
+          if (nodes.length >= ply) {
+            const targetEl = nodes[ply - 1];
+            if (targetEl) {
+              dispatchSyntheticClick(targetEl);
+              targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+              console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via move list node [${ply - 1}]`);
+              return true;
+            }
+          }
+        }
+
+        // Global fallback for move nodes across document
+        const allMoveNodes = Array.from(document.querySelectorAll('.vertical-move-list .node, .move-list-wrapper .node, wc-vertical-move-list .node, .keyboard-move-list .node, .main-line-row .node')).filter(el => {
+          if (el.classList.contains('node-number') || el.classList.contains('move-number') || el.classList.contains('round-number')) return false;
+          const text = (el.textContent || '').trim();
+          if (/^\d+\.?$/.test(text)) return false;
+          return text.length > 0 || el.querySelector('[class*="piece"], [data-piece]');
+        });
+
+        if (allMoveNodes.length >= ply) {
+          const targetEl = allMoveNodes[ply - 1];
+          if (targetEl) {
+            dispatchSyntheticClick(targetEl);
+            targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+            console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via global move node [${ply - 1}]`);
             return true;
           }
         }
@@ -847,22 +1009,6 @@ export class GameAnalyzer {
         console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via nav-first + ${ply}x nav-next`);
         return true;
       }
-
-      // Tier 4: Keyboard navigation fallback (ArrowLeft to 0, then ArrowRight x ply)
-      for (let k = 0; k < 120; k++) {
-        dispatchArrow('left');
-      }
-      for (let k = 0; k < ply; k++) {
-        dispatchArrow('right');
-      }
-
-      // Tier 5: URL query parameter & History state sync
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.set('move', String(ply));
-        window.history.pushState({ move: ply }, '', url.toString());
-        window.dispatchEvent(new PopStateEvent('popstate', { state: { move: ply } }));
-      } catch (e) {}
 
       return true;
     }
