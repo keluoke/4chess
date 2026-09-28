@@ -690,7 +690,7 @@ export class IntuitionPanel {
       const sf = predictionData.stockfish;
       if (sf && sf.bestMove) {
         if (timeEl) timeEl.textContent = `${latencyMs.toFixed(0)} ms · Stockfish`;
-        if (movesHeader) movesHeader.textContent = isWhite ? '白方最佳 (Stockfish 17)' : '黑方最佳 (Stockfish 17)';
+        if (movesHeader) movesHeader.textContent = isWhite ? '白方最佳 (Stockfish WASM)' : '黑方最佳 (Stockfish WASM)';
         
         if (movesContainer) {
           movesContainer.innerHTML = `
