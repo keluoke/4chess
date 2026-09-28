@@ -22,6 +22,8 @@ if str(MAIA3_DIR) not in sys.path:
 
 import torch
 import chess
+import chess.engine
+import shutil
 from maia3.models import MAIA3Model
 from maia3.model_registry import MODEL_SPECS
 from maia3.dataset import tokenize_board
@@ -38,6 +40,31 @@ GLOBAL_ENGINE = {
     "ready": False,
     "total_inferences": 0
 }
+
+GLOBAL_STOCKFISH = {
+    "engine": None,
+    "available": False,
+    "path": None
+}
+
+def init_stockfish():
+    sf_candidates = [
+        shutil.which("stockfish"),
+        "/opt/homebrew/bin/stockfish",
+        "/usr/local/bin/stockfish",
+        "/usr/bin/stockfish"
+    ]
+    sf_path = next((p for p in sf_candidates if p and Path(p).exists()), None)
+    if sf_path:
+        try:
+            GLOBAL_STOCKFISH["engine"] = chess.engine.SimpleEngine.popen_uci(sf_path)
+            GLOBAL_STOCKFISH["available"] = True
+            GLOBAL_STOCKFISH["path"] = sf_path
+            print(f"[Maia Server] 🐟 Stockfish 引擎已就绪: {sf_path}")
+        except Exception as e:
+            print(f"[Maia Server] ⚠️ Stockfish 初始化失败: {e}")
+    else:
+        print("[Maia Server] ℹ️ 未检测到本地 Stockfish 二进制文件，将仅使用 Maia 3。")
 
 def load_maia_model(model_name="maia3-79m"):
     print(f"[Maia Server] 🚀 Loading {model_name}...")
@@ -209,6 +236,77 @@ def evaluate_position(fen=None, moves=None, elo=1500, top_k=5):
     GLOBAL_ENGINE["total_inferences"] += 1
     latency = round((time.perf_counter() - t_start) * 1000, 2)
 
+    # Stockfish Analysis & Human vs Engine Comparison
+    stockfish_data = None
+    comparison = None
+    if GLOBAL_STOCKFISH["available"] and GLOBAL_STOCKFISH["engine"]:
+        try:
+            sf_engine = GLOBAL_STOCKFISH["engine"]
+            sf_res = sf_engine.analyse(board, chess.engine.Limit(time=0.04, depth=12))
+            pv = sf_res.get("pv", [])
+            sf_score_obj = sf_res.get("score")
+            
+            if pv:
+                best_m = pv[0]
+                sf_san = board.san(best_m)
+                sf_uci = best_m.uci()
+                
+                score_pov = sf_score_obj.pov(board.turn) if sf_score_obj else None
+                if score_pov and score_pov.is_mate():
+                    mate_n = score_pov.mate()
+                    formatted_score = f"#{mate_n}"
+                    cp_val = 10000 if mate_n > 0 else -10000
+                elif score_pov:
+                    cp_val = score_pov.score()
+                    formatted_score = f"{cp_val/100:+.2f}"
+                else:
+                    formatted_score = "0.00"
+                    cp_val = 0
+
+                pv_sans = []
+                temp_b = board.copy()
+                for m in pv[:4]:
+                    try:
+                        pv_sans.append(temp_b.san(m))
+                        temp_b.push(m)
+                    except Exception:
+                        break
+
+                stockfish_data = {
+                    "available": True,
+                    "bestMove": {
+                        "uci": sf_uci,
+                        "san": sf_san,
+                        "from": chess.square_name(best_m.from_square),
+                        "to": chess.square_name(best_m.to_square),
+                        "fromSq": best_m.from_square,
+                        "toSq": best_m.to_square
+                    },
+                    "score": formatted_score,
+                    "scoreCp": cp_val,
+                    "pv": pv_sans
+                }
+
+                if scored:
+                    top_maia = scored[0]
+                    agreed = (top_maia["uci"] == sf_uci)
+                    if agreed:
+                        comparison = {
+                            "agreed": True,
+                            "type": "consensus",
+                            "badge": "🎯 人机高度共识",
+                            "summary": f"直觉与客观一致: {top_maia['san']} 既是人类高频首选({top_maia['prob']}%)，也是引擎最优解({formatted_score})。"
+                        }
+                    else:
+                        comparison = {
+                            "agreed": False,
+                            "type": "divergence",
+                            "badge": "⚠️ 人类直觉与引擎分歧",
+                            "summary": f"人类偏好 {top_maia['san']} ({top_maia['prob']}%)，但 Stockfish 测算最佳为 {sf_san} (评估 {formatted_score})。"
+                        }
+        except Exception:
+            pass
+
     return {
         "status": "ok",
         "model": GLOBAL_ENGINE["model_name"],
@@ -225,6 +323,8 @@ def evaluate_position(fen=None, moves=None, elo=1500, top_k=5):
         "moves": scored[:top_k],
         "allLegalCount": len(legal_moves),
         "heatmap": heatmap,
+        "stockfish": stockfish_data,
+        "comparison": comparison,
         "latencyMs": latency
     }
 
@@ -292,18 +392,26 @@ class MaiaRequestHandler(BaseHTTPRequestHandler):
 
 def run_server(port=8765, model_name="maia3-79m"):
     load_maia_model(model_name)
+    init_stockfish()
     server_address = ("127.0.0.1", port)
     httpd = HTTPServer(server_address, MaiaRequestHandler)
     print(f"\n=======================================================")
     print(f"🔥 Maia-3 Engine Server running on http://127.0.0.1:{port}")
     print(f"⚡ Active Model: {GLOBAL_ENGINE['model_name']}")
     print(f"🎮 Hardware:     {GLOBAL_ENGINE['device_name']}")
+    if GLOBAL_STOCKFISH["available"]:
+        print(f"🐟 Stockfish:    已整合 ({GLOBAL_STOCKFISH['path']})")
     print(f"🌐 Chrome Extension auto-connect enabled with CORS!")
     print(f"=======================================================\n")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n[Maia Server] Shutting down...")
+        if GLOBAL_STOCKFISH["engine"]:
+            try:
+                GLOBAL_STOCKFISH["engine"].quit()
+            except Exception:
+                pass
         httpd.server_close()
 
 if __name__ == "__main__":

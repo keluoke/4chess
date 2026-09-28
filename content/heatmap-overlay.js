@@ -60,6 +60,14 @@ export class HeatmapOverlay {
         <marker id="maia-arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
           <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#a855f7" />
         </marker>
+        <!-- Arrowhead Marker Stockfish (Emerald Green) -->
+        <marker id="maia-arrow-sf" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#10b981" />
+        </marker>
+        <!-- Arrowhead Marker Consensus (Glowing Cyan) -->
+        <marker id="maia-arrow-consensus" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#06b6d4" />
+        </marker>
         <!-- Arrowhead Marker Highlight -->
         <marker id="maia-arrow-highlight" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#ec4899" />
@@ -67,6 +75,7 @@ export class HeatmapOverlay {
       </defs>
       <g id="maia-heatmap-layer"></g>
       <g id="maia-arrows-layer"></g>
+      <g id="maia-sf-arrows-layer"></g>
       <g id="maia-traps-layer"></g>
     `;
 
@@ -136,24 +145,31 @@ export class HeatmapOverlay {
 
     const heatmapGroup = this.svg.querySelector('#maia-heatmap-layer');
     const arrowsGroup = this.svg.querySelector('#maia-arrows-layer');
+    const sfArrowsGroup = this.svg.querySelector('#maia-sf-arrows-layer');
     const trapsGroup = this.svg.querySelector('#maia-traps-layer');
 
     heatmapGroup.innerHTML = '';
     arrowsGroup.innerHTML = '';
+    if (sfArrowsGroup) sfArrowsGroup.innerHTML = '';
     trapsGroup.innerHTML = '';
+
+    // If engine is not available, render nothing!
+    if (!predictionData || !predictionData.isAvailable) {
+      return;
+    }
 
     // 1. Render Square Heatmap
     if (this.showHeatmap && predictionData.heatmap) {
       this.renderHeatmapSquares(heatmapGroup, predictionData.heatmap);
     }
 
-    // 2. Render Move Arrows
-    if (this.showArrows && predictionData.moves) {
-      this.renderArrows(arrowsGroup, predictionData.moves);
+    // 2. Render Dual Move Arrows (Maia Human + Stockfish Objective)
+    if (this.showArrows) {
+      this.renderDualArrows(arrowsGroup, sfArrowsGroup, predictionData);
     }
 
     // 3. Render Tactical Trap Indicator
-    if (predictionData.analysis && predictionData.analysis.isTacticalTrap) {
+    if (predictionData.analysis && predictionData.analysis.isTacticalTrap && predictionData.moves?.[0]) {
       this.renderTrapWarning(trapsGroup, predictionData.moves[0]);
     }
   }
@@ -193,75 +209,136 @@ export class HeatmapOverlay {
     }
   }
 
-  renderArrows(group, moves) {
-    const topMoves = moves.slice(0, 3);
-    const styles = [
-      { marker: 'maia-arrow-gold', color: '#f59e0b', width: 8.5 },
-      { marker: 'maia-arrow-cyan', color: '#06b6d4', width: 6.0 },
-      { marker: 'maia-arrow-purple', color: '#a855f7', width: 4.5 }
-    ];
+  renderDualArrows(maiaGroup, sfGroup, data) {
+    const moves = data.moves || [];
+    const sf = data.stockfish;
+    const topMove = moves[0];
+    const isConsensus = sf && sf.bestMove && topMove && (topMove.uci === sf.bestMove.uci);
 
-    topMoves.forEach((move, idx) => {
-      const isHovered = this.activeHoverMove === move.uci;
-      const isTop = idx === 0;
+    if (isConsensus) {
+      // 1. Single Glowing Consensus Arrow (Maia == Stockfish)
+      this.drawArrow(maiaGroup, {
+        from: topMove.from,
+        to: topMove.to,
+        color: '#06b6d4',
+        width: 9.0,
+        marker: 'maia-arrow-consensus',
+        label: `🎯 ${topMove.san} (${topMove.prob}%)`,
+        opacity: 0.95
+      });
+      // Other human moves
+      moves.slice(1, 3).forEach((m, idx) => {
+        this.drawArrow(maiaGroup, {
+          from: m.from,
+          to: m.to,
+          color: idx === 0 ? '#f59e0b' : '#a855f7',
+          width: 5.0,
+          marker: idx === 0 ? 'maia-arrow-gold' : 'maia-arrow-purple',
+          label: `${m.prob}%`,
+          opacity: 0.65
+        });
+      });
+    } else {
+      // 2. Maia Human Top Move (Gold Arrow)
+      if (topMove) {
+        this.drawArrow(maiaGroup, {
+          from: topMove.from,
+          to: topMove.to,
+          color: '#f59e0b',
+          width: 8.5,
+          marker: 'maia-arrow-gold',
+          label: `🧠 ${topMove.san} (${topMove.prob}%)`,
+          opacity: 0.92
+        });
+      }
 
-      const fromCoords = this.squareToCoords(move.from);
-      const toCoords = this.squareToCoords(move.to);
+      // 3. Stockfish Objective Best Move (Emerald Green Arrow)
+      if (sf && sf.bestMove && sfGroup) {
+        const bm = sf.bestMove;
+        this.drawArrow(sfGroup, {
+          from: bm.fromSq !== undefined ? bm.fromSq : bm.from,
+          to: bm.toSq !== undefined ? bm.toSq : bm.to,
+          color: '#10b981',
+          width: 7.5,
+          marker: 'maia-arrow-sf',
+          dashed: '7 4',
+          label: `🐟 ${bm.san} (${sf.score})`,
+          opacity: 0.92,
+          isStockfish: true
+        });
+      }
 
-      const dx = toCoords.cx - fromCoords.cx;
-      const dy = toCoords.cy - fromCoords.cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist === 0) return;
+      // Other human candidates
+      moves.slice(1, 3).forEach(m => {
+        this.drawArrow(maiaGroup, {
+          from: m.from,
+          to: m.to,
+          color: '#a855f7',
+          width: 4.5,
+          marker: 'maia-arrow-purple',
+          label: `${m.prob}%`,
+          opacity: 0.60
+        });
+      });
+    }
+  }
 
-      const normX = dx / dist;
-      const normY = dy / dist;
+  drawArrow(group, { from, to, color, width, marker, label, opacity = 0.9, dashed = null, isStockfish = false }) {
+    const fromCoords = this.squareToCoords(from);
+    const toCoords = this.squareToCoords(to);
 
-      // Start circle at origin square to clarify direction
-      const startCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      startCircle.setAttribute('cx', fromCoords.cx);
-      startCircle.setAttribute('cy', fromCoords.cy);
-      startCircle.setAttribute('r', isTop ? '7' : '5');
-      startCircle.setAttribute('fill', isHovered ? '#ec4899' : styles[idx].color);
-      startCircle.setAttribute('opacity', isTop ? '0.95' : '0.8');
-      group.appendChild(startCircle);
+    const dx = toCoords.cx - fromCoords.cx;
+    const dy = toCoords.cy - fromCoords.cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) return;
 
-      // Line offset
-      const startX = fromCoords.cx + normX * 12;
-      const startY = fromCoords.cy + normY * 12;
-      const endX = toCoords.cx - normX * 22;
-      const endY = toCoords.cy - normY * 22;
+    const normX = dx / dist;
+    const normY = dy / dist;
 
-      const style = isHovered
-        ? { marker: 'maia-arrow-highlight', color: '#ec4899', width: 9.5 }
-        : styles[idx];
+    // Start circle at origin square
+    const startCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    startCircle.setAttribute('cx', fromCoords.cx);
+    startCircle.setAttribute('cy', fromCoords.cy);
+    startCircle.setAttribute('r', isStockfish ? '5' : '6');
+    startCircle.setAttribute('fill', color);
+    startCircle.setAttribute('opacity', opacity);
+    group.appendChild(startCircle);
 
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', startX);
-      line.setAttribute('y1', startY);
-      line.setAttribute('x2', endX);
-      line.setAttribute('y2', endY);
-      line.setAttribute('stroke', style.color);
-      line.setAttribute('stroke-width', style.width);
-      line.setAttribute('stroke-linecap', 'round');
-      line.setAttribute('marker-end', `url(#${style.marker})`);
-      line.setAttribute('opacity', isHovered ? '1.0' : (isTop ? '0.92' : '0.75'));
+    // Line offset
+    const startX = fromCoords.cx + normX * 12;
+    const startY = fromCoords.cy + normY * 12;
+    const endX = toCoords.cx - normX * 22;
+    const endY = toCoords.cy - normY * 22;
 
-      group.appendChild(line);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', startX);
+    line.setAttribute('y1', startY);
+    line.setAttribute('x2', endX);
+    line.setAttribute('y2', endY);
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', width);
+    line.setAttribute('stroke-linecap', 'round');
+    if (dashed) line.setAttribute('stroke-dasharray', dashed);
+    line.setAttribute('marker-end', `url(#${marker})`);
+    line.setAttribute('opacity', opacity);
+    group.appendChild(line);
 
-      // Percentage pill badge on destination square
+    // Label pill on destination square
+    if (label) {
       const badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       const badgeX = toCoords.cx;
-      const badgeY = toCoords.cy + (idx === 0 ? 0 : (idx === 1 ? -16 : 16));
+      const badgeY = toCoords.cy + (isStockfish ? 16 : -14);
 
+      const rectWidth = Math.max(55, label.length * 7.5 + 16);
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', badgeX - 25);
+      rect.setAttribute('x', badgeX - rectWidth / 2);
       rect.setAttribute('y', badgeY - 11);
-      rect.setAttribute('width', '50');
+      rect.setAttribute('width', rectWidth);
       rect.setAttribute('height', '22');
       rect.setAttribute('rx', '11');
       rect.setAttribute('fill', '#0f172a');
-      rect.setAttribute('stroke', style.color);
-      rect.setAttribute('stroke-width', '1.8');
+      rect.setAttribute('stroke', color);
+      rect.setAttribute('stroke-width', '1.6');
       rect.setAttribute('opacity', '0.95');
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -270,14 +347,14 @@ export class HeatmapOverlay {
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('fill', '#ffffff');
       text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
-      text.setAttribute('font-size', '11');
+      text.setAttribute('font-size', '10.5');
       text.setAttribute('font-weight', '700');
-      text.textContent = `${move.prob}%`;
+      text.textContent = label;
 
       badgeGroup.appendChild(rect);
       badgeGroup.appendChild(text);
       group.appendChild(badgeGroup);
-    });
+    }
   }
 
   renderTrapWarning(group, topMove) {

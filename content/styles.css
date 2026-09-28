@@ -468,3 +468,22 @@
   line-height: 1.5;
   color: #cbd5e1;
 }
+
+.maia-sf-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+}
+
+.maia-sf-eval {
+  background: rgba(16, 185, 129, 0.18);
+  color: #10b981;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

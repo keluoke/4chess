@@ -304,7 +304,6 @@ export class IntuitionPanel {
     this.currentData = predictionData;
     this.latency = latencyMs;
 
-    // 1. Update Active Turn Tag
     const turnPill = this.container.querySelector('#maia-turn-pill');
     const isWhite = predictionData.turn === 'w';
     if (turnPill) {
@@ -312,42 +311,98 @@ export class IntuitionPanel {
       turnPill.className = `maia-turn-tag ${isWhite ? 'turn-white' : 'turn-black'}`;
     }
 
+    const modelBadge = this.container.querySelector('#maia-model-badge');
+    const modelControls = this.container.querySelector('#maia-model-controls');
     const movesHeader = this.container.querySelector('#maia-moves-header-text');
+    const movesContainer = this.container.querySelector('#maia-moves-container');
+    const insightBox = this.container.querySelector('#maia-insight-card');
+    const insightBadge = this.container.querySelector('#maia-insight-badge');
+    const insightText = this.container.querySelector('#maia-insight-text');
+    const timeEl = this.container.querySelector('#maia-inference-time');
+
+    // 1. If engine is NOT available: strictly show unavailable error (no fake guesses!)
+    if (!predictionData || !predictionData.isAvailable) {
+      if (modelBadge) {
+        modelBadge.textContent = '🔴 Maia-3 未就绪';
+        modelBadge.className = 'maia-badge badge-warning';
+      }
+      if (modelControls) modelControls.style.display = 'flex';
+      if (timeEl) timeEl.textContent = '未就绪';
+      if (movesContainer) {
+        movesContainer.innerHTML = `
+          <div style="padding: 16px 12px; text-align: center; background: rgba(239, 68, 68, 0.08); border: 1px dashed rgba(239, 68, 68, 0.3); border-radius: 10px;">
+            <div style="font-size: 22px; margin-bottom: 6px;">🛑</div>
+            <div style="font-weight: 700; color: #ef4444; margin-bottom: 6px;">Maia-3 神经网络引擎未连接</div>
+            <div style="font-size: 11.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 10px;">
+              本插件已完全删除低精度离线乱猜模式。<br>
+              请在本地终端执行一键启动脚本载入 79M 模型：<br>
+              <code style="background: #1e293b; color: #38bdf8; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">./run_maia.sh</code>
+            </div>
+            <button id="maia-retry-btn" style="background: #3b82f6; color: #fff; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: 600;">🔄 重新检测引擎</button>
+          </div>
+        `;
+        const retryBtn = movesContainer.querySelector('#maia-retry-btn');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            if (this.onModelLoaded) this.onModelLoaded();
+          });
+        }
+      }
+      if (insightBox) insightBox.style.display = 'none';
+      return;
+    }
+
+    // 2. Engine is connected: Update Badges and Controls
+    if (modelControls) modelControls.style.display = 'none';
+    if (insightBox) insightBox.style.display = 'block';
+
+    if (modelBadge) {
+      if (predictionData.stockfish && predictionData.stockfish.available) {
+        modelBadge.textContent = `🟢 Maia-3 79M + Stockfish 17 (⚡ MPS)`;
+      } else if (predictionData.isLocalServer) {
+        modelBadge.textContent = `🟢 ${predictionData.modelName} (⚡ 本地 MPS)`;
+      } else {
+        modelBadge.textContent = `🟢 ONNX 实装 (⚡ ${predictionData.backend})`;
+      }
+      modelBadge.className = 'maia-badge badge-gpu';
+    }
+
     if (movesHeader) {
       movesHeader.textContent = isWhite ? '白方候选着法 (向上进攻)' : '黑方候选着法 (向下进攻)';
     }
 
-    // 2. Update Model Badge
-    const modelBadge = this.container.querySelector('#maia-model-badge');
-    const modelControls = this.container.querySelector('#maia-model-controls');
-    if (modelBadge) {
-      if (predictionData.isLocalServer) {
-        modelBadge.textContent = `🟢 ${predictionData.modelName} (⚡ 本地 MPS 原生加速)`;
-        modelBadge.className = 'maia-badge badge-gpu';
-        if (modelControls) modelControls.style.display = 'none';
-      } else if (predictionData.isRealOnnx) {
-        modelBadge.textContent = `🟢 ONNX 实装 (⚡ ${predictionData.backend})`;
-        modelBadge.className = 'maia-badge badge-gpu';
-        if (modelControls) modelControls.style.display = 'none';
-      } else if (predictionData.isEmbedded) {
-        modelBadge.textContent = `🟢 内置神经网络 (⚡ 0ms 本地秒开)`;
-        modelBadge.className = 'maia-badge badge-gpu';
-      } else {
-        modelBadge.textContent = '🟡 离线模式 (未加载权重)';
-        modelBadge.className = 'maia-badge badge-warning';
-      }
-    }
-
-    // 3. Latency
-    const timeEl = this.container.querySelector('#maia-inference-time');
     if (timeEl) {
-      timeEl.textContent = `${latencyMs.toFixed(1)} ms (${predictionData.backend})`;
+      timeEl.textContent = `${latencyMs.toFixed(0)} ms (${predictionData.backend})`;
     }
 
-    // 4. Move List
-    const movesContainer = this.container.querySelector('#maia-moves-container');
+    // 3. Human vs Stockfish Comparative Insight Card
+    if (predictionData.comparison) {
+      const { badge, summary, agreed } = predictionData.comparison;
+      insightBadge.textContent = badge;
+      insightBadge.className = `maia-insight-tag ${agreed ? 'tag-consensus' : 'tag-trap'}`;
+      insightBox.className = `maia-insight-box ${agreed ? 'alert-consensus' : 'alert-trap'}`;
+      
+      let sfHtml = '';
+      if (predictionData.stockfish && predictionData.stockfish.bestMove) {
+        const sf = predictionData.stockfish;
+        sfHtml = `
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center; font-size: 11.5px;">
+            <span>🐟 Stockfish 17 最佳: <strong>${sf.bestMove.san}</strong></span>
+            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${sf.score}</span>
+          </div>
+        `;
+      }
+      insightText.innerHTML = `${summary}${sfHtml}`;
+    } else if (predictionData.analysis) {
+      insightBadge.textContent = '💡 直觉研判';
+      insightBadge.className = 'maia-insight-tag tag-neutral';
+      insightBox.className = 'maia-insight-box alert-neutral';
+      insightText.textContent = predictionData.analysis.commentary;
+    }
+
+    // 4. Maia Human Candidates Move List
     if (!predictionData.moves || predictionData.moves.length === 0) {
-      movesContainer.innerHTML = `<div class="maia-placeholder">${predictionData.summary || '无可选合法着法'}</div>`;
+      movesContainer.innerHTML = `<div class="maia-placeholder">局面绝杀或无合法着法</div>`;
       return;
     }
 
@@ -359,13 +414,14 @@ export class IntuitionPanel {
       row.className = `maia-move-row ${idx === 0 ? 'top-pick' : ''}`;
       row.dataset.uci = move.uci;
 
+      const isSfMatch = predictionData.stockfish?.bestMove?.uci === move.uci;
       const colors = ['#f59e0b', '#06b6d4', '#a855f7', '#6b7280'];
-      const barColor = colors[idx] || '#6b7280';
+      const barColor = isSfMatch ? '#10b981' : (colors[idx] || '#6b7280');
 
       row.innerHTML = `
         <div class="maia-move-main">
           <span class="maia-move-rank">#${idx + 1}</span>
-          <span class="maia-move-san">${move.san}</span>
+          <span class="maia-move-san">${move.san} ${isSfMatch ? '<span style="font-size: 10px; color: #10b981;">(🐟 最佳)</span>' : ''}</span>
           <span class="maia-move-prob">${move.prob}%</span>
         </div>
         <div class="maia-progress-bar">
@@ -382,33 +438,5 @@ export class IntuitionPanel {
 
       movesContainer.appendChild(row);
     });
-
-    // 5. Insight Card
-    const insightBox = this.container.querySelector('#maia-insight-card');
-    const insightBadge = this.container.querySelector('#maia-insight-badge');
-    const insightText = this.container.querySelector('#maia-insight-text');
-
-    if (predictionData.analysis) {
-      const { badgeType, commentary } = predictionData.analysis;
-      insightText.textContent = commentary;
-
-      if (badgeType === 'blunder-trap') {
-        insightBox.className = 'maia-insight-box alert-trap';
-        insightBadge.textContent = '⚠️ 战术陷阱盲区';
-        insightBadge.className = 'maia-insight-tag tag-trap';
-      } else if (badgeType === 'consensus') {
-        insightBox.className = 'maia-insight-box alert-consensus';
-        insightBadge.textContent = '🎯 极高人类共识';
-        insightBadge.className = 'maia-insight-tag tag-consensus';
-      } else if (badgeType === 'tactical') {
-        insightBox.className = 'maia-insight-box alert-tactical';
-        insightBadge.textContent = '⚖️ 直觉剧烈分歧';
-        insightBadge.className = 'maia-insight-tag tag-tactical';
-      } else {
-        insightBox.className = 'maia-insight-box alert-neutral';
-        insightBadge.textContent = '💡 人类直觉着法';
-        insightBadge.className = 'maia-insight-tag tag-neutral';
-      }
-    }
   }
 }

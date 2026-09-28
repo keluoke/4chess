@@ -220,6 +220,7 @@ export class MaiaEngine {
       const commentary = `直觉候选: ${topMove.san} (${topMove.prob}%) · 胜率预估: ${localData.winRate}%`;
 
       return {
+        isAvailable: true,
         fen: localData.fen || fen,
         elo,
         turn: localData.activeTurn || chess.turn,
@@ -230,15 +231,17 @@ export class MaiaEngine {
         modelName: localData.model,
         heatmap: normalizedHeatmap,
         moves: scoredMoves,
+        stockfish: localData.stockfish,
+        comparison: localData.comparison,
         analysis: {
           topMove: topMove.uci,
           commentary,
-          isTacticalTrap: false
+          isTacticalTrap: localData.comparison ? !localData.comparison.agreed : false
         }
       };
     }
 
-    // 1. External ONNX Model (if loaded by user)
+    // 1. External Real ONNX Model (if loaded)
     if (ModelLoader.isModelLoaded() && window.ort) {
       try {
         const session = ModelLoader.session;
@@ -273,62 +276,41 @@ export class MaiaEngine {
         for (const m of scoredMoves) {
           normalizedHeatmap[m.to] = Math.min(1.0, normalizedHeatmap[m.to] + m.prob / 100);
         }
+
+        const analysis = this.analyzeHumanTendencies(chess, scoredMoves, elo);
+        return {
+          isAvailable: true,
+          fen,
+          elo,
+          turn: chess.turn,
+          backend: this.getBackend(),
+          isRealOnnx: true,
+          isEmbedded: false,
+          modelName: this.getModelName(),
+          heatmap: normalizedHeatmap,
+          moves: scoredMoves,
+          stockfish: null,
+          comparison: null,
+          analysis
+        };
       } catch (e) {
-        console.warn('[Maia-3] ONNX run fallback:', e);
+        console.warn('[Maia-3] ONNX run error:', e);
       }
     }
 
-    // 2. Embedded Pre-Packaged Maia-3 Neural Weights (0ms local inference)
-    if (!scoredMoves && ModelLoader.isEmbeddedReady) {
-      const embeddedResult = ModelLoader.evaluateEmbedded(chess, legalMoves, elo);
-      if (embeddedResult) {
-        scoredMoves = embeddedResult.scoredMoves;
-        normalizedHeatmap = embeddedResult.heatmap;
-      }
-    }
-
-    // 3. Fallback: Native WebGPU/WASM Compute Pipeline
-    if (!scoredMoves) {
-      const tokens = this.encodeBoard(chess);
-      let output;
-
-      if (this.activeBackend === 'webgpu') {
-        try {
-          output = await this.webgpuRunner.runInference(tokens, chess.turn, elo);
-        } catch (err) {
-          this.activeBackend = 'wasm';
-          output = this.wasmRunner.runInference(tokens, chess.turn, elo);
-        }
-      } else {
-        output = this.wasmRunner.runInference(tokens, chess.turn, elo);
-      }
-
-      const { heatmap: rawHeatmap, policy: policyMatrix } = output;
-      let maxVal = 0.0001;
-      for (let i = 0; i < 64; i++) {
-        if (rawHeatmap[i] > maxVal) maxVal = rawHeatmap[i];
-      }
-      normalizedHeatmap = new Float32Array(64);
-      for (let i = 0; i < 64; i++) {
-        normalizedHeatmap[i] = Math.pow(rawHeatmap[i] / maxVal, 1.25);
-      }
-
-      scoredMoves = this.scoreLegalMoves(chess, legalMoves, policyMatrix, elo);
-    }
-
-    const analysis = this.analyzeHumanTendencies(chess, scoredMoves, elo);
-
+    // 2. Strict Honesty: No fake fallback heuristics!
     return {
+      isAvailable: false,
+      error: 'Maia-3 神经网络引擎未就绪',
+      message: '本插件已禁用离线乱猜模式。请在本地终端启动真实 Maia-3 79M 服务：./run_maia.sh',
       fen,
-      elo,
       turn: chess.turn,
-      backend: this.getBackend(),
-      isRealOnnx: this.isRealOnnxLoaded(),
-      isEmbedded: this.isEmbeddedReady(),
-      modelName: this.getModelName(),
-      heatmap: normalizedHeatmap,
-      moves: scoredMoves,
-      analysis
+      backend: '未连接',
+      modelName: '未连接',
+      moves: [],
+      heatmap: new Float32Array(64),
+      stockfish: null,
+      comparison: null
     };
   }
 
