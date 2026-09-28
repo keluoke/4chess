@@ -260,7 +260,7 @@ export class MaiaInBrowserEngine {
   /**
    * Forward pass: computes move distribution and attention heatmap
    */
-  async predict(chessBoard, targetElo = 1500, abortCheck = null) {
+  async predict(chessBoard, targetElo = 1900, abortCheck = null) {
     if (!this.isReady) {
       throw new Error('Maia-3 In-Browser model is not loaded');
     }

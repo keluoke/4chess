@@ -89,7 +89,7 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('[Maia-3 Extension] Installed successfully.');
   // Initialize default user settings in chrome.storage.local
   chrome.storage.local.set({
-    defaultElo: 1500,
+    defaultElo: 1900,
     preferredBackend: 'webgpu',
     showHeatmap: true,
     showArrows: true,

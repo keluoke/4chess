@@ -42,6 +42,14 @@
   --weui-BORDER-LIGHT: rgba(255, 255, 255, 0.04);
 }
 
+/* Universal CSS Box-Sizing & Reset Isolation */
+#maia3-intuition-panel,
+#maia3-intuition-panel *,
+#maia-wechat-float,
+#maia-wechat-float * {
+  box-sizing: border-box !important;
+}
+
 /* Base Panel Root (WeChat Mini-Program Page Container) */
 .maia-panel-root {
   position: fixed;
@@ -133,14 +141,18 @@
    ========================================================================== */
 .weui-navbar {
   height: 44px;
-  padding: 0 12px;
+  min-height: 44px;
+  padding: 0 10px;
   background: var(--weui-BG-1);
   border-bottom: 0.5px solid var(--weui-BORDER);
   display: flex;
   align-items: center;
   justify-content: space-between;
   cursor: grab;
-  box-sizing: border-box;
+  box-sizing: border-box !important;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .weui-navbar:active {
@@ -150,18 +162,20 @@
 .weui-navbar__left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .weui-navbar__icon {
-  font-size: 16px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 
 .weui-navbar__title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--weui-FG-0);
   white-space: nowrap;
@@ -171,9 +185,9 @@
 }
 
 .weui-turn-tag {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
@@ -187,6 +201,29 @@
 .turn-black {
   background: rgba(7, 193, 96, 0.15);
   color: var(--weui-BRAND);
+}
+
+/* Back to Review button in Navbar */
+.weui-back-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--weui-BRAND-LIGHT);
+  border: 0.5px solid var(--weui-BRAND-BORDER);
+  color: var(--weui-BRAND);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+
+.weui-back-review-btn:hover {
+  background: rgba(7, 193, 96, 0.28);
+  transform: scale(1.02);
 }
 
 /* Iconic WeChat Mini-Program Capsule Button (小程序双键胶囊) */
@@ -358,6 +395,9 @@
   border-radius: 12px;
   overflow: hidden;
   border: 0.5px solid var(--weui-BORDER);
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box !important;
 }
 
 .weui-cell {

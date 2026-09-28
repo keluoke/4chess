@@ -16,7 +16,7 @@ export class MaiaEngine {
   constructor(onStatusChange = null) {
     this.maiaInBrowser = new MaiaInBrowserEngine();
     this.stockfishInBrowser = new StockfishInBrowser();
-    this.targetElo = 1500;
+    this.targetElo = 1900;
     this.onStatusChange = onStatusChange;
     this.isReady = false;
     this.isLoading = false;

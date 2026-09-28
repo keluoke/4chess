@@ -152,7 +152,7 @@ const I18N = {
 };
 
 export class IntuitionPanel {
-  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove }) {
+  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove, onSelectBlunder }) {
     this.onEloChange = onEloChange;
     this.onToggleChange = onToggleChange;
     this.onMoveHover = onMoveHover;
@@ -161,12 +161,18 @@ export class IntuitionPanel {
     this.onAnalyzeGame = onAnalyzeGame;
     this.onCancelReview = onCancelReview;
     this.onJumpToMove = onJumpToMove;
+    this.onSelectBlunder = onSelectBlunder;
 
     this.container = null;
     this.fab = null;
     this.isClosed = localStorage.getItem('maia3_panel_closed') === 'true';
     this.isFairPlayLocked = false;
-    this.currentElo = 1500;
+
+    let storedElo = 1900;
+    try {
+      storedElo = parseInt(localStorage.getItem('maia3_target_elo'), 10) || 1900;
+    } catch (e) {}
+    this.currentElo = storedElo;
     this.currentData = null;
     this.currentTurn = 'w';
     this.latency = 0;
@@ -276,14 +282,18 @@ export class IntuitionPanel {
           <span class="weui-navbar__icon">🧠</span>
           <span class="weui-navbar__title" id="txt-panel-title">${this.t('panelTitle')}</span>
           <span id="maia-turn-pill" class="weui-turn-tag turn-white">${this.t('white')}</span>
+          <button type="button" id="weui-btn-back-review" class="weui-back-review-btn" style="display: none;" title="${this.lang === 'zh' ? '返回全局复盘损耗榜' : 'Back to Game Review'}">
+            <span>⬅️</span>
+            <span>${this.lang === 'zh' ? '返回复盘' : 'Review'}</span>
+          </button>
         </div>
         <!-- Iconic WeChat Mini-Program Capsule (小程序双键胶囊) -->
         <div class="weui-capsule">
-          <button id="weui-btn-more" class="weui-capsule-btn" title="${this.t('btnMore')}">
+          <button type="button" id="weui-btn-more" class="weui-capsule-btn" title="${this.t('btnMore')}">
             <span class="weui-capsule-dots">•••</span>
           </button>
           <div class="weui-capsule-divider"></div>
-          <button id="weui-btn-close" class="weui-capsule-btn" title="${this.t('btnClose')}">
+          <button type="button" id="weui-btn-close" class="weui-capsule-btn" title="${this.t('btnClose')}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none"/>
               <circle cx="12" cy="12" r="3.5" fill="currentColor"/>
@@ -308,7 +318,23 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- 2. Model Spec -->
+        <!-- 2. Elo Rating Selector (隐藏在设置菜单内，默认 1900) -->
+        <div class="weui-drawer-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="weui-drawer-label" id="lbl-elo-title">${this.t('eloTitle')}</div>
+            <span id="maia-elo-val" style="color: var(--weui-BRAND); font-weight: 700; font-size: 12px;">${this.currentElo}</span>
+          </div>
+          <div class="weui-segmented-bar" style="height: 28px;">
+            <button type="button" class="weui-segment ${this.currentElo === 1100 ? 'active' : ''}" data-elo="1100">1100</button>
+            <button type="button" class="weui-segment ${this.currentElo === 1500 ? 'active' : ''}" data-elo="1500">1500</button>
+            <button type="button" class="weui-segment ${this.currentElo === 1900 ? 'active' : ''}" data-elo="1900">1900</button>
+            <button type="button" class="weui-segment ${this.currentElo === 2200 ? 'active' : ''}" data-elo="2200">2200</button>
+          </div>
+          <div id="maia-elo-desc" class="weui-cell-desc" style="padding: 2px 2px 0 2px;">${this.t('eloDesc')[this.currentElo] || ''}</div>
+          <input type="range" id="maia-elo-slider" min="600" max="2600" step="50" value="${this.currentElo}" class="weui-slider" />
+        </div>
+
+        <!-- 3. Model Spec -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
           <div style="display: flex; gap: 5px;">
@@ -318,12 +344,12 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- 3. Custom CDN URL -->
+        <!-- 4. Custom CDN URL -->
         <div class="weui-drawer-item">
-          <div class="weui-drawer-label" id="lbl-cdn-url">${this.t('lblCdnUrl')}</div>
+          <div class="weui-drawer-label" id="lbl-cdn-url">${this.t('lbl-cdn-url') || this.t('lblCdnUrl')}</div>
           <div style="display: flex; gap: 6px;">
             <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_23m.bin" value="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: var(--weui-BG-3); border: 0.5px solid var(--weui-BORDER); color: #FFF; padding: 4px 8px; border-radius: 6px; font-size: 10.5px; font-family: monospace;">
-            <button id="cdn-save-btn" class="weui-btn-primary" style="padding: 4px 10px; font-size: 11px;">${this.t('btnSave')}</button>
+            <button type="button" id="cdn-save-btn" class="weui-btn-primary" style="padding: 4px 10px; font-size: 11px;">${this.t('btnSave')}</button>
           </div>
         </div>
       </div>
@@ -374,24 +400,6 @@ export class IntuitionPanel {
           <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--weui-FG-2);">
             <span id="cdn-bytes-label">0 / 28.0 MB</span>
             <span id="lbl-cdn-cache-tag">${this.lang === 'zh' ? '永久本地缓存 (0ms)' : 'Local Cache (0ms)'}</span>
-          </div>
-        </div>
-
-        <!-- Elo Rating Selector Group (Zero-Overflow Segmented Tabs) -->
-        <div>
-          <div class="weui-cells__title">
-            <span id="lbl-elo-title">${this.t('eloTitle')}</span>
-            <span id="maia-elo-val" style="color: var(--weui-BRAND); font-weight: 700;">1500</span>
-          </div>
-          <div class="weui-cells" style="padding: 6px 8px;">
-            <div class="weui-segmented-bar">
-              <button class="weui-segment" data-elo="1100">1100</button>
-              <button class="weui-segment active" data-elo="1500">1500</button>
-              <button class="weui-segment" data-elo="1900">1900</button>
-              <button class="weui-segment" data-elo="2200">2200</button>
-            </div>
-            <div id="maia-elo-desc" class="weui-cell-desc">${this.t('eloDesc')[1500]}</div>
-            <input type="range" id="maia-elo-slider" min="600" max="2600" step="50" value="1500" class="weui-slider" />
           </div>
         </div>
 
@@ -571,8 +579,8 @@ export class IntuitionPanel {
       });
     });
 
-    // 3. Elo Segmented Tabs & Slider
-    const segments = this.container.querySelectorAll('#maia-panel-body .weui-segment');
+    // 3. Elo Segmented Tabs & Slider (Inside Settings Drawer)
+    const segments = this.container.querySelectorAll('.weui-segment[data-elo]');
     const eloSlider = this.container.querySelector('#maia-elo-slider');
     const eloVal = this.container.querySelector('#maia-elo-val');
     const eloDesc = this.container.querySelector('#maia-elo-desc');
@@ -592,6 +600,9 @@ export class IntuitionPanel {
       btn.addEventListener('click', () => {
         const elo = parseInt(btn.dataset.elo, 10);
         this.currentElo = elo;
+        try {
+          localStorage.setItem('maia3_target_elo', String(elo));
+        } catch (e) {}
         updateActiveEloButton(elo);
         if (eloSlider) eloSlider.value = elo;
         if (eloVal) eloVal.textContent = elo;
@@ -607,6 +618,9 @@ export class IntuitionPanel {
       eloSlider.addEventListener('input', (e) => {
         const elo = parseInt(e.target.value, 10);
         this.currentElo = elo;
+        try {
+          localStorage.setItem('maia3_target_elo', String(elo));
+        } catch (e) {}
         if (eloVal) eloVal.textContent = elo;
         updateActiveEloButton(elo);
         if (this.fab) {
@@ -678,10 +692,11 @@ export class IntuitionPanel {
       });
     }
 
-    // 6. Game Review Trigger & Close Buttons
+    // 6. Game Review Trigger, Back & Close Buttons
     const triggerReviewBtn = this.container.querySelector('#btn-trigger-review');
     const reviewDrawer = this.container.querySelector('#weui-review-overlay');
     const reviewCloseBtn = this.container.querySelector('#btn-close-review');
+    const backReviewBtn = this.container.querySelector('#weui-btn-back-review');
 
     if (triggerReviewBtn && reviewDrawer) {
       triggerReviewBtn.addEventListener('click', (e) => {
@@ -691,6 +706,7 @@ export class IntuitionPanel {
         } else {
           if (this.lastReviewResult) {
             reviewDrawer.style.display = 'flex';
+            if (backReviewBtn) backReviewBtn.style.display = 'none';
             this.renderReviewResults(this.lastReviewResult);
           } else {
             this.startReview();
@@ -699,10 +715,24 @@ export class IntuitionPanel {
       });
     }
 
+    if (backReviewBtn && reviewDrawer) {
+      backReviewBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reviewDrawer.style.display = 'flex';
+        backReviewBtn.style.display = 'none';
+        if (this.lastReviewResult) {
+          this.renderReviewResults(this.lastReviewResult);
+        }
+      });
+    }
+
     if (reviewCloseBtn && reviewDrawer) {
       reviewCloseBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         reviewDrawer.style.display = 'none';
+        if (this.lastReviewResult && backReviewBtn) {
+          backReviewBtn.style.display = 'inline-flex';
+        }
       });
     }
   }
@@ -880,15 +910,34 @@ export class IntuitionPanel {
 
     // Bind Jump-to-move clicks on blunder cards
     reviewBody.querySelectorAll('.weui-blunder-card').forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
         // Clear previous highlight
         reviewBody.querySelectorAll('.weui-blunder-card').forEach(c => c.style.outline = 'none');
         card.style.outline = '2px solid var(--weui-BRAND)';
 
         const idx = parseInt(card.dataset.momentIdx, 10);
         const item = filteredMoments[idx];
-        if (item && this.onJumpToMove) {
-          this.onJumpToMove(item);
+        if (!item) return;
+
+        const isPlayedClick = !!e.target.closest('.jump-played');
+        const targetPly = isPlayedClick ? item.ply : Math.max(0, item.ply - 1);
+
+        if (this.onJumpToMove) {
+          this.onJumpToMove(item, targetPly);
+        }
+
+        const reviewDrawer = this.container.querySelector('#weui-review-overlay');
+        if (reviewDrawer) {
+          reviewDrawer.style.display = 'none';
+        }
+
+        const backReviewBtn = this.container.querySelector('#weui-btn-back-review');
+        if (backReviewBtn) {
+          backReviewBtn.style.display = 'inline-flex';
+        }
+
+        if (this.onSelectBlunder) {
+          this.onSelectBlunder(item, targetPly);
         }
       });
     });
@@ -1428,5 +1477,19 @@ export class IntuitionPanel {
 
       movesContainer.appendChild(row);
     });
+  }
+
+  showCustomInsight({ badge, text, isTrap = false }) {
+    if (!this.container) return;
+    const insightCard = this.container.querySelector('#maia-insight-card');
+    const badgeEl = this.container.querySelector('#maia-insight-badge');
+    const textEl = this.container.querySelector('#maia-insight-text');
+    if (!insightCard || !badgeEl || !textEl) return;
+
+    badgeEl.textContent = badge;
+    badgeEl.className = `weui-insight-badge ${isTrap ? 'badge-trap' : ''}`;
+    insightCard.className = `weui-insight-box ${isTrap ? 'alert-trap' : ''}`;
+    textEl.innerHTML = text;
+    insightCard.style.display = 'block';
   }
 }

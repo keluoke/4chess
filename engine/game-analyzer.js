@@ -367,7 +367,7 @@ export class GameAnalyzer {
 
     const {
       depth = 8,
-      elo = 1500,
+      elo = 1900,
       onProgress = null
     } = options;
 
@@ -539,74 +539,161 @@ export class GameAnalyzer {
   }
 
   /**
-   * Jump to a specific move on the board
+   * Jump to a specific move on the board (Lichess & Chess.com)
+   * @param {Object} moveItem - The blunder or move object
+   * @param {number|null} targetPly - Explicit ply to jump to (defaults to decision point before move: moveItem.ply - 1)
    */
-  static jumpToMove(moveItem) {
+  static jumpToMove(moveItem, targetPly = null) {
     if (!moveItem) return false;
+    const ply = (targetPly !== null && typeof targetPly === 'number')
+      ? targetPly
+      : Math.max(0, (moveItem.ply || 1) - 1);
 
-    // 1. Direct DOM Element click
-    if (moveItem.element && typeof moveItem.element.click === 'function') {
-      try {
-        moveItem.element.click();
-        moveItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        return true;
-      } catch (e) {}
-    }
+    const isChesscom = typeof window !== 'undefined' && window.location.hostname.includes('chess.com');
+    const isLichess = typeof window !== 'undefined' && window.location.hostname.includes('lichess');
 
-    // 2. Query DOM for [data-ply="X"]
-    const plyEl = document.querySelector(`[data-ply="${moveItem.ply}"]`);
-    if (plyEl && typeof plyEl.click === 'function') {
-      try {
-        plyEl.click();
-        plyEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        return true;
-      } catch (e) {}
-    }
+    // Helper: dispatch full synthetic pointer/mouse events across shadow DOM boundaries
+    const dispatchSyntheticClick = (el) => {
+      if (!el) return;
+      const opts = { bubbles: true, cancelable: true, composed: true, view: window, buttons: 1 };
+      try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (e) {}
+      try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (e) {}
+      try { if (typeof el.click === 'function') el.click(); } catch (e) {}
+    };
 
-    // 3. Query DOM by move sequence index in .vertical-move-list or .main-line-row
-    const allNodes = Array.from(document.querySelectorAll('.vertical-move-list .node, .move-list-wrapper .node, [data-ply], .main-line-row .node'));
-    if (allNodes.length >= moveItem.ply) {
-      const targetNode = allNodes[moveItem.ply - 1];
-      if (targetNode && typeof targetNode.click === 'function') {
+    // Helper: simulate arrow keys on all board/document event targets
+    const dispatchArrow = (dir) => {
+      const key = dir === 'left' ? 'ArrowLeft' : 'ArrowRight';
+      const keyCode = dir === 'left' ? 37 : 39;
+      const targets = [document.body, document.documentElement, document, window];
+      const boardEl = document.querySelector('wc-chess-board, chess-board, cg-board');
+      if (boardEl) targets.unshift(boardEl);
+
+      for (const t of targets) {
+        if (!t) continue;
         try {
-          targetNode.click();
-          targetNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          return true;
+          t.dispatchEvent(new KeyboardEvent('keydown', { key, code: key, keyCode, which: keyCode, bubbles: true, cancelable: true, composed: true, view: window }));
+          t.dispatchEvent(new KeyboardEvent('keyup', { key, code: key, keyCode, which: keyCode, bubbles: true, cancelable: true, composed: true, view: window }));
         } catch (e) {}
       }
-    }
+    };
 
-    // 4. Lichess specific jump
-    if (window.location.hostname.includes('lichess')) {
-      const lichessMoves = document.querySelectorAll('.analyse__moves move, rm6 move, .tview2 u');
-      if (lichessMoves[moveItem.ply - 1]) {
-        lichessMoves[moveItem.ply - 1].click();
-        return true;
+    // -------------------------------------------------------------
+    // Platform 1: Lichess
+    // -------------------------------------------------------------
+    if (isLichess) {
+      if (ply === 0) {
+        const firstBtn = document.querySelector('.analyse__controls .first, button[data-act="first"]');
+        if (firstBtn) {
+          dispatchSyntheticClick(firstBtn);
+          return true;
+        }
+      } else {
+        const lichessMoves = Array.from(document.querySelectorAll('.analyse__moves move, rm6 move, .tview2 u, .analyse__moves u'));
+        if (lichessMoves[ply - 1]) {
+          dispatchSyntheticClick(lichessMoves[ply - 1]);
+          lichessMoves[ply - 1].scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+          return true;
+        }
       }
     }
 
-    // 5. Chess.com Web Component & Navigation fallback
-    if (window.location.hostname.includes('chess.com')) {
-      try {
-        const boardEl = document.querySelector('wc-chess-board, chess-board');
-        if (boardEl) {
-          if (typeof boardEl.game?.jumpToPly === 'function') {
-            boardEl.game.jumpToPly(moveItem.ply);
-            return true;
+    // -------------------------------------------------------------
+    // Platform 2: Chess.com Multi-Tier Strategy
+    // -------------------------------------------------------------
+    if (isChesscom) {
+      // Tier 1: Check Web Component direct JavaScript API
+      const boardEl = document.querySelector('wc-chess-board, chess-board');
+      if (boardEl) {
+        const targets = [boardEl.game, boardEl.game?.controller, boardEl.controller, boardEl];
+        const methodNames = ['goToPly', 'jumpToPly', 'goTo', 'jumpTo', 'seek', 'goToMove'];
+        for (const tgt of targets) {
+          if (!tgt) continue;
+          for (const m of methodNames) {
+            if (typeof tgt[m] === 'function') {
+              try {
+                tgt[m](ply);
+                console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via ${m}()`);
+                return true;
+              } catch (e) {}
+            }
           }
-          if (typeof boardEl.game?.jumpToMove === 'function') {
-            boardEl.game.jumpToMove(moveItem.ply);
+        }
+      }
+
+      // Tier 2: Directly dispatch synthetic click on target move node in DOM
+      if (ply === 0) {
+        const firstBtn = document.querySelector('button[data-cy="nav-first"], button[aria-label*="First" i], button.chevron-first, .board-controls-first, [class*="chevron-first"], [data-tab="first"]');
+        if (firstBtn) {
+          dispatchSyntheticClick(firstBtn);
+          console.log(`[GameAnalyzer] ✅ Jumped to ply 0 via nav-first button`);
+          return true;
+        }
+      } else {
+        const moveSelectors = [
+          `[data-ply="${ply}"]`,
+          `wc-vertical-move-list [data-ply="${ply}"]`,
+          `.vertical-move-list [data-ply="${ply}"]`,
+          `.move-list-wrapper [data-ply="${ply}"]`,
+          `.main-line-row [data-ply="${ply}"]`
+        ];
+        for (const sel of moveSelectors) {
+          const el = document.querySelector(sel);
+          if (el) {
+            dispatchSyntheticClick(el);
+            el.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+            console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via selector "${sel}"`);
             return true;
           }
         }
 
-        const url = new URL(window.location.href);
-        url.searchParams.set('move', String(moveItem.ply));
-        window.history.pushState({}, '', url.toString());
-        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        // Sequential index search among all move nodes
+        const allNodes = Array.from(document.querySelectorAll('.vertical-move-list .node, .move-list-wrapper .node, .keyboard-move-list .node, [data-ply], .main-line-row .node, wc-vertical-move-list .node'));
+        if (allNodes.length >= ply) {
+          const targetNode = allNodes[ply - 1];
+          if (targetNode) {
+            dispatchSyntheticClick(targetNode);
+            targetNode.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+            console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via allNodes[${ply - 1}]`);
+            return true;
+          }
+        }
+      }
+
+      // Tier 3: Use navigation buttons (nav-first then N times nav-next)
+      const navFirst = document.querySelector('button[data-cy="nav-first"], button[aria-label*="First" i], button.chevron-first, .board-controls-first, [data-tab="first"]');
+      const navNext = document.querySelector('button[data-cy="nav-next"], button[aria-label*="Next" i], button.chevron-right, .board-controls-next, [data-tab="next"]');
+      if (navFirst && navNext) {
+        dispatchSyntheticClick(navFirst);
+        if (ply > 0) {
+          for (let step = 0; step < ply; step++) {
+            dispatchSyntheticClick(navNext);
+          }
+        }
+        console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via nav-first + ${ply}x nav-next`);
         return true;
+      }
+
+      // Tier 4: Keyboard navigation fallback (ArrowLeft to 0, then ArrowRight x ply)
+      for (let k = 0; k < 120; k++) {
+        dispatchArrow('left');
+      }
+      for (let k = 0; k < ply; k++) {
+        dispatchArrow('right');
+      }
+
+      // Tier 5: URL query parameter & History state sync
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('move', String(ply));
+        window.history.pushState({ move: ply }, '', url.toString());
+        window.dispatchEvent(new PopStateEvent('popstate', { state: { move: ply } }));
       } catch (e) {}
+
+      return true;
     }
 
     return false;

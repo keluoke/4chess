@@ -84,8 +84,15 @@ export async function initMaiaExtension() {
     onCancelReview: () => {
       analyzer.cancel();
     },
-    onJumpToMove: (item) => {
-      GameAnalyzer.jumpToMove(item);
+    onJumpToMove: (item, targetPly = null) => {
+      GameAnalyzer.jumpToMove(item, targetPly);
+    },
+    onSelectBlunder: async (item, targetPly = null) => {
+      const targetFen = (targetPly === item.ply) ? item.fenAfter : item.fenBefore;
+      if (targetFen) {
+        currentFen = targetFen;
+        await runPrediction(targetFen, item);
+      }
     }
   });
 
@@ -94,7 +101,7 @@ export async function initMaiaExtension() {
 
   let predictionEpoch = 0;
 
-  async function runPrediction(fen) {
+  async function runPrediction(fen, blunderContext = null) {
     const thisEpoch = ++predictionEpoch;
     const abortCheck = () => predictionEpoch !== thisEpoch;
 
@@ -134,6 +141,29 @@ export async function initMaiaExtension() {
       overlay.render(maiaResult);
       panel.update(maiaResult, latency);
 
+      // If blunderContext is provided, display human-engine divergence insight banner
+      if (blunderContext) {
+        const isZh = panel.lang === 'zh';
+        const isTrap = blunderContext.isHumanTrap || blunderContext.severity === 'blunder';
+        const badgeText = isTrap
+          ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
+          : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
+        const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
+        const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
+
+        const insightHtml = isZh
+          ? `实战<strong>${sideText}</strong>走棋: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (直觉概率 <strong>${probText}</strong>)` : ''}，而引擎推荐最优走法为 <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>。<br/>` +
+            `局面损耗: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> 兵 (局势变动: ${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`
+          : `Played by <strong>${sideText}</strong>: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (Intuition: <strong>${probText}</strong>)` : ''}, while Engine recommends <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>.<br/>` +
+            `Centipawn loss: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> (${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`;
+
+        panel.showCustomInsight({
+          badge: badgeText,
+          text: insightHtml,
+          isTrap
+        });
+      }
+
       // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia)
       if (engine.stockfishInBrowser.isReady) {
         engine.evaluateStockfishAsync(fen, (sfRes) => {
@@ -141,6 +171,28 @@ export async function initMaiaExtension() {
             const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
             overlay.render(combined);
             panel.update(combined, latency);
+
+            if (blunderContext) {
+              const isZh = panel.lang === 'zh';
+              const isTrap = blunderContext.isHumanTrap || blunderContext.severity === 'blunder';
+              const badgeText = isTrap
+                ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
+                : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
+              const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
+              const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
+
+              const insightHtml = isZh
+                ? `实战<strong>${sideText}</strong>走棋: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (直觉概率 <strong>${probText}</strong>)` : ''}，而引擎推荐最优走法为 <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>。<br/>` +
+                  `局面损耗: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> 兵 (局势变动: ${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`
+                : `Played by <strong>${sideText}</strong>: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (Intuition: <strong>${probText}</strong>)` : ''}, while Engine recommends <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>.<br/>` +
+                  `Centipawn loss: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> (${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`;
+
+              panel.showCustomInsight({
+                badge: badgeText,
+                text: insightHtml,
+                isTrap
+              });
+            }
           }
         });
       }
