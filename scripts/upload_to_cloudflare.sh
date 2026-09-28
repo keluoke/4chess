@@ -8,26 +8,46 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODEL_5M="$DIR/models/maia3_model.bin"
+MODEL_23M="$DIR/models/maia3_23m.bin"
+MODEL_79M_FP16="$DIR/models/maia3_79m_fp16.bin"
 MODEL_79M="$DIR/models/maia3_79m.bin"
 
 echo "================================================================="
-echo "🧠 Maia-3 · Cloudflare CDN (weights.4chess.cc) 极速部署向导"
+echo "🧠 Maia-3 · Cloudflare CDN (weights.4chess.cc) 模型上传向导"
 echo "================================================================="
-echo "5M 推荐模型 (28MB):  $MODEL_5M"
-echo "79M 完整模型 (317MB): $MODEL_79M"
+echo "1. 5M 轻量推荐 (28MB):       $MODEL_5M"
+echo "2. 23M 平衡首选 (104MB):     $MODEL_23M"
+echo "3. 79M 高精 fp16 (159MB):    $MODEL_79M_FP16 (推荐，突破 300M 限制)"
+echo "4. 79M 完整 fp32 (317MB):    $MODEL_79M (超过 Cloudflare 300MB 单次直传限制)"
+echo ""
+echo "💡 关于 Cloudflare 300MB 限制与网页端拖拽:"
+echo "   Cloudflare Web 控制台和普通 HTTP PUT 单次上限为 300MB。"
+echo "   因此 317MB 的 fp32 文件会被拦截；"
+echo "   但 5M (28MB)、23M (104MB)、79M-fp16 (159MB) 均远低于 300MB，"
+echo "   不仅可以直接在网页端拖拽上传，也可通过以下终端命令 100% 成功秒传！"
 echo ""
 
+if command -v npx >/dev/null 2>&1; then
+  echo "-----------------------------------------------------------------"
+  echo "终端上传命令 (请确保在插件根目录运行，替换 <bucket-name> 为您的桶名):"
+  echo "-----------------------------------------------------------------"
+  echo "  # 查看当前 R2 桶名"
+  echo "  npx wrangler r2 bucket list"
+  echo ""
+  echo "  # 上传 5M 默认模型 (28MB):"
+  echo "  npx wrangler r2 object put <bucket-name>/maia3_model.bin --file=\"models/maia3_model.bin\" --remote"
+  echo ""
+  echo "  # 上传 23M 进阶模型 (104MB):"
+  echo "  npx wrangler r2 object put <bucket-name>/maia3_23m.bin --file=\"models/maia3_23m.bin\" --remote"
+  echo ""
+  echo "  # 上传 79M 大模型 (159MB fp16，推荐):"
+  echo "  npx wrangler r2 object put <bucket-name>/maia3_79m_fp16.bin --file=\"models/maia3_79m_fp16.bin\" --remote"
+  echo ""
+fi
+
 echo "-----------------------------------------------------------------"
-echo "针对您的自定义域名: weights.4chess.cc"
+echo "CORS 跨域配置 (如出现 403 / CORS 报错，请在 Cloudflare 存储桶设置粘贴):"
 echo "-----------------------------------------------------------------"
-echo "插件代码中现已默认配置了该域名！"
-echo "默认直链: https://weights.4chess.cc/maia3_model.bin"
-echo ""
-echo "如出现 403 Forbidden 提示，仅需在 Cloudflare 完成以下设置:"
-echo "1. 登录 Cloudflare 控制台 -> 点击左侧「R2 对象存储」-> 找到对应存储桶。"
-echo "2. 点击「设置 (Settings)」选项卡:"
-echo "   - 在「自定义域 (Custom Domains)」中确保已连接 weights.4chess.cc 且状态为 Active。"
-echo "   - 在「CORS 策略 (CORS Policy)」中点击添加或编辑，粘贴以下配置:"
 cat << 'EOF'
 [
   {
@@ -39,26 +59,10 @@ cat << 'EOF'
 ]
 EOF
 echo ""
-echo "3. 进入「对象 (Objects)」选项卡，上传模型文件:"
-echo "   - 推荐上传: $MODEL_5M (文件名必须为 maia3_model.bin)"
-echo "   - 若想使用 79M 大模型，也可将 $MODEL_79M 上传至桶中"
+echo "验证访问命令:"
+echo "  curl -I https://weights.4chess.cc/maia3_model.bin"
+echo "  curl -I https://weights.4chess.cc/maia3_23m.bin"
 echo ""
-echo "4. 上传完成后验证:"
-echo "   curl -I https://weights.4chess.cc/maia3_model.bin"
-echo "   返回 HTTP/2 200 即代表配置成功！"
-echo ""
-
-if command -v npx >/dev/null 2>&1; then
-  echo "-----------------------------------------------------------------"
-  echo "开发者快捷命令 (Wrangler CLI):"
-  echo "-----------------------------------------------------------------"
-  echo "  # 查看当前 R2 桶列表"
-  echo "  npx wrangler r2 bucket list"
-  echo ""
-  echo "  # 上传 5M 模型到指定桶 (将 <bucket-name> 替换为您的 R2 存储桶名):"
-  echo "  npx wrangler r2 object put <bucket-name>/maia3_model.bin --file=\"$MODEL_5M\""
-  echo ""
-fi
 
 echo "================================================================="
 echo "💡 提示：模型一旦从 CDN 下载完成，插件将通过 IndexedDB 永久本地缓存"

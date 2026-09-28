@@ -36,9 +36,10 @@ export class MaiaInBrowserEngine {
         arrayBuffer = urlOrBuffer;
         this.modelSource = 'memory';
       } else if (typeof urlOrBuffer === 'string') {
+        const cacheKey = urlOrBuffer.split('/').pop().replace(/\.bin$/, '') || 'maia3-5m';
         // 1. Try loading from persistent IndexedDB cache (0ms instant)
         try {
-          const cached = await ModelCache.getModel('maia3-5m');
+          const cached = (await ModelCache.getModel(cacheKey)) || (cacheKey === 'maia3_model' ? await ModelCache.getModel('maia3-5m') : null);
           if (cached && cached.byteLength > 1000000) {
             arrayBuffer = cached;
             this.modelSource = 'cache';
@@ -120,7 +121,7 @@ export class MaiaInBrowserEngine {
 
           // 3. Save to IndexedDB cache for future instant offline loads
           if (arrayBuffer) {
-            ModelCache.saveModel('maia3-5m', arrayBuffer).catch(() => {});
+            ModelCache.saveModel(cacheKey, arrayBuffer).catch(() => {});
           }
         }
       }
@@ -358,14 +359,17 @@ export class MaiaInBrowserEngine {
       const norm1W = this.tensors[`${pfx}.norm1.weight`]; // [D]
 
       // GAB sub-layers
-      const sm2W = this.tensors[`${pfx}.self_attn.sm2.weight`]; // [64, D]
-      const sm2B = this.tensors[`${pfx}.self_attn.sm2.bias`]; // [64]
-      const sm3W = this.tensors[`${pfx}.self_attn.sm3.weight`]; // [512, 64]
-      const sm3B = this.tensors[`${pfx}.self_attn.sm3.bias`]; // [512]
+      const sm1W = this.tensors[`${pfx}.self_attn.sm1.weight`]; // [p, D] if present
+      const sm1B = this.tensors[`${pfx}.self_attn.sm1.bias`]; // [p]
+      const sm2W = this.tensors[`${pfx}.self_attn.sm2.weight`]; // [hdim, inDim]
+      const sm2B = this.tensors[`${pfx}.self_attn.sm2.bias`];
+      const sm3W = this.tensors[`${pfx}.self_attn.sm3.weight`]; // [H*gen, hdim]
+      const sm3B = this.tensors[`${pfx}.self_attn.sm3.bias`];
       const ln1W = this.tensors[`${pfx}.self_attn.ln1.weight`];
       const ln1B = this.tensors[`${pfx}.self_attn.ln1.bias`];
       const ln2W = this.tensors[`${pfx}.self_attn.ln2.weight`];
       const ln2B = this.tensors[`${pfx}.self_attn.ln2.bias`];
+      const gabLayerWeight = this.tensors[`${pfx}.self_attn.gab_weight`] || gabSharedWeight;
 
       // Compute Q, K, V: [64, D] each
       const Q = new Float32Array(64 * D);
@@ -392,43 +396,69 @@ export class MaiaInBrowserEngine {
       }
 
       // Compute GAB square bias
-      // 1. Mean over 64 squares: [D]
-      const xMean = new Float32Array(D);
-      for (let i = 0; i < 64; i++) {
-        for (let d = 0; d < D; d++) xMean[d] += X[i * D + d];
-      }
-      for (let d = 0; d < D; d++) xMean[d] /= 64.0;
+      let sm2In;
+      let sm2InDim;
 
-      // 2. sm2: [64]
-      const sm2Out = new Float32Array(64);
-      for (let d = 0; d < 64; d++) {
+      if (sm1W && sm1B) {
+        // Architecture with per-square GAB projection (23M, 79M)
+        const p = sm1B.length;
+        const y1 = new Float32Array(64 * p);
+        for (let i = 0; i < 64; i++) {
+          const xOffset = i * D;
+          const yOffset = i * p;
+          for (let d1 = 0; d1 < p; d1++) {
+            let s = sm1B[d1];
+            const wOff = d1 * D;
+            for (let k = 0; k < D; k++) s += sm1W[wOff + k] * X[xOffset + k];
+            y1[yOffset + d1] = s;
+          }
+        }
+        sm2In = y1;
+        sm2InDim = 64 * p;
+      } else {
+        // Mean pooling architecture (5M)
+        const xMean = new Float32Array(D);
+        for (let i = 0; i < 64; i++) {
+          for (let d = 0; d < D; d++) xMean[d] += X[i * D + d];
+        }
+        for (let d = 0; d < D; d++) xMean[d] /= 64.0;
+        sm2In = xMean;
+        sm2InDim = D;
+      }
+
+      // 2. sm2 -> GELU -> LN1
+      const sm2OutDim = sm2B.length;
+      const sm2Out = new Float32Array(sm2OutDim);
+      for (let d = 0; d < sm2OutDim; d++) {
         let s = sm2B[d];
-        const wOff = d * D;
-        for (let k = 0; k < D; k++) s += sm2W[wOff + k] * xMean[k];
+        const wOff = d * sm2InDim;
+        for (let k = 0; k < sm2InDim; k++) s += sm2W[wOff + k] * sm2In[k];
         sm2Out[d] = this.gelu(s);
       }
       this.layerNormInPlace(sm2Out, ln1W, ln1B);
 
-      // 3. sm3: [512] -> GELU -> LN2
-      const sm3Out = new Float32Array(512);
-      for (let d = 0; d < 512; d++) {
+      // 3. sm3 -> GELU -> LN2
+      const sm3OutDim = sm3B.length;
+      const sm3Out = new Float32Array(sm3OutDim);
+      for (let d = 0; d < sm3OutDim; d++) {
         let s = sm3B[d];
-        const wOff = d * 64;
-        for (let k = 0; k < 64; k++) s += sm3W[wOff + k] * sm2Out[k];
+        const wOff = d * sm2OutDim;
+        for (let k = 0; k < sm2OutDim; k++) s += sm3W[wOff + k] * sm2Out[k];
         sm3Out[d] = this.gelu(s);
       }
       this.layerNormInPlace(sm3Out, ln2W, ln2B);
 
-      // 4. bias = GAB_weight (4096, 64) @ sm3Out (reshape 8, 64) -> [8, 4096]
+      // 4. bias = GAB_weight (4096, genSize) @ sm3Out -> [numHeads, 4096]
+      const genSize = gabLayerWeight.length / 4096;
       const gabBias = new Float32Array(numHeads * 4096);
       for (let h = 0; h < numHeads; h++) {
-        const headVecOffset = h * 64;
+        const headVecOffset = h * genSize;
         const headBiasOffset = h * 4096;
         for (let pair = 0; pair < 4096; pair++) {
           let bSum = 0;
-          const wOff = pair * 64;
-          for (let k = 0; k < 64; k++) {
-            bSum += gabSharedWeight[wOff + k] * sm3Out[headVecOffset + k];
+          const wOff = pair * genSize;
+          for (let k = 0; k < genSize; k++) {
+            bSum += gabLayerWeight[wOff + k] * sm3Out[headVecOffset + k];
           }
           gabBias[headBiasOffset + pair] = bSum;
         }
@@ -502,8 +532,9 @@ export class MaiaInBrowserEngine {
         this.rmsNormInPlace(X, xOff, D, norm1W);
 
         // FeedForward: Linear1 -> GELU -> Linear2 -> Residual -> RMSNorm2
-        const ffMid = new Float32Array(512);
-        for (let m = 0; m < 512; m++) {
+        const ffDim = lin1B.length;
+        const ffMid = new Float32Array(ffDim);
+        for (let m = 0; m < ffDim; m++) {
           let s = lin1B[m];
           const wOff = m * D;
           for (let k = 0; k < D; k++) s += lin1W[wOff + k] * X[xOff + k];
@@ -512,8 +543,8 @@ export class MaiaInBrowserEngine {
 
         for (let d = 0; d < D; d++) {
           let s = lin2B[d];
-          const wOff = d * 512;
-          for (let k = 0; k < 512; k++) s += lin2W[wOff + k] * ffMid[k];
+          const wOff = d * ffDim;
+          for (let k = 0; k < ffDim; k++) s += lin2W[wOff + k] * ffMid[k];
           X[xOff + d] += s; // residual
         }
         // RMSNorm2 in-place

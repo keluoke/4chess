@@ -94,10 +94,9 @@
       lastInfo = null;
 
       const fen = data.fen;
-      const depth = data.depth || 10;
+      const depth = data.depth || 8;
 
       worker.postMessage('stop');
-      worker.postMessage('ucinewgame');
       worker.postMessage(`position fen ${fen}`);
       worker.postMessage(`go depth ${depth}`);
     } else if (data.type === 'STOP') {

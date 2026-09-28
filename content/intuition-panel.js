@@ -120,12 +120,17 @@ export class IntuitionPanel {
           </div>
 
           <div id="cdn-config-drawer" style="display: none; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08);">
-            <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 4px;">Cloudflare R2 / CDN 权重地址:</div>
+            <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 4px;">快速预设模型:</div>
+            <div style="display: flex; gap: 4px; margin-bottom: 6px;">
+              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 4px; font-size: 9.5px; padding: 3px 0; cursor: pointer;">5M (28M)</button>
+              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: rgba(59,130,246,0.2); border: 1px solid #3b82f6; color: #93c5fd; border-radius: 4px; font-size: 9.5px; padding: 3px 0; cursor: pointer; font-weight: 600;">23M (104M)</button>
+              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_79m_fp16.bin" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 4px; font-size: 9.5px; padding: 3px 0; cursor: pointer;">79M (159M)</button>
+            </div>
             <div style="display: flex; gap: 6px;">
-              <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_model.bin" value="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 4px 6px; border-radius: 5px; font-size: 10.5px;">
+              <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_23m.bin" value="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 4px 6px; border-radius: 5px; font-size: 10px;">
               <button id="cdn-save-btn" style="background: #3b82f6; color: white; border: none; border-radius: 5px; padding: 4px 8px; font-size: 10.5px; cursor: pointer; font-weight: 600;">保存</button>
             </div>
-            <div style="font-size: 9.5px; color: #64748b; margin-top: 4px;">默认节点: https://weights.4chess.cc/maia3_model.bin (一次下载永久缓存)</div>
+            <div style="font-size: 9.5px; color: #64748b; margin-top: 4px;">各模型独立本地缓存，首次下载后离线 0ms 秒开</div>
           </div>
         </div>
 
@@ -260,6 +265,16 @@ export class IntuitionPanel {
         cdnInput.value = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
       });
     }
+
+    // Preset buttons
+    this.container.querySelectorAll('.cdn-preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (cdnInput) {
+          cdnInput.value = btn.getAttribute('data-url');
+          if (cdnSaveBtn) cdnSaveBtn.click();
+        }
+      });
+    });
 
     if (cdnSaveBtn && cdnInput) {
       cdnSaveBtn.addEventListener('click', async () => {

@@ -52,9 +52,15 @@
       </div>
 
       <div class="setting-item" style="margin-top: 10px;">
-        <label for="cdn-url">Cloudflare CDN / R2 地址:</label>
-        <input type="text" id="cdn-url" class="select-box" style="width: 100%; box-sizing: border-box; font-size: 11px; padding: 6px 8px; margin-top: 4px;" placeholder="https://weights.4chess.cc/maia3_model.bin">
-        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">默认: https://weights.4chess.cc/maia3_model.bin</div>
+        <label for="model-preset-select">Maia-3 模型规格:</label>
+        <select id="model-preset-select" class="select-box">
+          <option value="https://weights.4chess.cc/maia3_23m.bin" selected>⚡ 23M (推荐 · 104MB 极佳平衡)</option>
+          <option value="https://weights.4chess.cc/maia3_model.bin">🪶 5M (轻量 · 28MB 秒开体验)</option>
+          <option value="https://weights.4chess.cc/maia3_79m_fp16.bin">🏆 79M (高精 · 159MB 顶尖水平)</option>
+          <option value="custom">✏️ 自定义权重 URL...</option>
+        </select>
+        <input type="text" id="cdn-url" class="select-box" style="width: 100%; box-sizing: border-box; font-size: 11px; padding: 6px 8px; margin-top: 6px; display: none;" placeholder="https://weights.4chess.cc/maia3_23m.bin">
+        <div id="cdn-url-hint" style="font-size: 10px; color: #64748b; margin-top: 3px;">独立本地持久缓存，下载一次后离线 0ms 秒开</div>
       </div>
     </div>
 
