@@ -22,40 +22,94 @@ export class GameAnalyzer {
   }
 
   /**
-   * Scrapes played moves from Lichess or Chess.com DOM
+   * Parse PGN string into array of SAN moves
    */
-  static extractPageMoves(platform) {
-    const moves = [];
+  static parsePgn(pgnText) {
+    if (!pgnText || typeof pgnText !== 'string') return [];
 
-    if (platform === 'lichess') {
-      const container = document.querySelector('.analyse__moves, .tview2, rm6');
-      if (container) {
-        const moveEls = Array.from(container.querySelectorAll('move, u'));
-        moveEls.forEach((el, idx) => {
-          const raw = el.textContent.replace(/\d+[\.\s]+/g, '').trim();
-          const san = raw.split(/\s+/)[0];
-          if (san && !san.startsWith('*') && !['1-0', '0-1', '1/2-1/2'].includes(san)) {
-            moves.push({
-              ply: idx + 1,
-              moveNumber: Math.floor(idx / 2) + 1,
-              turn: (idx % 2 === 0) ? 'w' : 'b',
-              san,
-              element: el
-            });
-          }
+    // Strip comments {...}
+    let clean = pgnText.replace(/\{[^}]*\}/g, '');
+    // Strip metadata headers [...]
+    clean = clean.replace(/\[[^\]]*\]/g, '');
+    // Strip variations (...)
+    clean = clean.replace(/\([^)]*\)/g, '');
+    // Strip game termination markers
+    clean = clean.replace(/(1-0|0-1|1\/2-1\/2|\*)/g, '');
+
+    const tokens = clean.trim().split(/\s+/);
+    const moves = [];
+    let ply = 0;
+
+    for (const token of tokens) {
+      if (!token) continue;
+      // Skip pure move numbers like "1.", "12...", "1..."
+      if (/^\d+\.*$/.test(token)) continue;
+
+      // Extract SAN
+      const san = token.replace(/^\d+\.*[\.\s]*/, '').trim();
+      if (san && !san.startsWith('$')) {
+        ply++;
+        moves.push({
+          ply,
+          moveNumber: Math.floor((ply - 1) / 2) + 1,
+          turn: ((ply - 1) % 2 === 0) ? 'w' : 'b',
+          san,
+          element: null
         });
       }
-    } else if (platform === 'chesscom') {
-      const container = document.querySelector('.vertical-move-list, .move-list-wrapper, .keyboard-move-list');
-      if (container) {
-        const moveEls = Array.from(container.querySelectorAll('.node, .move-node, [data-ply]'));
-        moveEls.forEach((el, idx) => {
+    }
+
+    return moves;
+  }
+
+  /**
+   * Multi-tiered move extraction from Lichess / Chess.com:
+   * Tier 1: Expansive DOM move elements & attributes
+   * Tier 2: Board Web Component & in-page PGN textarea
+   * Tier 3: Chess.com API fetch for /game/live/:id and /game/daily/:id
+   * Tier 4: Lichess Game Export API
+   */
+  static async extractPageMoves(platform) {
+    // ------------------------------------------------------------------
+    // Tier 1: Search for Move elements in DOM (Clickable nodes)
+    // ------------------------------------------------------------------
+    const domSelectors = [
+      '[data-ply]',
+      '.vertical-move-list .node',
+      '.vertical-move-list .move-node',
+      '.move-list-wrapper .node',
+      '.move-list-wrapper .move-node',
+      '.keyboard-move-list .node',
+      'wc-vertical-move-list .node',
+      '.main-line-row .node',
+      '.main-line-row span.node',
+      '.main-line-row span[class*="node"]',
+      '.move-text-component',
+      '.node[data-whole-move-number]',
+      '.move-list-row .move-item',
+      '.analyse__moves move',
+      '.analyse__moves u',
+      'rm6 move',
+      '.tview2 u'
+    ];
+
+    if (typeof document !== 'undefined') {
+      const foundEls = Array.from(document.querySelectorAll(domSelectors.join(', ')));
+      if (foundEls.length > 0) {
+        const candidateMoves = [];
+        const seenPlys = new Set();
+
+        foundEls.forEach((el, idx) => {
           const plyAttr = el.getAttribute('data-ply');
-          const ply = plyAttr ? parseInt(plyAttr, 10) : (idx + 1);
+          const ply = plyAttr ? parseInt(plyAttr, 10) : (candidateMoves.length + 1);
+          if (seenPlys.has(ply)) return;
+
           const raw = el.textContent.replace(/\d+[\.\s]+/g, '').trim();
           const san = raw.split(/\s+/)[0];
-          if (san && !san.startsWith('*') && !['1-0', '0-1', '1/2-1/2'].includes(san)) {
-            moves.push({
+          // Validate standard chess notation (e.g. e4, Bxe5, O-O, etc.)
+          if (san && /^[a-hA-HKQRNB][a-h1-8x+#=\-]*$|^O-O(-O)?\+?#?$/i.test(san)) {
+            seenPlys.add(ply);
+            candidateMoves.push({
               ply,
               moveNumber: Math.floor((ply - 1) / 2) + 1,
               turn: ((ply - 1) % 2 === 0) ? 'w' : 'b',
@@ -64,10 +118,117 @@ export class GameAnalyzer {
             });
           }
         });
+
+        if (candidateMoves.length > 0) {
+          console.log(`[GameAnalyzer] Found ${candidateMoves.length} moves via DOM selectors!`);
+          return candidateMoves;
+        }
+      }
+
+      // ------------------------------------------------------------------
+      // Tier 2: Check Board Web Component & In-Page PGN
+      // ------------------------------------------------------------------
+      const boardEl = document.querySelector('wc-chess-board, chess-board');
+      if (boardEl) {
+        if (typeof boardEl.game?.getPGN === 'function') {
+          const pgn = boardEl.game.getPGN();
+          const moves = GameAnalyzer.parsePgn(pgn);
+          if (moves.length > 0) return moves;
+        }
+        if (typeof boardEl.getPGN === 'function') {
+          const pgn = boardEl.getPGN();
+          const moves = GameAnalyzer.parsePgn(pgn);
+          if (moves.length > 0) return moves;
+        }
+      }
+
+      // In-page PGN textareas or share attributes
+      const pgnElements = document.querySelectorAll('textarea.share-menu-tab-pgn-textarea, textarea.copyable, .copyables textarea, [pgn-headers], [pgn]');
+      for (const el of pgnElements) {
+        const rawPgn = el.value || el.getAttribute('pgn') || el.textContent;
+        if (rawPgn && rawPgn.includes('1.')) {
+          const moves = GameAnalyzer.parsePgn(rawPgn);
+          if (moves.length > 0) return moves;
+        }
+      }
+
+      // ------------------------------------------------------------------
+      // Tier 3: Chess.com API Fallback for /game/live/:id and /game/daily/:id
+      // ------------------------------------------------------------------
+      const chesscomMatch = window.location.pathname.match(/\/game\/(?:live|daily)\/(\d+)/);
+      if (chesscomMatch && chesscomMatch[1]) {
+        const gameId = chesscomMatch[1];
+        console.log(`[GameAnalyzer] Querying Chess.com Public API for game ID ${gameId}...`);
+
+        let username = null;
+        const metaDesc = document.querySelector('meta[name="description"]')?.content;
+        if (metaDesc) {
+          const uMatch = metaDesc.match(/([a-zA-Z0-9_\-]+)\s*\(\d+\)\s*vs\s*([a-zA-Z0-9_\-]+)\s*\(\d+\)/);
+          if (uMatch) {
+            username = uMatch[2] || uMatch[1];
+          }
+        }
+
+        if (!username) {
+          const userEl = document.querySelector('.user-username-component, [data-test-element="user-tagline-username"]');
+          if (userEl) username = userEl.textContent.trim();
+        }
+
+        if (!username && window.context?.user?.username) {
+          username = window.context.user.username;
+        }
+
+        if (username) {
+          try {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const apiUrl = `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/${year}/${month}`;
+
+            const resp = await fetch(apiUrl, {
+              headers: { 'User-Agent': 'MaiaExtension/1.0 (contact@4chess.cc)' }
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              const targetGame = data.games?.find(g => g.url && g.url.includes(gameId));
+              if (targetGame && targetGame.pgn) {
+                const moves = GameAnalyzer.parsePgn(targetGame.pgn);
+                if (moves.length > 0) {
+                  console.log(`[GameAnalyzer] ✅ Successfully retrieved ${moves.length} moves from Chess.com API!`);
+                  return moves;
+                }
+              }
+            }
+          } catch (apiErr) {
+            console.warn('[GameAnalyzer] Chess.com API fetch notice:', apiErr);
+          }
+        }
+      }
+
+      // ------------------------------------------------------------------
+      // Tier 4: Lichess Game Export API
+      // ------------------------------------------------------------------
+      const lichessMatch = window.location.pathname.match(/^\/([a-zA-Z0-9]{8,12})(?:\/|$)/);
+      if (lichessMatch && lichessMatch[1] && window.location.hostname.includes('lichess')) {
+        const gameId = lichessMatch[1];
+        try {
+          const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.pgn) {
+              const moves = GameAnalyzer.parsePgn(data.pgn);
+              if (moves.length > 0) return moves;
+            }
+          }
+        } catch (lErr) {
+          console.warn('[GameAnalyzer] Lichess export notice:', lErr);
+        }
       }
     }
 
-    return moves;
+    return [];
   }
 
   /**
@@ -296,15 +457,61 @@ export class GameAnalyzer {
    * Jump to a specific move on the board
    */
   static jumpToMove(moveItem) {
-    if (moveItem?.element) {
+    if (!moveItem) return false;
+
+    // 1. Direct DOM Element click
+    if (moveItem.element && typeof moveItem.element.click === 'function') {
       try {
         moveItem.element.click();
         moveItem.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         return true;
-      } catch (e) {
-        console.warn('[GameAnalyzer] Failed to click move element:', e);
+      } catch (e) {}
+    }
+
+    // 2. Query DOM for [data-ply="X"]
+    const plyEl = document.querySelector(`[data-ply="${moveItem.ply}"]`);
+    if (plyEl && typeof plyEl.click === 'function') {
+      try {
+        plyEl.click();
+        plyEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return true;
+      } catch (e) {}
+    }
+
+    // 3. Query DOM by move sequence index in .vertical-move-list or .main-line-row
+    const allNodes = Array.from(document.querySelectorAll('.vertical-move-list .node, .move-list-wrapper .node, [data-ply], .main-line-row .node'));
+    if (allNodes.length >= moveItem.ply) {
+      const targetNode = allNodes[moveItem.ply - 1];
+      if (targetNode && typeof targetNode.click === 'function') {
+        try {
+          targetNode.click();
+          targetNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          return true;
+        } catch (e) {}
       }
     }
+
+    // 4. Lichess specific jump
+    if (window.location.hostname.includes('lichess')) {
+      const lichessMoves = document.querySelectorAll('.analyse__moves move, rm6 move, .tview2 u');
+      if (lichessMoves[moveItem.ply - 1]) {
+        lichessMoves[moveItem.ply - 1].click();
+        return true;
+      }
+    }
+
+    // 5. Chess.com URL / State Update fallback (?move=X)
+    if (window.location.hostname.includes('chess.com')) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('move', String(moveItem.ply));
+        window.history.pushState({}, '', url.toString());
+        // Trigger keyboard step navigation
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        return true;
+      } catch (e) {}
+    }
+
     return false;
   }
 }

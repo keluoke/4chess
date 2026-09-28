@@ -63,7 +63,7 @@ export async function initMaiaExtension() {
     },
     onAnalyzeGame: async () => {
       const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
-      const moves = GameAnalyzer.extractPageMoves(platform);
+      const moves = await GameAnalyzer.extractPageMoves(platform);
       if (!moves || moves.length === 0) {
         throw new Error(panel.lang === 'zh' ? '当前页面未检测到棋步记录，请在对局或复盘页面使用。' : 'No move list detected on current page.');
       }
