@@ -1,38 +1,161 @@
-/* Maia-3 Human Intuition Predictor Extension Stylesheet */
+/* ==========================================================================
+   Maia-3 Chess · Android Material Design 3 (Material You / M3) Stylesheet
+   Designed according to Official Android & Google Material Design Guidelines:
+   - Dynamic M3 Surface Hierarchy & Tonal Elevations
+   - M3 Rounded Corner Scale (Extra-Large 24px Sheet, Capsule 28px FAB)
+   - M3 Segmented Buttons, Filter Chips, Linear Progress & Sliders
+   - M3 Typography (Google Sans / Roboto) & Smooth Android Easing Curves
+   ========================================================================== */
 
+:root {
+  /* M3 Dark Theme Surface Tokens */
+  --md-sys-color-surface: #141218;
+  --md-sys-color-surface-dim: #111014;
+  --md-sys-color-surface-bright: #3b383e;
+  --md-sys-color-surface-container-lowest: #0f0d13;
+  --md-sys-color-surface-container-low: #1d1b20;
+  --md-sys-color-surface-container: #211f26;
+  --md-sys-color-surface-container-high: #2b2930;
+  --md-sys-color-surface-container-highest: #36343b;
+
+  /* On-Surface Text & Icons */
+  --md-sys-color-on-surface: #e6e1e5;
+  --md-sys-color-on-surface-variant: #cac4d0;
+  --md-sys-color-outline: #938f99;
+  --md-sys-color-outline-variant: rgba(255, 255, 255, 0.12);
+
+  /* Primary Accent: Android M3 Google Light Blue */
+  --md-sys-color-primary: #a8c7fa;
+  --md-sys-color-on-primary: #062e6f;
+  --md-sys-color-primary-container: #0842a0;
+  --md-sys-color-on-primary-container: #d3e3fd;
+
+  /* Secondary Accent: Warm Intuition Amber / Gold */
+  --md-sys-color-secondary: #f5c042;
+  --md-sys-color-on-secondary: #3f2e00;
+  --md-sys-color-secondary-container: rgba(245, 192, 66, 0.16);
+  --md-sys-color-on-secondary-container: #ffdf99;
+
+  /* Tertiary Accent: Engine Mint / Teal */
+  --md-sys-color-tertiary: #6dd5ed;
+  --md-sys-color-on-tertiary: #00363f;
+  --md-sys-color-tertiary-container: #004f5d;
+  --md-sys-color-on-tertiary-container: #bfe9f6;
+
+  /* Success & Error */
+  --md-sys-color-success: #10b981;
+  --md-sys-color-success-container: rgba(16, 185, 129, 0.16);
+  --md-sys-color-error: #f2b8b5;
+  --md-sys-color-error-container: #8c1d18;
+  --md-sys-color-on-error-container: #f9dedc;
+
+  /* M3 Motion & State */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-duration-short: 150ms;
+  --md-sys-motion-duration-medium: 250ms;
+  --md-sys-state-hover: rgba(255, 255, 255, 0.08);
+  --md-sys-state-pressed: rgba(255, 255, 255, 0.14);
+}
+
+/* Base Panel Root (Android M3 Floating Sheet / Modal Surface) */
 .maia-panel-root {
   position: fixed;
   top: 70px;
-  right: 25px;
-  width: 330px;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.65), 0 0 25px 1px rgba(99, 102, 241, 0.2);
-  color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  right: 24px;
+  width: 336px;
+  background: rgba(20, 18, 24, 0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 24px; /* M3 Extra-Large Container Shape */
+  box-shadow: 0px 8px 16px 4px rgba(0, 0, 0, 0.45), 0px 4px 6px 1px rgba(0, 0, 0, 0.3);
+  color: var(--md-sys-color-on-surface);
+  font-family: "Google Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   z-index: 999999;
   user-select: none;
   overflow: hidden;
-  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  transition: box-shadow var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-standard),
+              border-color var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-standard),
+              transform var(--md-sys-motion-duration-short) ease;
 }
 
 .maia-panel-root:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 30px 2px rgba(99, 102, 241, 0.3);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0px 12px 24px 6px rgba(0, 0, 0, 0.55), 0px 6px 8px 2px rgba(0, 0, 0, 0.35);
 }
 
-/* Header */
+/* ==========================================================================
+   Android M3 Floating Action Button (FAB) for Closed / Minimized State
+   ========================================================================== */
+.maia-m3-fab {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  z-index: 999999;
+  height: 48px;
+  padding: 0 18px 0 14px;
+  border-radius: 28px; /* M3 Extended FAB Capsule Shape */
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border: 1px solid rgba(168, 199, 250, 0.35);
+  box-shadow: 0 4px 8px 3px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-family: "Google Sans", "Roboto", -apple-system, sans-serif;
+  transition: transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+              background var(--md-sys-motion-duration-short) ease,
+              box-shadow var(--md-sys-motion-duration-short) ease;
+}
+
+.maia-m3-fab:hover {
+  transform: scale(1.04);
+  background: #0b49ab;
+  border-color: rgba(168, 199, 250, 0.5);
+  box-shadow: 0 6px 12px 4px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.maia-m3-fab:active {
+  transform: scale(0.97);
+  background: #083b8a;
+}
+
+.maia-fab-icon {
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.maia-fab-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+}
+
+.maia-fab-badge {
+  font-size: 11px;
+  font-weight: 800;
+  background: var(--md-sys-color-secondary);
+  color: var(--md-sys-color-on-secondary);
+  padding: 2px 7px;
+  border-radius: 9999px;
+  letter-spacing: 0.2px;
+}
+
+/* ==========================================================================
+   Android M3 Top App Bar (Header)
+   ========================================================================== */
 .maia-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: rgba(30, 41, 59, 0.7);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--md-sys-color-surface-container);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
   cursor: grab;
 }
 
@@ -43,102 +166,135 @@
 .maia-title-box {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.maia-icon-glow {
+.maia-m3-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(168, 199, 250, 0.15);
+  color: var(--md-sys-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 17px;
-  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7));
+  flex-shrink: 0;
+  border: 1px solid rgba(168, 199, 250, 0.25);
+}
+
+.maia-title-text-group {
+  display: flex;
+  flex-direction: column;
 }
 
 .maia-title {
   font-weight: 700;
   font-size: 13.5px;
-  letter-spacing: -0.2px;
-  background: linear-gradient(135deg, #ffffff 40%, #cbd5e1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  line-height: 1.2;
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: -0.1px;
+}
+
+.maia-subtitle {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  letter-spacing: 0.2px;
 }
 
 .maia-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
-/* Active Turn Tags */
+/* Android M3 Icon Buttons (32px circular touch target) */
+.maia-m3-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background var(--md-sys-motion-duration-short) ease,
+              color var(--md-sys-motion-duration-short) ease,
+              transform 0.1s ease;
+}
+
+.maia-m3-icon-btn:hover {
+  background: var(--md-sys-state-hover);
+  color: var(--md-sys-color-on-surface);
+}
+
+.maia-m3-icon-btn:active {
+  background: var(--md-sys-state-pressed);
+  transform: scale(0.92);
+}
+
+.maia-m3-icon-btn.maia-btn-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+/* M3 Assist Chip (Active Turn Tag) */
 .maia-turn-tag {
   font-size: 10.5px;
-  font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 9999px;
-  letter-spacing: 0.3px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 9999px; /* M3 Chip Shape */
+  letter-spacing: 0.2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .turn-white {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .turn-black {
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(14, 165, 233, 0.15);
   color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
-.maia-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2.5px 7px;
-  border-radius: 9999px;
-  letter-spacing: 0.3px;
-}
-
-.badge-gpu {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
-}
-
-.badge-warning {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
-
-.maia-btn-icon {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-}
-
-.maia-btn-icon:hover {
-  color: #ffffff;
-}
-
-/* Body */
+/* ==========================================================================
+   Android M3 Body & Sections
+   ========================================================================== */
 .maia-body {
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 13px;
+  max-height: calc(90vh - 80px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
-/* Dual Engine Status Box */
+.maia-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.maia-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+/* M3 Elevated Card (Dual Engine Status Box) */
 .maia-dual-status-box {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 10px 12px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px; /* M3 Medium Shape */
+  padding: 11px 13px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -147,63 +303,63 @@
 .maia-status-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .maia-status-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 11.5px;
 }
 
 .maia-status-title {
-  color: #94a3b8;
-  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
 }
 
 .maia-status-val {
   margin-left: auto;
   font-size: 11px;
   font-weight: 700;
-  color: #38bdf8;
+  color: var(--md-sys-color-primary);
 }
 
 .maia-status-dot {
-  width: 7.5px;
-  height: 7.5px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .status-ready {
-  background-color: #10b981;
-  box-shadow: 0 0 7px #10b981;
+  background-color: var(--md-sys-color-success);
+  box-shadow: 0 0 8px var(--md-sys-color-success);
 }
 
 .status-loading {
-  background-color: #f59e0b;
-  box-shadow: 0 0 7px #f59e0b;
+  background-color: var(--md-sys-color-secondary);
+  box-shadow: 0 0 8px var(--md-sys-color-secondary);
   animation: maia-pulse-dot 1.2s infinite ease-in-out;
 }
 
 .status-error {
   background-color: #ef4444;
-  box-shadow: 0 0 7px #ef4444;
+  box-shadow: 0 0 8px #ef4444;
 }
 
 @keyframes maia-pulse-dot {
-  0%, 100% { opacity: 0.35; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
-/* Cloudflare CDN Progress Card */
+/* Cloudflare CDN Progress Card (M3 Linear Progress) */
 .cdn-progress-card {
   margin-top: 4px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  border-radius: 8px;
-  padding: 8px 10px;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid rgba(168, 199, 250, 0.25);
+  border-radius: 12px;
+  padding: 8px 11px;
 }
 
 .cdn-progress-header {
@@ -211,27 +367,27 @@
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .cdn-label {
-  color: #38bdf8;
+  color: var(--md-sys-color-primary);
   font-weight: 600;
 }
 
 .cdn-speed {
-  color: #10b981;
+  color: var(--md-sys-color-success);
   font-weight: 700;
   font-size: 10.5px;
 }
 
 .cdn-progress-track {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  height: 6px; /* M3 Linear Progress Standard */
+  background: var(--md-sys-color-surface-container-highest);
   border-radius: 9999px;
   overflow: hidden;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .cdn-bar-fill {
@@ -245,24 +401,31 @@
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: #64748b;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
-.sf-eval-chip {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-weight: 700;
-  font-size: 11px;
+/* CDN Suggestion Chips */
+.cdn-preset-btn {
+  transition: all var(--md-sys-motion-duration-short) ease;
+  font-family: inherit;
 }
 
-/* Sections */
+.cdn-preset-btn:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.cdn-preset-btn:active {
+  transform: scale(0.97);
+}
+
+/* ==========================================================================
+   Android M3 Segmented Buttons (Elo Rating Selector)
+   ========================================================================== */
 .maia-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .maia-section-header {
@@ -273,115 +436,146 @@
 
 .maia-label {
   font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface-variant);
+  letter-spacing: 0.4px;
 }
 
 .maia-elo-pill {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
-  padding: 1.5px 7px;
-  border-radius: 6px;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: var(--md-sys-color-secondary);
+  background: var(--md-sys-color-secondary-container);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(245, 192, 66, 0.3);
 }
 
 .maia-meta-text {
   font-size: 10px;
-  color: #64748b;
+  color: var(--md-sys-color-on-surface-variant);
   font-weight: 500;
 }
 
-/* Elo Presets */
-.maia-elo-presets {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+/* Joined M3 Segmented Button Container */
+.maia-elo-segmented {
+  display: flex;
+  border-radius: 9999px; /* M3 Segmented Button Capsule */
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  overflow: hidden;
+  padding: 2px;
 }
 
-.maia-elo-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 7px;
-  color: #cbd5e1;
-  padding: 5px 2px;
-  font-size: 10.5px;
+.maia-segmented-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--md-sys-color-on-surface-variant);
+  padding: 6px 0;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
-  text-align: center;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
 }
 
-.maia-elo-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+.maia-segmented-btn:hover {
+  background: var(--md-sys-state-hover);
+  color: var(--md-sys-color-on-surface);
 }
 
-.maia-elo-btn.active {
-  background: #f59e0b;
-  color: #0f172a;
-  border-color: #f59e0b;
+.maia-segmented-btn.active {
+  background: var(--md-sys-color-secondary);
+  color: var(--md-sys-color-on-secondary);
   font-weight: 800;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
+.seg-check {
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Android M3 Slider */
 .maia-slider {
   -webkit-appearance: none;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.15);
+  height: 6px; /* M3 Thicker Track */
+  border-radius: 9999px;
+  background: var(--md-sys-color-surface-container-highest);
   outline: none;
   cursor: pointer;
+  margin-top: 2px;
 }
 
 .maia-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+  background: var(--md-sys-color-secondary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: transform 0.1s ease;
+  transition: transform var(--md-sys-motion-duration-short) ease;
 }
 
-/* Toggles */
+.maia-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+/* ==========================================================================
+   Android M3 Filter Chips (Toggles)
+   ========================================================================== */
 .maia-toggles-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
-.maia-toggle-chip {
+.maia-m3-chip {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: center;
+  gap: 7px;
+  background: var(--md-sys-color-surface-container);
+  padding: 6px 12px;
+  border-radius: 9999px; /* M3 Filter Chip Capsule */
+  border: 1px solid var(--md-sys-color-outline-variant);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-  transition: all 0.15s ease;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: all var(--md-sys-motion-duration-short) ease;
 }
 
-.maia-toggle-chip:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
+.maia-m3-chip:hover {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
 }
 
-.maia-toggle-chip input[type="checkbox"] {
-  accent-color: #f59e0b;
+.maia-m3-chip:has(input:checked) {
+  background: var(--md-sys-color-secondary-container);
+  border-color: rgba(245, 192, 66, 0.4);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.maia-m3-chip input[type="checkbox"] {
+  accent-color: var(--md-sys-color-secondary);
   cursor: pointer;
+  width: 14px;
+  height: 14px;
 }
 
-/* Move List */
+/* ==========================================================================
+   Android M3 Candidate Move List Items
+   ========================================================================== */
 .maia-moves-list {
   display: flex;
   flex-direction: column;
@@ -389,55 +583,62 @@
 }
 
 .maia-move-row {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 9px;
-  padding: 8px 10px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 14px; /* M3 Card Shape */
+  padding: 8px 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
 }
 
 .maia-move-row:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(245, 158, 11, 0.4);
+  background: var(--md-sys-color-surface-container-high);
+  border-color: rgba(245, 192, 66, 0.4);
   transform: translateX(2px);
 }
 
 .maia-move-row.top-pick {
-  border-color: rgba(245, 158, 11, 0.25);
-  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 192, 66, 0.35);
+  background: rgba(245, 192, 66, 0.08);
 }
 
 .maia-move-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .maia-move-rank {
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 800;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .maia-move-san {
   font-weight: 700;
-  font-size: 14px;
-  color: #f8fafc;
-  letter-spacing: -0.2px;
+  font-size: 13.5px;
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: -0.1px;
 }
 
 .maia-move-prob {
   font-weight: 800;
-  font-size: 13px;
-  color: #f59e0b;
+  font-size: 12.5px;
+  color: var(--md-sys-color-secondary);
 }
 
 .maia-progress-bar {
   width: 100%;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 6px; /* M3 Linear Progress */
+  background: var(--md-sys-color-surface-container-highest);
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -449,85 +650,90 @@
 }
 
 .maia-placeholder {
-  color: #64748b;
+  color: var(--md-sys-color-on-surface-variant);
   font-style: italic;
   text-align: center;
   padding: 12px 0;
+  font-size: 12px;
 }
 
-/* Insight Box */
+/* ==========================================================================
+   Android M3 Assist Banner / Notification Card
+   ========================================================================== */
 .maia-insight-box {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 10px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 16px;
+  padding: 11px 13px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .maia-insight-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   align-self: flex-start;
   font-size: 10.5px;
   font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 5px;
+  padding: 3px 9px;
+  border-radius: 8px; /* M3 Badge Shape */
+  letter-spacing: 0.2px;
 }
 
 .tag-trap {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
 .alert-trap {
   border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.06);
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .tag-consensus {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border: 1px solid rgba(245, 192, 66, 0.35);
 }
 
 .alert-consensus {
-  border-color: rgba(245, 158, 11, 0.3);
-  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 192, 66, 0.3);
+  background: rgba(245, 192, 66, 0.06);
 }
 
 .tag-tactical {
-  background: rgba(6, 182, 212, 0.15);
-  color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  background: rgba(6, 182, 212, 0.16);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.35);
 }
 
 .alert-tactical {
   border-color: rgba(6, 182, 212, 0.3);
-  background: rgba(6, 182, 212, 0.05);
+  background: rgba(6, 182, 212, 0.06);
 }
 
 .tag-neutral {
-  background: rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .alert-neutral {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--md-sys-color-outline-variant);
 }
 
 .maia-insight-content {
   font-size: 12px;
   line-height: 1.5;
-  color: #cbd5e1;
+  color: var(--md-sys-color-on-surface);
 }
 
 .maia-sf-row {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--md-sys-color-outline-variant);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -538,7 +744,7 @@
   background: rgba(16, 185, 129, 0.18);
   color: #10b981;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-weight: 700;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }

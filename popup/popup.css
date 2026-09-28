@@ -1,4 +1,33 @@
-/* Popup Stylesheet */
+/* ==========================================================================
+   Maia-3 Extension Popup · Android Material Design 3 (Material You / M3)
+   ========================================================================== */
+
+:root {
+  --md-surface: #141218;
+  --md-surface-dim: #111014;
+  --md-surface-container: #211f26;
+  --md-surface-container-high: #2b2930;
+  --md-surface-container-highest: #36343b;
+
+  --md-on-surface: #e6e1e5;
+  --md-on-surface-variant: #cac4d0;
+  --md-outline: #938f99;
+  --md-outline-variant: rgba(255, 255, 255, 0.12);
+
+  --md-primary: #a8c7fa;
+  --md-primary-container: #0842a0;
+  --md-on-primary-container: #d3e3fd;
+
+  --md-secondary: #f5c042;
+  --md-secondary-container: rgba(245, 192, 66, 0.16);
+  --md-on-secondary-container: #ffdf99;
+
+  --md-success: #10b981;
+  --md-success-container: rgba(16, 185, 129, 0.16);
+
+  --md-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -6,10 +35,10 @@
 }
 
 body {
-  width: 320px;
-  background-color: #0f172a;
-  color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  width: 326px;
+  background-color: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: "Google Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   padding: 14px;
 }
@@ -20,45 +49,137 @@ body {
   gap: 12px;
 }
 
+/* Top App Bar Header */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--md-outline-variant);
 }
 
 .logo-box {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.icon {
-  font-size: 20px;
+.avatar-m3 {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(168, 199, 250, 0.15);
+  border: 1px solid rgba(168, 199, 250, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
 }
 
 .title {
   font-size: 14px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--md-on-surface);
+  line-height: 1.2;
 }
 
 .subtitle {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--md-on-surface-variant);
 }
 
 .badge {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
-  padding: 2px 7px;
+  padding: 3px 9px;
   border-radius: 9999px;
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--md-success-container);
+  color: var(--md-success);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  letter-spacing: 0.2px;
 }
 
+/* M3 Switch Card (Show / Hide Panel) */
+.switch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 16px;
+}
+
+.switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--md-on-surface);
+}
+
+.switch-desc {
+  font-size: 10.5px;
+  color: var(--md-on-surface-variant);
+}
+
+/* Android M3 Switch Specification */
+.m3-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.m3-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.m3-switch-track {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--md-surface-container-highest);
+  border: 2px solid var(--md-outline);
+  border-radius: 9999px;
+  transition: all 0.2s var(--md-easing-standard);
+}
+
+.m3-switch-thumb {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 4px;
+  bottom: 4px;
+  background-color: var(--md-outline);
+  border-radius: 50%;
+  transition: all 0.2s var(--md-easing-standard);
+}
+
+.m3-switch input:checked + .m3-switch-track {
+  background-color: var(--md-primary-container);
+  border-color: var(--md-primary);
+}
+
+.m3-switch input:checked + .m3-switch-track .m3-switch-thumb {
+  transform: translateX(18px);
+  background-color: var(--md-primary);
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  bottom: 2px;
+}
+
+/* Quick Launch (M3 Filled Tonal Buttons) */
 .quick-launch {
   display: flex;
   flex-direction: column;
@@ -72,91 +193,108 @@ body {
   gap: 6px;
   text-decoration: none;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 8px 12px;
-  border-radius: 8px;
-  transition: all 0.15s ease;
+  border-radius: 9999px; /* M3 Pill Button */
+  transition: all 0.15s var(--md-easing-standard);
 }
 
 .launch-btn.lichess {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  border: 1px solid rgba(245, 192, 66, 0.3);
 }
 
 .launch-btn.lichess:hover {
-  background: rgba(245, 158, 11, 0.2);
+  filter: brightness(1.15);
+  transform: translateY(-1px);
 }
 
 .launch-btn.chesscom {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: var(--md-success-container);
+  color: var(--md-success);
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .launch-btn.chesscom:hover {
-  background: rgba(16, 185, 129, 0.2);
+  filter: brightness(1.15);
+  transform: translateY(-1px);
 }
 
+/* M3 Elevated Cards */
 .card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 16px;
+  padding: 12px;
 }
 
 .card-title {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #94a3b8;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 10px;
+  letter-spacing: 0.3px;
 }
 
 .setting-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  margin-bottom: 9px;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
 }
 
 .setting-item label {
-  font-size: 11.5px;
-  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
 }
 
+/* Android M3 Outlined Selects & Inputs */
 .select-box {
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: #ffffff;
-  padding: 6px 8px;
-  font-size: 12px;
+  width: 100%;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 10px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  font-family: inherit;
   outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.select-box:hover {
+  background: var(--md-surface-container-highest);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .select-box:focus {
-  border-color: #f59e0b;
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 1px var(--md-primary);
 }
 
 .feature-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 11.5px;
-  color: #cbd5e1;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.45;
 }
 
-.feature-list li {
-  line-height: 1.4;
+.feature-list strong {
+  color: var(--md-on-surface);
 }
 
 .footer {
   text-align: center;
   font-size: 10px;
-  color: #64748b;
+  color: #79747e;
   padding-top: 4px;
 }

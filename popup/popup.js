@@ -1,30 +1,61 @@
 /**
- * Popup Logic for Maia-3 Extension
+ * Popup Logic for Maia-3 Extension (Android Material Design 3 Edition)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
   const statusPill = document.getElementById('status-pill');
   const eloSelect = document.getElementById('default-elo');
   const backendSelect = document.getElementById('backend-pref');
+  const cdnInput = document.getElementById('cdn-url');
+  const presetSelect = document.getElementById('model-preset-select');
+  const panelSwitch = document.getElementById('toggle-panel-switch');
 
-  // Standalone in-browser dual engine status
+  // 1. Dual Engine Engine Status
   const hasWebGPU = !!navigator.gpu;
   if (hasWebGPU) {
     statusPill.textContent = '🟢 WebGPU + WASM 就绪';
     statusPill.style.color = '#10b981';
   } else {
     statusPill.textContent = '🟢 WebAssembly 就绪';
-    statusPill.style.color = '#06b6d4';
+    statusPill.style.color = '#38bdf8';
   }
 
+  // 2. Query active tab to sync panel switch state
+  if (chrome.tabs && chrome.tabs.query) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs?.[0];
+      if (activeTab?.id) {
+        chrome.tabs.sendMessage(activeTab.id, { type: 'GET_PANEL_STATE' }, (response) => {
+          if (chrome.runtime.lastError) return;
+          if (response && typeof response.closed === 'boolean') {
+            if (panelSwitch) panelSwitch.checked = !response.closed;
+          }
+        });
+      }
+    });
+  }
 
-  const cdnInput = document.getElementById('cdn-url');
-  const presetSelect = document.getElementById('model-preset-select');
+  // 3. Handle panel toggle switch
+  if (panelSwitch) {
+    panelSwitch.addEventListener('change', () => {
+      const shouldOpen = panelSwitch.checked;
+      if (chrome.tabs && chrome.tabs.query) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTab = tabs?.[0];
+          if (activeTab?.id) {
+            chrome.tabs.sendMessage(activeTab.id, { type: shouldOpen ? 'OPEN_PANEL' : 'CLOSE_PANEL' }, () => {
+              if (chrome.runtime.lastError) {}
+            });
+          }
+        });
+      }
+    });
+  }
 
-  // Load saved preferences
+  // 4. Load saved preferences
   chrome.storage.local.get(['defaultElo', 'preferredBackend', 'cloudflareCdnUrl'], (res) => {
-    if (res.defaultElo) eloSelect.value = res.defaultElo;
-    if (res.preferredBackend) backendSelect.value = res.preferredBackend;
+    if (res.defaultElo && eloSelect) eloSelect.value = res.defaultElo;
+    if (res.preferredBackend && backendSelect) backendSelect.value = res.preferredBackend;
     const currentUrl = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_23m.bin';
     if (cdnInput) cdnInput.value = currentUrl;
 
@@ -40,14 +71,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Save changes
-  eloSelect.addEventListener('change', (e) => {
-    chrome.storage.local.set({ defaultElo: parseInt(e.target.value, 10) });
-  });
+  // 5. Save changes
+  if (eloSelect) {
+    eloSelect.addEventListener('change', (e) => {
+      chrome.storage.local.set({ defaultElo: parseInt(e.target.value, 10) });
+    });
+  }
 
-  backendSelect.addEventListener('change', (e) => {
-    chrome.storage.local.set({ preferredBackend: e.target.value });
-  });
+  if (backendSelect) {
+    backendSelect.addEventListener('change', (e) => {
+      chrome.storage.local.set({ preferredBackend: e.target.value });
+    });
+  }
 
   if (presetSelect) {
     presetSelect.addEventListener('change', (e) => {

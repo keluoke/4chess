@@ -1,12 +1,14 @@
 /**
- * Maia-3 Human Intuition Floating Panel
- * Displays:
- * 1. Current Side to Move (⚪ 白方行棋 / ⚫ 黑方行棋) - never guesses!
- * 2. Model Status & Weight Manager (ONNX Neural Engine vs Lightweight Fallback)
- * 3. One-click HuggingFace download or local .onnx loader
- * 4. Elo rating slider & Top candidate human moves with percentage bars
+ * Maia-3 Human Intuition Floating Panel (Android Material Design 3 Edition)
+ * Designed according to Official Android & Google Material Design Guidelines:
+ * 1. M3 Surface Tonal Elevation & 24px Rounded Container
+ * 2. Header with Close Button (✕) and Minimize Button (−)
+ * 3. Android M3 Floating Action Button (FAB) for Closed State (Restore on 1-Click)
+ * 4. M3 Segmented Buttons (Elo Rating Selector: 1100, 1500, 1900, 2200)
+ * 5. M3 Filter Chips (Heatmap & Arrow Visual Toggles)
+ * 6. M3 Linear Progress & Dual-Engine Status Card
+ * 7. Candidate Moves List & Human Intuition Insight Card
  */
-
 
 export class IntuitionPanel {
   constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave }) {
@@ -17,7 +19,9 @@ export class IntuitionPanel {
     this.onCdnSave = onCdnSave;
 
     this.container = null;
+    this.fab = null;
     this.isMinimized = false;
+    this.isClosed = localStorage.getItem('maia3_panel_closed') === 'true';
     this.currentElo = 1500;
     this.currentData = null;
     this.currentTurn = 'w';
@@ -31,13 +35,31 @@ export class IntuitionPanel {
   }
 
   init() {
-    const old = document.getElementById('maia3-intuition-panel');
-    if (old) old.remove();
+    // 1. Remove any legacy instances
+    const oldPanel = document.getElementById('maia3-intuition-panel');
+    if (oldPanel) oldPanel.remove();
+    const oldFab = document.getElementById('maia3-fab');
+    if (oldFab) oldFab.remove();
 
+    // 2. Create M3 Panel Container
     this.container = document.createElement('div');
     this.container.id = 'maia3-intuition-panel';
     this.container.className = 'maia-panel-root';
 
+    // 3. Create M3 Floating Action Button (FAB)
+    this.fab = document.createElement('div');
+    this.fab.id = 'maia3-fab';
+    this.fab.className = 'maia-m3-fab';
+    this.fab.setAttribute('role', 'button');
+    this.fab.setAttribute('tabindex', '0');
+    this.fab.title = '打开 Maia 3 人类直觉面板 (点击恢复)';
+    this.fab.innerHTML = `
+      <span class="maia-fab-icon">🧠</span>
+      <span class="maia-fab-label">Maia 3</span>
+      <span id="maia-fab-elo" class="maia-fab-badge">${this.currentElo}</span>
+    `;
+
+    // 4. Restore Panel Position
     const savedPos = localStorage.getItem('maia3_panel_pos');
     if (savedPos) {
       try {
@@ -52,12 +74,36 @@ export class IntuitionPanel {
       } catch (e) {}
     }
 
+    // 5. Restore FAB Position
+    const savedFabPos = localStorage.getItem('maia3_fab_pos');
+    if (savedFabPos) {
+      try {
+        const { left, top } = JSON.parse(savedFabPos);
+        if (typeof left === 'number' && typeof top === 'number') {
+          this.fab.style.left = `${left}px`;
+          this.fab.style.top = `${top}px`;
+          this.fab.style.right = 'auto';
+        }
+      } catch (e) {}
+    }
+
+    // 6. Set Visibility State (Closed vs Open)
+    if (this.isClosed) {
+      this.container.style.display = 'none';
+      this.fab.style.display = 'flex';
+    } else {
+      this.container.style.display = 'block';
+      this.fab.style.display = 'none';
+    }
+
     this.renderSkeleton();
 
+    // 7. Mount both to DOM
     const mount = () => {
       const parent = document.body || document.documentElement;
-      if (parent && !parent.contains(this.container)) {
-        parent.appendChild(this.container);
+      if (parent) {
+        if (!parent.contains(this.container)) parent.appendChild(this.container);
+        if (!parent.contains(this.fab)) parent.appendChild(this.fab);
       }
     };
     mount();
@@ -66,25 +112,34 @@ export class IntuitionPanel {
     }
 
     this.setupDraggable();
+    this.setupFabEvents();
   }
 
   renderSkeleton() {
     this.container.innerHTML = `
-      <!-- Header -->
+      <!-- Android M3 Top App Bar (Header) -->
       <div class="maia-header" id="maia-drag-handle">
         <div class="maia-title-box">
-          <div class="maia-icon-glow">🧠</div>
-          <span class="maia-title">Maia 3 · 人类直觉预测器</span>
+          <div class="maia-m3-avatar">🧠</div>
+          <div class="maia-title-text-group">
+            <span class="maia-title">Maia 3</span>
+            <span class="maia-subtitle">人类直觉预测器 · Android M3</span>
+          </div>
         </div>
         <div class="maia-header-actions">
           <span id="maia-turn-pill" class="maia-turn-tag turn-white">⚪ 白方行棋</span>
-          <button id="maia-btn-min" class="maia-btn-icon" title="最小化/展开">−</button>
+          <button id="maia-btn-min" class="maia-m3-icon-btn" title="折叠 / 展开" aria-label="最小化">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>
+          </button>
+          <button id="maia-btn-close" class="maia-m3-icon-btn maia-btn-close" title="关闭面板 (收起为浮动小球)" aria-label="关闭">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
         </div>
       </div>
 
-      <!-- Main Body -->
+      <!-- Android M3 Sheet Body -->
       <div class="maia-body" id="maia-panel-body">
-        <!-- Dual Engine Status Box -->
+        <!-- Dual Engine Status Card (M3 Elevated Card) -->
         <div class="maia-dual-status-box">
           <div class="maia-status-row">
             <div class="maia-status-item">
@@ -99,7 +154,7 @@ export class IntuitionPanel {
             </div>
           </div>
 
-          <!-- Cloudflare CDN Progress Card -->
+          <!-- Cloudflare CDN Progress Card (M3 Linear Progress) -->
           <div id="maia-cdn-progress-card" class="cdn-progress-card" style="display: none;">
             <div class="cdn-progress-header">
               <span id="cdn-status-label" class="cdn-label">⚡ Cloudflare CDN 传输中...</span>
@@ -110,58 +165,66 @@ export class IntuitionPanel {
             </div>
             <div class="cdn-progress-meta">
               <span id="cdn-bytes-label">0 MB / 28.0 MB</span>
-              <span>💡 自动缓存至本地，后续 0ms 秒开</span>
+              <span>💡 一次下载永久缓存，后续 0ms 秒开</span>
             </div>
           </div>
 
           <!-- CDN Custom Config Drawer Toggle -->
           <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 2px;">
-            <button id="btn-toggle-cdn-drawer" style="background: none; border: none; color: #64748b; font-size: 10px; cursor: pointer; padding: 0;">⚙️ CDN / 缓存设置</button>
+            <button id="btn-toggle-cdn-drawer" style="background: none; border: none; color: #94a3b8; font-size: 10px; cursor: pointer; padding: 2px 0;">⚙️ CDN / 模型配置</button>
           </div>
 
-          <div id="cdn-config-drawer" style="display: none; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08);">
-            <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 4px;">快速预设模型:</div>
+          <div id="cdn-config-drawer" style="display: none; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.1);">
+            <div style="font-size: 10.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">快速预设模型:</div>
             <div style="display: flex; gap: 4px; margin-bottom: 6px;">
-              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 4px; font-size: 9.5px; padding: 3px 0; cursor: pointer;">5M (28M)</button>
-              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: rgba(59,130,246,0.2); border: 1px solid #3b82f6; color: #93c5fd; border-radius: 4px; font-size: 9.5px; padding: 3px 0; cursor: pointer; font-weight: 600;">23M (104M)</button>
-              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_79m_fp16.bin" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 4px; font-size: 9.5px; padding: 3px 0; cursor: pointer;">79M (159M)</button>
+              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 8px; font-size: 9.5px; padding: 4px 0; cursor: pointer;">5M (28M)</button>
+              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: rgba(168,199,250,0.18); border: 1px solid #7cacf8; color: #d3e3fd; border-radius: 8px; font-size: 9.5px; padding: 4px 0; cursor: pointer; font-weight: 700;">23M (104M)</button>
+              <button type="button" class="cdn-preset-btn" data-url="https://weights.4chess.cc/maia3_79m_fp16.bin" style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 8px; font-size: 9.5px; padding: 4px 0; cursor: pointer;">79M (159M)</button>
             </div>
             <div style="display: flex; gap: 6px;">
-              <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_23m.bin" value="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 4px 6px; border-radius: 5px; font-size: 10px;">
-              <button id="cdn-save-btn" style="background: #3b82f6; color: white; border: none; border-radius: 5px; padding: 4px 8px; font-size: 10.5px; cursor: pointer; font-weight: 600;">保存</button>
+              <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_23m.bin" value="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: #141218; border: 1px solid rgba(255,255,255,0.15); color: #f8fafc; padding: 5px 8px; border-radius: 8px; font-size: 10px; font-family: monospace;">
+              <button id="cdn-save-btn" style="background: #0842a0; color: #d3e3fd; border: 1px solid rgba(168,199,250,0.3); border-radius: 8px; padding: 4px 10px; font-size: 10.5px; cursor: pointer; font-weight: 700;">保存</button>
             </div>
-            <div style="font-size: 9.5px; color: #64748b; margin-top: 4px;">各模型独立本地缓存，首次下载后离线 0ms 秒开</div>
+            <div style="font-size: 9.5px; color: #94a3b8; margin-top: 4px;">各模型独立本地缓存，首次下载后离线 0ms 秒开</div>
           </div>
         </div>
 
-        <!-- Elo Selector -->
+        <!-- Android M3 Segmented Buttons (Elo Rating Selector) -->
         <div class="maia-section">
           <div class="maia-section-header">
             <span class="maia-label">目标棋手等级分 (Elo)</span>
             <span id="maia-elo-val" class="maia-elo-pill">1500</span>
           </div>
-          <div class="maia-elo-presets">
-            <button class="maia-elo-btn" data-elo="1100">1100 (初阶)</button>
-            <button class="maia-elo-btn active" data-elo="1500">1500 (中阶)</button>
-            <button class="maia-elo-btn" data-elo="1900">1900 (进阶)</button>
-            <button class="maia-elo-btn" data-elo="2200">2200 (大师)</button>
+          <div class="maia-elo-segmented">
+            <button class="maia-segmented-btn" data-elo="1100">
+              <span class="seg-check"></span><span class="seg-label">1100 (初阶)</span>
+            </button>
+            <button class="maia-segmented-btn active" data-elo="1500">
+              <span class="seg-check">✓</span><span class="seg-label">1500 (中阶)</span>
+            </button>
+            <button class="maia-segmented-btn" data-elo="1900">
+              <span class="seg-check"></span><span class="seg-label">1900 (进阶)</span>
+            </button>
+            <button class="maia-segmented-btn" data-elo="2200">
+              <span class="seg-check"></span><span class="seg-label">2200 (大师)</span>
+            </button>
           </div>
           <input type="range" id="maia-elo-slider" min="600" max="2600" step="50" value="1500" class="maia-slider" />
         </div>
 
-        <!-- Visual Toggles -->
+        <!-- Android M3 Filter Chips (Visual Toggles) -->
         <div class="maia-toggles-row">
-          <label class="maia-toggle-chip">
+          <label class="maia-m3-chip" id="chip-heatmap">
             <input type="checkbox" id="maia-chk-heatmap" checked />
             <span>🔥 意图热力图</span>
           </label>
-          <label class="maia-toggle-chip">
+          <label class="maia-m3-chip" id="chip-arrows">
             <input type="checkbox" id="maia-chk-arrows" checked />
             <span>🏹 直觉箭头</span>
           </label>
         </div>
 
-        <!-- Prediction List -->
+        <!-- Candidate Moves List -->
         <div class="maia-section">
           <div class="maia-section-header">
             <span id="maia-moves-header-text" class="maia-label">候选着法预测</span>
@@ -172,9 +235,9 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- Human Intuition Insight Card -->
+        <!-- Human Intuition Insight Banner (M3 Assist Banner) -->
         <div id="maia-insight-card" class="maia-insight-box">
-          <div id="maia-insight-badge" class="maia-insight-tag">💡 直觉分析</div>
+          <div id="maia-insight-badge" class="maia-insight-tag">💡 直觉研判</div>
           <div id="maia-insight-text" class="maia-insight-content">
             观察棋局中，Maia 3 正在实时分析人类直觉倾向...
           </div>
@@ -185,31 +248,141 @@ export class IntuitionPanel {
     this.bindEvents();
   }
 
+  setupFabEvents() {
+    if (!this.fab) return;
+
+    let isDraggingFab = false;
+    let hasMoved = false;
+    let startX, startY, origLeft, origTop;
+
+    this.fab.addEventListener('mousedown', (e) => {
+      isDraggingFab = true;
+      hasMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      const rect = this.fab.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop = rect.top;
+
+      const onMouseMove = (moveEvent) => {
+        if (!isDraggingFab) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          hasMoved = true;
+        }
+
+        const newLeft = Math.max(10, Math.min(window.innerWidth - rect.width - 10, origLeft + dx));
+        const newTop = Math.max(10, Math.min(window.innerHeight - rect.height - 10, origTop + dy));
+
+        this.fab.style.left = `${newLeft}px`;
+        this.fab.style.top = `${newTop}px`;
+        this.fab.style.right = 'auto';
+      };
+
+      const onMouseUp = () => {
+        if (!isDraggingFab) return;
+        isDraggingFab = false;
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+
+        if (hasMoved) {
+          const rect = this.fab.getBoundingClientRect();
+          localStorage.setItem('maia3_fab_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+        }
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    });
+
+    // Restore panel on click (if not dragged)
+    this.fab.addEventListener('click', (e) => {
+      if (!hasMoved) {
+        this.open();
+      }
+    });
+
+    this.fab.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        this.open();
+      }
+    });
+  }
+
+  close() {
+    this.isClosed = true;
+    this.container.style.display = 'none';
+    if (this.fab) {
+      this.fab.style.display = 'flex';
+      const eloBadge = this.fab.querySelector('#maia-fab-elo');
+      if (eloBadge) eloBadge.textContent = this.currentElo;
+    }
+    localStorage.setItem('maia3_panel_closed', 'true');
+  }
+
+  open() {
+    this.isClosed = false;
+    this.container.style.display = 'block';
+    if (this.fab) {
+      this.fab.style.display = 'none';
+    }
+    localStorage.setItem('maia3_panel_closed', 'false');
+  }
+
+  isPanelClosed() {
+    return this.isClosed;
+  }
+
   bindEvents() {
-    // Minimize / Expand
+    // 1. Close Button (✕)
+    const closeBtn = this.container.querySelector('#maia-btn-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.close();
+      });
+    }
+
+    // 2. Minimize / Expand Button (− / +)
     const minBtn = this.container.querySelector('#maia-btn-min');
     const body = this.container.querySelector('#maia-panel-body');
     if (minBtn && body) {
       minBtn.addEventListener('click', () => {
         this.isMinimized = !this.isMinimized;
         body.style.display = this.isMinimized ? 'none' : 'block';
-        minBtn.textContent = this.isMinimized ? '+' : '−';
+        minBtn.innerHTML = this.isMinimized ?
+          `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>` :
+          `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>`;
       });
     }
 
-    // Elo Presets
-    const eloBtns = this.container.querySelectorAll('.maia-elo-btn');
+    // 3. Elo Segmented Buttons & Slider
+    const segBtns = this.container.querySelectorAll('.maia-segmented-btn');
     const eloSlider = this.container.querySelector('#maia-elo-slider');
     const eloVal = this.container.querySelector('#maia-elo-val');
 
-    eloBtns.forEach(btn => {
+    const updateActiveEloButton = (elo) => {
+      segBtns.forEach(btn => {
+        const isMatch = parseInt(btn.dataset.elo, 10) === elo;
+        btn.classList.toggle('active', isMatch);
+        const check = btn.querySelector('.seg-check');
+        if (check) check.textContent = isMatch ? '✓' : '';
+      });
+    };
+
+    segBtns.forEach(btn => {
       btn.addEventListener('click', () => {
-        eloBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
         const elo = parseInt(btn.dataset.elo, 10);
         this.currentElo = elo;
+        updateActiveEloButton(elo);
         if (eloSlider) eloSlider.value = elo;
         if (eloVal) eloVal.textContent = elo;
+        if (this.fab) {
+          const eloBadge = this.fab.querySelector('#maia-fab-elo');
+          if (eloBadge) eloBadge.textContent = elo;
+        }
         if (this.onEloChange) this.onEloChange(elo);
       });
     });
@@ -219,14 +392,16 @@ export class IntuitionPanel {
         const elo = parseInt(e.target.value, 10);
         this.currentElo = elo;
         if (eloVal) eloVal.textContent = elo;
-        eloBtns.forEach(b => {
-          b.classList.toggle('active', parseInt(b.dataset.elo, 10) === elo);
-        });
+        updateActiveEloButton(elo);
+        if (this.fab) {
+          const eloBadge = this.fab.querySelector('#maia-fab-elo');
+          if (eloBadge) eloBadge.textContent = elo;
+        }
         if (this.onEloChange) this.onEloChange(elo);
       });
     }
 
-    // Toggles
+    // 4. M3 Filter Chips (Toggles)
     const chkHeatmap = this.container.querySelector('#maia-chk-heatmap');
     const chkArrows = this.container.querySelector('#maia-chk-arrows');
 
@@ -245,7 +420,7 @@ export class IntuitionPanel {
     if (chkHeatmap) chkHeatmap.addEventListener('change', updateToggles);
     if (chkArrows) chkArrows.addEventListener('change', updateToggles);
 
-    // CDN Drawer & Config
+    // 5. CDN Drawer & Config
     const toggleCdnBtn = this.container.querySelector('#btn-toggle-cdn-drawer');
     const cdnDrawer = this.container.querySelector('#cdn-config-drawer');
     const cdnInput = this.container.querySelector('#cdn-url-input');
@@ -255,14 +430,14 @@ export class IntuitionPanel {
       toggleCdnBtn.addEventListener('click', () => {
         const isHidden = cdnDrawer.style.display === 'none';
         cdnDrawer.style.display = isHidden ? 'block' : 'none';
-        toggleCdnBtn.textContent = isHidden ? '🔼 收起 CDN 设置' : '⚙️ CDN / 缓存设置';
+        toggleCdnBtn.textContent = isHidden ? '▲ 收起设置' : '⚙️ CDN / 模型配置';
       });
     }
 
-    // Load saved CDN URL into input (defaults to weights.4chess.cc)
+    // Load saved CDN URL
     if (typeof chrome !== 'undefined' && chrome.storage?.local && cdnInput) {
       chrome.storage.local.get(['cloudflareCdnUrl'], (res) => {
-        cdnInput.value = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
+        cdnInput.value = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_23m.bin';
       });
     }
 
@@ -287,7 +462,7 @@ export class IntuitionPanel {
         cdnSaveBtn.style.background = '#10b981';
         setTimeout(() => {
           cdnSaveBtn.textContent = originalText;
-          cdnSaveBtn.style.background = '#3b82f6';
+          cdnSaveBtn.style.background = '#0842a0';
         }, 1500);
 
         if (this.onCdnSave) {
@@ -310,7 +485,7 @@ export class IntuitionPanel {
     const cdnBytesLabel = this.container.querySelector('#cdn-bytes-label');
 
     if (status.maia) {
-      const { state, percent, speed, loadedMB, totalMB, source, error } = status.maia;
+      const { state, percent, speed, loadedMB, totalMB, source } = status.maia;
       if (state === 'ready') {
         if (dotMaia) dotMaia.className = 'maia-status-dot status-ready';
         if (labelMaia) labelMaia.textContent = `就绪 (${source || '纯本地'})`;
@@ -336,11 +511,11 @@ export class IntuitionPanel {
       }
     }
 
-    // 2. Update Stockfish 17 Status Dot & Text
+    // 2. Update Stockfish Status Dot & Text
     const dotSf = this.container.querySelector('#dot-sf');
     const labelSf = this.container.querySelector('#label-sf-status');
     if (status.stockfish) {
-      const { state, error } = status.stockfish;
+      const { state } = status.stockfish;
       if (state === 'ready') {
         if (dotSf) dotSf.className = 'maia-status-dot status-ready';
         if (labelSf) labelSf.textContent = '就绪 (WASM 毫秒级)';
@@ -361,7 +536,7 @@ export class IntuitionPanel {
     let startX, startY, origLeft, origTop;
 
     handle.addEventListener('mousedown', (e) => {
-      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT' || e.target.closest('button')) return;
       isDragging = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -404,7 +579,11 @@ export class IntuitionPanel {
 
     if (!predictionData) return;
 
-    // Update status indicators if provided
+    if (this.fab) {
+      const eloBadge = this.fab.querySelector('#maia-fab-elo');
+      if (eloBadge) eloBadge.textContent = this.currentElo;
+    }
+
     if (predictionData.status) {
       this.updateEngineStatus(predictionData.status);
     }
@@ -423,7 +602,7 @@ export class IntuitionPanel {
     const insightText = this.container.querySelector('#maia-insight-text');
     const timeEl = this.container.querySelector('#maia-inference-time');
 
-    // 1. If Maia-3 engine is NOT available yet: check if Stockfish is ready & has computed!
+    // 1. If Maia-3 engine is NOT ready yet: check if Stockfish has preliminary result
     if (!predictionData.isAvailable) {
       const sf = predictionData.stockfish;
       if (sf && sf.bestMove) {
@@ -442,9 +621,9 @@ export class IntuitionPanel {
                 <div class="maia-progress-fill" style="width: 100%; background-color: #10b981;"></div>
               </div>
             </div>
-            <div style="margin-top: 10px; padding: 10px 12px; background: rgba(56, 189, 248, 0.06); border: 1px dashed rgba(56, 189, 248, 0.25); border-radius: 8px; text-align: center;">
-              <div style="font-size: 11px; color: #38bdf8; font-weight: 600;">🧠 Maia-3 人类直觉候选着法传输中...</div>
-              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Stockfish 17 现已独立完成运算，Maia-3 传输完毕后将呈现人机直觉热力图对比</div>
+            <div style="margin-top: 10px; padding: 10px 12px; background: rgba(168, 199, 250, 0.08); border: 1px dashed rgba(168, 199, 250, 0.25); border-radius: 12px; text-align: center;">
+              <div style="font-size: 11px; color: #a8c7fa; font-weight: 700;">🧠 Maia-3 人类直觉候选着法传输中...</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Stockfish 17 现已独立完成运算，Maia-3 传输完毕后将呈现人机直觉热力图对比</div>
             </div>
           `;
         }
@@ -457,21 +636,20 @@ export class IntuitionPanel {
           insightText.innerHTML = `Stockfish 17 建议走 <strong>${sf.bestMove.san}</strong> (评估评分: ${sf.score})。<br><span style="color: #94a3b8; font-size: 10.5px;">Maia-3 权重正从 Cloudflare CDN 传输中，就绪后将立即呈现人类直觉热力图。</span>`;
         }
       } else {
-        // Stockfish is also initializing or computing
         if (timeEl) timeEl.textContent = '载入中...';
         if (movesContainer) {
           const maiaState = predictionData.status?.maia;
           const isError = maiaState?.state === 'error';
           movesContainer.innerHTML = `
-            <div style="padding: 16px 12px; text-align: center; background: rgba(56, 189, 248, 0.08); border: 1px dashed rgba(56, 189, 248, 0.3); border-radius: 10px;">
-              <div style="font-size: 22px; margin-bottom: 6px;">${isError ? '⚠️' : '🧠'}</div>
-              <div style="font-weight: 700; color: #38bdf8; margin-bottom: 6px;">
+            <div style="padding: 16px 12px; text-align: center; background: rgba(168, 199, 250, 0.08); border: 1px dashed rgba(168, 199, 250, 0.3); border-radius: 14px;">
+              <div style="font-size: 24px; margin-bottom: 6px;">${isError ? '⚠️' : '🧠'}</div>
+              <div style="font-weight: 700; color: #a8c7fa; margin-bottom: 6px;">
                 ${isError ? 'Maia-3 模型未就绪' : '正在载入 Maia-3 神经网络'}
               </div>
               <div style="font-size: 11.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 10px;">
-                ${isError ? '无法从默认源载入模型，请点击上方“⚙️ CDN / 缓存设置”配置您的 Cloudflare R2 / Worker 地址。' : (maiaState?.status || '正在从 Cloudflare CDN 传输 27.9 MB 模型至本地...')}
+                ${isError ? '无法从默认源载入模型，请点击上方“⚙️ CDN / 模型配置”切换您的 R2 节点。' : (maiaState?.status || '正在从 Cloudflare CDN 传输模型至本地...')}
               </div>
-              <button id="maia-retry-btn" style="background: #3b82f6; color: #fff; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: 600;">🔄 重新初始化引擎</button>
+              <button id="maia-retry-btn" style="background: #0842a0; color: #d3e3fd; border: 1px solid rgba(168,199,250,0.3); padding: 5px 14px; border-radius: 9999px; cursor: pointer; font-size: 11.5px; font-weight: 700;">🔄 重新初始化引擎</button>
             </div>
           `;
           const retryBtn = movesContainer.querySelector('#maia-retry-btn');
@@ -497,7 +675,7 @@ export class IntuitionPanel {
       timeEl.textContent = `${latencyMs.toFixed(0)} ms (${predictionData.backend})`;
     }
 
-    // Human vs Stockfish Comparative Insight Card
+    // Human vs Stockfish Comparative Insight Banner
     if (predictionData.comparison) {
       const { badge, summary, agreed } = predictionData.comparison;
       insightBadge.textContent = badge;
@@ -508,9 +686,9 @@ export class IntuitionPanel {
       if (predictionData.stockfish && predictionData.stockfish.bestMove) {
         const sf = predictionData.stockfish;
         sfHtml = `
-          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center; font-size: 11.5px;">
+          <div class="maia-sf-row">
             <span>🐟 Stockfish 17 最佳: <strong>${sf.bestMove.san}</strong></span>
-            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${sf.score}</span>
+            <span class="maia-sf-eval">${sf.score}</span>
           </div>
         `;
       }
@@ -537,13 +715,13 @@ export class IntuitionPanel {
       row.dataset.uci = move.uci;
 
       const isSfMatch = predictionData.stockfish?.bestMove?.uci === move.uci;
-      const colors = ['#f59e0b', '#06b6d4', '#a855f7', '#6b7280'];
-      const barColor = isSfMatch ? '#10b981' : (colors[idx] || '#6b7280');
+      const colors = ['#f5c042', '#38bdf8', '#a855f7', '#94a3b8'];
+      const barColor = isSfMatch ? '#10b981' : (colors[idx] || '#94a3b8');
 
       row.innerHTML = `
         <div class="maia-move-main">
           <span class="maia-move-rank">#${idx + 1}</span>
-          <span class="maia-move-san">${move.san} ${isSfMatch ? '<span style="font-size: 10px; color: #10b981;">(🐟 最佳)</span>' : ''}</span>
+          <span class="maia-move-san">${move.san} ${isSfMatch ? '<span style="font-size: 10px; color: #10b981; font-weight: 700;">(🐟 最佳)</span>' : ''}</span>
           <span class="maia-move-prob">${move.prob}%</span>
         </div>
         <div class="maia-progress-bar">

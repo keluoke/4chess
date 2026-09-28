@@ -127,4 +127,26 @@ export async function initMaiaExtension() {
 
   detector.start();
   console.log('[Maia-3] Extension successfully hooked into analysis environment! ♟️');
+
+  // Handle runtime messages from Popup
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (msg.type === 'TOGGLE_PANEL') {
+        if (panel.isPanelClosed()) {
+          panel.open();
+        } else {
+          panel.close();
+        }
+        sendResponse({ closed: panel.isPanelClosed() });
+      } else if (msg.type === 'GET_PANEL_STATE') {
+        sendResponse({ closed: panel.isPanelClosed() });
+      } else if (msg.type === 'OPEN_PANEL') {
+        panel.open();
+        sendResponse({ closed: false });
+      } else if (msg.type === 'CLOSE_PANEL') {
+        panel.close();
+        sendResponse({ closed: true });
+      }
+    });
+  }
 }
