@@ -143,18 +143,49 @@ export class MaiaInBrowserEngine {
       const payloadOffset = 8 + metaLen;
       const payloadBytes = new Uint8Array(arrayBuffer, payloadOffset);
 
-      // Map tensor buffers (zero-copy if 4-byte aligned, slice fallback if unaligned)
+      // Fast Float16 to Float32 conversion helper
+      function decodeFp16(u16Arr) {
+        const len = u16Arr.length;
+        const out = new Float32Array(len);
+        for (let i = 0; i < len; i++) {
+          const h = u16Arr[i];
+          const sign = (h & 0x8000) >> 15;
+          const exp = (h & 0x7c00) >> 10;
+          const mant = h & 0x03ff;
+          if (exp === 0) {
+            out[i] = (sign ? -1 : 1) * Math.pow(2, -14) * (mant / 1024);
+          } else if (exp === 0x1f) {
+            out[i] = mant ? NaN : ((sign ? -1 : 1) * Infinity);
+          } else {
+            out[i] = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + mant / 1024);
+          }
+        }
+        return out;
+      }
+
+      const isFp16 = this.meta.dtype === 'float16';
+
+      // Map tensor buffers (zero-copy if 4-byte aligned, or decode float16)
       for (const [name, info] of Object.entries(this.meta.tensors)) {
         const totalOffset = payloadBytes.byteOffset + info.offset;
-        if (totalOffset % 4 === 0) {
-          this.tensors[name] = new Float32Array(
-            payloadBytes.buffer,
-            totalOffset,
-            info.numel
-          );
+        if (isFp16) {
+          const u16Slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 2);
+          if (typeof Float16Array !== 'undefined') {
+            this.tensors[name] = new Float32Array(new Float16Array(u16Slice));
+          } else {
+            this.tensors[name] = decodeFp16(new Uint16Array(u16Slice));
+          }
         } else {
-          const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
-          this.tensors[name] = new Float32Array(slice);
+          if (totalOffset % 4 === 0) {
+            this.tensors[name] = new Float32Array(
+              payloadBytes.buffer,
+              totalOffset,
+              info.numel
+            );
+          } else {
+            const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
+            this.tensors[name] = new Float32Array(slice);
+          }
         }
       }
 

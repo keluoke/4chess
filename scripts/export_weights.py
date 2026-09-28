@@ -13,8 +13,9 @@ import torch
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 
-def export_checkpoint(ckpt_path, output_path):
-    print(f"[Exporter] 📂 Loading checkpoint: {ckpt_path.name}...")
+def export_checkpoint(ckpt_path, output_path, fp16=False):
+    dtype = "float16" if fp16 else "float32"
+    print(f"[Exporter] 📂 Loading checkpoint: {ckpt_path.name} ({dtype})...")
     ckpt = torch.load(str(ckpt_path), map_location="cpu")
     sd = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
     sd = {k.replace("smolgen", "gab"): v.contiguous() for k, v in sd.items()}
@@ -23,7 +24,7 @@ def export_checkpoint(ckpt_path, output_path):
     dim_vit = sd["token_projection.weight"].shape[0]
     num_heads = 8 if dim_vit == 256 else 32
     num_blocks = 8
-    print(f"[Exporter] 🧠 Detected architecture: dim_vit={dim_vit}, num_heads={num_heads}, num_blocks={num_blocks}")
+    print(f"[Exporter] 🧠 Detected architecture: dim_vit={dim_vit}, num_heads={num_heads}, num_blocks={num_blocks}, dtype={dtype}")
 
     # Build tensor table
     tensor_table = {}
@@ -31,7 +32,7 @@ def export_checkpoint(ckpt_path, output_path):
     all_bytes = bytearray()
 
     for name in sorted(sd.keys()):
-        tensor = sd[name].float()
+        tensor = sd[name].half() if fp16 else sd[name].float()
         raw_bytes = tensor.numpy().tobytes()
         tensor_table[name] = {
             "offset": current_offset,
@@ -46,6 +47,7 @@ def export_checkpoint(ckpt_path, output_path):
     meta = {
         "magic": "MAIA3_CHESSFORMER",
         "version": 1,
+        "dtype": dtype,
         "dim_vit": dim_vit,
         "num_heads": num_heads,
         "num_blocks": num_blocks,
@@ -78,13 +80,16 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Export Maia-3 checkpoint to zero-copy binary")
     parser.add_argument("--model", choices=["5m", "79m", "both"], default="5m", help="Model size to export")
+    parser.add_argument("--fp16", action="store_true", help="Export in float16 to reduce file size by 50%")
     args = parser.parse_args()
 
     if args.model in ["5m", "both"]:
         src5 = MODELS_DIR / "maia3-5m.pt"
         if src5.exists():
-            export_checkpoint(src5, MODELS_DIR / "maia3_model.bin")
+            export_checkpoint(src5, MODELS_DIR / "maia3_5m.bin", fp16=args.fp16)
+            export_checkpoint(src5, MODELS_DIR / "maia3_model.bin", fp16=args.fp16)
     if args.model in ["79m", "both"]:
         src79 = MODELS_DIR / "maia3-79m.pt"
         if src79.exists():
-            export_checkpoint(src79, MODELS_DIR / "maia3_79m.bin")
+            out_name = "maia3_79m_fp16.bin" if args.fp16 else "maia3_79m.bin"
+            export_checkpoint(src79, MODELS_DIR / out_name, fp16=args.fp16)
