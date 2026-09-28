@@ -7,6 +7,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   const eloSelect = document.getElementById('default-elo');
   const backendSelect = document.getElementById('backend-pref');
 
+  // Check local engine server first
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 400);
+    const res = await fetch('http://127.0.0.1:8765/health', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'ready') {
+        statusPill.textContent = `⚡ ${data.model} (本地原生)`;
+        statusPill.style.color = '#10b981';
+        return;
+      }
+    }
+  } catch (e) {}
+
   // Check hardware acceleration
   const hasWebGPU = !!navigator.gpu;
   if (hasWebGPU) {

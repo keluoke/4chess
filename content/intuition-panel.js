@@ -319,10 +319,16 @@ export class IntuitionPanel {
 
     // 2. Update Model Badge
     const modelBadge = this.container.querySelector('#maia-model-badge');
+    const modelControls = this.container.querySelector('#maia-model-controls');
     if (modelBadge) {
-      if (predictionData.isRealOnnx) {
+      if (predictionData.isLocalServer) {
+        modelBadge.textContent = `🟢 ${predictionData.modelName} (⚡ 本地 MPS 原生加速)`;
+        modelBadge.className = 'maia-badge badge-gpu';
+        if (modelControls) modelControls.style.display = 'none';
+      } else if (predictionData.isRealOnnx) {
         modelBadge.textContent = `🟢 ONNX 实装 (⚡ ${predictionData.backend})`;
         modelBadge.className = 'maia-badge badge-gpu';
+        if (modelControls) modelControls.style.display = 'none';
       } else if (predictionData.isEmbedded) {
         modelBadge.textContent = `🟢 内置神经网络 (⚡ 0ms 本地秒开)`;
         modelBadge.className = 'maia-badge badge-gpu';

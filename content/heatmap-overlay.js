@@ -19,8 +19,11 @@ export class HeatmapOverlay {
   }
 
   attach(boardEl, orientation = 'white') {
-    this.boardEl = boardEl;
     this.orientation = orientation;
+    if (this.boardEl === boardEl && this.svg && boardEl.contains(this.svg)) {
+      return;
+    }
+    this.boardEl = boardEl;
 
     const computedStyle = window.getComputedStyle(boardEl);
     if (computedStyle.position === 'static') {
@@ -99,6 +102,11 @@ export class HeatmapOverlay {
    * sqIdx = rank * 8 + file (a1 = 0, h1 = 7, a8 = 56, h8 = 63)
    */
   squareToCoords(sqIdx) {
+    if (typeof sqIdx === 'string') {
+      const f = sqIdx.charCodeAt(0) - 97;
+      const r = parseInt(sqIdx[1], 10) - 1;
+      sqIdx = r * 8 + f;
+    }
     const f = sqIdx % 8;
     const r = Math.floor(sqIdx / 8);
 

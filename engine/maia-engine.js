@@ -18,13 +18,19 @@ export class MaiaEngine {
     this.activeBackend = 'initializing';
     this.targetElo = 1500;
     this.isReady = false;
+    this.localServerConnected = false;
+    this.localServerModel = '';
+    this.localServerDevice = '';
   }
 
   async initialize() {
-    // 1. Initialize embedded neural weights from extension package (0ms local file)
+    // 1. Check local native engine server (http://127.0.0.1:8765)
+    await this.checkLocalServer();
+
+    // 2. Initialize embedded neural weights from extension package (0ms local file)
     await ModelLoader.initEmbeddedModel();
 
-    // 2. Initialize hardware compute pipelines (WebGPU / WASM)
+    // 3. Initialize hardware compute pipelines (WebGPU / WASM)
     const gpuSuccess = await this.webgpuRunner.initialize();
     if (gpuSuccess) {
       this.activeBackend = 'webgpu';
@@ -37,6 +43,54 @@ export class MaiaEngine {
     return this.getBackend();
   }
 
+  async checkLocalServer() {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 400);
+      const res = await fetch('http://127.0.0.1:8765/health', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'ready') {
+          this.localServerConnected = true;
+          this.localServerModel = data.model;
+          this.localServerDevice = data.device;
+          console.log(`[Maia Engine] ⚡ 连接到本地原生 ${data.model} (${data.device})!`);
+          return true;
+        }
+      }
+    } catch (e) {
+      this.localServerConnected = false;
+    }
+    return false;
+  }
+
+  async tryLocalServerPredict(fen, elo, moves = null) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600);
+      const res = await fetch('http://127.0.0.1:8765/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fen, elo, moves, top_k: 5 }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'ok' && data.moves) {
+          this.localServerConnected = true;
+          this.localServerModel = data.model;
+          this.localServerDevice = data.device;
+          return data;
+        }
+      }
+    } catch (e) {
+      this.localServerConnected = false;
+    }
+    return null;
+  }
+
   setElo(elo) {
     this.targetElo = Math.max(600, Math.min(2600, elo));
   }
@@ -46,6 +100,9 @@ export class MaiaEngine {
   }
 
   getBackend() {
+    if (this.localServerConnected) {
+      return `⚡ ${this.localServerModel} (${this.localServerDevice})`;
+    }
     if (ModelLoader.isModelLoaded()) {
       return `ONNX (${this.activeBackend.toUpperCase()})`;
     }
@@ -56,7 +113,7 @@ export class MaiaEngine {
   }
 
   isRealOnnxLoaded() {
-    return ModelLoader.isModelLoaded();
+    return this.localServerConnected || ModelLoader.isModelLoaded();
   }
 
   isEmbeddedReady() {
@@ -148,6 +205,38 @@ export class MaiaEngine {
 
     let normalizedHeatmap;
     let scoredMoves;
+
+    // 0. Native Local Maia-3 Server (79M on MPS / PyTorch hardware acceleration)
+    const localData = await this.tryLocalServerPredict(fen, elo);
+    if (localData && localData.moves && localData.moves.length > 0) {
+      scoredMoves = localData.moves.map(m => ({
+        ...m,
+        from: typeof m.from === 'string' ? ChessBoard.squareToIndex(m.from) : m.from,
+        to: typeof m.to === 'string' ? ChessBoard.squareToIndex(m.to) : m.to
+      }));
+
+      normalizedHeatmap = new Float32Array(localData.heatmap || 64);
+      const topMove = scoredMoves[0];
+      const commentary = `直觉候选: ${topMove.san} (${topMove.prob}%) · 胜率预估: ${localData.winRate}%`;
+
+      return {
+        fen: localData.fen || fen,
+        elo,
+        turn: localData.activeTurn || chess.turn,
+        backend: `${localData.model} (${localData.device}) - ${localData.latencyMs}ms`,
+        isRealOnnx: true,
+        isEmbedded: false,
+        isLocalServer: true,
+        modelName: localData.model,
+        heatmap: normalizedHeatmap,
+        moves: scoredMoves,
+        analysis: {
+          topMove: topMove.uci,
+          commentary,
+          isTacticalTrap: false
+        }
+      };
+    }
 
     // 1. External ONNX Model (if loaded by user)
     if (ModelLoader.isModelLoaded() && window.ort) {

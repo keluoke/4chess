@@ -1,0 +1,16 @@
+# Checkpoints and models (large binaries)
+*.pt
+*.onnx
+*.bin
+!models/maia3_weights.bin
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+maia3_src/
+
+# OS
+.DS_Store
