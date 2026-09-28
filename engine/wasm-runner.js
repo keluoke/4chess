@@ -1,7 +1,6 @@
 /**
- * WebAssembly / SIMD Fallback Runner for Maia-3 Chessformer
- * Implements optimized vector-accelerated attention and move policy calculation.
- * Ensures zero-dependency, ultra-fast execution if WebGPU is not supported or active.
+ * WebAssembly / Vectorized Fallback Runner for Maia-3 Chessformer
+ * Computes attention heatmap and source-to-destination policy matrix
  */
 
 export class WasmRunner {
@@ -10,7 +9,6 @@ export class WasmRunner {
   }
 
   async initialize() {
-    console.log('[Maia-3 WASM] WebAssembly runner initialized.');
     return this.isSupported;
   }
 
@@ -25,12 +23,12 @@ export class WasmRunner {
     const manhattan = dr + df;
     const chebyshev = Math.max(dr, df);
 
-    let bias = -0.15 * manhattan;
+    let bias = -0.10 * manhattan;
 
-    if (dr === 0 || df === 0) bias += 0.8;
-    if (dr === df) bias += 0.85;
-    if ((dr === 1 && df === 2) || (dr === 2 && df === 1)) bias += 1.1;
-    if (chebyshev <= 1) bias += 0.6;
+    if (dr === 0 || df === 0) bias += 0.70;
+    if (dr === df) bias += 0.75;
+    if ((dr === 1 && df === 2) || (dr === 2 && df === 1)) bias += 1.00;
+    if (chebyshev <= 1) bias += 0.50;
 
     return bias;
   }
@@ -42,9 +40,10 @@ export class WasmRunner {
 
     const heatmap = new Float32Array(64);
     const attentionMatrix = new Float32Array(64 * 64);
+    const policy = new Float32Array(64 * 64);
     const logits = new Float32Array(64);
 
-    // Compute attention matrix for each square token
+    // 1. Compute Attention Matrix
     for (let i = 0; i < 64; i++) {
       const piece_i = boardTokensArray[i * 4 + 0];
       const color_i = boardTokensArray[i * 4 + 3];
@@ -59,31 +58,26 @@ export class WasmRunner {
 
         let semantic = 0.0;
         if (piece_i > 0.5) {
-          // Focus on opposing pieces
           if (color_j !== 0 && color_i !== color_j) {
-            semantic += 1.4;
+            semantic += 1.35;
           }
-          // Center squares control
           const r_j = Math.floor(j / 8);
           const f_j = j % 8;
-          if ((r_j === 3 || r_j === 4) && (f_j === 3 || f_j === 4)) {
-            semantic += 0.7;
-          }
-          // Opponent king attack
+          const cDist = Math.abs(r_j - 3.5) + Math.abs(f_j - 3.5);
+          semantic += Math.max(0.0, (7.0 - cDist) / 7.0) * 0.8;
+
           if (piece_j === 6.0 && color_j !== color_i) {
-            semantic += 1.8;
+            semantic += 1.70;
           }
         }
 
-        const ratingFocus = (1.0 - eloNorm) * 0.4;
-        const logit = (geomBias + semantic + ratingFocus) / temperature;
+        const logit = geomBias + semantic;
         logits[j] = logit;
         if (logit > maxLogit) {
           maxLogit = logit;
         }
       }
 
-      // Softmax
       let denom = 0.0;
       for (let j = 0; j < 64; j++) {
         const expVal = Math.exp(logits[j] - maxLogit);
@@ -96,19 +90,62 @@ export class WasmRunner {
       }
     }
 
-    // Heatmap aggregation: sum attention from player's pieces
-    for (let j = 0; j < 64; j++) {
+    // 2. Compute Policy Transition Matrix & Heatmap
+    for (let s = 0; s < 64; s++) {
+      const piece_s = boardTokensArray[s * 4 + 0];
+      const color_s = boardTokensArray[s * 4 + 3];
+      const r_s = Math.floor(s / 8);
+
+      for (let d = 0; d < 64; d++) {
+        const piece_d = boardTokensArray[d * 4 + 0];
+        const color_d = boardTokensArray[d * 4 + 3];
+
+        const r_d = Math.floor(d / 8);
+        const f_d = d % 8;
+
+        const att_sd = attentionMatrix[s * 64 + d];
+        const geom = this.computeGeometricBias(s, d);
+
+        const centerDist = Math.abs(r_d - 3.5) + Math.abs(f_d - 3.5);
+        const centerBonus = (7.0 - centerDist) / 7.0;
+
+        let pol = att_sd * 2.8 + geom * 0.7 + centerBonus * 1.5;
+
+        // Minor piece development
+        const backRank = isWhite ? 0 : 7;
+        if ((piece_s === 2.0 || piece_s === 3.0) && r_s === backRank) {
+          pol += 1.3;
+        }
+
+        // Central pawns and 2-step initial advance
+        if (piece_s === 1.0) {
+          if (f_d === 2 || f_d === 3 || f_d === 4) {
+            pol += 1.4;
+          }
+          if (Math.abs(r_s - r_d) === 2) {
+            pol += 0.55;
+          }
+        }
+
+        // Tactical captures
+        if (color_d !== 0 && color_d !== color_s) {
+          pol += 1.8 + (1.0 - eloNorm) * 1.0;
+        }
+
+        policy[s * 64 + d] = pol;
+      }
+
+      // Heatmap
       let totalAtt = 0.0;
       for (let i = 0; i < 64; i++) {
-        const piece_i = boardTokensArray[i * 4 + 0];
         const color_i = boardTokensArray[i * 4 + 3];
-        if (piece_i > 0.5 && color_i === turnNum) {
-          totalAtt += attentionMatrix[i * 64 + j];
+        if (color_i === turnNum) {
+          totalAtt += attentionMatrix[i * 64 + s];
         }
       }
-      heatmap[j] = totalAtt;
+      heatmap[s] = totalAtt;
     }
 
-    return heatmap;
+    return { heatmap, policy };
   }
 }

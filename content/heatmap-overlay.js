@@ -2,7 +2,7 @@
  * Board Overlay for Maia-3 Human Intuition Heatmap & Arrows
  * Injects an SVG canvas over the chessboard to render:
  * 1. 64-square attention heatmap with smooth thermal gradient
- * 2. Weighted intuition arrows for top candidate human moves
+ * 2. Unambiguous directed intuition arrows pointing precisely from origin to destination
  * 3. Tactical trap warning rings
  */
 
@@ -22,17 +22,14 @@ export class HeatmapOverlay {
     this.boardEl = boardEl;
     this.orientation = orientation;
 
-    // Ensure board element has relative positioning
     const computedStyle = window.getComputedStyle(boardEl);
     if (computedStyle.position === 'static') {
       boardEl.style.position = 'relative';
     }
 
-    // Remove existing overlay if any
     const existing = boardEl.querySelector('#maia3-board-overlay');
     if (existing) existing.remove();
 
-    // Create SVG overlay
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svg.id = 'maia3-board-overlay';
     this.svg.setAttribute('viewBox', '0 0 800 800');
@@ -45,31 +42,25 @@ export class HeatmapOverlay {
     this.svg.style.zIndex = '15';
     this.svg.style.transition = 'opacity 0.2s ease';
 
-    // SVG Defs (Markers for arrows, glow filters)
+    // SVG Arrow Markers with orient="auto" (Standard, non-inverting)
     this.svg.innerHTML = `
       <defs>
         <!-- Arrowhead Marker 1 (Gold / Amber) -->
-        <marker id="maia-arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+        <marker id="maia-arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f59e0b" />
         </marker>
         <!-- Arrowhead Marker 2 (Cyan / Teal) -->
-        <marker id="maia-arrow-cyan" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#06b6d4" />
+        <marker id="maia-arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#06b6d4" />
         </marker>
         <!-- Arrowhead Marker 3 (Purple / Violet) -->
-        <marker id="maia-arrow-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#a855f7" />
+        <marker id="maia-arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#a855f7" />
         </marker>
         <!-- Arrowhead Marker Highlight -->
-        <marker id="maia-arrow-highlight" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#ec4899" />
+        <marker id="maia-arrow-highlight" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#ec4899" />
         </marker>
-
-        <!-- Drop Shadow / Glow Filter -->
-        <filter id="maia-glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="8" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
       </defs>
       <g id="maia-heatmap-layer"></g>
       <g id="maia-arrows-layer"></g>
@@ -104,21 +95,22 @@ export class HeatmapOverlay {
   }
 
   /**
-   * Converts square index (0..63) to SVG coordinates [x, y, centerX, centerY]
+   * Converts square index (0..63) to SVG canvas coordinates
+   * sqIdx = rank * 8 + file (a1 = 0, h1 = 7, a8 = 56, h8 = 63)
    */
   squareToCoords(sqIdx) {
     const f = sqIdx % 8;
     const r = Math.floor(sqIdx / 8);
 
     let col = f;
-    let row = 7 - r; // White perspective: rank 8 is row 0
+    let row = 7 - r; // White orientation: rank 8 is top row 0
 
     if (this.orientation === 'black') {
       col = 7 - f;
-      row = r;
+      row = r; // Black orientation: rank 1 is top row 0
     }
 
-    const sqSize = 100; // 800 / 8
+    const sqSize = 100;
     const x = col * sqSize;
     const y = row * sqSize;
     return {
@@ -130,9 +122,6 @@ export class HeatmapOverlay {
     };
   }
 
-  /**
-   * Main render function
-   */
   render(predictionData) {
     if (!this.svg) return;
     this.currentData = predictionData;
@@ -155,7 +144,7 @@ export class HeatmapOverlay {
       this.renderArrows(arrowsGroup, predictionData.moves);
     }
 
-    // 3. Render Tactical Trap indicator
+    // 3. Render Tactical Trap Indicator
     if (predictionData.analysis && predictionData.analysis.isTacticalTrap) {
       this.renderTrapWarning(trapsGroup, predictionData.moves[0]);
     }
@@ -164,12 +153,10 @@ export class HeatmapOverlay {
   renderHeatmapSquares(group, heatmap) {
     for (let i = 0; i < 64; i++) {
       const val = heatmap[i];
-      if (val < 0.12) continue; // Skip minimal attention squares for clean visual
+      if (val < 0.15) continue;
 
       const { x, y, size } = this.squareToCoords(i);
-
-      // Color interpolation: Low attention (cool violet/amber) -> High attention (fiery coral/gold)
-      const alpha = Math.min(0.85, val * this.heatmapOpacity);
+      const alpha = Math.min(0.80, val * this.heatmapOpacity);
       let r, g, b;
 
       if (val < 0.5) {
@@ -185,10 +172,10 @@ export class HeatmapOverlay {
       }
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', x + 3);
-      rect.setAttribute('y', y + 3);
-      rect.setAttribute('width', size - 6);
-      rect.setAttribute('height', size - 6);
+      rect.setAttribute('x', x + 4);
+      rect.setAttribute('y', y + 4);
+      rect.setAttribute('width', size - 8);
+      rect.setAttribute('height', size - 8);
       rect.setAttribute('rx', '10');
       rect.setAttribute('ry', '10');
       rect.setAttribute('fill', `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`);
@@ -199,11 +186,10 @@ export class HeatmapOverlay {
   }
 
   renderArrows(group, moves) {
-    // Only display top 3 moves to avoid visual clutter
     const topMoves = moves.slice(0, 3);
     const styles = [
-      { marker: 'maia-arrow-gold', color: '#f59e0b', width: 9 },
-      { marker: 'maia-arrow-cyan', color: '#06b6d4', width: 6.5 },
+      { marker: 'maia-arrow-gold', color: '#f59e0b', width: 8.5 },
+      { marker: 'maia-arrow-cyan', color: '#06b6d4', width: 6.0 },
       { marker: 'maia-arrow-purple', color: '#a855f7', width: 4.5 }
     ];
 
@@ -214,7 +200,6 @@ export class HeatmapOverlay {
       const fromCoords = this.squareToCoords(move.from);
       const toCoords = this.squareToCoords(move.to);
 
-      // Trim line ends slightly so arrow heads don't overshoot square centers
       const dx = toCoords.cx - fromCoords.cx;
       const dy = toCoords.cy - fromCoords.cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -223,16 +208,25 @@ export class HeatmapOverlay {
       const normX = dx / dist;
       const normY = dy / dist;
 
-      const startX = fromCoords.cx + normX * 18;
-      const startY = fromCoords.cy + normY * 18;
+      // Start circle at origin square to clarify direction
+      const startCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      startCircle.setAttribute('cx', fromCoords.cx);
+      startCircle.setAttribute('cy', fromCoords.cy);
+      startCircle.setAttribute('r', isTop ? '7' : '5');
+      startCircle.setAttribute('fill', isHovered ? '#ec4899' : styles[idx].color);
+      startCircle.setAttribute('opacity', isTop ? '0.95' : '0.8');
+      group.appendChild(startCircle);
+
+      // Line offset
+      const startX = fromCoords.cx + normX * 12;
+      const startY = fromCoords.cy + normY * 12;
       const endX = toCoords.cx - normX * 22;
       const endY = toCoords.cy - normY * 22;
 
       const style = isHovered
-        ? { marker: 'maia-arrow-highlight', color: '#ec4899', width: 10 }
+        ? { marker: 'maia-arrow-highlight', color: '#ec4899', width: 9.5 }
         : styles[idx];
 
-      // Base arrow line
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', startX);
       line.setAttribute('y1', startY);
@@ -243,24 +237,23 @@ export class HeatmapOverlay {
       line.setAttribute('stroke-linecap', 'round');
       line.setAttribute('marker-end', `url(#${style.marker})`);
       line.setAttribute('opacity', isHovered ? '1.0' : (isTop ? '0.92' : '0.75'));
-      line.style.transition = 'all 0.2s ease';
 
       group.appendChild(line);
 
       // Percentage pill badge on destination square
       const badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       const badgeX = toCoords.cx;
-      const badgeY = toCoords.cy + (idx === 0 ? 0 : (idx === 1 ? -18 : 18));
+      const badgeY = toCoords.cy + (idx === 0 ? 0 : (idx === 1 ? -16 : 16));
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', badgeX - 25);
-      rect.setAttribute('y', badgeY - 12);
+      rect.setAttribute('y', badgeY - 11);
       rect.setAttribute('width', '50');
-      rect.setAttribute('height', '24');
-      rect.setAttribute('rx', '12');
-      rect.setAttribute('fill', '#111827');
+      rect.setAttribute('height', '22');
+      rect.setAttribute('rx', '11');
+      rect.setAttribute('fill', '#0f172a');
       rect.setAttribute('stroke', style.color);
-      rect.setAttribute('stroke-width', '2');
+      rect.setAttribute('stroke-width', '1.8');
       rect.setAttribute('opacity', '0.95');
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -269,7 +262,7 @@ export class HeatmapOverlay {
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('fill', '#ffffff');
       text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
-      text.setAttribute('font-size', '12');
+      text.setAttribute('font-size', '11');
       text.setAttribute('font-weight', '700');
       text.textContent = `${move.prob}%`;
 
@@ -286,21 +279,12 @@ export class HeatmapOverlay {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', cx);
     circle.setAttribute('cy', cy);
-    circle.setAttribute('r', '40');
+    circle.setAttribute('r', '38');
     circle.setAttribute('fill', 'none');
     circle.setAttribute('stroke', '#ef4444');
-    circle.setAttribute('stroke-width', '4');
+    circle.setAttribute('stroke-width', '3.5');
     circle.setAttribute('stroke-dasharray', '6 4');
     circle.setAttribute('opacity', '0.85');
-
-    const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateTransform');
-    anim.setAttribute('attributeName', 'transform');
-    anim.setAttribute('type', 'rotate');
-    anim.setAttribute('from', `0 ${cx} ${cy}`);
-    anim.setAttribute('to', `360 ${cx} ${cy}`);
-    anim.setAttribute('dur', '6s');
-    anim.setAttribute('repeatCount', 'indefinite');
-    circle.appendChild(anim);
 
     group.appendChild(circle);
   }
