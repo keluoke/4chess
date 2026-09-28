@@ -1154,3 +1154,106 @@
   margin-top: 5px;
 }
 
+/* Blunder Drill Navigation Bar & Perspective Controls */
+.weui-drill-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--weui-BG-2);
+  border: 0.5px solid var(--weui-BORDER);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.weui-drill-btn {
+  background: var(--weui-BG-3);
+  border: 0.5px solid var(--weui-BORDER);
+  color: var(--weui-FG-0);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.weui-drill-btn:hover:not(:disabled) {
+  background: var(--weui-BRAND);
+  color: #FFFFFF;
+  border-color: var(--weui-BRAND);
+}
+
+.weui-drill-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.weui-drill-btn.drill-title-btn {
+  flex: 1;
+  background: rgba(7, 193, 96, 0.12);
+  color: var(--weui-BRAND);
+  border-color: rgba(7, 193, 96, 0.3);
+  font-size: 11px;
+}
+
+.weui-drill-btn.drill-title-btn:hover {
+  background: var(--weui-BRAND);
+  color: #FFFFFF;
+}
+
+.weui-drill-btn.drill-exit-btn {
+  padding: 4px 6px;
+  color: var(--weui-FG-HALF);
+}
+
+.weui-drill-btn.drill-exit-btn:hover {
+  background: rgba(250, 81, 81, 0.2);
+  color: #FA5151;
+  border-color: #FA5151;
+}
+
+/* Blunder Drill Details Card */
+.weui-blunder-drill-card {
+  background: var(--weui-BG-2);
+  border: 0.5px solid var(--weui-BORDER);
+  border-left: 3.5px solid #FA5151;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.weui-blunder-drill-card.severity-mistake {
+  border-left-color: #FF9F0A;
+}
+
+.weui-blunder-drill-card.severity-inaccuracy {
+  border-left-color: #FFD60A;
+}
+
+.weui-drill-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 9.5px;
+  color: var(--weui-FG-HALF);
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.weui-drill-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+

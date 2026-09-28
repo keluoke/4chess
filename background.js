@@ -147,18 +147,38 @@ async function handleFetchChesscomGame(gameId, usernames = [], gameType = 'live'
 }
 
 async function handleFetchLichessGame(gameId) {
+  const cleanId = (gameId || '').trim().replace(/^https?:\/\/lichess\.org\//, '').split('/')[0].slice(0, 8);
+  if (!cleanId || cleanId.length < 8) {
+    return { ok: false, error: '无效的 Lichess 对局 ID (Invalid Lichess Game ID)' };
+  }
+
+  // Strategy 1: JSON export (contains parsed pgn & moves)
   try {
-    const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true`, {
+    const resp = await fetch(`https://lichess.org/game/export/${cleanId}?moves=true&pgnInJson=true`, {
       headers: { 'Accept': 'application/json' }
     });
     if (resp.ok) {
       const data = await resp.json();
       if (data.pgn) {
-        return { ok: true, pgn: data.pgn, source: 'lichess-export' };
+        return { ok: true, pgn: data.pgn, movesStr: data.moves, source: 'lichess-export-json' };
       }
     }
   } catch (e) {
-    console.warn('[Background] Lichess export error:', e);
+    console.warn('[Background] Lichess json export notice:', e);
   }
+
+  // Strategy 2: Plain PGN export fallback
+  try {
+    const rawResp = await fetch(`https://lichess.org/game/export/${cleanId}`);
+    if (rawResp.ok) {
+      const pgn = await rawResp.text();
+      if (pgn && pgn.includes('1.')) {
+        return { ok: true, pgn, source: 'lichess-export-raw' };
+      }
+    }
+  } catch (e) {
+    console.warn('[Background] Lichess raw export notice:', e);
+  }
+
   return { ok: false, error: '未能在 Lichess 找到该对局导出数据' };
 }

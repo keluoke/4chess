@@ -87,21 +87,33 @@ export async function initMaiaExtension() {
     onJumpToMove: (item, targetPly = null) => {
       GameAnalyzer.jumpToMove(item, targetPly);
     },
-    onSelectBlunder: async (item, targetPly = null) => {
-      const targetFen = (targetPly === item.ply) ? item.fenAfter : item.fenBefore;
+    onSelectBlunder: async (results, index, moments, viewMode = 'decision') => {
+      const item = moments[index];
+      if (!item) return;
+      activeDrill = { results, index, item, viewMode };
+
+      const targetPly = viewMode === 'result' ? item.ply : Math.max(0, item.ply - 1);
+      const targetFen = viewMode === 'result' ? item.fenAfter : item.fenBefore;
+
+      GameAnalyzer.jumpToMove(item, targetPly);
+
       if (targetFen) {
         currentFen = targetFen;
-        await runPrediction(targetFen, item);
+        await runPrediction(targetFen, item, viewMode);
       }
+    },
+    onClearBlunderDrill: () => {
+      activeDrill = null;
     }
   });
 
   // Notify initial status
   panel.updateEngineStatus(engine.status);
 
+  let activeDrill = null;
   let predictionEpoch = 0;
 
-  async function runPrediction(fen, blunderContext = null) {
+  async function runPrediction(fen, blunderContext = null, viewMode = 'decision') {
     const thisEpoch = ++predictionEpoch;
     const abortCheck = () => predictionEpoch !== thisEpoch;
 
@@ -138,6 +150,8 @@ export async function initMaiaExtension() {
 
       const latency = performance.now() - t0;
 
+      maiaResult.blunderContext = blunderContext;
+      maiaResult.viewMode = viewMode;
       overlay.render(maiaResult);
       panel.update(maiaResult, latency);
 
@@ -169,6 +183,8 @@ export async function initMaiaExtension() {
         engine.evaluateStockfishAsync(fen, (sfRes) => {
           if (!abortCheck() && sfRes) {
             const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
+            combined.blunderContext = blunderContext;
+            combined.viewMode = viewMode;
             overlay.render(combined);
             panel.update(combined, latency);
 
@@ -243,6 +259,25 @@ export async function initMaiaExtension() {
       panel.setFairPlayLocked(false);
     }
 
+    // Blunder drill synchronization with board detector
+    if (activeDrill && activeDrill.item) {
+      const fenBoard = fen.split(' ')[0];
+      const beforeBoard = activeDrill.item.fenBefore ? activeDrill.item.fenBefore.split(' ')[0] : null;
+      const afterBoard = activeDrill.item.fenAfter ? activeDrill.item.fenAfter.split(' ')[0] : null;
+
+      if (fenBoard === beforeBoard) {
+        await runPrediction(fen, activeDrill.item, 'decision');
+        return;
+      } else if (fenBoard === afterBoard) {
+        await runPrediction(fen, activeDrill.item, 'result');
+        return;
+      } else {
+        // User manually navigated away from the blunder drill position!
+        activeDrill = null;
+        panel.clearBlunderDrill();
+      }
+    }
+
     // Immediately clear stale arrows and set evaluating state
     overlay.clear();
     panel.setEvaluating(fen);
@@ -253,9 +288,8 @@ export async function initMaiaExtension() {
   detector.start();
   console.log('[Maia-3] Extension successfully hooked into analysis environment! ♟️');
 
-  // Liveness check for Fair Play state transitions (e.g. game finishes or starts)
-  setInterval(() => {
-    const isLive = FairPlayGuard.isLiveGameInProgress();
+  // Instant 0ms observer for Fair Play state transitions (e.g. game finishes or starts)
+  const handleFairPlayChange = (isLive) => {
     if (isLive !== panel.isFairPlayLocked) {
       panel.setFairPlayLocked(isLive);
       if (isLive) {
@@ -268,7 +302,10 @@ export async function initMaiaExtension() {
         runPrediction(currentFen);
       }
     }
-  }, 1000);
+  };
+
+  FairPlayGuard.startObserver(handleFairPlayChange);
+  setInterval(() => handleFairPlayChange(FairPlayGuard.isLiveGameInProgress()), 250);
 
   // Handle runtime messages from Popup
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {

@@ -152,7 +152,7 @@ const I18N = {
 };
 
 export class IntuitionPanel {
-  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove, onSelectBlunder }) {
+  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove, onSelectBlunder, onClearBlunderDrill }) {
     this.onEloChange = onEloChange;
     this.onToggleChange = onToggleChange;
     this.onMoveHover = onMoveHover;
@@ -162,6 +162,8 @@ export class IntuitionPanel {
     this.onCancelReview = onCancelReview;
     this.onJumpToMove = onJumpToMove;
     this.onSelectBlunder = onSelectBlunder;
+    this.onClearBlunderDrill = onClearBlunderDrill;
+    this.activeDrill = null;
 
     this.container = null;
     this.fab = null;
@@ -424,6 +426,21 @@ export class IntuitionPanel {
             <span>📊</span>
             <span id="lbl-btn-review">${this.t('btnAnalyzeGame')}</span>
           </button>
+        </div>
+
+        <!-- Blunder Drill Navigation Box (shown during blunder drill inspection) -->
+        <div id="maia-blunder-drill-box" style="display: none; margin-bottom: 8px;">
+          <div class="weui-drill-nav-bar">
+            <button type="button" class="weui-drill-btn" id="drill-btn-prev">◀ ${this.lang === 'zh' ? '上一处' : 'Prev'}</button>
+            <button type="button" class="weui-drill-btn drill-title-btn" id="drill-btn-list">📋 ${this.lang === 'zh' ? '损耗榜' : 'Blunders'} (1/1)</button>
+            <button type="button" class="weui-drill-btn" id="drill-btn-next">${this.lang === 'zh' ? '下一处' : 'Next'} ▶</button>
+            <button type="button" class="weui-drill-btn drill-exit-btn" id="drill-btn-exit" title="${this.lang === 'zh' ? '退出复盘导览' : 'Exit drill'}">✕</button>
+          </div>
+          <div class="weui-segmented-bar" style="height: 26px; margin-top: 6px;">
+            <button type="button" class="weui-segment active" id="drill-view-decision">⚡ ${this.lang === 'zh' ? '走棋前决策 (当前)' : 'Decision Point'}</button>
+            <button type="button" class="weui-segment" id="drill-view-result">${this.lang === 'zh' ? '走出后局面' : 'Resulting Board'}</button>
+          </div>
+          <div class="weui-blunder-drill-card" id="drill-info-card"></div>
         </div>
 
         <!-- Candidate Moves List Group -->
@@ -735,6 +752,70 @@ export class IntuitionPanel {
         }
       });
     }
+
+    // 7. Blunder Drill Navigation Controls
+    const drillPrevBtn = this.container.querySelector('#drill-btn-prev');
+    const drillNextBtn = this.container.querySelector('#drill-btn-next');
+    const drillListBtn = this.container.querySelector('#drill-btn-list');
+    const drillExitBtn = this.container.querySelector('#drill-btn-exit');
+    const drillViewDecision = this.container.querySelector('#drill-view-decision');
+    const drillViewResult = this.container.querySelector('#drill-view-result');
+
+    if (drillPrevBtn) {
+      drillPrevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.activeDrill && this.activeDrill.index > 0) {
+          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index - 1, this.activeDrill.filteredMoments, this.activeDrill.viewMode);
+        }
+      });
+    }
+
+    if (drillNextBtn) {
+      drillNextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.activeDrill && this.activeDrill.index < this.activeDrill.filteredMoments.length - 1) {
+          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index + 1, this.activeDrill.filteredMoments, this.activeDrill.viewMode);
+        }
+      });
+    }
+
+    if (drillListBtn) {
+      drillListBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const drawer = this.container.querySelector('#weui-review-overlay');
+        if (drawer) {
+          drawer.style.display = 'flex';
+          if (this.activeDrill?.results) {
+            this.renderReviewResults(this.activeDrill.results);
+          }
+        }
+      });
+    }
+
+    if (drillExitBtn) {
+      drillExitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.clearBlunderDrill();
+      });
+    }
+
+    if (drillViewDecision) {
+      drillViewDecision.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.activeDrill && this.activeDrill.viewMode !== 'decision') {
+          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index, this.activeDrill.filteredMoments, 'decision');
+        }
+      });
+    }
+
+    if (drillViewResult) {
+      drillViewResult.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.activeDrill && this.activeDrill.viewMode !== 'result') {
+          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index, this.activeDrill.filteredMoments, 'result');
+        }
+      });
+    }
   }
 
   async startReview() {
@@ -862,6 +943,8 @@ export class IntuitionPanel {
           const movePrefix = isWhite ? `${item.moveNumber}.` : `${item.moveNumber}...`;
           const severityIcon = item.severity === 'blunder' ? '🔴' : (item.severity === 'mistake' ? '🟠' : '🟡');
           const severityClass = `severity-${item.severity}`;
+          const isCurrentActive = this.activeDrill && this.activeDrill.currentItem === item;
+          const activeStyle = isCurrentActive ? 'outline: 2px solid var(--weui-BRAND); background: rgba(7, 193, 96, 0.08);' : '';
           const trapHtml = item.isHumanTrap ? `
             <div class="weui-blunder-trap-tip">
               💡 ${isZh ? `典型 <strong>${this.currentElo}</strong> 分段人类棋手有 <strong>${item.humanProbability}%</strong> 走出同样这步错棋（直觉盲区）` : `Typical <strong>${this.currentElo}</strong> players make this move <strong>${item.humanProbability}%</strong> of the time (Intuition Trap)`}
@@ -869,7 +952,7 @@ export class IntuitionPanel {
           ` : '';
 
           return `
-            <div class="weui-blunder-card ${severityClass}" data-moment-idx="${idx}">
+            <div class="weui-blunder-card ${severityClass}" data-moment-idx="${idx}" style="${activeStyle}">
               <div class="weui-blunder-row-top">
                 <div class="weui-blunder-move-tag">
                   <span>${severityIcon}</span>
@@ -911,36 +994,107 @@ export class IntuitionPanel {
     // Bind Jump-to-move clicks on blunder cards
     reviewBody.querySelectorAll('.weui-blunder-card').forEach(card => {
       card.addEventListener('click', (e) => {
-        // Clear previous highlight
-        reviewBody.querySelectorAll('.weui-blunder-card').forEach(c => c.style.outline = 'none');
-        card.style.outline = '2px solid var(--weui-BRAND)';
-
         const idx = parseInt(card.dataset.momentIdx, 10);
         const item = filteredMoments[idx];
         if (!item) return;
 
-        const isPlayedClick = !!e.target.closest('.jump-played');
-        const targetPly = isPlayedClick ? item.ply : Math.max(0, item.ply - 1);
-
-        if (this.onJumpToMove) {
-          this.onJumpToMove(item, targetPly);
-        }
-
-        const reviewDrawer = this.container.querySelector('#weui-review-overlay');
-        if (reviewDrawer) {
-          reviewDrawer.style.display = 'none';
-        }
-
-        const backReviewBtn = this.container.querySelector('#weui-btn-back-review');
-        if (backReviewBtn) {
-          backReviewBtn.style.display = 'inline-flex';
-        }
-
-        if (this.onSelectBlunder) {
-          this.onSelectBlunder(item, targetPly);
-        }
+        this.startBlunderDrill(results, idx, filteredMoments, 'decision');
       });
     });
+  }
+
+  startBlunderDrill(results, index, filteredMoments = null, viewMode = 'decision') {
+    const moments = filteredMoments || results.keyMoments;
+    const item = moments[index];
+    if (!item) return;
+
+    this.activeDrill = {
+      results,
+      index,
+      filteredMoments: moments,
+      currentItem: item,
+      viewMode
+    };
+
+    // Hide review drawer
+    const reviewDrawer = this.container.querySelector('#weui-review-overlay');
+    if (reviewDrawer) reviewDrawer.style.display = 'none';
+
+    // Show drill box
+    const drillBox = this.container.querySelector('#maia-blunder-drill-box');
+    if (drillBox) drillBox.style.display = 'block';
+
+    // Update navigation buttons
+    const prevBtn = this.container.querySelector('#drill-btn-prev');
+    const nextBtn = this.container.querySelector('#drill-btn-next');
+    const listBtn = this.container.querySelector('#drill-btn-list');
+    if (prevBtn) prevBtn.disabled = index <= 0;
+    if (nextBtn) nextBtn.disabled = index >= moments.length - 1;
+    if (listBtn) {
+      listBtn.textContent = `📋 ${this.lang === 'zh' ? '损耗榜' : 'Blunders'} (${index + 1}/${moments.length})`;
+    }
+
+    // Update perspective buttons
+    const viewDecBtn = this.container.querySelector('#drill-view-decision');
+    const viewResBtn = this.container.querySelector('#drill-view-result');
+    if (viewDecBtn) viewDecBtn.className = `weui-segment ${viewMode === 'decision' ? 'active' : ''}`;
+    if (viewResBtn) viewResBtn.className = `weui-segment ${viewMode === 'result' ? 'active' : ''}`;
+
+    // Update info card
+    const infoCard = this.container.querySelector('#drill-info-card');
+    if (infoCard) {
+      const isZh = this.lang === 'zh';
+      const isWhite = item.turn === 'w';
+      const movePrefix = isWhite ? `${item.moveNumber}.` : `${item.moveNumber}...`;
+      const severityIcon = item.severity === 'blunder' ? '🔴' : (item.severity === 'mistake' ? '🟠' : '🟡');
+      const sideText = isWhite ? (isZh ? '白棋' : 'White') : (isZh ? '黑棋' : 'Black');
+
+      const trapHtml = item.isHumanTrap ? `
+        <div class="weui-blunder-trap-tip">
+          💡 ${isZh ? `典型 <strong>${this.currentElo}</strong> 分段人类棋手有 <strong>${item.humanProbability}%</strong> 走出同样这步错棋（直觉盲区）` : `Typical <strong>${this.currentElo}</strong> players make this move <strong>${item.humanProbability}%</strong> of the time`}
+        </div>
+      ` : '';
+
+      infoCard.className = `weui-blunder-drill-card severity-${item.severity}`;
+      infoCard.innerHTML = `
+        <div class="weui-blunder-row-top">
+          <div class="weui-blunder-move-tag">
+            <span>${severityIcon}</span>
+            <span>${movePrefix} ${item.san}</span>
+            <span style="font-size: 10px; color: var(--weui-FG-HALF); font-weight: 500;">(${sideText})</span>
+          </div>
+          <div class="weui-blunder-loss-tag">${isZh ? '损耗' : 'Loss'} ${item.lossPawns}</div>
+        </div>
+        <div class="weui-blunder-row-moves">
+          <span>${isZh ? '实战' : 'Played'}: <span class="move-played-bad">${item.san}</span></span>
+          <span style="color: var(--weui-FG-2);">➔</span>
+          <span>${isZh ? '最优' : 'Best'}: <span class="move-best-good">${item.bestSan}</span></span>
+        </div>
+        <div class="weui-blunder-eval-row">
+          <span>${isZh ? '局势突变' : 'Eval swing'}: ${item.evalBefore} ➔ ${item.evalAfter}</span>
+          <span style="font-size: 9.5px; color: var(--weui-FG-HALF);">${viewMode === 'decision' ? (isZh ? '📍 走棋前决策' : '📍 Decision point') : (isZh ? '📍 走出后局面' : '📍 Resulting board')}</span>
+        </div>
+        <div class="weui-drill-legend">
+          <span class="weui-drill-legend-item"><span style="color:#ef4444; font-weight: 700;">❌ 虚线:</span> ${isZh ? '实战错手' : 'Played'}</span>
+          <span class="weui-drill-legend-item"><span style="color:#10b981; font-weight: 700;">🐟 实线:</span> ${isZh ? '推荐正着' : 'Best'}</span>
+          <span class="weui-drill-legend-item"><span style="color:#f59e0b; font-weight: 700;">🧠 实线:</span> ${isZh ? '人类直觉' : 'Intuition'}</span>
+        </div>
+        ${trapHtml}
+      `;
+    }
+
+    if (this.onSelectBlunder) {
+      this.onSelectBlunder(results, index, moments, viewMode);
+    }
+  }
+
+  clearBlunderDrill() {
+    this.activeDrill = null;
+    const drillBox = this.container.querySelector('#maia-blunder-drill-box');
+    if (drillBox) drillBox.style.display = 'none';
+    if (this.onClearBlunderDrill) {
+      this.onClearBlunderDrill();
+    }
   }
 
   updateEngineStatus(status) {
@@ -1124,6 +1278,10 @@ export class IntuitionPanel {
     if (this.fab) {
       const fabTitle = this.fab.querySelector('.weui-float-title');
       if (fabTitle) fabTitle.textContent = this.t('floatTitle');
+    }
+
+    if (this.activeDrill) {
+      this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index, this.activeDrill.filteredMoments, this.activeDrill.viewMode);
     }
   }
 

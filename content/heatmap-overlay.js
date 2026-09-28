@@ -70,6 +70,10 @@ export class HeatmapOverlay {
         <marker id="maia-arrow-consensus" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
           <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#06b6d4" />
         </marker>
+        <!-- Arrowhead Marker Blunder (Crimson Red) -->
+        <marker id="maia-arrow-blunder" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#ef4444" />
+        </marker>
         <!-- Arrowhead Marker Highlight -->
         <marker id="maia-arrow-highlight" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#ec4899" />
@@ -233,11 +237,81 @@ export class HeatmapOverlay {
   renderDualArrows(maiaGroup, sfGroup, data) {
     const moves = data.moves || [];
     const sf = data.stockfish;
+    const blunder = data.blunderContext;
+
+    // SCENARIO 1: Blunder Moment Drill (Decision point before the blunder was played)
+    if (blunder && data.viewMode !== 'result') {
+      // 1. Played Blunder Arrow (❌ Crimson Red, dashed)
+      const bFrom = blunder.from || (blunder.uci ? blunder.uci.slice(0, 2) : null);
+      const bTo = blunder.to || (blunder.uci ? blunder.uci.slice(2, 4) : null);
+
+      if (bFrom && bTo) {
+        this.drawArrow(maiaGroup, {
+          from: bFrom,
+          to: bTo,
+          color: '#ef4444',
+          width: 8.5,
+          marker: 'maia-arrow-blunder',
+          dashed: '7 4',
+          label: `❌ 实战: ${blunder.san} (${blunder.lossPawns})`,
+          opacity: 0.96,
+          badgeOffsetY: -18
+        });
+      }
+
+      // 2. Engine Best Move Arrow (🐟 Emerald Green, solid)
+      const bm = blunder.bestMove || sf?.bestMove;
+      const bmFrom = bm ? (bm.fromSq !== undefined ? bm.fromSq : bm.from) : (blunder.bestUci ? blunder.bestUci.slice(0, 2) : null);
+      const bmTo = bm ? (bm.toSq !== undefined ? bm.toSq : bm.to) : (blunder.bestUci ? blunder.bestUci.slice(2, 4) : null);
+
+      if (bmFrom && bmTo && sfGroup) {
+        const bestSan = blunder.bestSan || bm.san;
+        const evalScore = sf?.score || blunder.evalBefore;
+        this.drawArrow(sfGroup, {
+          from: bmFrom,
+          to: bmTo,
+          color: '#10b981',
+          width: 8.5,
+          marker: 'maia-arrow-sf',
+          label: `🐟 推荐: ${bestSan} (${evalScore})`,
+          opacity: 0.96,
+          isStockfish: true,
+          badgeOffsetY: 18
+        });
+      }
+
+      // 3. Maia Intuition Arrow (🧠 Gold, if distinct from played blunder & engine best)
+      const topMove = moves[0];
+      if (topMove) {
+        const cleanTop = topMove.san.replace(/[+#?!]/g, '');
+        const cleanPlayed = (blunder.san || '').replace(/[+#?!]/g, '');
+        const cleanBest = (blunder.bestSan || bm?.san || '').replace(/[+#?!]/g, '');
+        const isPlayedMove = cleanTop === cleanPlayed || (bFrom && bTo && topMove.from === bFrom && topMove.to === bTo);
+        const isBestMove = cleanTop === cleanBest || (bmFrom && bmTo && topMove.from === bmFrom && topMove.to === bmTo);
+
+        if (!isPlayedMove && !isBestMove) {
+          this.drawArrow(maiaGroup, {
+            from: topMove.from,
+            to: topMove.to,
+            color: '#f59e0b',
+            width: 6.5,
+            marker: 'maia-arrow-gold',
+            label: `🧠 直觉: ${topMove.san} (${topMove.prob}%)`,
+            opacity: 0.85,
+            badgeOffsetY: 0
+          });
+        }
+      }
+
+      return;
+    }
+
+    // SCENARIO 2: Standard Dual-Engine Comparative Display
     const topMove = moves[0];
     const isConsensus = sf && sf.bestMove && topMove && (topMove.uci === sf.bestMove.uci);
 
     if (isConsensus) {
-      // 1. Single Glowing Consensus Arrow (Maia == Stockfish)
+      // Single Glowing Consensus Arrow (Maia == Stockfish)
       this.drawArrow(maiaGroup, {
         from: topMove.from,
         to: topMove.to,
@@ -260,7 +334,7 @@ export class HeatmapOverlay {
         });
       });
     } else {
-      // 2. Maia Human Top Move (Gold Arrow)
+      // Maia Human Top Move (Gold Arrow)
       if (topMove) {
         this.drawArrow(maiaGroup, {
           from: topMove.from,
@@ -273,7 +347,7 @@ export class HeatmapOverlay {
         });
       }
 
-      // 3. Stockfish Objective Best Move (Emerald Green Arrow)
+      // Stockfish Objective Best Move (Emerald Green Arrow)
       if (sf && sf.bestMove && sfGroup) {
         const bm = sf.bestMove;
         this.drawArrow(sfGroup, {
@@ -304,7 +378,7 @@ export class HeatmapOverlay {
     }
   }
 
-  drawArrow(group, { from, to, color, width, marker, label, opacity = 0.9, dashed = null, isStockfish = false }) {
+  drawArrow(group, { from, to, color, width, marker, label, opacity = 0.9, dashed = null, isStockfish = false, badgeOffsetY = null }) {
     const fromCoords = this.squareToCoords(from);
     const toCoords = this.squareToCoords(to);
 
@@ -348,7 +422,8 @@ export class HeatmapOverlay {
     if (label) {
       const badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       const badgeX = toCoords.cx;
-      const badgeY = toCoords.cy + (isStockfish ? 16 : -14);
+      const offsetY = badgeOffsetY !== null ? badgeOffsetY : (isStockfish ? 16 : -14);
+      const badgeY = toCoords.cy + offsetY;
 
       const rectWidth = Math.max(55, label.length * 7.5 + 16);
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');

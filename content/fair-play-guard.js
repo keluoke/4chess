@@ -91,7 +91,12 @@ export class FairPlayGuard {
         return false; // Concluded game
       }
 
-      // 4. Check active in-game controls:
+      // 4. Check active in-game controls (including move-0 Abort button):
+      const hasAbortBtn = document.querySelector(
+        'button[aria-label="Abort"], button[aria-label="放弃对局"], button[aria-label="取消"], ' +
+        '[data-cy="abort-button"], button.game-controls-abort, .abort-button-component, ' +
+        '.game-controls-button[aria-label*="Abort" i], .game-controls-button[aria-label*="放弃" i]'
+      );
       const hasResignBtn = document.querySelector(
         'button[aria-label="Resign"], button[aria-label="认输"], .resign-button-component, ' +
         'button.game-controls-resign, [data-cy="resign-button"], .game-controls-button[aria-label="Resign"], ' +
@@ -105,9 +110,10 @@ export class FairPlayGuard {
       const hasRunningClock = document.querySelector(
         '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
       );
+      const hasPlayClocks = (path.startsWith('/play') || path.startsWith('/live')) && document.querySelector('.clock-component, .clock-bottom, .clock-top, .player-component .clock');
 
       // If active play controls exist and no game-over modal, a game is in progress!
-      if (hasResignBtn || hasDrawBtn || hasRunningClock) {
+      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasRunningClock || hasPlayClocks) {
         return true; // LIVE GAME ACTIVE!
       }
 
@@ -115,5 +121,37 @@ export class FairPlayGuard {
     }
 
     return false;
+  }
+
+  /**
+   * Start 0ms instant DOM mutation watcher for Fair Play lockdown
+   */
+  static startObserver(onChange) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    if (this._observer) this._observer.disconnect();
+
+    this.lastState = FairPlayGuard.isLiveGameInProgress();
+
+    const check = () => {
+      const current = FairPlayGuard.isLiveGameInProgress();
+      if (current !== this.lastState) {
+        this.lastState = current;
+        if (onChange) onChange(current);
+      }
+    };
+
+    this._observer = new MutationObserver(check);
+    const target = document.body || document.documentElement;
+    if (target) {
+      this._observer.observe(target, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'aria-label', 'data-cy']
+      });
+    }
+
+    window.addEventListener('popstate', check);
+    check();
   }
 }
