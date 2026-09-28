@@ -73,7 +73,11 @@ const I18N = {
     playedMove: '实战走棋',
     bestMove: '推荐最优',
     evalChange: '局势变动',
-    reviewError: '复盘失败'
+    reviewError: '复盘失败',
+    fairPlayTitle: '对局进行中 · 公平竞技保护',
+    fairPlayDesc: '为恪守国际象棋反作弊守则，在实时对局进行期间严禁提供任何引擎建议、直觉箭头与意图热力图。',
+    fairPlayUnlockTip: '✓ 对局结束后将自动解锁全局复盘与直觉研判',
+    fairPlayLocked: '对局中 · 已锁定'
   },
   en: {
     panelTitle: 'Maia 3 Intuition',
@@ -139,7 +143,11 @@ const I18N = {
     playedMove: 'Played',
     bestMove: 'Best',
     evalChange: 'Eval Swing',
-    reviewError: 'Review Failed'
+    reviewError: 'Review Failed',
+    fairPlayTitle: 'Live Game Active · Fair Play Guard',
+    fairPlayDesc: 'Per Fair Play Anti-Cheat rules, engine assistance, candidate arrows, and attention heatmaps are strictly disabled during live matches.',
+    fairPlayUnlockTip: '✓ Unlocks automatically upon game conclusion',
+    fairPlayLocked: 'Live Game · Locked'
   }
 };
 
@@ -157,6 +165,7 @@ export class IntuitionPanel {
     this.container = null;
     this.fab = null;
     this.isClosed = localStorage.getItem('maia3_panel_closed') === 'true';
+    this.isFairPlayLocked = false;
     this.currentElo = 1500;
     this.currentData = null;
     this.currentTurn = 'w';
@@ -699,6 +708,12 @@ export class IntuitionPanel {
   }
 
   async startReview() {
+    if (this.isFairPlayLocked) {
+      alert(this.lang === 'zh'
+        ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
+        : '🛡️ Live game active! Per Fair Play rules, engine review is disabled during live games.');
+      return;
+    }
     const reviewDrawer = this.container.querySelector('#weui-review-overlay');
     const reviewBody = this.container.querySelector('#weui-review-body');
     if (!reviewDrawer || !reviewBody) return;
@@ -1107,7 +1122,55 @@ export class IntuitionPanel {
     });
   }
 
+  setFairPlayLocked(isLocked) {
+    if (this.isFairPlayLocked === isLocked) return;
+    this.isFairPlayLocked = isLocked;
+
+    if (!this.container) return;
+
+    const movesContainer = this.container.querySelector('#maia-moves-container');
+    const movesHeader = this.container.querySelector('#maia-moves-header-text');
+    const timeEl = this.container.querySelector('#maia-inference-time');
+    const insightBox = this.container.querySelector('#maia-insight-card');
+    const turnPill = this.container.querySelector('#maia-turn-pill');
+
+    if (isLocked) {
+      if (insightBox) insightBox.style.display = 'none';
+      if (movesHeader) movesHeader.textContent = this.lang === 'zh' ? '公平竞技保护 (Fair Play)' : 'Fair Play Guard';
+      if (timeEl) timeEl.textContent = this.t('fairPlayLocked');
+      if (turnPill) {
+        turnPill.textContent = this.lang === 'zh' ? '🛡️ 对局中' : '🛡️ Live';
+        turnPill.className = 'weui-turn-tag';
+      }
+
+      if (movesContainer) {
+        movesContainer.innerHTML = `
+          <div class="weui-fair-play-banner" style="padding: 24px 14px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 8px;">🛡️</div>
+            <div style="font-size: 13.5px; font-weight: 700; color: #FFF; margin-bottom: 6px;">
+              ${this.t('fairPlayTitle')}
+            </div>
+            <div style="font-size: 11px; color: var(--weui-FG-HALF); line-height: 1.5; margin-bottom: 12px;">
+              ${this.t('fairPlayDesc')}
+            </div>
+            <div style="display: inline-block; padding: 4px 10px; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); border-radius: 4px; font-size: 10.5px; color: var(--weui-BRAND);">
+              ${this.t('fairPlayUnlockTip')}
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      if (movesContainer && movesContainer.querySelector('.weui-fair-play-banner')) {
+        movesContainer.innerHTML = '';
+      }
+      if (this.currentData) {
+        this.update(this.currentData, this.latency);
+      }
+    }
+  }
+
   setEvaluating(fen = null) {
+    if (this.isFairPlayLocked) return;
     this.currentData = null;
     let turn = 'w';
     if (fen && typeof fen === 'string') {
@@ -1174,6 +1237,7 @@ export class IntuitionPanel {
   }
 
   update(predictionData, latencyMs = 0) {
+    if (this.isFairPlayLocked) return;
     this.currentData = predictionData;
     this.latency = latencyMs;
 

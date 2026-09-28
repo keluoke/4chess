@@ -6,6 +6,8 @@
  * 3. Tactical trap warning rings
  */
 
+import { FairPlayGuard } from './fair-play-guard.js';
+
 export class HeatmapOverlay {
   constructor() {
     this.svg = null;
@@ -141,6 +143,10 @@ export class HeatmapOverlay {
 
   render(predictionData) {
     if (!this.svg) return;
+    if (FairPlayGuard.isLiveGameInProgress()) {
+      this.clear();
+      return;
+    }
     this.currentData = predictionData;
 
     const heatmapGroup = this.svg.querySelector('#maia-heatmap-layer');

@@ -9,6 +9,7 @@ import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { BoardDetector } from './board-detector.js';
 import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
+import { FairPlayGuard } from './fair-play-guard.js';
 
 export async function initMaiaExtension() {
   console.log('[Maia-3] 🚀 Starting Human Intuition Extension (Scheme 0 Standalone)...');
@@ -62,6 +63,11 @@ export async function initMaiaExtension() {
       }
     },
     onAnalyzeGame: async () => {
+      if (FairPlayGuard.isLiveGameInProgress()) {
+        throw new Error(panel.lang === 'zh'
+          ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
+          : '🛡️ Live game active! Per Fair Play rules, engine review is disabled during live games.');
+      }
       const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
       const moves = await GameAnalyzer.extractPageMoves(platform);
       if (!moves || moves.length === 0) {
@@ -91,6 +97,18 @@ export async function initMaiaExtension() {
   async function runPrediction(fen) {
     const thisEpoch = ++predictionEpoch;
     const abortCheck = () => predictionEpoch !== thisEpoch;
+
+    // Fair Play Iron Law: Strictly lock down during active live games
+    if (FairPlayGuard.isLiveGameInProgress()) {
+      overlay.clear();
+      panel.setFairPlayLocked(true);
+      if (engine.stockfishInBrowser?.isReady) {
+        engine.stockfishInBrowser.stop();
+      }
+      return;
+    } else {
+      panel.setFairPlayLocked(false);
+    }
 
     // Immediately wipe stale arrows and old evaluation so nothing lingers during transition!
     overlay.clear();
@@ -161,6 +179,18 @@ export async function initMaiaExtension() {
       overlay.attach(detector.boardEl, orientation);
     }
 
+    // Fair Play check on position change
+    if (FairPlayGuard.isLiveGameInProgress()) {
+      overlay.clear();
+      panel.setFairPlayLocked(true);
+      if (engine.stockfishInBrowser?.isReady) {
+        engine.stockfishInBrowser.stop();
+      }
+      return;
+    } else {
+      panel.setFairPlayLocked(false);
+    }
+
     // Immediately clear stale arrows and set evaluating state
     overlay.clear();
     panel.setEvaluating(fen);
@@ -170,6 +200,23 @@ export async function initMaiaExtension() {
 
   detector.start();
   console.log('[Maia-3] Extension successfully hooked into analysis environment! ♟️');
+
+  // Liveness check for Fair Play state transitions (e.g. game finishes or starts)
+  setInterval(() => {
+    const isLive = FairPlayGuard.isLiveGameInProgress();
+    if (isLive !== panel.isFairPlayLocked) {
+      panel.setFairPlayLocked(isLive);
+      if (isLive) {
+        overlay.clear();
+        if (engine.stockfishInBrowser?.isReady) {
+          engine.stockfishInBrowser.stop();
+        }
+      } else if (currentFen) {
+        // Game concluded! Re-enable evaluation for post-game review
+        runPrediction(currentFen);
+      }
+    }
+  }, 1000);
 
   // Handle runtime messages from Popup
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {

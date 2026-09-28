@@ -158,49 +158,49 @@ export class GameAnalyzer {
       const chesscomMatch = window.location.pathname.match(/\/game\/(?:live|daily)\/(\d+)/);
       if (chesscomMatch && chesscomMatch[1]) {
         const gameId = chesscomMatch[1];
-        console.log(`[GameAnalyzer] Querying Chess.com Public API for game ID ${gameId}...`);
+        console.log(`[GameAnalyzer] Querying Chess.com for game ID ${gameId}...`);
 
-        let username = null;
+        const candidateUsers = new Set();
         const metaDesc = document.querySelector('meta[name="description"]')?.content;
         if (metaDesc) {
           const uMatch = metaDesc.match(/([a-zA-Z0-9_\-]+)\s*\(\d+\)\s*vs\s*([a-zA-Z0-9_\-]+)\s*\(\d+\)/);
           if (uMatch) {
-            username = uMatch[2] || uMatch[1];
+            if (uMatch[1]) candidateUsers.add(uMatch[1]);
+            if (uMatch[2]) candidateUsers.add(uMatch[2]);
           }
         }
 
-        if (!username) {
-          const userEl = document.querySelector('.user-username-component, [data-test-element="user-tagline-username"]');
-          if (userEl) username = userEl.textContent.trim();
+        document.querySelectorAll('.user-username-component, [data-test-element="user-tagline-username"], .user-tagline-username').forEach(el => {
+          const u = el.textContent.trim();
+          if (u) candidateUsers.add(u);
+        });
+
+        if (window.context?.user?.username) {
+          candidateUsers.add(window.context.user.username);
         }
 
-        if (!username && window.context?.user?.username) {
-          username = window.context.user.username;
-        }
-
-        if (username) {
+        // Delegate to background service worker (exempt from webpage CSP & forbidden headers)
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
           try {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const apiUrl = `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/${year}/${month}`;
-
-            const resp = await fetch(apiUrl, {
-              headers: { 'User-Agent': 'MaiaExtension/1.0 (contact@4chess.cc)' }
+            const res = await new Promise((resolve) => {
+              chrome.runtime.sendMessage({
+                type: 'FETCH_CHESSCOM_GAME_PGN',
+                gameId,
+                usernames: Array.from(candidateUsers)
+              }, resolve);
             });
-            if (resp.ok) {
-              const data = await resp.json();
-              const targetGame = data.games?.find(g => g.url && g.url.includes(gameId));
-              if (targetGame && targetGame.pgn) {
-                const moves = GameAnalyzer.parsePgn(targetGame.pgn);
-                if (moves.length > 0) {
-                  console.log(`[GameAnalyzer] ✅ Successfully retrieved ${moves.length} moves from Chess.com API!`);
-                  return moves;
-                }
+
+            if (res && res.ok && res.pgn) {
+              const moves = GameAnalyzer.parsePgn(res.pgn);
+              if (moves.length > 0) {
+                console.log(`[GameAnalyzer] ✅ Successfully retrieved ${moves.length} moves via Background API (${res.source})!`);
+                return moves;
               }
+            } else if (res && res.error) {
+              console.warn('[GameAnalyzer] Chess.com background fetch notice:', res.error);
             }
-          } catch (apiErr) {
-            console.warn('[GameAnalyzer] Chess.com API fetch notice:', apiErr);
+          } catch (err) {
+            console.warn('[GameAnalyzer] Background messaging error for Chess.com:', err);
           }
         }
       }
@@ -211,19 +211,24 @@ export class GameAnalyzer {
       const lichessMatch = window.location.pathname.match(/^\/([a-zA-Z0-9]{8,12})(?:\/|$)/);
       if (lichessMatch && lichessMatch[1] && window.location.hostname.includes('lichess')) {
         const gameId = lichessMatch[1];
-        try {
-          const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true`, {
-            headers: { 'Accept': 'application/json' }
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.pgn) {
-              const moves = GameAnalyzer.parsePgn(data.pgn);
-              if (moves.length > 0) return moves;
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          try {
+            const res = await new Promise((resolve) => {
+              chrome.runtime.sendMessage({
+                type: 'FETCH_LICHESS_GAME_PGN',
+                gameId
+              }, resolve);
+            });
+            if (res && res.ok && res.pgn) {
+              const moves = GameAnalyzer.parsePgn(res.pgn);
+              if (moves.length > 0) {
+                console.log(`[GameAnalyzer] ✅ Successfully retrieved ${moves.length} moves via Lichess Background API!`);
+                return moves;
+              }
             }
+          } catch (lErr) {
+            console.warn('[GameAnalyzer] Lichess background export notice:', lErr);
           }
-        } catch (lErr) {
-          console.warn('[GameAnalyzer] Lichess export notice:', lErr);
         }
       }
     }
@@ -500,13 +505,25 @@ export class GameAnalyzer {
       }
     }
 
-    // 5. Chess.com URL / State Update fallback (?move=X)
+    // 5. Chess.com Web Component & Navigation fallback
     if (window.location.hostname.includes('chess.com')) {
       try {
+        const boardEl = document.querySelector('wc-chess-board, chess-board');
+        if (boardEl) {
+          if (typeof boardEl.game?.jumpToPly === 'function') {
+            boardEl.game.jumpToPly(moveItem.ply);
+            return true;
+          }
+          if (typeof boardEl.game?.jumpToMove === 'function') {
+            boardEl.game.jumpToMove(moveItem.ply);
+            return true;
+          }
+        }
+
         const url = new URL(window.location.href);
         url.searchParams.set('move', String(moveItem.ply));
         window.history.pushState({}, '', url.toString());
-        // Trigger keyboard step navigation
+        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
         return true;
       } catch (e) {}
