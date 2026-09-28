@@ -62,25 +62,36 @@ export async function initMaiaExtension() {
   // Notify initial status
   panel.updateEngineStatus(engine.status);
 
-  let activePredictionFen = null;
+  let predictionEpoch = 0;
 
   async function runPrediction(fen) {
-    activePredictionFen = fen;
+    const thisEpoch = ++predictionEpoch;
+    const abortCheck = () => predictionEpoch !== thisEpoch;
+
+    // Stop previous Stockfish evaluation to free up CPU
+    if (engine.stockfishInBrowser?.isReady) {
+      engine.stockfishInBrowser.stop();
+    }
+
+    // Yield 1 frame (16ms) to let browser finish rendering piece move animation and play audio
+    await new Promise(r => setTimeout(r, 16));
+    if (abortCheck()) return;
+
     const t0 = performance.now();
     try {
-      // Phase 1: Instant Maia-3 Human Intuition (0 wait, immediate rendering)
-      const maiaResult = await engine.predict(fen, panel.currentElo, null);
+      // Phase 1: Instant Maia-3 Human Intuition (0 wait, non-blocking)
+      const maiaResult = await engine.predict(fen, panel.currentElo, null, abortCheck);
+      if (abortCheck() || !maiaResult) return;
+
       const latency = performance.now() - t0;
 
-      if (activePredictionFen === fen) {
-        overlay.render(maiaResult);
-        panel.update(maiaResult, latency);
-      }
+      overlay.render(maiaResult);
+      panel.update(maiaResult, latency);
 
       // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia)
       if (engine.stockfishInBrowser.isReady) {
         engine.evaluateStockfishAsync(fen, (sfRes) => {
-          if (activePredictionFen === fen && sfRes) {
+          if (!abortCheck() && sfRes) {
             const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
             overlay.render(combined);
             panel.update(combined, latency);

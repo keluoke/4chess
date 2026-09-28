@@ -260,7 +260,7 @@ export class MaiaInBrowserEngine {
   /**
    * Forward pass: computes move distribution and attention heatmap
    */
-  predict(chessBoard, targetElo = 1500) {
+  async predict(chessBoard, targetElo = 1500, abortCheck = null) {
     if (!this.isReady) {
       throw new Error('Maia-3 In-Browser model is not loaded');
     }
@@ -351,6 +351,13 @@ export class MaiaInBrowserEngine {
 
     // 5. Transformer Blocks (0..7)
     for (let b = 0; b < numBlocks; b++) {
+      if (abortCheck && abortCheck()) {
+        return null;
+      }
+      if (b > 0 && b % 2 === 0) {
+        // Yield to browser UI thread to maintain 60 FPS piece animation
+        await new Promise(r => setTimeout(r, 0));
+      }
       const pfx = `transformer.layers.${b}`;
 
       // --- Self-Attention ---
@@ -551,6 +558,7 @@ export class MaiaInBrowserEngine {
         this.rmsNormInPlace(X, xOff, D, norm2W);
       }
     }
+    if (abortCheck && abortCheck()) return null;
 
     // Final Transformer LayerNorm:
     const tNormW = this.tensors['transformer.norm.weight'];

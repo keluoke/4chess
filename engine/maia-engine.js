@@ -22,6 +22,8 @@ export class MaiaEngine {
     this.isLoading = false;
     this.backendName = '浏览器端 WebGPU / JS + WebAssembly';
     this.modelName = 'Maia-3 5M Chessformer';
+    this.lruCache = new Map();
+    this.MAX_CACHE_SIZE = 150;
 
     // Independent status tracking for both engines
     this.status = {
@@ -172,7 +174,16 @@ export class MaiaEngine {
   /**
    * Evaluates position using both Maia 3 and Stockfish
    */
-  async predict(fen, elo = this.targetElo, sfRes = null) {
+  async predict(fen, elo = this.targetElo, sfRes = null, abortCheck = null) {
+    const cacheKey = `${fen}_${elo}`;
+    if (this.lruCache.has(cacheKey)) {
+      const cached = this.lruCache.get(cacheKey);
+      if (sfRes) {
+        return this.attachStockfishResult(cached, sfRes, elo);
+      }
+      return cached;
+    }
+
     const chess = new ChessBoard(fen);
     const legalMoves = chess.getLegalMoves();
 
@@ -220,7 +231,7 @@ export class MaiaEngine {
         };
       }
 
-      return {
+      const localResult = {
         isAvailable: true,
         isMaiaReady: true,
         isStockfishReady: this.stockfishInBrowser.isReady,
@@ -241,6 +252,13 @@ export class MaiaEngine {
         },
         latencyMs: localData.latencyMs || 8
       };
+
+      if (this.lruCache.size >= this.MAX_CACHE_SIZE) {
+        const firstKey = this.lruCache.keys().next().value;
+        this.lruCache.delete(firstKey);
+      }
+      this.lruCache.set(cacheKey, localResult);
+      return localResult;
     }
 
     // 1. If Maia-3 model is not loaded yet: return Stockfish evaluation and download progress
@@ -271,7 +289,8 @@ export class MaiaEngine {
     const tStart = performance.now();
 
     // 3. Run Maia-3 in-browser prediction
-    const maiaRes = this.maiaInBrowser.predict(chess, elo);
+    const maiaRes = await this.maiaInBrowser.predict(chess, elo, abortCheck);
+    if (!maiaRes) return null; // Aborted by user moving again
 
     // 4. Human vs Stockfish Comparative Insight
     const topMove = maiaRes.moves[0] || null;
@@ -302,7 +321,7 @@ export class MaiaEngine {
 
     const totalLatency = Math.round(performance.now() - tStart);
 
-    return {
+    const result = {
       isAvailable: true,
       isMaiaReady: true,
       isStockfishReady: this.stockfishInBrowser.isReady,
@@ -323,6 +342,14 @@ export class MaiaEngine {
       },
       latencyMs: totalLatency
     };
+
+    if (this.lruCache.size >= this.MAX_CACHE_SIZE) {
+      const firstKey = this.lruCache.keys().next().value;
+      this.lruCache.delete(firstKey);
+    }
+    this.lruCache.set(cacheKey, result);
+
+    return result;
   }
 
   evaluateStockfishAsync(fen, callback) {

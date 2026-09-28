@@ -96,17 +96,16 @@ export class BoardDetector {
     // Listen to keyboard navigation
     window.addEventListener('keydown', (e) => {
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'j', 'k', 'h', 'l', 'f'].includes(e.key)) {
-        setTimeout(() => this.scheduleUpdate(), 40);
-        setTimeout(() => this.scheduleUpdate(), 150);
+        this.scheduleUpdate(35);
       }
     });
   }
 
-  scheduleUpdate() {
+  scheduleUpdate(delay = 30) {
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.checkUpdate();
-    }, 30);
+    }, delay);
   }
 
   detectOrientation() {

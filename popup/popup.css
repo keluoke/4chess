@@ -1,31 +1,24 @@
 /* ==========================================================================
-   Maia-3 Extension Popup · Android Material Design 3 (Material You / M3)
+   Maia-3 Extension Popup · WeChat Mini-Program (WeUI) Stylesheet
    ========================================================================== */
 
 :root {
-  --md-surface: #141218;
-  --md-surface-dim: #111014;
-  --md-surface-container: #211f26;
-  --md-surface-container-high: #2b2930;
-  --md-surface-container-highest: #36343b;
+  --weui-BG-0: #111111;
+  --weui-BG-1: #191919;
+  --weui-BG-2: #232323;
+  --weui-BG-3: #2c2c2c;
+  --weui-BG-4: #383838;
 
-  --md-on-surface: #e6e1e5;
-  --md-on-surface-variant: #cac4d0;
-  --md-outline: #938f99;
-  --md-outline-variant: rgba(255, 255, 255, 0.12);
+  --weui-BRAND: #07C160;
+  --weui-BRAND-LIGHT: rgba(7, 193, 96, 0.16);
 
-  --md-primary: #a8c7fa;
-  --md-primary-container: #0842a0;
-  --md-on-primary-container: #d3e3fd;
+  --weui-FG-0: rgba(255, 255, 255, 0.9);
+  --weui-FG-HALF: rgba(255, 255, 255, 0.6);
+  --weui-FG-1: rgba(255, 255, 255, 0.5);
+  --weui-FG-2: rgba(255, 255, 255, 0.3);
 
-  --md-secondary: #f5c042;
-  --md-secondary-container: rgba(245, 192, 66, 0.16);
-  --md-on-secondary-container: #ffdf99;
-
-  --md-success: #10b981;
-  --md-success-container: rgba(16, 185, 129, 0.16);
-
-  --md-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --weui-BORDER: rgba(255, 255, 255, 0.08);
+  --weui-BORDER-LIGHT: rgba(255, 255, 255, 0.04);
 }
 
 * {
@@ -35,266 +28,204 @@
 }
 
 body {
-  width: 326px;
-  background-color: var(--md-surface);
-  color: var(--md-on-surface);
-  font-family: "Google Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  width: 316px;
+  background-color: var(--weui-BG-1);
+  color: var(--weui-FG-0);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
   font-size: 13px;
-  padding: 14px;
-}
-
-.popup-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Top App Bar Header */
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--md-outline-variant);
-}
-
-.logo-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.avatar-m3 {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(168, 199, 250, 0.15);
-  border: 1px solid rgba(168, 199, 250, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  flex-shrink: 0;
-}
-
-.title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--md-on-surface);
-  line-height: 1.2;
-}
-
-.subtitle {
-  font-size: 11px;
-  color: var(--md-on-surface-variant);
-}
-
-.badge {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 9999px;
-  background: var(--md-success-container);
-  color: var(--md-success);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  letter-spacing: 0.2px;
-}
-
-/* M3 Switch Card (Show / Hide Panel) */
-.switch-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--md-surface-container);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 16px;
-}
-
-.switch-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.switch-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--md-on-surface);
-}
-
-.switch-desc {
-  font-size: 10.5px;
-  color: var(--md-on-surface-variant);
-}
-
-/* Android M3 Switch Specification */
-.m3-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.m3-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.m3-switch-track {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: var(--md-surface-container-highest);
-  border: 2px solid var(--md-outline);
-  border-radius: 9999px;
-  transition: all 0.2s var(--md-easing-standard);
-}
-
-.m3-switch-thumb {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 4px;
-  bottom: 4px;
-  background-color: var(--md-outline);
-  border-radius: 50%;
-  transition: all 0.2s var(--md-easing-standard);
-}
-
-.m3-switch input:checked + .m3-switch-track {
-  background-color: var(--md-primary-container);
-  border-color: var(--md-primary);
-}
-
-.m3-switch input:checked + .m3-switch-track .m3-switch-thumb {
-  transform: translateX(18px);
-  background-color: var(--md-primary);
-  width: 18px;
-  height: 18px;
-  left: 2px;
-  bottom: 2px;
-}
-
-/* Quick Launch (M3 Filled Tonal Buttons) */
-.quick-launch {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.launch-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 8px 12px;
-  border-radius: 9999px; /* M3 Pill Button */
-  transition: all 0.15s var(--md-easing-standard);
-}
-
-.launch-btn.lichess {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-  border: 1px solid rgba(245, 192, 66, 0.3);
-}
-
-.launch-btn.lichess:hover {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.launch-btn.chesscom {
-  background: var(--md-success-container);
-  color: var(--md-success);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.launch-btn.chesscom:hover {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-/* M3 Elevated Cards */
-.card {
-  background: var(--md-surface-container);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 16px;
   padding: 12px;
 }
 
-.card-title {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--md-on-surface-variant);
-  margin-bottom: 10px;
-  letter-spacing: 0.3px;
-}
-
-.setting-item {
+.weui-page {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-bottom: 9px;
+  gap: 10px;
 }
 
-.setting-item:last-child {
-  margin-bottom: 0;
+/* WeChat Top Header */
+.weui-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--weui-BORDER);
 }
 
-.setting-item label {
-  font-size: 11px;
+.weui-header__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weui-header__icon {
+  font-size: 18px;
+}
+
+.weui-header__title {
+  font-size: 14px;
   font-weight: 600;
-  color: var(--md-on-surface-variant);
+  color: var(--weui-FG-0);
+  line-height: 1.2;
 }
 
-/* Android M3 Outlined Selects & Inputs */
-.select-box {
-  width: 100%;
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 10px;
-  padding: 6px 9px;
-  font-size: 11.5px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
+.weui-header__desc {
+  font-size: 10.5px;
+  color: var(--weui-FG-1);
 }
 
-.select-box:hover {
-  background: var(--md-surface-container-highest);
-  border-color: rgba(255, 255, 255, 0.25);
+.weui-tag-status {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--weui-BRAND-LIGHT);
+  color: var(--weui-BRAND);
 }
 
-.select-box:focus {
-  border-color: var(--md-primary);
-  box-shadow: 0 0 0 1px var(--md-primary);
-}
-
-.feature-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* WeUI Cells & Group */
+.weui-cells__title {
   font-size: 11px;
-  color: var(--md-on-surface-variant);
-  line-height: 1.45;
+  font-weight: 500;
+  color: var(--weui-FG-1);
+  padding: 0 4px;
+  margin-top: 2px;
 }
 
-.feature-list strong {
-  color: var(--md-on-surface);
+.weui-cells {
+  background: var(--weui-BG-2);
+  border-radius: 10px;
+  border: 0.5px solid var(--weui-BORDER);
+  overflow: hidden;
 }
 
-.footer {
+.weui-cell {
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  border-bottom: 0.5px solid var(--weui-BORDER-LIGHT);
+}
+
+.weui-cell:last-child {
+  border-bottom: none;
+}
+
+.weui-cell__bd {
+  color: var(--weui-FG-0);
+  font-weight: 500;
+}
+
+/* Native WeChat Switch */
+.weui-switch {
+  position: relative;
+  width: 40px;
+  height: 23px;
+  border: 1px solid var(--weui-BORDER);
+  outline: 0;
+  border-radius: 100px;
+  box-sizing: border-box;
+  background-color: var(--weui-BG-4);
+  transition: background-color 0.2s, border 0.2s;
+  cursor: pointer;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+}
+
+.weui-switch:before {
+  content: " ";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 38px;
+  height: 21px;
+  border-radius: 100px;
+  background-color: var(--weui-BG-4);
+  transition: transform 0.2s;
+}
+
+.weui-switch:after {
+  content: " ";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s;
+}
+
+.weui-switch:checked {
+  border-color: var(--weui-BRAND);
+  background-color: var(--weui-BRAND);
+}
+
+.weui-switch:checked:before {
+  transform: scale(0);
+}
+
+.weui-switch:checked:after {
+  transform: translateX(17px);
+}
+
+/* Quick Actions */
+.weui-quick-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.weui-btn-action {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--weui-FG-0);
+  background: var(--weui-BG-2);
+  border: 0.5px solid var(--weui-BORDER);
+  padding: 8px 6px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  text-align: center;
+}
+
+.weui-btn-action:hover {
+  background: var(--weui-BG-3);
+  color: var(--weui-BRAND);
+}
+
+/* WeUI Select & Input */
+.weui-select {
+  background: var(--weui-BG-3);
+  color: var(--weui-FG-0);
+  border: 0.5px solid var(--weui-BORDER);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  outline: none;
+  font-family: inherit;
+}
+
+.weui-input {
+  width: 100%;
+  background: var(--weui-BG-3);
+  color: var(--weui-FG-0);
+  border: 0.5px solid var(--weui-BORDER);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 10.5px;
+  outline: none;
+  font-family: monospace;
+  box-sizing: border-box;
+}
+
+.weui-footer {
   text-align: center;
   font-size: 10px;
-  color: #79747e;
+  color: var(--weui-FG-2);
   padding-top: 4px;
 }
