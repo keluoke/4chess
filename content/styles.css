@@ -2,15 +2,15 @@
 
 .maia-panel-root {
   position: fixed;
-  top: 75px;
+  top: 70px;
   right: 25px;
-  width: 320px;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  width: 330px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 16px;
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 20px 1px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.65), 0 0 25px 1px rgba(99, 102, 241, 0.2);
   color: #f8fafc;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
@@ -21,8 +21,8 @@
 }
 
 .maia-panel-root:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px 2px rgba(99, 102, 241, 0.25);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 30px 2px rgba(99, 102, 241, 0.3);
 }
 
 /* Header */
@@ -31,7 +31,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(30, 41, 59, 0.7);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   cursor: grab;
 }
@@ -47,8 +47,8 @@
 }
 
 .maia-icon-glow {
-  font-size: 16px;
-  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.6));
+  font-size: 17px;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7));
 }
 
 .maia-title {
@@ -66,26 +66,48 @@
   gap: 8px;
 }
 
+/* Active Turn Tags */
+.maia-turn-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  letter-spacing: 0.3px;
+}
+
+.turn-white {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+.turn-black {
+  background: rgba(15, 23, 42, 0.8);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
 .maia-badge {
   font-size: 10px;
   font-weight: 700;
   padding: 2.5px 7px;
   border-radius: 9999px;
   letter-spacing: 0.3px;
-  text-transform: uppercase;
 }
 
 .badge-gpu {
   background: rgba(16, 185, 129, 0.15);
   color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
 
-.badge-wasm {
-  background: rgba(6, 182, 212, 0.15);
-  color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.3);
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .maia-btn-icon {
@@ -97,7 +119,6 @@
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
-  transition: color 0.15s ease;
 }
 
 .maia-btn-icon:hover {
@@ -109,9 +130,80 @@
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 13px;
 }
 
+/* Model Box */
+.maia-model-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.maia-model-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.maia-model-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.maia-model-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.maia-action-btn {
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.maia-action-btn:hover {
+  background: rgba(99, 102, 241, 0.3);
+  color: #ffffff;
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.maia-action-btn.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+.maia-action-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.maia-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.maia-progress-text {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+/* Sections */
 .maia-section {
   display: flex;
   flex-direction: column;
@@ -181,7 +273,6 @@
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
 }
 
-/* Slider */
 .maia-slider {
   -webkit-appearance: none;
   width: 100%;
@@ -202,10 +293,6 @@
   box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
   cursor: pointer;
   transition: transform 0.1s ease;
-}
-
-.maia-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
 }
 
 /* Toggles */
@@ -322,7 +409,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: all 0.2s ease;
 }
 
 .maia-insight-tag {

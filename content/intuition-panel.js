@@ -1,23 +1,26 @@
 /**
- * Maia-3 Human Intuition Floating & Dockable Panel
- * Sleek glassmorphic UI displaying:
- * - Elo level selector (1100, 1500, 1900, 2200, or continuous slider)
- * - Hardware acceleration badge (WebGPU / WASM)
- * - Top candidate human moves with animated probability bars
- * - Human vs Engine divergence & Blunder trap alerts
- * - Overlay controls (Heatmap, Arrows, Opacity)
+ * Maia-3 Human Intuition Floating Panel
+ * Displays:
+ * 1. Current Side to Move (⚪ 白方行棋 / ⚫ 黑方行棋) - never guesses!
+ * 2. Model Status & Weight Manager (ONNX Neural Engine vs Lightweight Fallback)
+ * 3. One-click HuggingFace download or local .onnx loader
+ * 4. Elo rating slider & Top candidate human moves with percentage bars
  */
 
+import { ModelLoader } from '../engine/model-loader.js';
+
 export class IntuitionPanel {
-  constructor({ onEloChange, onToggleChange, onMoveHover }) {
+  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded }) {
     this.onEloChange = onEloChange;
     this.onToggleChange = onToggleChange;
     this.onMoveHover = onMoveHover;
+    this.onModelLoaded = onModelLoaded;
 
     this.container = null;
     this.isMinimized = false;
     this.currentElo = 1500;
     this.currentData = null;
+    this.currentTurn = 'w';
     this.latency = 0;
 
     this.showHeatmap = true;
@@ -28,7 +31,6 @@ export class IntuitionPanel {
   }
 
   init() {
-    // Remove if already exists
     const old = document.getElementById('maia3-intuition-panel');
     if (old) old.remove();
 
@@ -36,7 +38,6 @@ export class IntuitionPanel {
     this.container.id = 'maia3-intuition-panel';
     this.container.className = 'maia-panel-root';
 
-    // Restore saved position
     const savedPos = localStorage.getItem('maia3_panel_pos');
     if (savedPos) {
       try {
@@ -61,13 +62,38 @@ export class IntuitionPanel {
           <span class="maia-title">Maia 3 · 人类直觉预测器</span>
         </div>
         <div class="maia-header-actions">
-          <span id="maia-backend-badge" class="maia-badge badge-gpu">⚡ WebGPU</span>
+          <span id="maia-turn-pill" class="maia-turn-tag turn-white">⚪ 白方行棋</span>
           <button id="maia-btn-min" class="maia-btn-icon" title="最小化/展开">−</button>
         </div>
       </div>
 
       <!-- Main Body -->
       <div class="maia-body" id="maia-panel-body">
+        <!-- Model Engine Status & Weight Manager -->
+        <div class="maia-model-box">
+          <div class="maia-model-header">
+            <span class="maia-model-label">神经网络核心:</span>
+            <span id="maia-model-badge" class="maia-badge badge-warning">🟡 离线模式 (未加载权重)</span>
+          </div>
+
+          <div id="maia-model-controls" class="maia-model-actions">
+            <button id="maia-btn-download" class="maia-action-btn">
+              📥 从 HuggingFace 载入 Maia-3 ONNX
+            </button>
+            <label class="maia-action-btn secondary">
+              📂 载入本地 .onnx
+              <input type="file" id="maia-file-input" accept=".onnx" style="display: none;" />
+            </label>
+          </div>
+
+          <div id="maia-load-progress-box" class="maia-progress-container" style="display: none;">
+            <div class="maia-progress-bar">
+              <div id="maia-load-fill" class="maia-progress-fill" style="width: 0%; background-color: #10b981;"></div>
+            </div>
+            <span id="maia-load-text" class="maia-progress-text">准备下载...</span>
+          </div>
+        </div>
+
         <!-- Elo Selector -->
         <div class="maia-section">
           <div class="maia-section-header">
@@ -98,15 +124,15 @@ export class IntuitionPanel {
         <!-- Prediction List -->
         <div class="maia-section">
           <div class="maia-section-header">
-            <span class="maia-label">人类最可能候选着法</span>
+            <span id="maia-moves-header-text" class="maia-label">候选着法预测</span>
             <span id="maia-inference-time" class="maia-meta-text">Inference: -- ms</span>
           </div>
           <div id="maia-moves-container" class="maia-moves-list">
-            <div class="maia-placeholder">等待棋盘输入...</div>
+            <div class="maia-placeholder">⏳ 正在同步棋盘状态与行棋方...</div>
           </div>
         </div>
 
-        <!-- Human Intuition & Discrepancy Insight -->
+        <!-- Human Intuition Insight Card -->
         <div id="maia-insight-card" class="maia-insight-box">
           <div id="maia-insight-badge" class="maia-insight-tag">💡 直觉分析</div>
           <div id="maia-insight-text" class="maia-insight-content">
@@ -146,7 +172,6 @@ export class IntuitionPanel {
       });
     });
 
-    // Elo Slider
     eloSlider.addEventListener('input', (e) => {
       const elo = parseInt(e.target.value, 10);
       this.currentElo = elo;
@@ -175,6 +200,61 @@ export class IntuitionPanel {
 
     chkHeatmap.addEventListener('change', updateToggles);
     chkArrows.addEventListener('change', updateToggles);
+
+    // Model Download Button (HuggingFace)
+    const btnDownload = this.container.querySelector('#maia-btn-download');
+    const progressBox = this.container.querySelector('#maia-load-progress-box');
+    const progressFill = this.container.querySelector('#maia-load-fill');
+    const progressText = this.container.querySelector('#maia-load-text');
+    const modelBadge = this.container.querySelector('#maia-model-badge');
+
+    btnDownload.addEventListener('click', async () => {
+      progressBox.style.display = 'block';
+      btnDownload.disabled = true;
+
+      try {
+        const hfUrl = 'https://huggingface.co/novachess/novachess-engine/resolve/main/maia3_simplified.onnx';
+        await ModelLoader.downloadModelFromHuggingFace(hfUrl, 'Maia-3 (HuggingFace ONNX)', (percent, msg) => {
+          progressFill.style.width = `${percent}%`;
+          progressText.textContent = msg;
+        });
+
+        modelBadge.textContent = '🟢 Maia-3 真实模型已激活';
+        modelBadge.className = 'maia-badge badge-gpu';
+        progressBox.style.display = 'none';
+        btnDownload.style.display = 'none';
+
+        if (this.onModelLoaded) this.onModelLoaded();
+      } catch (err) {
+        progressText.textContent = `下载失败: ${err.message}`;
+        progressFill.style.backgroundColor = '#ef4444';
+        btnDownload.disabled = false;
+      }
+    });
+
+    // Local .onnx File Upload
+    const fileInput = this.container.querySelector('#maia-file-input');
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      progressBox.style.display = 'block';
+      try {
+        await ModelLoader.loadFromLocalFile(file, (percent, msg) => {
+          progressFill.style.width = `${percent}%`;
+          progressText.textContent = msg;
+        });
+
+        modelBadge.textContent = `🟢 已载入: ${file.name}`;
+        modelBadge.className = 'maia-badge badge-gpu';
+        progressBox.style.display = 'none';
+
+        if (this.onModelLoaded) this.onModelLoaded();
+      } catch (err) {
+        progressText.textContent = `加载失败: ${err.message}`;
+        progressFill.style.backgroundColor = '#ef4444';
+      }
+    });
   }
 
   setupDraggable() {
@@ -183,7 +263,7 @@ export class IntuitionPanel {
     let startX, startY, origLeft, origTop;
 
     handle.addEventListener('mousedown', (e) => {
-      if (e.target.tagName === 'BUTTON') return;
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
       isDragging = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -191,8 +271,6 @@ export class IntuitionPanel {
       const rect = this.container.getBoundingClientRect();
       origLeft = rect.left;
       origTop = rect.top;
-
-      this.container.style.transition = 'none';
 
       const onMouseMove = (moveEvent) => {
         if (!isDragging) return;
@@ -210,11 +288,9 @@ export class IntuitionPanel {
       const onMouseUp = () => {
         if (!isDragging) return;
         isDragging = false;
-        this.container.style.transition = '';
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
 
-        // Save position
         const rect = this.container.getBoundingClientRect();
         localStorage.setItem('maia3_panel_pos', JSON.stringify({ left: rect.left, top: rect.top }));
       };
@@ -224,32 +300,42 @@ export class IntuitionPanel {
     });
   }
 
-  setBackend(backend) {
-    const badge = this.container.querySelector('#maia-backend-badge');
-    if (!badge) return;
-
-    if (backend === 'webgpu') {
-      badge.textContent = '⚡ WebGPU';
-      badge.className = 'maia-badge badge-gpu';
-    } else {
-      badge.textContent = '⚙️ WASM';
-      badge.className = 'maia-badge badge-wasm';
-    }
-  }
-
   update(predictionData, latencyMs = 0) {
     this.currentData = predictionData;
     this.latency = latencyMs;
 
-    this.setBackend(predictionData.backend);
-
-    // Latency
-    const timeEl = this.container.querySelector('#maia-inference-time');
-    if (timeEl) {
-      timeEl.textContent = `${latencyMs.toFixed(1)} ms (${predictionData.backend.toUpperCase()})`;
+    // 1. Update Active Turn Tag
+    const turnPill = this.container.querySelector('#maia-turn-pill');
+    const isWhite = predictionData.turn === 'w';
+    if (turnPill) {
+      turnPill.textContent = isWhite ? '⚪ 白方行棋' : '⚫ 黑方行棋';
+      turnPill.className = `maia-turn-tag ${isWhite ? 'turn-white' : 'turn-black'}`;
     }
 
-    // Move List
+    const movesHeader = this.container.querySelector('#maia-moves-header-text');
+    if (movesHeader) {
+      movesHeader.textContent = isWhite ? '白方候选着法 (向上进攻)' : '黑方候选着法 (向下进攻)';
+    }
+
+    // 2. Update Model Badge
+    const modelBadge = this.container.querySelector('#maia-model-badge');
+    if (modelBadge) {
+      if (predictionData.isRealOnnx) {
+        modelBadge.textContent = `🟢 ONNX 实装 (⚡ ${predictionData.backend})`;
+        modelBadge.className = 'maia-badge badge-gpu';
+      } else {
+        modelBadge.textContent = '🟡 离线模式 (未加载权重)';
+        modelBadge.className = 'maia-badge badge-warning';
+      }
+    }
+
+    // 3. Latency
+    const timeEl = this.container.querySelector('#maia-inference-time');
+    if (timeEl) {
+      timeEl.textContent = `${latencyMs.toFixed(1)} ms (${predictionData.backend})`;
+    }
+
+    // 4. Move List
     const movesContainer = this.container.querySelector('#maia-moves-container');
     if (!predictionData.moves || predictionData.moves.length === 0) {
       movesContainer.innerHTML = `<div class="maia-placeholder">${predictionData.summary || '无可选合法着法'}</div>`;
@@ -278,7 +364,6 @@ export class IntuitionPanel {
         </div>
       `;
 
-      // Hover to highlight arrow
       row.addEventListener('mouseenter', () => {
         if (this.onMoveHover) this.onMoveHover(move.uci);
       });
@@ -289,7 +374,7 @@ export class IntuitionPanel {
       movesContainer.appendChild(row);
     });
 
-    // Insight card
+    // 5. Insight Card
     const insightBox = this.container.querySelector('#maia-insight-card');
     const insightBadge = this.container.querySelector('#maia-insight-badge');
     const insightText = this.container.querySelector('#maia-insight-text');

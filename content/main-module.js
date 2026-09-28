@@ -9,7 +9,7 @@ import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
 
 export async function initMaiaExtension() {
-  console.log('[Maia-3] Starting Human Intuition Chrome Extension...');
+  console.log('[Maia-3] Starting Human Intuition Extension...');
 
   const engine = new MaiaEngine();
   await engine.initialize();
@@ -30,6 +30,12 @@ export async function initMaiaExtension() {
     },
     onMoveHover: (moveUci) => {
       overlay.setHoverMove(moveUci);
+    },
+    onModelLoaded: async () => {
+      console.log('[Maia-3] Real ONNX model loaded! Refreshing predictions...');
+      if (currentFen) {
+        await runPrediction(currentFen);
+      }
     }
   });
 
@@ -46,11 +52,11 @@ export async function initMaiaExtension() {
     }
   }
 
-  const detector = new BoardDetector(async ({ fen, orientation, boardRect, platform }) => {
+  const detector = new BoardDetector(async ({ fen, orientation, platform }) => {
     currentFen = fen;
     currentOrientation = orientation;
 
-    // Attach overlay to current board container if not attached
+    // Attach overlay to current board container
     if (detector.containerEl) {
       overlay.attach(detector.containerEl, orientation);
     } else if (detector.boardEl) {
