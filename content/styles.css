@@ -553,6 +553,83 @@
   transition: width 0.25s ease;
 }
 
+/* WeUI Move Transition Skeleton (步进推演骨架屏) */
+@keyframes weuiShimmer {
+  0% { opacity: 0.22; }
+  50% { opacity: 0.65; }
+  100% { opacity: 0.22; }
+}
+
+.weui-skeleton-wrapper {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.weui-move-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  animation: weuiShimmer 1.1s ease-in-out infinite;
+}
+
+.weui-skeleton-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weui-skel-rank {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.weui-skel-name {
+  display: inline-block;
+  width: 50px;
+  height: 12px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.10);
+  margin-left: 8px;
+  margin-right: auto;
+}
+
+.weui-skel-val {
+  display: inline-block;
+  width: 36px;
+  height: 12px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.weui-skel-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(7, 193, 96, 0.3);
+}
+
+/* WeUI Spinner for Evaluation (推演微转动画) */
+@keyframes weuiSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.weui-eval-spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(7, 193, 96, 0.3);
+  border-top-color: var(--weui-BRAND);
+  border-radius: 50%;
+  animation: weuiSpin 0.75s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
 /* ==========================================================================
    WeChat Alert / Insight Banner (直觉分析卡片)
    ========================================================================== */

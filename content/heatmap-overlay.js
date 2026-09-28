@@ -390,12 +390,16 @@ export class HeatmapOverlay {
   }
 
   clear() {
+    this.currentData = null;
+    this.activeHoverMove = null;
     if (!this.svg) return;
     const heatmapGroup = this.svg.querySelector('#maia-heatmap-layer');
     const arrowsGroup = this.svg.querySelector('#maia-arrows-layer');
+    const sfArrowsGroup = this.svg.querySelector('#maia-sf-arrows-layer');
     const trapsGroup = this.svg.querySelector('#maia-traps-layer');
     if (heatmapGroup) heatmapGroup.innerHTML = '';
     if (arrowsGroup) arrowsGroup.innerHTML = '';
+    if (sfArrowsGroup) sfArrowsGroup.innerHTML = '';
     if (trapsGroup) trapsGroup.innerHTML = '';
   }
 }

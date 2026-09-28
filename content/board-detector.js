@@ -96,12 +96,29 @@ export class BoardDetector {
     // Listen to keyboard navigation
     window.addEventListener('keydown', (e) => {
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'j', 'k', 'h', 'l', 'f'].includes(e.key)) {
-        this.scheduleUpdate(35);
+        this.scheduleUpdate(20);
       }
     });
+
+    // Listen to clicks on move lists and navigation controls for crisp response
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (target.closest('.analyse__moves, .tview2, .vertical-move-list, .move-list-wrapper, rm6, .analyse__controls, .keyboard-move-list, [data-cy*="move"], [class*="navigation"]')) {
+        this.scheduleUpdate(20);
+      }
+    }, true);
+
+    // Listen to wheel scrolling over chessboard (Lichess/Chess.com step through moves)
+    window.addEventListener('wheel', (e) => {
+      const target = this.containerEl || this.boardEl;
+      if (target && (e.target === target || target.contains(e.target))) {
+        this.scheduleUpdate(25);
+      }
+    }, { passive: true });
   }
 
-  scheduleUpdate(delay = 30) {
+  scheduleUpdate(delay = 20) {
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.checkUpdate();

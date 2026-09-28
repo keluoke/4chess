@@ -591,6 +591,71 @@ export class IntuitionPanel {
     });
   }
 
+  setEvaluating(fen = null) {
+    this.currentData = null;
+    let turn = 'w';
+    if (fen && typeof fen === 'string') {
+      const parts = fen.split(' ');
+      if (parts.length > 1 && (parts[1] === 'w' || parts[1] === 'b')) {
+        turn = parts[1];
+      }
+    }
+    const isWhite = turn === 'w';
+
+    const turnPill = this.container.querySelector('#maia-turn-pill');
+    if (turnPill) {
+      turnPill.textContent = isWhite ? '⚪ 白方' : '⚫ 黑方';
+      turnPill.className = `weui-turn-tag ${isWhite ? 'turn-white' : 'turn-black'}`;
+    }
+
+    const timeEl = this.container.querySelector('#maia-inference-time');
+    if (timeEl) {
+      timeEl.innerHTML = `<span class="weui-eval-spinner"></span> 计算中...`;
+    }
+
+    const movesHeader = this.container.querySelector('#maia-moves-header-text');
+    if (movesHeader) {
+      movesHeader.textContent = isWhite ? '白方候选着法' : '黑方候选着法';
+    }
+
+    const movesContainer = this.container.querySelector('#maia-moves-container');
+    if (movesContainer) {
+      movesContainer.innerHTML = `
+        <div class="weui-skeleton-wrapper">
+          <div class="weui-move-skeleton">
+            <div class="weui-skeleton-line">
+              <span class="weui-skel-rank"></span>
+              <span class="weui-skel-name"></span>
+              <span class="weui-skel-val"></span>
+            </div>
+            <div class="weui-skel-bar" style="width: 75%;"></div>
+          </div>
+          <div class="weui-move-skeleton">
+            <div class="weui-skeleton-line">
+              <span class="weui-skel-rank"></span>
+              <span class="weui-skel-name" style="width: 44px;"></span>
+              <span class="weui-skel-val" style="width: 30px;"></span>
+            </div>
+            <div class="weui-skel-bar" style="width: 45%;"></div>
+          </div>
+          <div class="weui-move-skeleton">
+            <div class="weui-skeleton-line">
+              <span class="weui-skel-rank"></span>
+              <span class="weui-skel-name" style="width: 36px;"></span>
+              <span class="weui-skel-val" style="width: 25px;"></span>
+            </div>
+            <div class="weui-skel-bar" style="width: 28%;"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    const insightBox = this.container.querySelector('#maia-insight-card');
+    if (insightBox) {
+      insightBox.style.display = 'none';
+    }
+  }
+
   update(predictionData, latencyMs = 0) {
     this.currentData = predictionData;
     this.latency = latencyMs;

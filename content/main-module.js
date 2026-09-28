@@ -68,6 +68,10 @@ export async function initMaiaExtension() {
     const thisEpoch = ++predictionEpoch;
     const abortCheck = () => predictionEpoch !== thisEpoch;
 
+    // Immediately wipe stale arrows and old evaluation so nothing lingers during transition!
+    overlay.clear();
+    panel.setEvaluating(fen);
+
     // Stop previous Stockfish evaluation to free up CPU
     if (engine.stockfishInBrowser?.isReady) {
       engine.stockfishInBrowser.stop();
@@ -132,6 +136,10 @@ export async function initMaiaExtension() {
     } else if (detector.boardEl) {
       overlay.attach(detector.boardEl, orientation);
     }
+
+    // Immediately clear stale arrows and set evaluating state
+    overlay.clear();
+    panel.setEvaluating(fen);
 
     await runPrediction(fen);
   });
