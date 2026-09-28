@@ -835,3 +835,282 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ==========================================================================
+   WeChat Game Review (全局棋局复盘与关键损耗排行榜)
+   ========================================================================== */
+.weui-review-entry {
+  padding: 8px 12px;
+}
+
+.weui-btn-review {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(7, 193, 96, 0.12) 0%, rgba(16, 174, 255, 0.12) 100%);
+  border: 1px solid var(--weui-BRAND-BORDER);
+  color: var(--weui-BRAND);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.weui-btn-review:hover {
+  background: linear-gradient(135deg, rgba(7, 193, 96, 0.22) 0%, rgba(16, 174, 255, 0.22) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.18);
+}
+
+.weui-review-overlay {
+  position: absolute;
+  top: 44px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  background: var(--weui-BG-1);
+  display: flex;
+  flex-direction: column;
+  animation: weuiFadeIn 0.2s cubic-bezier(0.1, 1, 0.1, 1);
+  overflow: hidden;
+}
+
+.weui-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--weui-BG-2);
+  border-bottom: 0.5px solid var(--weui-BORDER);
+}
+
+.weui-review-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--weui-FG-0);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.weui-review-close {
+  background: none;
+  border: none;
+  color: var(--weui-FG-HALF);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+}
+
+.weui-review-close:hover {
+  background: var(--weui-BG-3);
+  color: var(--weui-FG-0);
+}
+
+.weui-review-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Progress State */
+.weui-review-progress-box {
+  background: var(--weui-BG-2);
+  border: 0.5px solid var(--weui-BORDER);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.weui-review-progress-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--weui-FG-0);
+}
+
+.weui-review-progress-sub {
+  font-size: 11px;
+  color: var(--weui-FG-HALF);
+}
+
+.weui-review-cancel-btn {
+  background: var(--weui-BG-3);
+  border: 0.5px solid var(--weui-BORDER);
+  color: var(--weui-FG-HALF);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  align-self: center;
+  margin-top: 4px;
+}
+
+.weui-review-cancel-btn:hover {
+  color: var(--weui-RED);
+  border-color: var(--weui-RED);
+}
+
+/* Review Summary Stats */
+.weui-review-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.weui-stat-card {
+  background: var(--weui-BG-2);
+  border: 0.5px solid var(--weui-BORDER);
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.weui-stat-num {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.weui-stat-label {
+  font-size: 9.5px;
+  color: var(--weui-FG-2);
+  margin-top: 2px;
+}
+
+.stat-blunder { color: #FA5151; }
+.stat-mistake { color: #FF9F0A; }
+.stat-inaccuracy { color: #FFD60A; }
+.stat-acpl { color: var(--weui-BRAND); }
+
+/* Blunder & Loss Cards */
+.weui-blunder-card {
+  background: var(--weui-BG-2);
+  border: 0.5px solid var(--weui-BORDER);
+  border-left: 3.5px solid #FA5151;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.weui-blunder-card:hover {
+  background: var(--weui-BG-3);
+  border-color: var(--weui-BRAND-BORDER);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.weui-blunder-card.severity-mistake {
+  border-left-color: #FF9F0A;
+}
+
+.weui-blunder-card.severity-inaccuracy {
+  border-left-color: #FFD60A;
+}
+
+.weui-blunder-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.weui-blunder-move-tag {
+  font-size: 12px;
+  font-weight: 800;
+  color: #FA5151;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.severity-mistake .weui-blunder-move-tag { color: #FF9F0A; }
+.severity-inaccuracy .weui-blunder-move-tag { color: #FFD60A; }
+
+.weui-blunder-loss-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(250, 81, 81, 0.12);
+  color: #FA5151;
+  font-family: monospace;
+}
+
+.severity-mistake .weui-blunder-loss-tag {
+  background: rgba(255, 159, 10, 0.12);
+  color: #FF9F0A;
+}
+
+.severity-inaccuracy .weui-blunder-loss-tag {
+  background: rgba(255, 214, 10, 0.12);
+  color: #FFD60A;
+}
+
+.weui-blunder-row-moves {
+  font-size: 11px;
+  color: var(--weui-FG-0);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.move-played-bad {
+  color: #FA5151;
+  font-weight: 700;
+  text-decoration: line-through;
+}
+
+.severity-mistake .move-played-bad { color: #FF9F0A; }
+.severity-inaccuracy .move-played-bad { color: #FFD60A; }
+
+.move-best-good {
+  color: var(--weui-BRAND);
+  font-weight: 700;
+}
+
+.weui-blunder-eval-row {
+  font-size: 10px;
+  color: var(--weui-FG-HALF);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weui-blunder-trap-tip {
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: rgba(16, 174, 255, 0.08);
+  border-left: 2px solid #10aeff;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #10aeff;
+  line-height: 1.4;
+}
+
+.weui-blunder-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--weui-BRAND);
+  font-weight: 600;
+  margin-top: 5px;
+}
+

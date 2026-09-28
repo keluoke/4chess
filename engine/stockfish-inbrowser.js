@@ -9,6 +9,7 @@ import { ChessBoard } from './chess-core.js';
 export class StockfishInBrowser {
   constructor() {
     this.isReady = false;
+    this.engineName = 'Stockfish 19 Lite WASM';
     this.iframe = null;
     this.pendingRequests = new Map();
     this.reqCounter = 0;
@@ -61,8 +62,9 @@ export class StockfishInBrowser {
 
         if (data.type === 'STOCKFISH_READY') {
           this.isReady = true;
-          console.log('[Stockfish In-Browser] ✅ WebAssembly 引擎已就绪!');
-          if (this.onReadyCallback) this.onReadyCallback();
+          if (data.engineName) this.engineName = data.engineName;
+          console.log(`[Stockfish In-Browser] ✅ WebAssembly 引擎已就绪 (${this.engineName})!`);
+          if (this.onReadyCallback) this.onReadyCallback(this.engineName);
           resolve(true);
         } else if (data.type === 'STOCKFISH_RESULT') {
           const req = this.pendingRequests.get(data.id);

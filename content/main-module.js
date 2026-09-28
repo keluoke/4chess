@@ -5,6 +5,7 @@
  */
 
 import { MaiaEngine } from '../engine/maia-engine.js';
+import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { BoardDetector } from './board-detector.js';
 import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
@@ -16,12 +17,15 @@ export async function initMaiaExtension() {
   let currentOrientation = 'white';
   const overlay = new HeatmapOverlay();
   let panel = null;
+  let detector = null;
 
   const engine = new MaiaEngine((status) => {
     if (panel) {
       panel.updateEngineStatus(status);
     }
   });
+
+  const analyzer = new GameAnalyzer(engine.stockfishInBrowser, engine);
 
   panel = new IntuitionPanel({
     onEloChange: async (elo) => {
@@ -56,6 +60,26 @@ export async function initMaiaExtension() {
       } catch (e) {
         console.error('[Maia-3] Re-init error with custom CDN:', e);
       }
+    },
+    onAnalyzeGame: async () => {
+      const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
+      const moves = GameAnalyzer.extractPageMoves(platform);
+      if (!moves || moves.length === 0) {
+        throw new Error(panel.lang === 'zh' ? '当前页面未检测到棋步记录，请在对局或复盘页面使用。' : 'No move list detected on current page.');
+      }
+      return await analyzer.analyzeGame(moves, {
+        depth: 8,
+        elo: panel.currentElo,
+        onProgress: (prog) => {
+          panel.updateReviewProgress(prog);
+        }
+      });
+    },
+    onCancelReview: () => {
+      analyzer.cancel();
+    },
+    onJumpToMove: (item) => {
+      GameAnalyzer.jumpToMove(item);
     }
   });
 
@@ -126,7 +150,7 @@ export async function initMaiaExtension() {
     console.warn('[Maia-3] Engine initialization notice:', err?.message || err);
   });
 
-  const detector = new BoardDetector(async ({ fen, orientation, platform }) => {
+  detector = new BoardDetector(async ({ fen, orientation, platform }) => {
     currentFen = fen;
     currentOrientation = orientation;
 

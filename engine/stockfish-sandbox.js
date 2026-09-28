@@ -7,20 +7,35 @@
   let worker = null;
   let currentReqId = null;
   let lastInfo = null;
+  let engineName = 'Stockfish 19 Lite WASM';
   const multiPvMap = new Map();
 
   function initWorker() {
     try {
-      worker = new Worker('../lib/stockfish.js');
+      try {
+        worker = new Worker('../lib/stockfish-19.js');
+      } catch (e1) {
+        console.warn('[Stockfish Sandbox] Stockfish 19 worker failed to initialize, falling back to stockfish.js:', e1);
+        worker = new Worker('../lib/stockfish.js');
+        engineName = 'Stockfish WASM';
+      }
 
-      worker.onmessage = function(e) {
-        const line = typeof e.data === 'string' ? e.data : '';
-        if (!line) return;
+      worker.onerror = function(err) {
+        console.warn('[Stockfish Sandbox] Stockfish worker error:', err);
+      };
 
-        if (line === 'readyok') {
-          window.parent.postMessage({ type: 'STOCKFISH_READY' }, '*');
-          return;
-        }
+    worker.onmessage = function(e) {
+      const line = typeof e.data === 'string' ? e.data : '';
+      if (!line) return;
+
+      if (line.startsWith('id name ')) {
+        engineName = line.replace('id name ', '').trim();
+      }
+
+      if (line === 'readyok') {
+        window.parent.postMessage({ type: 'STOCKFISH_READY', engineName }, '*');
+        return;
+      }
 
         // Parse evaluation info lines:
         // info depth 10 seldepth 12 multipv 1 score cp 35 nodes 2415 pv e2e4 e7e5 ...
