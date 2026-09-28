@@ -7,7 +7,6 @@
  * 4. Elo rating slider & Top candidate human moves with percentage bars
  */
 
-import { ModelLoader } from '../engine/model-loader.js';
 
 export class IntuitionPanel {
   constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded }) {
@@ -42,14 +41,29 @@ export class IntuitionPanel {
     if (savedPos) {
       try {
         const { left, top } = JSON.parse(savedPos);
-        this.container.style.left = `${left}px`;
-        this.container.style.top = `${top}px`;
-        this.container.style.right = 'auto';
+        if (typeof left === 'number' && typeof top === 'number' &&
+            left >= 0 && left < window.innerWidth - 100 &&
+            top >= 0 && top < window.innerHeight - 50) {
+          this.container.style.left = `${left}px`;
+          this.container.style.top = `${top}px`;
+          this.container.style.right = 'auto';
+        }
       } catch (e) {}
     }
 
     this.renderSkeleton();
-    document.body.appendChild(this.container);
+
+    const mount = () => {
+      const parent = document.body || document.documentElement;
+      if (parent && !parent.contains(this.container)) {
+        parent.appendChild(this.container);
+      }
+    };
+    mount();
+    if (!document.body) {
+      window.addEventListener('DOMContentLoaded', mount);
+    }
+
     this.setupDraggable();
   }
 
@@ -139,11 +153,13 @@ export class IntuitionPanel {
     // Minimize / Expand
     const minBtn = this.container.querySelector('#maia-btn-min');
     const body = this.container.querySelector('#maia-panel-body');
-    minBtn.addEventListener('click', () => {
-      this.isMinimized = !this.isMinimized;
-      body.style.display = this.isMinimized ? 'none' : 'block';
-      minBtn.textContent = this.isMinimized ? '+' : '−';
-    });
+    if (minBtn && body) {
+      minBtn.addEventListener('click', () => {
+        this.isMinimized = !this.isMinimized;
+        body.style.display = this.isMinimized ? 'none' : 'block';
+        minBtn.textContent = this.isMinimized ? '+' : '−';
+      });
+    }
 
     // Elo Presets
     const eloBtns = this.container.querySelectorAll('.maia-elo-btn');
@@ -156,29 +172,31 @@ export class IntuitionPanel {
         btn.classList.add('active');
         const elo = parseInt(btn.dataset.elo, 10);
         this.currentElo = elo;
-        eloSlider.value = elo;
-        eloVal.textContent = elo;
+        if (eloSlider) eloSlider.value = elo;
+        if (eloVal) eloVal.textContent = elo;
         if (this.onEloChange) this.onEloChange(elo);
       });
     });
 
-    eloSlider.addEventListener('input', (e) => {
-      const elo = parseInt(e.target.value, 10);
-      this.currentElo = elo;
-      eloVal.textContent = elo;
-      eloBtns.forEach(b => {
-        b.classList.toggle('active', parseInt(b.dataset.elo, 10) === elo);
+    if (eloSlider) {
+      eloSlider.addEventListener('input', (e) => {
+        const elo = parseInt(e.target.value, 10);
+        this.currentElo = elo;
+        if (eloVal) eloVal.textContent = elo;
+        eloBtns.forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.elo, 10) === elo);
+        });
+        if (this.onEloChange) this.onEloChange(elo);
       });
-      if (this.onEloChange) this.onEloChange(elo);
-    });
+    }
 
     // Toggles
     const chkHeatmap = this.container.querySelector('#maia-chk-heatmap');
     const chkArrows = this.container.querySelector('#maia-chk-arrows');
 
     const updateToggles = () => {
-      this.showHeatmap = chkHeatmap.checked;
-      this.showArrows = chkArrows.checked;
+      this.showHeatmap = chkHeatmap ? chkHeatmap.checked : true;
+      this.showArrows = chkArrows ? chkArrows.checked : true;
       if (this.onToggleChange) {
         this.onToggleChange({
           showHeatmap: this.showHeatmap,
@@ -188,67 +206,13 @@ export class IntuitionPanel {
       }
     };
 
-    chkHeatmap.addEventListener('change', updateToggles);
-    chkArrows.addEventListener('change', updateToggles);
-
-    // Model Download Button (HuggingFace)
-    const btnDownload = this.container.querySelector('#maia-btn-download');
-    const progressBox = this.container.querySelector('#maia-load-progress-box');
-    const progressFill = this.container.querySelector('#maia-load-fill');
-    const progressText = this.container.querySelector('#maia-load-text');
-    const modelBadge = this.container.querySelector('#maia-model-badge');
-
-    btnDownload.addEventListener('click', async () => {
-      progressBox.style.display = 'block';
-      btnDownload.disabled = true;
-
-      try {
-        const hfUrl = 'https://huggingface.co/novachess/novachess-engine/resolve/main/maia3_simplified.onnx';
-        await ModelLoader.downloadModelFromHuggingFace(hfUrl, 'Maia-3 (HuggingFace ONNX)', (percent, msg) => {
-          progressFill.style.width = `${percent}%`;
-          progressText.textContent = msg;
-        });
-
-        modelBadge.textContent = '🟢 Maia-3 真实模型已激活';
-        modelBadge.className = 'maia-badge badge-gpu';
-        progressBox.style.display = 'none';
-        btnDownload.style.display = 'none';
-
-        if (this.onModelLoaded) this.onModelLoaded();
-      } catch (err) {
-        progressText.textContent = `下载失败: ${err.message}`;
-        progressFill.style.backgroundColor = '#ef4444';
-        btnDownload.disabled = false;
-      }
-    });
-
-    // Local .onnx File Upload
-    const fileInput = this.container.querySelector('#maia-file-input');
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      progressBox.style.display = 'block';
-      try {
-        await ModelLoader.loadFromLocalFile(file, (percent, msg) => {
-          progressFill.style.width = `${percent}%`;
-          progressText.textContent = msg;
-        });
-
-        modelBadge.textContent = `🟢 已载入: ${file.name}`;
-        modelBadge.className = 'maia-badge badge-gpu';
-        progressBox.style.display = 'none';
-
-        if (this.onModelLoaded) this.onModelLoaded();
-      } catch (err) {
-        progressText.textContent = `加载失败: ${err.message}`;
-        progressFill.style.backgroundColor = '#ef4444';
-      }
-    });
+    if (chkHeatmap) chkHeatmap.addEventListener('change', updateToggles);
+    if (chkArrows) chkArrows.addEventListener('change', updateToggles);
   }
 
   setupDraggable() {
     const handle = this.container.querySelector('#maia-drag-handle');
+    if (!handle) return;
     let isDragging = false;
     let startX, startY, origLeft, origTop;
 
