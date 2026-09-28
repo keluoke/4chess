@@ -146,7 +146,8 @@ export class StockfishInBrowser {
             scoreCp: rawResult.scoreCp,
             isMate: rawResult.isMate,
             depth: rawResult.depth,
-            pv: rawResult.pv || []
+            pv: rawResult.pv || [],
+            lines: rawResult.lines || []
           });
         }
       });

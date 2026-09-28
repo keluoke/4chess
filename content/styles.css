@@ -241,6 +241,83 @@
 }
 
 /* ==========================================================================
+   WeChat Dropdown / Settings Overlay (最上层独立浮层，绝对不被遮挡)
+   ========================================================================== */
+.weui-drawer-overlay {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  background: #1c1c1c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8), 0 2px 6px rgba(0, 0, 0, 0.4);
+  border-radius: 0 0 16px 16px;
+  padding: 12px 14px 14px 14px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: weuiSlideDown 0.18s cubic-bezier(0, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+@keyframes weuiSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.weui-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 0.5px solid var(--weui-BORDER-LIGHT);
+  padding-bottom: 8px;
+}
+
+.weui-drawer-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--weui-FG-0);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.weui-drawer-close {
+  background: transparent;
+  border: none;
+  color: var(--weui-FG-HALF);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+  transition: color 0.1s ease;
+}
+
+.weui-drawer-close:hover {
+  color: var(--weui-FG-0);
+}
+
+.weui-drawer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weui-drawer-label {
+  font-size: 11px;
+  color: var(--weui-FG-HALF);
+  font-weight: 600;
+}
+
+/* ==========================================================================
    WeChat Mini-Program Body & WeUI Cell Groups (列表与分组)
    ========================================================================== */
 .weui-page__bd {
@@ -533,10 +610,45 @@
   color: var(--weui-FG-0);
 }
 
+.weui-move-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .weui-move-prob {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--weui-BRAND);
+}
+
+/* Delta Difference Tag in Move List */
+.weui-delta-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.2px;
+  flex-shrink: 0;
+}
+
+.weui-delta-tag.tag-best {
+  background: rgba(7, 193, 96, 0.16);
+  color: var(--weui-BRAND);
+  border: 0.5px solid rgba(7, 193, 96, 0.35);
+}
+
+.weui-delta-tag.tag-slight {
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border: 0.5px solid rgba(245, 158, 11, 0.35);
+}
+
+.weui-delta-tag.tag-blunder {
+  background: rgba(239, 68, 68, 0.20);
+  color: #ef4444;
+  border: 0.5px solid rgba(239, 68, 68, 0.4);
 }
 
 .weui-progress-track {

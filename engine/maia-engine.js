@@ -294,30 +294,8 @@ export class MaiaEngine {
 
     // 4. Human vs Stockfish Comparative Insight
     const topMove = maiaRes.moves[0] || null;
-    let comparison = null;
-
-    if (topMove && sfRes && sfRes.bestMove) {
-      const isConsensus = topMove.uci === sfRes.bestMove.uci;
-      if (isConsensus) {
-        comparison = {
-          agreed: true,
-          badge: '🎯 人机高度共识',
-          summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！`
-        };
-      } else {
-        comparison = {
-          agreed: false,
-          badge: '⚠️ 人机着法分歧',
-          summary: `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (${sfRes.score})。`
-        };
-      }
-    } else if (topMove) {
-      comparison = {
-        agreed: true,
-        badge: '💡 人类直觉首选',
-        summary: `典型 ${elo} 分段人类首选 <strong>${topMove.san}</strong> (${topMove.prob}%)。`
-      };
-    }
+    const comparison = this.buildComparison(topMove, sfRes, elo);
+    const enrichedMoves = this.enrichMovesWithDelta(maiaRes.moves, sfRes);
 
     const totalLatency = Math.round(performance.now() - tStart);
 
@@ -332,7 +310,7 @@ export class MaiaEngine {
       modelName: this.modelName,
       status: this.status,
       heatmap: maiaRes.heatmap,
-      moves: maiaRes.moves,
+      moves: enrichedMoves,
       stockfish: sfRes,
       comparison,
       analysis: {
@@ -352,6 +330,77 @@ export class MaiaEngine {
     return result;
   }
 
+  buildComparison(topMove, sfRes, elo) {
+    if (!topMove) return null;
+    if (!sfRes || !sfRes.bestMove) {
+      return {
+        agreed: true,
+        badge: '💡 人类直觉首选',
+        badgeEn: '💡 Human Intuition',
+        summary: `典型 ${elo} 分段人类首选 <strong>${topMove.san}</strong> (${topMove.prob}%)。`,
+        summaryEn: `Typical ${elo} players favor <strong>${topMove.san}</strong> (${topMove.prob}%).`,
+        delta: 0,
+        deltaText: null,
+        evalScore: null
+      };
+    }
+
+    const isConsensus = topMove.uci === sfRes.bestMove.uci;
+    if (isConsensus) {
+      return {
+        agreed: true,
+        badge: '🎯 人机高度共识',
+        badgeEn: '🎯 High Consensus',
+        summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！(局面评级: ${sfRes.score})`,
+        summaryEn: `Human intuition & Stockfish both agree on <strong>${topMove.san}</strong> (${topMove.prob}%)! (Eval: ${sfRes.score})`,
+        delta: 0,
+        deltaText: '0.00',
+        evalScore: sfRes.score
+      };
+    }
+
+    let deltaText = null;
+    let deltaCp = null;
+    if (sfRes.lines && sfRes.lines.length > 0) {
+      const match = sfRes.lines.find(l => l.uci === topMove.uci);
+      if (match) {
+        deltaCp = match.deltaCp;
+        deltaText = match.deltaText;
+      }
+    }
+
+    const lossStrZh = deltaText ? `，直觉损耗 Δ: ${deltaText} 兵` : '';
+    const lossStrEn = deltaText ? `, intuition loss Δ: ${deltaText} pawn` : '';
+
+    return {
+      agreed: false,
+      badge: '⚠️ 人机着法分歧',
+      badgeEn: '⚠️ Engine Divergence',
+      summary: `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (评级: ${sfRes.score}${lossStrZh})。`,
+      summaryEn: `~<strong>${topMove.prob}%</strong> of ${elo} players favor <strong>${topMove.san}</strong>, while Stockfish advises <strong>${sfRes.bestMove.san}</strong> (Eval: ${sfRes.score}${lossStrEn}).`,
+      delta: deltaCp !== null ? deltaCp / 100 : null,
+      deltaText,
+      evalScore: sfRes.score
+    };
+  }
+
+  enrichMovesWithDelta(moves, sfRes) {
+    if (!moves || !sfRes?.bestMove) return moves;
+    return moves.map(m => {
+      const copy = { ...m };
+      if (copy.uci === sfRes.bestMove.uci) {
+        copy.deltaText = '0.00';
+        copy.isBest = true;
+      } else if (sfRes.lines) {
+        const line = sfRes.lines.find(l => l.uci === copy.uci);
+        if (line) {
+          copy.deltaText = line.deltaText;
+        }
+      }
+      return copy;
+    });
+  }
+
   evaluateStockfishAsync(fen, callback) {
     if (!this.stockfishInBrowser.isReady) return;
     this.stockfishInBrowser.evaluate(fen, 8, 800).then(sfRes => {
@@ -362,29 +411,12 @@ export class MaiaEngine {
   attachStockfishResult(predictionResult, sfRes, elo = this.targetElo) {
     if (!predictionResult || !sfRes) return predictionResult;
     const topMove = predictionResult.moves?.[0] || null;
-    let comparison = null;
-
-    if (topMove && sfRes.bestMove) {
-      const isConsensus = topMove.uci === sfRes.bestMove.uci;
-      if (isConsensus) {
-        comparison = {
-          agreed: true,
-          badge: '🎯 人机高度共识',
-          summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！`
-        };
-      } else {
-        comparison = {
-          agreed: false,
-          badge: '⚠️ 人机着法分歧',
-          summary: `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (${sfRes.score})。`
-        };
-      }
-    } else if (topMove) {
-      comparison = predictionResult.comparison;
-    }
+    const comparison = this.buildComparison(topMove, sfRes, elo);
+    const enrichedMoves = this.enrichMovesWithDelta(predictionResult.moves, sfRes);
 
     return {
       ...predictionResult,
+      moves: enrichedMoves,
       stockfish: sfRes,
       comparison,
       analysis: {

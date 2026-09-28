@@ -7,6 +7,7 @@
   let worker = null;
   let currentReqId = null;
   let lastInfo = null;
+  const multiPvMap = new Map();
 
   function initWorker() {
     try {
@@ -22,14 +23,16 @@
         }
 
         // Parse evaluation info lines:
-        // info depth 10 seldepth 12 score cp 35 nodes 2415 pv e2e4 e7e5 ...
+        // info depth 10 seldepth 12 multipv 1 score cp 35 nodes 2415 pv e2e4 e7e5 ...
         if (line.startsWith('info') && line.includes('score')) {
           const depthMatch = line.match(/\bdepth (\d+)/);
+          const multipvMatch = line.match(/\bmultipv (\d+)/);
           const cpMatch = line.match(/\bscore cp (-?\d+)/);
           const mateMatch = line.match(/\bscore mate (-?\d+)/);
           const pvMatch = line.match(/\bpv (.+)$/);
 
           const depth = depthMatch ? parseInt(depthMatch[1], 10) : 0;
+          const multipv = multipvMatch ? parseInt(multipvMatch[1], 10) : 1;
           let scoreText = '0.00';
           let scoreCp = 0;
           let isMate = false;
@@ -46,14 +49,27 @@
           }
 
           const pv = pvMatch ? pvMatch[1].trim().split(/\s+/) : [];
+          const moveUci = pv[0] || null;
 
-          lastInfo = {
-            depth,
+          multiPvMap.set(multipv, {
+            multipv,
+            uci: moveUci,
             scoreText,
             scoreCp,
             isMate,
+            depth,
             pv
-          };
+          });
+
+          if (multipv === 1) {
+            lastInfo = {
+              depth,
+              scoreText,
+              scoreCp,
+              isMate,
+              pv
+            };
+          }
         }
 
         // Parse bestmove line:
@@ -62,22 +78,43 @@
           const parts = line.split(/\s+/);
           const bestMove = parts[1] && parts[1] !== '(none)' ? parts[1] : null;
 
+          const best = multiPvMap.get(1) || lastInfo;
+          const lines = [];
+          for (const [idx, item] of multiPvMap.entries()) {
+            if (item.uci) {
+              const deltaCp = best ? (item.scoreCp - best.scoreCp) : 0;
+              const deltaText = (deltaCp / 100).toFixed(2);
+              lines.push({
+                multipv: idx,
+                uci: item.uci,
+                scoreText: item.scoreText,
+                scoreCp: item.scoreCp,
+                deltaCp,
+                deltaText,
+                isMate: item.isMate
+              });
+            }
+          }
+
           window.parent.postMessage({
             type: 'STOCKFISH_RESULT',
             id: currentReqId,
             bestMove,
-            scoreText: lastInfo ? lastInfo.scoreText : '0.00',
-            scoreCp: lastInfo ? lastInfo.scoreCp : 0,
-            isMate: lastInfo ? lastInfo.isMate : false,
-            depth: lastInfo ? lastInfo.depth : 0,
-            pv: lastInfo ? lastInfo.pv : []
+            scoreText: best ? best.scoreText : (lastInfo ? lastInfo.scoreText : '0.00'),
+            scoreCp: best ? best.scoreCp : (lastInfo ? lastInfo.scoreCp : 0),
+            isMate: best ? best.isMate : (lastInfo ? lastInfo.isMate : false),
+            depth: best ? best.depth : (lastInfo ? lastInfo.depth : 0),
+            pv: best ? best.pv : (lastInfo ? lastInfo.pv : []),
+            lines
           }, '*');
 
           currentReqId = null;
+          multiPvMap.clear();
         }
       };
 
       worker.postMessage('uci');
+      worker.postMessage('setoption name MultiPV value 3');
       worker.postMessage('isready');
     } catch (err) {
       console.error('[Stockfish Sandbox] Failed to initialize worker:', err);
