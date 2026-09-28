@@ -3,6 +3,88 @@
  * Handles extension lifecycle, storage initialization, and secure background API requests.
  */
 
+import { ChessBoard } from './engine/chess-core.js';
+
+const TCN_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=";
+const TCN_PROMO_PIECES = "qnrbkp";
+
+function decodeTcn(tcnString) {
+  if (!tcnString || typeof tcnString !== 'string') return [];
+  const moves = [];
+
+  for (let i = 0; i < tcnString.length; i += 2) {
+    const code1 = TCN_ALPHABET.indexOf(tcnString[i]);
+    let code2 = TCN_ALPHABET.indexOf(tcnString[i + 1]);
+    if (code1 === -1 || code2 === -1) continue;
+
+    const move = {};
+    if (code2 > 63) {
+      const promoIndex = Math.floor((code2 - 64) / 3);
+      move.promotion = TCN_PROMO_PIECES[promoIndex];
+      const offset = ((code2 - 1) % 3) - 1;
+      code2 = code1 + (code1 < 16 ? -8 : 8) + offset;
+    }
+    if (code1 > 75) {
+      const dropIndex = code1 - 79;
+      move.drop = TCN_PROMO_PIECES[dropIndex];
+    } else {
+      const file = code1 % 8;
+      const rank = Math.floor(code1 / 8) + 1;
+      move.from = 'abcdefgh'[file] + rank;
+    }
+    const file = code2 % 8;
+    const rank = Math.floor(code2 / 8) + 1;
+    move.to = 'abcdefgh'[file] + rank;
+
+    moves.push(move);
+  }
+  return moves;
+}
+
+function tcnToSanMoves(tcnString) {
+  const tcnMoves = decodeTcn(tcnString);
+  if (!tcnMoves || tcnMoves.length === 0) return [];
+
+  const chess = new ChessBoard();
+  const moves = [];
+
+  for (let i = 0; i < tcnMoves.length; i++) {
+    const mv = tcnMoves[i];
+    const uci = mv.from + mv.to + (mv.promotion || '');
+    const legals = chess.getLegalMoves();
+    const found = legals.find(m => m.uci === uci || (m.fromSq === mv.from && m.toSq === mv.to));
+    if (!found) break;
+    chess.makeMove(found);
+    moves.push({
+      ply: i + 1,
+      moveNumber: Math.floor(i / 2) + 1,
+      turn: (i % 2 === 0) ? 'w' : 'b',
+      san: found.san,
+      element: null
+    });
+  }
+
+  return moves;
+}
+
+function movesToPgn(moves, headers = {}) {
+  let pgn = '';
+  for (const [k, v] of Object.entries(headers)) {
+    pgn += `[${k} "${v}"]\n`;
+  }
+  pgn += '\n';
+  for (let i = 0; i < moves.length; i++) {
+    if (i % 2 === 0) {
+      pgn += `${Math.floor(i / 2) + 1}. `;
+    }
+    pgn += `${moves[i].san} `;
+  }
+  if (headers.Result) {
+    pgn += headers.Result;
+  }
+  return pgn.trim();
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Maia-3 Extension] Installed successfully.');
   // Initialize default user settings in chrome.storage.local
@@ -18,7 +100,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle background requests (bypasses webpage CSP & forbidden headers)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'FETCH_CHESSCOM_GAME_PGN') {
-    handleFetchChesscomGame(msg.gameId, msg.usernames || [])
+    handleFetchChesscomGame(msg.gameId, msg.usernames || [], msg.gameType || 'live')
       .then(sendResponse)
       .catch(err => sendResponse({ ok: false, error: err.message }));
     return true; // Keep message channel open for async response
@@ -32,68 +114,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-async function handleFetchChesscomGame(gameId, usernames) {
-  const headers = { 'User-Agent': 'ChessIntuitionExtension/1.0 (contact@4chess.cc)' };
-  const usersToTry = new Set((usernames || []).filter(Boolean));
+async function handleFetchChesscomGame(gameId, usernames = [], gameType = 'live') {
+  const headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  };
 
-  // Strategy 1: Check live game callback (returns direct PGN or reveals player usernames)
-  try {
-    const cbRes = await fetch(`https://www.chess.com/callback/live/game/${gameId}`, { headers });
-    if (cbRes.ok) {
-      const cbData = await cbRes.json();
-      if (cbData.players) {
-        if (cbData.players.top?.username) usersToTry.add(cbData.players.top.username);
-        if (cbData.players.bottom?.username) usersToTry.add(cbData.players.bottom.username);
-      }
-      const pgn = cbData.game?.pgn || cbData.pgn;
-      if (pgn) {
-        return { ok: true, pgn, source: 'chesscom-callback' };
-      }
-    }
-  } catch (e) {
-    console.warn('[Background] Live callback notice:', e);
-  }
-
-  // Strategy 2: Query user monthly archives (fast & reliable)
-  for (const user of usersToTry) {
-    if (!user) continue;
+  // Strategy 1: Check live/daily game callback (fast & directly provides TCN moveList)
+  for (const type of [gameType, 'live', 'daily']) {
     try {
-      const archRes = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(user)}/games/archives`, { headers });
-      if (archRes.ok) {
-        const archData = await archRes.json();
-        // Check newest archives first (last 2 months)
-        const recentArchives = (archData.archives || []).slice(-2).reverse();
-        for (const archUrl of recentArchives) {
-          const gRes = await fetch(archUrl, { headers });
-          if (gRes.ok) {
-            const gData = await gRes.json();
-            const g = gData.games?.find(x => x.url && x.url.includes(gameId));
-            if (g && g.pgn) {
-              return { ok: true, pgn: g.pgn, source: 'chesscom-api' };
-            }
+      const cbRes = await fetch(`https://www.chess.com/callback/${type}/game/${gameId}`, { headers });
+      if (cbRes.ok) {
+        const cbData = await cbRes.json();
+        if (cbData.game?.moveList) {
+          const moves = tcnToSanMoves(cbData.game.moveList);
+          if (moves.length > 0) {
+            const pgn = movesToPgn(moves, cbData.game.pgnHeaders || {});
+            return { ok: true, pgn, moves, source: `chesscom-${type}-callback-tcn` };
           }
+        }
+        const directPgn = cbData.game?.pgn || cbData.pgn;
+        if (directPgn) {
+          return { ok: true, pgn: directPgn, source: `chesscom-${type}-callback` };
         }
       }
     } catch (e) {
-      console.warn('[Background] Archive fetch error for', user, e);
+      console.warn(`[Background] ${type} callback notice:`, e);
     }
   }
 
-  // Strategy 3: Check daily game callback
-  try {
-    const dailyRes = await fetch(`https://www.chess.com/callback/daily/game/${gameId}`, { headers });
-    if (dailyRes.ok) {
-      const dailyData = await dailyRes.json();
-      const pgn = dailyData.game?.pgn || dailyData.pgn;
-      if (pgn) {
-        return { ok: true, pgn, source: 'chesscom-daily-callback' };
-      }
-    }
-  } catch (e) {
-    console.warn('[Background] Daily callback notice:', e);
-  }
-
-  return { ok: false, error: '未能在 Chess.com 归档中找到该对局记录 (Game not found in archives)' };
+  return { ok: false, error: '未能在 Chess.com 找到该对局数据 (Game not found)' };
 }
 
 async function handleFetchLichessGame(gameId) {
