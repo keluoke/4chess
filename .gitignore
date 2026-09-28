@@ -2,7 +2,7 @@
 *.pt
 *.onnx
 *.bin
-!models/maia3_weights.bin
+!models/maia3_model.bin
 
 # Python
 __pycache__/

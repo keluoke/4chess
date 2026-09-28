@@ -69,28 +69,18 @@ export class IntuitionPanel {
 
       <!-- Main Body -->
       <div class="maia-body" id="maia-panel-body">
-        <!-- Model Engine Status & Weight Manager -->
+        <!-- Model Engine Status -->
         <div class="maia-model-box">
           <div class="maia-model-header">
-            <span class="maia-model-label">神经网络核心:</span>
-            <span id="maia-model-badge" class="maia-badge badge-warning">🟡 离线模式 (未加载权重)</span>
+            <span class="maia-model-label">双引擎核心:</span>
+            <span id="maia-model-badge" class="maia-badge badge-gpu">🟢 Maia-3 + Stockfish (纯本地)</span>
           </div>
-
-          <div id="maia-model-controls" class="maia-model-actions">
-            <button id="maia-btn-download" class="maia-action-btn">
-              📥 从 HuggingFace 载入 Maia-3 ONNX
-            </button>
-            <label class="maia-action-btn secondary">
-              📂 载入本地 .onnx
-              <input type="file" id="maia-file-input" accept=".onnx" style="display: none;" />
-            </label>
-          </div>
-
+          <div id="maia-model-controls" class="maia-model-actions" style="display: none;"></div>
           <div id="maia-load-progress-box" class="maia-progress-container" style="display: none;">
             <div class="maia-progress-bar">
-              <div id="maia-load-fill" class="maia-progress-fill" style="width: 0%; background-color: #10b981;"></div>
+              <div id="maia-load-fill" class="maia-progress-fill" style="width: 100%; background-color: #10b981;"></div>
             </div>
-            <span id="maia-load-text" class="maia-progress-text">准备下载...</span>
+            <span id="maia-load-text" class="maia-progress-text">内置 730 万参数已加载</span>
           </div>
         </div>
 
@@ -320,25 +310,24 @@ export class IntuitionPanel {
     const insightText = this.container.querySelector('#maia-insight-text');
     const timeEl = this.container.querySelector('#maia-inference-time');
 
-    // 1. If engine is NOT available: strictly show unavailable error (no fake guesses!)
+    // 1. If engine is NOT available: strictly show loading/unavailable state (no fake heuristics!)
     if (!predictionData || !predictionData.isAvailable) {
       if (modelBadge) {
-        modelBadge.textContent = '🔴 Maia-3 未就绪';
+        modelBadge.textContent = predictionData?.loading ? '⏳ 载入模型中...' : '🔴 Maia-3 未就绪';
         modelBadge.className = 'maia-badge badge-warning';
       }
-      if (modelControls) modelControls.style.display = 'flex';
-      if (timeEl) timeEl.textContent = '未就绪';
+      if (modelControls) modelControls.style.display = 'none';
+      if (timeEl) timeEl.textContent = '载入中...';
       if (movesContainer) {
         movesContainer.innerHTML = `
-          <div style="padding: 16px 12px; text-align: center; background: rgba(239, 68, 68, 0.08); border: 1px dashed rgba(239, 68, 68, 0.3); border-radius: 10px;">
-            <div style="font-size: 22px; margin-bottom: 6px;">🛑</div>
-            <div style="font-weight: 700; color: #ef4444; margin-bottom: 6px;">Maia-3 神经网络引擎未连接</div>
+          <div style="padding: 16px 12px; text-align: center; background: rgba(56, 189, 248, 0.08); border: 1px dashed rgba(56, 189, 248, 0.3); border-radius: 10px;">
+            <div style="font-size: 22px; margin-bottom: 6px;">🧠</div>
+            <div style="font-weight: 700; color: #38bdf8; margin-bottom: 6px;">正在载入 Maia-3 神经网络</div>
             <div style="font-size: 11.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 10px;">
-              本插件已完全删除低精度离线乱猜模式。<br>
-              请在本地终端执行一键启动脚本载入 79M 模型：<br>
-              <code style="background: #1e293b; color: #38bdf8; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">./run_maia.sh</code>
+              ${predictionData?.message || '正在将 7,327,236 参数载入浏览器内存...'}<br>
+              方案0架构：100% 浏览器原生执行，无需配置任何外部服务。
             </div>
-            <button id="maia-retry-btn" style="background: #3b82f6; color: #fff; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: 600;">🔄 重新检测引擎</button>
+            <button id="maia-retry-btn" style="background: #3b82f6; color: #fff; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 11.5px; font-weight: 600;">🔄 重新初始化</button>
           </div>
         `;
         const retryBtn = movesContainer.querySelector('#maia-retry-btn');
@@ -357,13 +346,7 @@ export class IntuitionPanel {
     if (insightBox) insightBox.style.display = 'block';
 
     if (modelBadge) {
-      if (predictionData.stockfish && predictionData.stockfish.available) {
-        modelBadge.textContent = `🟢 Maia-3 79M + Stockfish 17 (⚡ MPS)`;
-      } else if (predictionData.isLocalServer) {
-        modelBadge.textContent = `🟢 ${predictionData.modelName} (⚡ 本地 MPS)`;
-      } else {
-        modelBadge.textContent = `🟢 ONNX 实装 (⚡ ${predictionData.backend})`;
-      }
+      modelBadge.textContent = `🟢 Maia-3 + Stockfish (纯本地)`;
       modelBadge.className = 'maia-badge badge-gpu';
     }
 

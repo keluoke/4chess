@@ -1,6 +1,7 @@
 /**
- * Main Content Module for Maia-3 Chrome Extension
+ * Main Content Module for Maia-3 Chrome Extension (Scheme 0: Pure Standalone)
  * Coordinates BoardDetector, MaiaEngine, HeatmapOverlay, and IntuitionPanel.
+ * 100% In-Browser execution without any external services or Python runtimes.
  */
 
 import { MaiaEngine } from '../engine/maia-engine.js';
@@ -9,11 +10,9 @@ import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
 
 export async function initMaiaExtension() {
-  console.log('[Maia-3] Starting Human Intuition Extension...');
+  console.log('[Maia-3] 🚀 Starting Human Intuition Extension (Scheme 0 Standalone)...');
 
   const engine = new MaiaEngine();
-  await engine.initialize();
-
   const overlay = new HeatmapOverlay();
   let currentFen = null;
   let currentOrientation = 'white';
@@ -32,7 +31,6 @@ export async function initMaiaExtension() {
       overlay.setHoverMove(moveUci);
     },
     onModelLoaded: async () => {
-      console.log('[Maia-3] Real ONNX model loaded! Refreshing predictions...');
       if (currentFen) {
         await runPrediction(currentFen);
       }
@@ -51,6 +49,16 @@ export async function initMaiaExtension() {
       console.error('[Maia-3] Prediction error:', err);
     }
   }
+
+  // Start dual-engine initialization asynchronously
+  engine.initialize().then(() => {
+    console.log('[Maia-3] ✅ Dual Engine (Maia 3 + Stockfish) fully ready in browser!');
+    if (currentFen) {
+      runPrediction(currentFen);
+    }
+  }).catch(err => {
+    console.error('[Maia-3] ❌ Engine initialization error:', err);
+  });
 
   const detector = new BoardDetector(async ({ fen, orientation, platform }) => {
     currentFen = fen;
