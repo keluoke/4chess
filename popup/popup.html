@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Maia 3 · 人类直觉预测器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-box">
+        <span class="icon">🧠</span>
+        <div>
+          <h1 class="title">Maia 3 Chess</h1>
+          <p class="subtitle">人类直觉热力图 & 预测引擎</p>
+        </div>
+      </div>
+      <div id="status-pill" class="badge">检查中...</div>
+    </div>
+
+    <!-- Quick Launch -->
+    <div class="quick-launch">
+      <a href="https://lichess.org/analysis" target="_blank" class="launch-btn lichess">
+        <span>♟️ 打开 Lichess 分析板</span>
+      </a>
+      <a href="https://www.chess.com/analysis" target="_blank" class="launch-btn chesscom">
+        <span>♟️ 打开 Chess.com 分析板</span>
+      </a>
+    </div>
+
+    <!-- Settings Card -->
+    <div class="card">
+      <h2 class="card-title">偏好设置</h2>
+      
+      <div class="setting-item">
+        <label for="default-elo">默认等级分 (Elo):</label>
+        <select id="default-elo" class="select-box">
+          <option value="1100">1100 - 初级玩家直觉</option>
+          <option value="1500" selected>1500 - 中级业余玩家</option>
+          <option value="1900">1900 - 进阶高手玩家</option>
+          <option value="2200">2200 - 大师级直觉</option>
+        </select>
+      </div>
+
+      <div class="setting-item">
+        <label for="backend-pref">首选计算引擎:</label>
+        <select id="backend-pref" class="select-box">
+          <option value="webgpu" selected>⚡ WebGPU (推荐 · 硬件加速)</option>
+          <option value="wasm">⚙️ WebAssembly / SIMD (通用保底)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Architecture & Model Info -->
+    <div class="card">
+      <h2 class="card-title">架构特性 (ICLR 2026)</h2>
+      <ul class="feature-list">
+        <li>✨ <strong>Chessformer</strong>: 64 方格独立 Token 变换器</li>
+        <li>🔥 <strong>GAB 几何注意力偏置</strong>: 捕捉棋盘几何关系</li>
+        <li>🎯 <strong>人类直觉热力图</strong>: 直接提取注意力权重呈现直觉焦点</li>
+        <li>⚡ <strong>本地私密运行</strong>: 毫秒级推理，无需服务端通信</li>
+      </ul>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span>基于 CSSLab Maia 3 & Chessformer 架构</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
