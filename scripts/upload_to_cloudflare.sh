@@ -1,40 +1,33 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Cloudflare R2 / CDN 极速分发配置脚本
-# 用于将 27.97 MB Maia-3 模型一键上传至您的 Cloudflare 免费存储桶 (R2 / Workers)
-# 获得全球高速 CDN 加速与零流量费 (0 Egress Fees) 分发。
+# 针对专属域名 weights.4chess.cc 进行一键指引与上传
 # ==============================================================================
 
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODEL_FILE="$DIR/models/maia3_model.bin"
+MODEL_5M="$DIR/models/maia3_model.bin"
+MODEL_79M="$DIR/models/maia3_79m.bin"
 
 echo "================================================================="
-echo "🧠 Maia-3 · Cloudflare 高速 CDN 部署向导"
+echo "🧠 Maia-3 · Cloudflare CDN (weights.4chess.cc) 极速部署向导"
 echo "================================================================="
-echo "本地模型路径: $MODEL_FILE"
-
-if [ ! -f "$MODEL_FILE" ]; then
-  echo "❌ 找不到 $MODEL_FILE 文件！请先运行 export 脚本生成模型。"
-  exit 1
-fi
-
-MODEL_SIZE=$(ls -lh "$MODEL_FILE" | awk '{print $5}')
-echo "模型文件大小: $MODEL_SIZE"
+echo "5M 推荐模型 (28MB):  $MODEL_5M"
+echo "79M 完整模型 (317MB): $MODEL_79M"
 echo ""
 
 echo "-----------------------------------------------------------------"
-echo "方式一：通过 Cloudflare 网页后台上传 (推荐，免命令行，2分钟搞定)"
+echo "针对您的自定义域名: weights.4chess.cc"
 echo "-----------------------------------------------------------------"
-echo "1. 登录 Cloudflare 控制台: https://dash.cloudflare.com/"
-echo "2. 点击左侧导航栏的「R2 对象存储」->「创建存储桶 (Create bucket)」"
-echo "   - 存储桶名称输入: maia3-weights (或任意英文名称)"
-echo "   - 位置选择「自动 (Automatic)」并点击创建"
-echo "3. 进入该存储桶，点击「设置 (Settings)」选项卡:"
-echo "   - 找到「公开访问 (Public access)」-> 开启「允许公开访问 (Allow Public Access)」或绑定自定义域名"
-echo "   - 记下生成的公开访问 URL (例如: https://pub-xxxxxxxxxxxxxxxx.r2.dev)"
-echo "4. 在设置页面的「CORS 策略 (CORS Policy)」中点击「添加 CORS 策略」，粘贴以下内容并保存:"
+echo "插件代码中现已默认配置了该域名！"
+echo "默认直链: https://weights.4chess.cc/maia3_model.bin"
+echo ""
+echo "如出现 403 Forbidden 提示，仅需在 Cloudflare 完成以下设置:"
+echo "1. 登录 Cloudflare 控制台 -> 点击左侧「R2 对象存储」-> 找到对应存储桶。"
+echo "2. 点击「设置 (Settings)」选项卡:"
+echo "   - 在「自定义域 (Custom Domains)」中确保已连接 weights.4chess.cc 且状态为 Active。"
+echo "   - 在「CORS 策略 (CORS Policy)」中点击添加或编辑，粘贴以下配置:"
 cat << 'EOF'
 [
   {
@@ -46,36 +39,28 @@ cat << 'EOF'
 ]
 EOF
 echo ""
-echo "5. 返回「对象 (Objects)」选项卡，点击「上传 (Upload)」，直接将以下文件拖入上传:"
-echo "   $MODEL_FILE"
+echo "3. 进入「对象 (Objects)」选项卡，上传模型文件:"
+echo "   - 推荐上传: $MODEL_5M (文件名必须为 maia3_model.bin)"
+echo "   - 若想使用 79M 大模型，也可将 $MODEL_79M 上传至桶中"
 echo ""
-echo "6. 上传完成后，您的完整 CDN 直链即为:"
-echo "   https://pub-xxxxxxxxxxxxxxxx.r2.dev/maia3_model.bin"
-echo "   将此 URL 填入插件悬浮面板的「⚙️ CDN / 缓存设置」中即可！"
+echo "4. 上传完成后验证:"
+echo "   curl -I https://weights.4chess.cc/maia3_model.bin"
+echo "   返回 HTTP/2 200 即代表配置成功！"
 echo ""
-
-echo "-----------------------------------------------------------------"
-echo "方式二：通过 Wrangler 命令行一键上传 (适合开发者)"
-echo "-----------------------------------------------------------------"
 
 if command -v npx >/dev/null 2>&1; then
-  echo "检测到 Node.js / npx 环境已就绪。"
-  echo "如果您已登录 Cloudflare，可直接运行以下命令:"
+  echo "-----------------------------------------------------------------"
+  echo "开发者快捷命令 (Wrangler CLI):"
+  echo "-----------------------------------------------------------------"
+  echo "  # 查看当前 R2 桶列表"
+  echo "  npx wrangler r2 bucket list"
   echo ""
-  echo "  # 1. 登录 Cloudflare"
-  echo "  npx wrangler login"
-  echo ""
-  echo "  # 2. 创建 R2 存储桶 (若未创建)"
-  echo "  npx wrangler r2 bucket create maia3-weights"
-  echo ""
-  echo "  # 3. 上传模型文件"
-  echo "  npx wrangler r2 object put maia3-weights/maia3_model.bin --file=\"$MODEL_FILE\""
-  echo ""
-  echo "  # 4. 在控制台为 maia3-weights 开启公开访问或 Worker 代理"
+  echo "  # 上传 5M 模型到指定桶 (将 <bucket-name> 替换为您的 R2 存储桶名):"
+  echo "  npx wrangler r2 object put <bucket-name>/maia3_model.bin --file=\"$MODEL_5M\""
   echo ""
 fi
 
 echo "================================================================="
 echo "💡 提示：模型一旦从 CDN 下载完成，插件将通过 IndexedDB 永久本地缓存"
-echo "   后续页面访问与刷新均为 0ms 纯本地瞬时加载，无重复流量消耗。"
+echo "   后续页面访问与刷新均为 0ms 纯本地秒开，无需二次消耗网络流量。"
 echo "================================================================="

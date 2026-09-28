@@ -24,7 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   chrome.storage.local.get(['defaultElo', 'preferredBackend', 'cloudflareCdnUrl'], (res) => {
     if (res.defaultElo) eloSelect.value = res.defaultElo;
     if (res.preferredBackend) backendSelect.value = res.preferredBackend;
-    if (res.cloudflareCdnUrl && cdnInput) cdnInput.value = res.cloudflareCdnUrl;
+    if (cdnInput) {
+      cdnInput.value = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
+    }
   });
 
   // Save changes

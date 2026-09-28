@@ -120,12 +120,12 @@ export class IntuitionPanel {
           </div>
 
           <div id="cdn-config-drawer" style="display: none; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08);">
-            <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 4px;">自定义 Cloudflare R2 / Worker CDN 地址:</div>
+            <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 4px;">Cloudflare R2 / CDN 权重地址:</div>
             <div style="display: flex; gap: 6px;">
-              <input type="text" id="cdn-url-input" placeholder="https://pub-xxxx.r2.dev/maia3_model.bin" style="flex: 1; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 4px 6px; border-radius: 5px; font-size: 10.5px;">
+              <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_model.bin" value="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 4px 6px; border-radius: 5px; font-size: 10.5px;">
               <button id="cdn-save-btn" style="background: #3b82f6; color: white; border: none; border-radius: 5px; padding: 4px 8px; font-size: 10.5px; cursor: pointer; font-weight: 600;">保存</button>
             </div>
-            <div style="font-size: 9.5px; color: #64748b; margin-top: 4px;">留空则自动使用本地内置权重或默认 CDN。</div>
+            <div style="font-size: 9.5px; color: #64748b; margin-top: 4px;">默认节点: https://weights.4chess.cc/maia3_model.bin (一次下载永久缓存)</div>
           </div>
         </div>
 
@@ -254,12 +254,10 @@ export class IntuitionPanel {
       });
     }
 
-    // Load saved CDN URL into input
+    // Load saved CDN URL into input (defaults to weights.4chess.cc)
     if (typeof chrome !== 'undefined' && chrome.storage?.local && cdnInput) {
       chrome.storage.local.get(['cloudflareCdnUrl'], (res) => {
-        if (res?.cloudflareCdnUrl) {
-          cdnInput.value = res.cloudflareCdnUrl;
-        }
+        cdnInput.value = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
       });
     }
 

@@ -95,13 +95,16 @@ export class MaiaEngine {
     if (customCdn) {
       candidates.push(customCdn);
     }
-    // Extension packaged local file
+    // 1. Primary Default: User's dedicated Cloudflare CDN bucket
+    candidates.push('https://weights.4chess.cc/maia3_model.bin');
+
+    // 2. Extension packaged local file
     if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
       candidates.push(chrome.runtime.getURL('models/maia3_model.bin'));
     } else {
       candidates.push('models/maia3_model.bin');
     }
-    // High-speed CDN mirror fallback
+    // 3. High-speed mirror fallback
     candidates.push('https://maia3-cdn.pages.dev/models/maia3_model.bin');
 
     let loaded = false;

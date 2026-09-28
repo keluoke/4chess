@@ -143,13 +143,19 @@ export class MaiaInBrowserEngine {
       const payloadOffset = 8 + metaLen;
       const payloadBytes = new Uint8Array(arrayBuffer, payloadOffset);
 
-      // Map tensor buffers
+      // Map tensor buffers (zero-copy if 4-byte aligned, slice fallback if unaligned)
       for (const [name, info] of Object.entries(this.meta.tensors)) {
-        this.tensors[name] = new Float32Array(
-          payloadBytes.buffer,
-          payloadBytes.byteOffset + info.offset,
-          info.numel
-        );
+        const totalOffset = payloadBytes.byteOffset + info.offset;
+        if (totalOffset % 4 === 0) {
+          this.tensors[name] = new Float32Array(
+            payloadBytes.buffer,
+            totalOffset,
+            info.numel
+          );
+        } else {
+          const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
+          this.tensors[name] = new Float32Array(slice);
+        }
       }
 
       this.initVocab();

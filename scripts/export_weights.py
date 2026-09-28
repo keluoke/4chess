@@ -54,12 +54,16 @@ def export_checkpoint(ckpt_path, output_path):
         "tensors": tensor_table
     }
     meta_json = json.dumps(meta).encode("utf-8")
+    # Ensure 4-byte alignment for float32 array payload
+    pad = (4 - (len(meta_json) % 4)) % 4
+    if pad > 0:
+        meta_json += b" " * pad
     meta_len = len(meta_json)
 
     # File format:
     # [4 bytes: MAGIC 'M3CF']
     # [4 bytes: meta_json_len (uint32)]
-    # [meta_json bytes]
+    # [meta_json bytes (4-byte aligned)]
     # [tensor binary payload]
     with open(output_path, "wb") as f:
         f.write(b"M3CF")
@@ -71,6 +75,16 @@ def export_checkpoint(ckpt_path, output_path):
     print(f"[Exporter] ✅ Exported successfully to {output_path.name} ({out_mb:.2f} MB, {meta['total_params']:,} parameters)")
 
 if __name__ == "__main__":
-    src = MODELS_DIR / "maia3-5m.pt"
-    dst = MODELS_DIR / "maia3_model.bin"
-    export_checkpoint(src, dst)
+    import argparse
+    parser = argparse.ArgumentParser(description="Export Maia-3 checkpoint to zero-copy binary")
+    parser.add_argument("--model", choices=["5m", "79m", "both"], default="5m", help="Model size to export")
+    args = parser.parse_args()
+
+    if args.model in ["5m", "both"]:
+        src5 = MODELS_DIR / "maia3-5m.pt"
+        if src5.exists():
+            export_checkpoint(src5, MODELS_DIR / "maia3_model.bin")
+    if args.model in ["79m", "both"]:
+        src79 = MODELS_DIR / "maia3-79m.pt"
+        if src79.exists():
+            export_checkpoint(src79, MODELS_DIR / "maia3_79m.bin")
