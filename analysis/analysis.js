@@ -159,6 +159,16 @@ class AnalysisStudioApp {
           chrome.storage.local.set({ defaultElo: this.currentElo });
         }
       } catch (err) {}
+
+      // Reset active move Maia prediction so it recalculates for the new ELO
+      if (this.currentPly > 0) {
+        const moveReview = this.reviewResult?.allMoves?.find(m => m.ply === this.currentPly);
+        if (moveReview) {
+          moveReview.maiaTopSan = null;
+          moveReview.maiaTopUci = null;
+          moveReview.maiaTopProb = null;
+        }
+      }
       this.updateActivePositionAnalysis();
     });
 
@@ -619,7 +629,7 @@ class AnalysisStudioApp {
       this.el.compareEngineSan.style.color = 'var(--brand-green)';
       this.el.compareEngineMeta.textContent = moveReview.evalBefore ? `评估 ${moveReview.evalBefore}` : '';
 
-      // 2. Maia intuition (from pre-computed data)
+      // 2. Maia intuition (from pre-computed data, with real-time fallback)
       if (moveReview.maiaTopSan) {
         this.el.compareIntuitionSan.textContent = moveReview.maiaTopSan;
         this.el.compareIntuitionSan.style.color = '#e6a520';
@@ -627,9 +637,47 @@ class AnalysisStudioApp {
           ? `概率 ${moveReview.maiaTopProb.toFixed(1)}%`
           : '';
       } else {
-        this.el.compareIntuitionSan.textContent = '—';
-        this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
+        // Fallback: Real-time Maia prediction if not yet stored
+        this.el.compareIntuitionSan.textContent = '计算中...';
+        this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
         this.el.compareIntuitionMeta.textContent = '';
+
+        const targetPly = this.currentPly;
+        this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, this.currentElo).then(pred => {
+          if (this.currentPly !== targetPly) return;
+          if (pred && pred.moves && pred.moves.length > 0) {
+            const top = pred.moves[0];
+            moveReview.maiaTopSan = top.san || null;
+            moveReview.maiaTopUci = top.uci || null;
+            moveReview.maiaTopProb = typeof top.prob === 'number' ? top.prob : null;
+
+            this.el.compareIntuitionSan.textContent = top.san;
+            this.el.compareIntuitionSan.style.color = '#e6a520';
+            this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
+
+            // Update match badge
+            const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
+            const cleanMaia = (top.san || '').replace(/[+#?!]/g, '');
+            const cleanBest = (moveReview.bestSan || '').replace(/[+#?!]/g, '');
+            if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
+              this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(230,165,32,0.15); color: #e6a520;">= 直觉</span>`;
+            }
+
+            // Draw gold arrow if different from engine best
+            if (top.uci && top.uci !== moveReview.bestUci) {
+              arrows.push({
+                from: top.uci.slice(0, 2),
+                to: top.uci.slice(2, 4),
+                color: 'gold',
+                label: `${top.san} ${top.prob != null ? Math.round(top.prob) + '%' : ''}`
+              });
+              this.boardUI.setArrows(arrows);
+            }
+          } else {
+            this.el.compareIntuitionSan.textContent = '—';
+            this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
+          }
+        });
       }
 
       // 3. Played move
@@ -713,29 +761,73 @@ class AnalysisStudioApp {
 
       this.boardUI.setArrows(arrows);
     } else {
-      // No review data yet - show loading state
-      this.el.divergenceBadge.textContent = '⚡ 分析中';
+      // Review data not yet computed for this ply - provide real-time dual-engine preview
+      this.el.divergenceBadge.textContent = '⚡ 实时分析中';
       this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-      this.resetComparePanel();
+
+      // Immediately display played move
+      this.el.comparePlayedSan.textContent = currentPos.san;
+      this.el.comparePlayedSan.style.color = 'var(--text-main)';
+      this.el.comparePlayedMeta.textContent = '';
+      this.el.comparePlayedCard.classList.remove('is-blunder');
+
+      // Set placeholders
+      this.el.compareEngineSan.textContent = '计算中...';
+      this.el.compareEngineSan.style.color = 'var(--brand-gold)';
+      this.el.compareEngineMeta.textContent = '';
+      this.el.compareIntuitionSan.textContent = '计算中...';
+      this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
+      this.el.compareIntuitionMeta.textContent = '';
+
+      const prevPos = this.positions[this.currentPly - 1];
+      const evalFen = prevPos ? prevPos.fen : currentPos.fen;
+      const targetPly = this.currentPly;
+      const arrows = [];
 
       // Fallback realtime Maia prediction
-      this.maiaEngine.predict(currentPos.fen, this.currentElo).then(pred => {
-        if (this.currentPly !== this.positions.indexOf(currentPos)) return;
+      this.maiaEngine.predict(evalFen, this.currentElo).then(pred => {
+        if (this.currentPly !== targetPly) return;
         if (pred && pred.moves && pred.moves.length > 0) {
           const top = pred.moves[0];
           this.el.compareIntuitionSan.textContent = top.san || '—';
           this.el.compareIntuitionSan.style.color = '#e6a520';
           this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
           if (top.uci) {
-            this.boardUI.setArrows([{
+            arrows.push({
               from: top.uci.slice(0, 2),
               to: top.uci.slice(2, 4),
               color: 'gold',
               label: `${top.san} (${top.prob}%)`
-            }]);
+            });
+            this.boardUI.setArrows(arrows);
           }
+        } else {
+          this.el.compareIntuitionSan.textContent = '—';
+          this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
         }
       });
+
+      // Fallback realtime Stockfish evaluation
+      if (this.stockfish?.isReady) {
+        this.stockfish.evaluate(evalFen, 6, 2500, 1).then(sfRes => {
+          if (this.currentPly !== targetPly) return;
+          if (sfRes && sfRes.bestMove) {
+            this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
+            this.el.compareEngineSan.style.color = 'var(--brand-green)';
+            this.el.compareEngineMeta.textContent = `评估 ${sfRes.score}`;
+            arrows.push({
+              from: sfRes.bestMove.fromSq,
+              to: sfRes.bestMove.toSq,
+              color: 'green',
+              label: sfRes.bestMove.san
+            });
+            this.boardUI.setArrows(arrows);
+          } else {
+            this.el.compareEngineSan.textContent = '—';
+            this.el.compareEngineSan.style.color = 'var(--text-dim)';
+          }
+        });
+      }
     }
   }
 

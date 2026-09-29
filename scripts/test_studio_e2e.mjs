@@ -140,6 +140,12 @@ const testResult = await send('Runtime.evaluate', {
     // 5. Check Maia data is stored per move
     const hasMaiaData = app.reviewResult?.allMoves?.some(m => m.maiaTopSan != null);
 
+    // 6. Check Piece SVG rendering (Rook & Knight)
+    const rookSvg = document.querySelector('[data-piece="R"]')?.innerHTML || '';
+    const knightSvg = document.querySelector('[data-piece="N"]')?.innerHTML || '';
+    const hasProperRookCrenels = rookSvg.includes('M9 39h27v-3H9zm3-3v-4h21v4');
+    const hasProperKnightSnout = knightSvg.includes('0-4.003 1-4-4');
+
     return {
       success: true,
       totalMoves: app.moves.length,
@@ -156,6 +162,8 @@ const testResult = await send('Runtime.evaluate', {
       cardClickPly,
       cardClickArrows,
       hasMaiaData,
+      hasProperRookCrenels,
+      hasProperKnightSnout,
       stockfishReady: app.stockfish.isReady
     };
   })()`,

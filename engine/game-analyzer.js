@@ -558,18 +558,18 @@ export class GameAnalyzer {
       // Lichess game ID: 8 characters (e.g. lichess.org/38uTqNdksSRF -> lichess_38uTqNdk)
       if (href.includes('lichess.org')) {
         const m = window.location.pathname.match(/^\/([a-zA-Z0-9]{8})/);
-        if (m && m[1]) return `lichess_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v3_lichess_${m[1]}_${hash.slice(0, 10)}`;
       }
       // Chess.com game ID (e.g. /game/live/184446398482 or /analysis/game/live/184446398482)
       if (href.includes('chess.com')) {
         const m = window.location.pathname.match(/\b(\d{8,15})\b/);
-        if (m && m[1]) return `chesscom_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v3_chesscom_${m[1]}_${hash.slice(0, 10)}`;
       }
     }
 
     // Universal fallback: deterministic 64-bit hash over moves sequence & params
     if (moves && moves.length > 0) {
-      return `game_${moves.length}_${hash.slice(0, 12)}`;
+      return `v3_game_${moves.length}_${hash.slice(0, 12)}`;
     }
 
     return null;
@@ -584,7 +584,10 @@ export class GameAnalyzer {
       const storageKey = `maia3_review_${cacheKey}`;
       // L1: Memory Cache
       if (GameAnalyzer.memoryCache.has(storageKey)) {
-        return GameAnalyzer.memoryCache.get(storageKey);
+        const mem = GameAnalyzer.memoryCache.get(storageKey);
+        if (mem && mem.allMoves && mem.allMoves.some(m => m.maiaTopSan != null)) {
+          return mem;
+        }
       }
 
       // L2: Persistent chrome.storage.local
@@ -594,6 +597,11 @@ export class GameAnalyzer {
         });
         if (data && data[storageKey] && data[storageKey].result) {
           const res = data[storageKey].result;
+          const hasMaia = res.allMoves && res.allMoves.some(m => m.maiaTopSan != null);
+          if (!hasMaia && res.allMoves && res.allMoves.length > 0) {
+            console.log(`[GameAnalyzer] Stale cache without Maia intuition data found for ${cacheKey}, discarding...`);
+            return null;
+          }
           GameAnalyzer.memoryCache.set(storageKey, res);
           console.log(`[GameAnalyzer] ⚡ Loaded review from persistent cache for ${cacheKey}`);
           return res;
@@ -603,8 +611,14 @@ export class GameAnalyzer {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && parsed.result) {
-            GameAnalyzer.memoryCache.set(storageKey, parsed.result);
-            return parsed.result;
+            const res = parsed.result;
+            const hasMaia = res.allMoves && res.allMoves.some(m => m.maiaTopSan != null);
+            if (!hasMaia && res.allMoves && res.allMoves.length > 0) {
+              console.log(`[GameAnalyzer] Stale cache without Maia intuition data found for ${cacheKey}, discarding...`);
+              return null;
+            }
+            GameAnalyzer.memoryCache.set(storageKey, res);
+            return res;
           }
         }
       }
