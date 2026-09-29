@@ -29,18 +29,20 @@ export class FairPlayGuard {
     if (host.includes('lichess.org')) {
       if (path.startsWith('/analysis') ||
           path.startsWith('/study') ||
+          path.startsWith('/broadcast') ||
           path.startsWith('/editor') ||
           path.startsWith('/practice') ||
           path.startsWith('/training') ||
           path.startsWith('/learn') ||
           path.startsWith('/puzzle') ||
           path.startsWith('/tv')) {
-        return false; // Whitelisted safe
+        return false; // Whitelisted safe (analysis/study/broadcast relay)
       }
     }
 
     if (host.includes('chess.com')) {
       if (path.startsWith('/analysis') ||
+          path.startsWith('/events') ||
           path.startsWith('/puzzles') ||
           path.startsWith('/library') ||
           path.startsWith('/lessons') ||
@@ -48,7 +50,7 @@ export class FairPlayGuard {
           path.startsWith('/classroom') ||
           path.startsWith('/vision') ||
           path.startsWith('/drills')) {
-        return false; // Whitelisted safe
+        return false; // Whitelisted safe (analysis/lessons/event broadcasts)
       }
     }
 

@@ -34,6 +34,7 @@
 
   function initWorker() {
     let initialized = false;
+    let readyTimer = null;
 
     function tryWorker(scriptUrl, name) {
       try {
@@ -43,6 +44,7 @@
           if (!initialized && scriptUrl.includes('stockfish-19')) {
             console.log('[Stockfish Sandbox] Falling back to stockfish.js...');
             try { w.terminate(); } catch (e) {}
+            clearTimeout(readyTimer);
             worker = tryWorker('../lib/stockfish.js', 'Stockfish WASM');
           }
         };
@@ -56,6 +58,7 @@
           }
 
           if (line === 'readyok') {
+            if (readyTimer) clearTimeout(readyTimer);
             if (!initialized) {
               initialized = true;
               window.parent.postMessage({ type: 'STOCKFISH_READY', engineName }, '*');
@@ -193,18 +196,26 @@
       }
     }
 
-    worker = tryWorker('../lib/stockfish-19.js#stockfish.wasm,worker', 'Stockfish 19 Lite WASM');
+    readyTimer = setTimeout(() => {
+      if (!initialized) {
+        console.warn('[Stockfish Sandbox] Stockfish 19 did not ready in 2000ms, falling back to stockfish.js...');
+        try { if (worker) worker.terminate(); } catch (e) {}
+        worker = tryWorker('../lib/stockfish.js', 'Stockfish WASM');
+      }
+    }, 2000);
+
+    const origTry = tryWorker;
+    worker = origTry('../lib/stockfish-19.js#stockfish.wasm,worker', 'Stockfish 19 Lite WASM');
     if (!worker) {
-      worker = tryWorker('../lib/stockfish.js', 'Stockfish WASM');
+      clearTimeout(readyTimer);
+      worker = origTry('../lib/stockfish.js', 'Stockfish WASM');
     }
   }
 
   window.addEventListener('message', function(e) {
-    // Security boundary: Only accept messages from parent window
-    if (e.source !== window.parent) return;
-
     const data = e.data;
     if (!data || !worker) return;
+    if (data.type !== 'EVALUATE' && data.type !== 'STOP') return;
 
     if (data.type === 'EVALUATE') {
       const req = {

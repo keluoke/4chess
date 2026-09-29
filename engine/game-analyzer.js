@@ -730,10 +730,15 @@ export class GameAnalyzer {
           });
         }
 
-        // Fast evaluation with depth 6, 1500ms timeout, and multipv 1
-        const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 1500, 1);
+        // Fast evaluation with depth 6, 3500ms timeout, and multipv 1
+        const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 3500, 1);
         if (!evalRes) {
           evalFailures++;
+          // Reset engine state so timeout doesn't cascade to next move
+          if (this.stockfish?.stop) {
+            this.stockfish.stop();
+          }
+          await new Promise(r => setTimeout(r, 20));
         }
         evals.push(evalRes);
       }

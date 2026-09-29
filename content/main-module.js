@@ -73,6 +73,17 @@ export async function initMaiaExtension() {
       if (!moves || moves.length === 0) {
         throw new Error(panel.lang === 'zh' ? '当前页面未检测到棋步记录，请在对局或复盘页面使用。' : 'No move list detected on current page.');
       }
+
+      // Stop any running single-move Stockfish background search and ensure engine is ready
+      if (engine.stockfishInBrowser) {
+        if (!engine.stockfishInBrowser.isReady) {
+          await engine.stockfishInBrowser.initialize();
+        } else {
+          engine.stockfishInBrowser.stop();
+        }
+      }
+      await new Promise(r => setTimeout(r, 60));
+
       const reviewResult = await analyzer.analyzeGame(moves, {
         depth: 6,
         elo: panel.currentElo,
