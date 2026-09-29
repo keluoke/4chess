@@ -100,6 +100,9 @@ class AnalysisStudioApp {
       btnSubmitPgn: document.getElementById('btn-submit-pgn'),
       sampleFischer: document.getElementById('sample-fischer'),
       sampleKasparov: document.getElementById('sample-kasparov'),
+      dropOverlay: document.getElementById('drag-drop-overlay'),
+      fileInput: document.getElementById('pgn-file-input'),
+      btnUploadFile: document.getElementById('btn-upload-file'),
       // Three-way comparison panel
       comparePanel: document.getElementById('compare-panel'),
       compareEngineSan: document.getElementById('compare-engine-san'),
@@ -197,11 +200,63 @@ class AnalysisStudioApp {
       if (e.target === this.el.pgnModal) this.el.pgnModal.classList.remove('open');
     });
 
-    this.el.btnSubmitPgn.addEventListener('click', () => {
-      const pgn = this.el.pgnInput.value.trim();
-      if (!pgn) return;
+    this.el.btnSubmitPgn.addEventListener('click', async () => {
+      const input = this.el.pgnInput.value.trim();
+      if (!input) return;
       this.el.pgnModal.classList.remove('open');
-      this.loadGameFromPgn(pgn);
+      await this.smartLoadInput(input);
+    });
+
+    // File Upload Button & Input
+    if (this.el.btnUploadFile && this.el.fileInput) {
+      this.el.btnUploadFile.addEventListener('click', () => {
+        this.el.fileInput.click();
+      });
+      this.el.fileInput.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          this.handleFileUpload(file);
+          this.el.pgnModal.classList.remove('open');
+          this.el.fileInput.value = '';
+        }
+      });
+    }
+
+    // Global Drag & Drop for PGN files
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      if (this.el.dropOverlay) this.el.dropOverlay.style.display = 'flex';
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
+        if (this.el.dropOverlay) this.el.dropOverlay.style.display = 'none';
+      }
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (this.el.dropOverlay) this.el.dropOverlay.style.display = 'none';
+      const file = e.dataTransfer?.files?.[0];
+      if (file) {
+        this.handleFileUpload(file);
+        return;
+      }
+      const droppedText = e.dataTransfer?.getData('text');
+      if (droppedText) {
+        this.smartLoadInput(droppedText);
+      }
+    });
+
+    // Global Paste (Cmd+V / Ctrl+V anywhere outside input/textarea)
+    window.addEventListener('paste', (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (['input', 'textarea'].includes(tag)) return;
+      const text = e.clipboardData?.getData('text')?.trim();
+      if (text) {
+        this.smartLoadInput(text);
+      }
     });
 
     this.el.sampleFischer.addEventListener('click', () => {
@@ -278,10 +333,190 @@ class AnalysisStudioApp {
     }
   }
 
+  showToast(message, duration = 3000) {
+    let toast = document.getElementById('studio-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'studio-toast';
+      toast.className = 'studio-toast';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, duration);
+  }
+
+  handleFileUpload(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result;
+      if (typeof content === 'string') {
+        this.smartLoadInput(content, file.name);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  async smartLoadInput(input, sourceName = '') {
+    if (!input || typeof input !== 'string') return false;
+    const text = input.trim();
+    if (!text) return false;
+
+    // 1. Detect Lichess Game URL
+    // e.g. https://lichess.org/aBcDeFgH or lichess.org/aBcDeFgH/white
+    const lichessMatch = text.match(/(?:https?:\/\/)?(?:www\.)?lichess\.org\/([a-zA-Z0-9]{8,12})/i);
+    if (lichessMatch) {
+      const gameId = lichessMatch[1].slice(0, 8);
+      this.showToast(`🔍 正在从 Lichess 获取对局 (${gameId})...`, 5000);
+      try {
+        const resp = await fetch(`https://lichess.org/game/export/${gameId}?clocks=true&evals=true`);
+        if (resp.ok) {
+          const pgn = await resp.text();
+          if (pgn && pgn.includes('1.')) {
+            this.showToast(`✅ 成功载入 Lichess 对局 (${gameId})`);
+            this.loadGameFromPgn(pgn);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('[Analysis Studio] Lichess export error:', err);
+      }
+      this.showToast(`❌ 未能从 Lichess 获取该对局，请确认对局公开或直接粘贴 PGN`);
+      return false;
+    }
+
+    // 2. Detect Chess.com Game URL
+    // e.g. https://www.chess.com/game/live/12345678 or chess.com/game/daily/12345678
+    const chesscomMatch = text.match(/(?:https?:\/\/)?(?:www\.)?chess\.com\/game\/(live|daily)\/([0-9]+)/i);
+    if (chesscomMatch) {
+      const type = chesscomMatch[1];
+      const gameId = chesscomMatch[2];
+      this.showToast(`🔍 正在从 Chess.com 获取对局 (${gameId})...`, 5000);
+
+      // Try via Cloudflare Pages Function proxy (/api/chesscom?id=...&type=...)
+      try {
+        const proxyUrl = `/api/chesscom?id=${gameId}&type=${type}`;
+        const resp = await fetch(proxyUrl);
+        if (resp.ok) {
+          const data = await resp.json();
+          const pgn = data.game?.pgn || data.pgn;
+          if (pgn) {
+            this.showToast(`✅ 成功载入 Chess.com 对局 (${gameId})`);
+            this.loadGameFromPgn(pgn);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('[Analysis Studio] Chess.com proxy error:', err);
+      }
+
+      // If running inside Chrome extension, fallback to background script
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        try {
+          const res = await new Promise(res => {
+            chrome.runtime.sendMessage({ type: 'FETCH_CHESSCOM_GAME_PGN', gameId, gameType: type }, res);
+          });
+          if (res?.ok && res.pgn) {
+            this.showToast(`✅ 成功载入 Chess.com 对局 (${gameId})`);
+            this.loadGameFromPgn(res.pgn);
+            return true;
+          }
+        } catch (e) {}
+      }
+
+      this.showToast(`⚠️ Chess.com 对局接口受限，建议在对局页面直接点击插件复盘或复制 PGN`);
+      return false;
+    }
+
+    // 3. Detect FEN Position string
+    const fenParts = text.split(/\s+/);
+    if (fenParts.length >= 2 && fenParts[0].split('/').length === 8) {
+      try {
+        this.moves = [];
+        this.positions = [{
+          ply: 0,
+          moveNumber: 1,
+          turn: fenParts[1] === 'b' ? 'b' : 'w',
+          san: 'FEN',
+          fen: text,
+          moveEl: null
+        }];
+        this.boardUI.setPosition(text, null);
+        this.el.metaWhite.textContent = '⚪ 自由局面分析';
+        this.el.metaBlack.textContent = '⚫ FEN';
+        this.el.metaResult.textContent = '*';
+        this.el.moveCountBadge.textContent = '0';
+        this.renderMoveList();
+        this.goToPly(0);
+        this.showToast('♟️ 已载入 FEN 局面');
+        return true;
+      } catch (e) {
+        console.warn('[Analysis Studio] FEN load error:', e);
+      }
+    }
+
+    // 4. Default: Standard PGN text
+    if (text.includes('1.') || text.includes('[Event')) {
+      const label = sourceName ? ` (${sourceName})` : '';
+      this.loadGameFromPgn(text);
+      this.showToast(`♟️ 成功载入 PGN 棋谱${label}`);
+      return true;
+    }
+
+    this.showToast('⚠️ 未能识别该内容，请确认是否为有效 PGN 文本或对局链接');
+    return false;
+  }
+
   async loadInitialGame() {
     let loaded = false;
 
-    // 1. Try reading from chrome.storage.local
+    // 1. Try URL parameters (Hash # or Search ?)
+    // Hash is ideal: keeps entire PGN client-side without sending to Cloudflare/CDN servers
+    try {
+      const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+      const hashParams = new URLSearchParams(hash);
+      const searchParams = new URLSearchParams(window.location.search);
+
+      const pgnParam = hashParams.get('pgn') || searchParams.get('pgn');
+      const urlParam = hashParams.get('url') || searchParams.get('url');
+      const eloParam = hashParams.get('elo') || searchParams.get('elo');
+
+      if (eloParam) {
+        const parsedElo = parseInt(eloParam, 10);
+        if ([1100, 1500, 1900].includes(parsedElo)) {
+          this.currentElo = parsedElo;
+          if (this.el.eloSelector) this.el.eloSelector.value = String(parsedElo);
+        }
+      }
+
+      if (pgnParam) {
+        const decodedPgn = decodeURIComponent(pgnParam);
+        if (decodedPgn) {
+          this.loadGameFromPgn(decodedPgn);
+          loaded = true;
+          return;
+        }
+      }
+
+      if (urlParam) {
+        const decodedUrl = decodeURIComponent(urlParam);
+        if (decodedUrl) {
+          const ok = await this.smartLoadInput(decodedUrl);
+          if (ok) {
+            loaded = true;
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Analysis Studio] Error parsing URL parameters:', e);
+    }
+
+    // 2. Try reading from chrome.storage.local (when opened from Chrome extension)
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
         const stored = await new Promise(res => {
@@ -290,7 +525,7 @@ class AnalysisStudioApp {
 
         if (stored?.defaultElo) {
           this.currentElo = stored.defaultElo;
-          this.el.eloSelector.value = String(this.currentElo);
+          if (this.el.eloSelector) this.el.eloSelector.value = String(this.currentElo);
         }
 
         const game = stored?.active_analysis_game;
@@ -303,7 +538,7 @@ class AnalysisStudioApp {
       }
     }
 
-    // 2. Fallback to Fischer sample game
+    // 3. Fallback to Fischer sample game
     if (!loaded) {
       this.loadGameFromPgn(SAMPLE_GAMES.fischer);
     }

@@ -115,9 +115,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'OPEN_ANALYSIS_TAB') {
     const gameData = msg.gameData || {};
-    chrome.storage.local.set({ active_analysis_game: gameData }, () => {
-      chrome.tabs.create({ url: chrome.runtime.getURL('analysis/index.html') }, (tab) => {
-        sendResponse({ ok: true, tabId: tab?.id });
+    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl'], (settings) => {
+      chrome.storage.local.set({ active_analysis_game: gameData }, () => {
+        let targetUrl = chrome.runtime.getURL('analysis/index.html');
+        if (settings?.useWebReview && gameData.pgn) {
+          const base = (settings.webReviewBaseUrl || 'https://4chess.cc/analysis/').replace(/\/$/, '');
+          const pgnParam = encodeURIComponent(gameData.pgn);
+          targetUrl = `${base}/#pgn=${pgnParam}`;
+        }
+        chrome.tabs.create({ url: targetUrl }, (tab) => {
+          sendResponse({ ok: true, tabId: tab?.id });
+        });
       });
     });
     return true;

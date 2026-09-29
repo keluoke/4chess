@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Maia 3 · 复盘分析</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#121826">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" href="../icons/icon48.png">
+  <link rel="apple-touch-icon" href="../icons/icon128.png">
   <link rel="stylesheet" href="analysis.css">
 </head>
 <body>
@@ -165,24 +171,51 @@
     </section>
   </main>
 
+  <!-- Drag & Drop Overlay -->
+  <div class="drag-drop-overlay" id="drag-drop-overlay" style="display: none;">
+    <div class="drag-drop-card">
+      <span style="font-size: 38px;">♟️</span>
+      <div style="font-size: 16px; font-weight: 700; color: #fff; margin-top: 6px;">释放以载入 PGN 棋谱</div>
+      <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">支持 .pgn 棋谱文件与文本拖拽</div>
+    </div>
+  </div>
+
   <!-- PGN Import Modal -->
   <div class="modal-overlay" id="pgn-modal">
     <div class="modal-card">
-      <h3 class="modal-title">导入 PGN 棋谱</h3>
-      <textarea id="pgn-input" class="pgn-textarea" placeholder="在此粘贴 PGN 文本，例如：
-1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 ..."></textarea>
-      <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
-        <span>示例棋谱:</span>
-        <button type="button" class="btn-header" id="sample-fischer" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
-        <button type="button" class="btn-header" id="sample-kasparov" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫不朽对局</button>
+      <h3 class="modal-title">导入棋谱与对局</h3>
+      <textarea id="pgn-input" class="pgn-textarea" placeholder="在此粘贴：
+1. PGN 棋谱文本 或 FEN 局面
+2. Lichess 对局网址 (如 https://lichess.org/aBcDeFgH)
+3. Chess.com 对局网址 (如 https://www.chess.com/game/live/12345678)
+或直接将本地 .pgn 文件拖拽至窗口任意位置"></textarea>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+        <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
+          <span>示例:</span>
+          <button type="button" class="btn-header" id="sample-fischer" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
+          <button type="button" class="btn-header" id="sample-kasparov" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫对局</button>
+        </div>
+        <div>
+          <input type="file" id="pgn-file-input" accept=".pgn,.txt" style="display: none;">
+          <button type="button" class="btn-header" id="btn-upload-file" style="height: 24px; padding: 0 10px; font-size: 11px;">📁 选择 PGN 文件</button>
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-header" id="btn-cancel-pgn">取消</button>
-        <button type="button" class="btn-header btn-primary" id="btn-submit-pgn">加载分析</button>
+        <button type="button" class="btn-header btn-primary" id="btn-submit-pgn">智能解析并载入</button>
       </div>
     </div>
   </div>
 
   <script type="module" src="analysis.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((e) => {
+          console.debug('[PWA] SW register skipped:', e);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

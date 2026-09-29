@@ -1,0 +1,3 @@
+# Cloudflare Pages Redirects
+# When visiting root domain (e.g. https://4chess.cc/), redirect directly to the review studio
+/ /analysis/ 302
