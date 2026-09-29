@@ -27,6 +27,13 @@ export class GameAnalyzer {
   static parsePgn(pgnText) {
     if (!pgnText || typeof pgnText !== 'string') return [];
 
+    // Extract starting FEN if specified via [FEN "..."] header
+    let startFen = null;
+    const fenMatch = pgnText.match(/\[FEN\s+"([^"]+)"\]/i);
+    if (fenMatch && fenMatch[1]) {
+      startFen = fenMatch[1].trim();
+    }
+
     // Strip comments {...}
     let clean = pgnText.replace(/\{[^}]*\}/g, '');
     // Strip metadata headers [...]
@@ -57,6 +64,10 @@ export class GameAnalyzer {
           element: null
         });
       }
+    }
+
+    if (startFen) {
+      moves.startFen = startFen;
     }
 
     return moves;
@@ -462,14 +473,20 @@ export class GameAnalyzer {
    * Replays moves to construct position chain
    */
   static buildPositionChain(moves) {
-    const chess = new ChessBoard();
+    const startFen = moves?.startFen || ChessBoard.INITIAL_FEN;
+    const chess = new ChessBoard(startFen);
     const positions = [{
       ply: 0,
-      turn: 'w',
+      moveNumber: chess.fullMoves,
+      turn: chess.turn,
       fen: chess.getFen(),
       san: 'Start',
       moveEl: null
     }];
+
+    let isPartial = false;
+    let stoppedAtPly = null;
+    let unparsedSan = null;
 
     for (let i = 0; i < moves.length; i++) {
       const mItem = moves[i];
@@ -482,14 +499,19 @@ export class GameAnalyzer {
 
       if (!matched) {
         console.warn(`[GameAnalyzer] Move replay stopped at ply ${i + 1}: ${mItem.san}`);
+        isPartial = true;
+        stoppedAtPly = i + 1;
+        unparsedSan = mItem.san;
         break;
       }
 
+      const sidePlayed = chess.turn;
+      const moveNumber = chess.fullMoves;
       chess.makeMove(matched);
       positions.push({
         ply: i + 1,
-        moveNumber: Math.floor(i / 2) + 1,
-        turn: (i % 2 === 0) ? 'w' : 'b',
+        moveNumber,
+        turn: sidePlayed,
         san: mItem.san,
         uci: matched.uci || `${matched.fromSq || matched.from}${matched.toSq || matched.to}`,
         from: matched.fromSq || matched.from,
@@ -499,35 +521,55 @@ export class GameAnalyzer {
       });
     }
 
+    positions.isPartial = isPartial;
+    positions.stoppedAtPly = stoppedAtPly;
+    positions.unparsedSan = unparsedSan;
+
     return positions;
   }
 
   static memoryCache = new Map();
 
+  static hashString(str) {
+    let h1 = 0xdeadbeef, h2 = 0x41c64e6d;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+  }
+
   /**
    * Generates a stable unique cache key for the current game
    */
-  static getGameKey(moves) {
+  static getGameKey(moves, options = {}) {
+    const { depth = 6, elo = 1900 } = options;
+    const startFen = moves?.startFen || 'start';
+    const moveSans = (moves || []).map(m => m.san || '').join(',');
+    const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|sf19lite`);
+
     if (typeof window !== 'undefined') {
       const href = window.location.href;
       // Lichess game ID: 8 characters (e.g. lichess.org/38uTqNdksSRF -> lichess_38uTqNdk)
       if (href.includes('lichess.org')) {
         const m = window.location.pathname.match(/^\/([a-zA-Z0-9]{8})/);
-        if (m && m[1]) return `lichess_${m[1]}`;
+        if (m && m[1]) return `lichess_${m[1]}_${hash.slice(0, 10)}`;
       }
       // Chess.com game ID (e.g. /game/live/184446398482 or /analysis/game/live/184446398482)
       if (href.includes('chess.com')) {
         const m = window.location.pathname.match(/\b(\d{8,15})\b/);
-        if (m && m[1]) return `chesscom_${m[1]}`;
+        if (m && m[1]) return `chesscom_${m[1]}_${hash.slice(0, 10)}`;
       }
     }
 
-    // Universal fallback: deterministic signature from moves SAN
+    // Universal fallback: deterministic 64-bit hash over moves sequence & params
     if (moves && moves.length > 0) {
-      const total = moves.length;
-      const head = moves.slice(0, 5).map(m => m.san).join('');
-      const tail = moves.slice(-5).map(m => m.san).join('');
-      return `sig_${total}_${head}_${tail}`;
+      return `game_${moves.length}_${hash.slice(0, 12)}`;
     }
 
     return null;
@@ -629,7 +671,7 @@ export class GameAnalyzer {
       onProgress = null
     } = options;
 
-    const cacheKey = GameAnalyzer.getGameKey(moves);
+    const cacheKey = GameAnalyzer.getGameKey(moves, { depth, elo });
 
     // 1. Instant Cache Hit Check (0ms response)
     if (!forceRefresh && cacheKey) {
@@ -662,12 +704,20 @@ export class GameAnalyzer {
 
       const totalPositions = positions.length;
       const evals = [];
+      let evalFailures = 0;
 
       // Step 1: Evaluate each position with Stockfish 19
       for (let i = 0; i < totalPositions; i++) {
         if (this.isCancelled) {
           this.isAnalyzing = false;
           return null;
+        }
+
+        // Live game lockdown check
+        if (typeof window !== 'undefined' && window.FairPlayGuard && window.FairPlayGuard.isLiveGameInProgress()) {
+          this.isCancelled = true;
+          this.isAnalyzing = false;
+          throw new Error('公平竞技保护生效中，禁止进行复盘分析');
         }
 
         if (onProgress) {
@@ -682,11 +732,15 @@ export class GameAnalyzer {
 
         // Fast evaluation with depth 6, 1500ms timeout, and multipv 1
         const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 1500, 1);
-        evals.push(evalRes || {
-          scoreCp: 0,
-          score: '0.00',
-          bestMove: { san: '?' }
-        });
+        if (!evalRes) {
+          evalFailures++;
+        }
+        evals.push(evalRes);
+      }
+
+      // If failure rate > 30%, fail cleanly instead of masquerading
+      if (evalFailures > 0 && (evalFailures / totalPositions) > 0.3) {
+        throw new Error(`引擎计算超时或无响应，失败率过高 (${evalFailures}/${totalPositions})，无法生成可信复盘`);
       }
 
       // Step 2: Compute centipawn loss per move
@@ -706,39 +760,42 @@ export class GameAnalyzer {
         const evalBefore = evals[i - 1];
         const evalAfter = evals[i];
 
-        const turn = posAfter.turn; // 'w' or 'b' (side that made this move)
+        const turn = posAfter.turn; // side that made this move ('w' or 'b')
         const playedSan = posAfter.san;
         const bestSan = evalBefore?.bestMove?.san || '?';
 
-        // Check if played move is the best move
-        const isBest = (playedSan.replace(/[+#?!]/g, '') === bestSan.replace(/[+#?!]/g, ''));
-        
         let lossCp = 0;
-        if (!isBest && evalBefore && evalAfter) {
-          // Clamp scores to [-1000, 1000] to handle checkmates smoothly
-          const cpBefore = Math.max(-1000, Math.min(1000, evalBefore.scoreCp || 0));
-          const cpAfter = Math.max(-1000, Math.min(1000, evalAfter.scoreCp || 0));
-          lossCp = Math.max(0, cpBefore + cpAfter);
-        }
-
-        if (turn === 'w') {
-          totalLossWhite += lossCp;
-          countWhite++;
-        } else {
-          totalLossBlack += lossCp;
-          countBlack++;
-        }
-
         let severity = 'good';
-        if (lossCp >= 200) {
-          severity = 'blunder'; // 大漏 >= 2.00 兵
-          blundersCount++;
-        } else if (lossCp >= 100) {
-          severity = 'mistake'; // 失误 >= 1.00 兵
-          mistakesCount++;
-        } else if (lossCp >= 40) {
-          severity = 'inaccuracy'; // 疑问手 >= 0.40 兵
-          inaccuraciesCount++;
+
+        if (evalBefore && evalAfter) {
+          const isBest = (bestSan !== '?') && (playedSan.replace(/[+#?!]/g, '') === bestSan.replace(/[+#?!]/g, ''));
+          if (!isBest) {
+            // Clamp scores to [-1000, 1000] to handle checkmates smoothly
+            const cpBefore = Math.max(-1000, Math.min(1000, evalBefore.scoreCp || 0));
+            const cpAfter = Math.max(-1000, Math.min(1000, evalAfter.scoreCp || 0));
+            lossCp = Math.max(0, cpBefore + cpAfter);
+          }
+
+          if (turn === 'w') {
+            totalLossWhite += lossCp;
+            countWhite++;
+          } else {
+            totalLossBlack += lossCp;
+            countBlack++;
+          }
+
+          if (lossCp >= 200) {
+            severity = 'blunder'; // 大漏 >= 2.00 兵
+            blundersCount++;
+          } else if (lossCp >= 100) {
+            severity = 'mistake'; // 失误 >= 1.00 兵
+            mistakesCount++;
+          } else if (lossCp >= 40) {
+            severity = 'inaccuracy'; // 疑问手 >= 0.40 兵
+            inaccuraciesCount++;
+          }
+        } else {
+          severity = 'unknown';
         }
 
         const lossPawns = (lossCp / 100).toFixed(2);
@@ -757,8 +814,8 @@ export class GameAnalyzer {
           lossCp,
           lossPawns: `-${lossPawns}`,
           severity,
-          evalBefore: evalBefore.score,
-          evalAfter: evalAfter.score,
+          evalBefore: evalBefore ? evalBefore.score : '?',
+          evalAfter: evalAfter ? evalAfter.score : '?',
           fenBefore: posBefore.fen,
           fenAfter: posAfter.fen,
           element: posAfter.moveEl,
@@ -793,10 +850,15 @@ export class GameAnalyzer {
             const pred = await this.maiaEngine.predict(moment.fenBefore, elo);
             if (pred && pred.moves) {
               const cleanPlayed = moment.san.replace(/[+#?!]/g, '');
-              const matched = pred.moves.find(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
-              if (matched) {
-                moment.isHumanTrap = true;
-                moment.humanProbability = matched.probability;
+              const matchedIdx = pred.moves.findIndex(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
+              if (matchedIdx !== -1) {
+                const matched = pred.moves[matchedIdx];
+                const prob = typeof matched.prob === 'number' ? matched.prob : 0;
+                moment.humanProbability = prob;
+                // Genuine Human Trap: Maia strongly favors this blunder (Rank #1 or #2, or >= 15% probability)
+                if (matchedIdx <= 1 || prob >= 15.0) {
+                  moment.isHumanTrap = true;
+                }
               }
             }
           } catch (e) {
@@ -807,6 +869,8 @@ export class GameAnalyzer {
 
       const result = {
         totalMoves: positions.length - 1,
+        isPartial: !!positions.isPartial,
+        stoppedAtPly: positions.stoppedAtPly || null,
         blundersCount,
         mistakesCount,
         inaccuraciesCount,
@@ -819,8 +883,8 @@ export class GameAnalyzer {
       this.lastReviewResult = result;
       this.isAnalyzing = false;
 
-      // Save to Persistent Cache
-      if (cacheKey) {
+      // Save to Persistent Cache ONLY if complete and no engine evaluation failures occurred
+      if (cacheKey && !positions.isPartial && evalFailures === 0) {
         await GameAnalyzer.saveCachedReview(cacheKey, result);
       }
 

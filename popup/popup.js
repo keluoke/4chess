@@ -53,8 +53,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 4. Load saved preferences
-  chrome.storage.local.get(['defaultElo', 'preferredBackend', 'cloudflareCdnUrl'], (res) => {
-    if (res.defaultElo && eloSelect) eloSelect.value = res.defaultElo;
+  chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'preferredBackend', 'cloudflareCdnUrl'], (res) => {
+    const elo = res.defaultElo || res.maia3_target_elo || 1900;
+    if (eloSelect) eloSelect.value = elo;
     if (res.preferredBackend && backendSelect) backendSelect.value = res.preferredBackend;
     const currentUrl = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_23m.bin';
     if (cdnInput) cdnInput.value = currentUrl;
@@ -74,7 +75,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. Save changes
   if (eloSelect) {
     eloSelect.addEventListener('change', (e) => {
-      chrome.storage.local.set({ defaultElo: parseInt(e.target.value, 10) });
+      const val = parseInt(e.target.value, 10);
+      chrome.storage.local.set({ defaultElo: val, maia3_target_elo: val });
+      if (chrome.tabs && chrome.tabs.query) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTab = tabs?.[0];
+          if (activeTab?.id) {
+            chrome.tabs.sendMessage(activeTab.id, { type: 'SET_ELO', elo: val }, () => {
+              if (chrome.runtime.lastError) {}
+            });
+          }
+        });
+      }
     });
   }
 

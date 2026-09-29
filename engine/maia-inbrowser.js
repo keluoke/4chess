@@ -30,7 +30,8 @@ export class MaiaInBrowserEngine {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
-      let arrayBuffer = null;
+      try {
+        let arrayBuffer = null;
 
       if (urlOrBuffer instanceof ArrayBuffer) {
         arrayBuffer = urlOrBuffer;
@@ -194,7 +195,11 @@ export class MaiaInBrowserEngine {
       this.isReady = true;
       console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource})`);
       return true;
-    })();
+    } catch (err) {
+      this.initPromise = null;
+      throw err;
+    }
+  })();
 
     return this.initPromise;
   }
@@ -658,7 +663,8 @@ export class MaiaInBrowserEngine {
     const sumL = expL.reduce((a, b) => a + b, 0);
     const probs = expL.map(e => e / sumL);
 
-    // Format scored moves
+    // Format scored moves & square heatmap
+    // Square heatmap represents candidate move destination square probability aggregation (sum of move probabilities targeting each square)
     const scored = [];
     const squareWeights = new Float32Array(64);
 

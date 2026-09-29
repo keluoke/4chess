@@ -64,11 +64,13 @@ result.keyMoments.forEach((km, i) => {
 });
 
 console.log('\n--- Testing GameAnalyzer Cache Hit ---');
-const cacheKey = GameAnalyzer.getGameKey(sampleMoves);
+const cacheKey = GameAnalyzer.getGameKey(sampleMoves, { depth: 8, elo: 1500 });
 console.log('Deterministic game key:', cacheKey);
 
 let hitCache = false;
 const cachedResult = await analyzer.analyzeGame(sampleMoves, {
+  depth: 8,
+  elo: 1500,
   onProgress: (prog) => {
     if (prog.fromCache) hitCache = true;
   }
@@ -81,9 +83,20 @@ if (hitCache && cachedResult && cachedResult.totalMoves === 10) {
   process.exit(1);
 }
 
+// Verify different parameters yield different cache keys
+const keyDifferentElo = GameAnalyzer.getGameKey(sampleMoves, { depth: 8, elo: 1900 });
+if (cacheKey !== keyDifferentElo) {
+  console.log('✅ Cache key differentiates by Elo/Depth parameters!');
+} else {
+  console.error('❌ Cache key collided across different Elo!');
+  process.exit(1);
+}
+
 console.log('\n--- Testing forceRefresh ---');
 let reevaluated = false;
 await analyzer.analyzeGame(sampleMoves, {
+  depth: 8,
+  elo: 1500,
   forceRefresh: true,
   onProgress: (prog) => {
     if (prog.phase === 'evaluating') reevaluated = true;
@@ -93,6 +106,63 @@ if (reevaluated) {
   console.log('✅ forceRefresh successfully bypassed cache and re-analyzed!');
 } else {
   console.error('❌ forceRefresh failed to re-evaluate!');
+  process.exit(1);
+}
+
+console.log('\n--- Testing Custom Start FEN in PGN ---');
+import { ChessBoard } from '../engine/chess-core.js';
+
+const customPgn = `[Event "Puzzle"]
+[FEN "r1bqk2r/pppp1ppp/2n5/4p3/1bB1P1n1/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 1 6"]
+
+6. O-O d6 7. Nd5`;
+
+const customMoves = GameAnalyzer.parsePgn(customPgn);
+if (customMoves.startFen && customMoves.length === 3) {
+  console.log('✅ [FEN "..."] header parsed properly:', customMoves.startFen);
+  const customPositions = GameAnalyzer.buildPositionChain(customMoves);
+  if (customPositions.length === 4 && customPositions[0].fen.startsWith('r1bqk2r')) {
+    console.log('✅ Custom start position chained accurately:', customPositions[0].fen);
+  } else {
+    console.error('❌ Custom position chain failed:', customPositions);
+    process.exit(1);
+  }
+} else {
+  console.error('❌ parsePgn failed to retain startFen:', customMoves);
+  process.exit(1);
+}
+
+console.log('\n--- Testing Castling Rules with Missing Rooks/Kings ---');
+// Board with white king at e1 but NO rooks at a1 or h1
+const boardNoRook = new ChessBoard('4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1');
+if (!boardNoRook.castling.K && !boardNoRook.castling.Q && !boardNoRook.castling.k && !boardNoRook.castling.q) {
+  console.log('✅ ChessBoard.load invalidated impossible castling rights on piece-less board!');
+} else {
+  console.error('❌ Failed to invalidate castling rights on piece-less board:', boardNoRook.castling);
+  process.exit(1);
+}
+
+const legals = boardNoRook.getLegalMoves();
+const castlingMoves = legals.filter(m => m.castling || m.san === 'O-O' || m.san === 'O-O-O');
+if (castlingMoves.length === 0) {
+  console.log('✅ No pseudo-legal castling moves generated without rooks!');
+} else {
+  console.error('❌ Generated illegal castling moves:', castlingMoves);
+  process.exit(1);
+}
+
+console.log('\n--- Testing Partial Review Replay Flags ---');
+const illegalMoves = [
+  { san: 'e4' },
+  { san: 'e5' },
+  { san: 'Qh5' },
+  { san: 'Ke2??' } // Illegal move for Black at ply 4
+];
+const partialPositions = GameAnalyzer.buildPositionChain(illegalMoves);
+if (partialPositions.isPartial && partialPositions.stoppedAtPly === 4) {
+  console.log('✅ Partial replay correctly flagged at ply 4 without breaking!');
+} else {
+  console.error('❌ Partial replay flag missing:', partialPositions.isPartial, partialPositions.stoppedAtPly);
   process.exit(1);
 }
 

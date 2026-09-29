@@ -24,100 +24,124 @@ export class FairPlayGuard {
     const path = window.location.pathname;
 
     // ------------------------------------------------------------------
-    // Lichess.org Checks
+    // 1. Whitelisted Safe Environments (Always Safe: Non-Game Analysis/Study)
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
-      // 1. Explicit analysis, study, or editor are ALWAYS safe
-      if (path.startsWith('/analysis') || path.startsWith('/study') || path.startsWith('/editor') || path.startsWith('/practice')) {
-        return false;
+      if (path.startsWith('/analysis') ||
+          path.startsWith('/study') ||
+          path.startsWith('/editor') ||
+          path.startsWith('/practice') ||
+          path.startsWith('/training') ||
+          path.startsWith('/learn') ||
+          path.startsWith('/puzzle') ||
+          path.startsWith('/tv')) {
+        return false; // Whitelisted safe
       }
-
-      // 2. Check if game is already concluded
-      const isConcluded = document.querySelector('.result-wrap, .game__meta .status, .analyse__controls, .crosstable__match');
-      if (isConcluded) {
-        return false;
-      }
-
-      // 3. Active in-game indicators: active resign/draw buttons or ticking clocks
-      const hasResignBtn = document.querySelector('button.resign, .game__controls .resign, button[data-action="resign"]');
-      const hasDrawBtn = document.querySelector('button.draw-yes, .game__controls .draw-yes');
-      const hasRunningClock = document.querySelector('.rclock-running');
-
-      if (hasResignBtn || hasDrawBtn || hasRunningClock) {
-        return true; // LIVE GAME ACTIVE!
-      }
-
-      return false;
     }
 
-    // ------------------------------------------------------------------
-    // Chess.com Checks
-    // ------------------------------------------------------------------
     if (host.includes('chess.com')) {
-      // 1. Analysis, Explorer, Puzzles, Lessons, Library are ALWAYS safe
       if (path.startsWith('/analysis') ||
           path.startsWith('/puzzles') ||
           path.startsWith('/library') ||
           path.startsWith('/lessons') ||
           path.startsWith('/explorer') ||
-          path.startsWith('/classroom')) {
-        return false;
+          path.startsWith('/classroom') ||
+          path.startsWith('/vision') ||
+          path.startsWith('/drills')) {
+        return false; // Whitelisted safe
       }
+    }
 
-      // 2. Archived game records (/game/live/:id and /game/daily/:id)
-      if (path.startsWith('/game/live/') || path.startsWith('/game/daily/')) {
-        // If an active countdown clock is physically running, it is an active live match
-        const hasActiveRunningClock = document.querySelector('.clock-running, .clock-component.clock-running');
-        if (hasActiveRunningClock) {
-          return true;
-        }
-        return false; // Concluded historical archive
-      }
-
-      // 3. Check if game has already concluded
-      // Check meta description for termination text
-      const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
-      if (/won by|drawn by|won on time|won on disconnection|resignation|checkmate/i.test(metaDesc)) {
-        return false; // Concluded game
-      }
-
-      // Check Game Over modal or Review buttons
-      const isGameOver = document.querySelector(
-        '.game-over-modal, .game-result-component, .live-game-over-component, ' +
-        '[data-cy="game-review-button"], .game-review-buttons-review, .game-over-dialog, ' +
-        '.game-over-header-component, [data-cy="game-over-modal"]'
+    // ------------------------------------------------------------------
+    // 2. Active In-Game Controls (Strict Highest Priority - Immediate Lock)
+    // Under NO circumstances may completion indicators override active game controls!
+    // ------------------------------------------------------------------
+    if (host.includes('lichess.org')) {
+      const hasResignBtn = document.querySelector(
+        'button.resign, .game__controls .resign, button[data-action="resign"], [data-hint*="Resign" i], [data-hint*="认输" i]'
       );
-      if (isGameOver) {
-        return false; // Concluded game
-      }
+      const hasDrawBtn = document.querySelector(
+        'button.draw-yes, .game__controls .draw-yes, button[data-action="draw-yes"]'
+      );
+      const hasRunningClock = document.querySelector('.rclock-running, .rclock .running');
+      const hasCanMove = document.querySelector('cg-board.can-move, .your-turn');
 
-      // 4. Check active in-game controls (including move-0 Abort button):
+      if (hasResignBtn || hasDrawBtn || hasRunningClock || hasCanMove) {
+        return true; // LIVE GAME ACTIVE!
+      }
+    }
+
+    if (host.includes('chess.com')) {
       const hasAbortBtn = document.querySelector(
-        'button[aria-label="Abort"], button[aria-label="放弃对局"], button[aria-label="取消"], ' +
+        'button[aria-label*="Abort" i], button[aria-label*="放弃" i], button[aria-label*="取消" i], ' +
         '[data-cy="abort-button"], button.game-controls-abort, .abort-button-component, ' +
         '.game-controls-button[aria-label*="Abort" i], .game-controls-button[aria-label*="放弃" i]'
       );
       const hasResignBtn = document.querySelector(
-        'button[aria-label="Resign"], button[aria-label="认输"], .resign-button-component, ' +
-        'button.game-controls-resign, [data-cy="resign-button"], .game-controls-button[aria-label="Resign"], ' +
-        '.game-controls-button[aria-label="认输"], button.resign'
+        'button[aria-label*="Resign" i], button[aria-label*="认输" i], .resign-button-component, ' +
+        'button.game-controls-resign, [data-cy="resign-button"], .game-controls-button[aria-label*="Resign" i], ' +
+        '.game-controls-button[aria-label*="认输" i], button.resign'
       );
       const hasDrawBtn = document.querySelector(
-        'button[aria-label="Draw"], button[aria-label="和棋"], button[aria-label="Offer Draw"], ' +
-        'button[aria-label="提议和棋"], .draw-button-component, [data-cy="draw-button"], ' +
-        '.game-controls-button[aria-label="Draw"], .game-controls-button[aria-label="和棋"], button.draw-yes'
+        'button[aria-label*="Draw" i], button[aria-label*="和棋" i], button[aria-label*="Offer Draw" i], ' +
+        'button[aria-label*="提议和棋" i], .draw-button-component, [data-cy="draw-button"], ' +
+        '.game-controls-button[aria-label*="Draw" i], .game-controls-button[aria-label*="和棋" i], button.draw-yes'
       );
       const hasRunningClock = document.querySelector(
         '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
       );
-      const hasPlayClocks = (path.startsWith('/play') || path.startsWith('/live')) && document.querySelector('.clock-component, .clock-bottom, .clock-top, .player-component .clock');
+      const hasCanMove = document.querySelector('wc-chess-board[can-move], chess-board[can-move]');
 
-      // If active play controls exist and no game-over modal, a game is in progress!
-      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasRunningClock || hasPlayClocks) {
+      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasRunningClock || hasCanMove) {
         return true; // LIVE GAME ACTIVE!
       }
+    }
 
-      return false;
+    // ------------------------------------------------------------------
+    // 3. Trusted Game-Over / Concluded Evidence Check
+    // ------------------------------------------------------------------
+    if (host.includes('lichess.org')) {
+      const resultEl = document.querySelector('.result-wrap .result, .crosstable__match');
+      const statusText = document.querySelector('.game__meta .status')?.textContent || '';
+      const isStatusConcluded = /checkmate|time out|resigns|drawn|stalemate|abandoned|rules infraction|victory|defeat/i.test(statusText);
+
+      if (resultEl || isStatusConcluded) {
+        return false; // Concluded historical match
+      }
+
+      // Fail-Safe: On a Lichess game path without confirmed conclusion, assume live game!
+      if (/^\/[a-zA-Z0-9]{8,12}/.test(path)) {
+        return true;
+      }
+    }
+
+    if (host.includes('chess.com')) {
+      const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
+      const isMetaConcluded = /won by|drawn by|won on time|won on disconnection|resignation|checkmate/i.test(metaDesc);
+
+      const gameOverEl = document.querySelector(
+        '.game-over-modal, .game-result-component, .live-game-over-component, ' +
+        '[data-cy="game-review-button"], .game-review-buttons-review, .game-over-dialog, ' +
+        '.game-over-header-component, [data-cy="game-over-modal"], .game-over-player-component'
+      );
+
+      if (isMetaConcluded || gameOverEl) {
+        return false; // Concluded historical match
+      }
+
+      // Daily or Live game paths without verified conclusion:
+      // Fail-Safe: Must be locked!
+      if (path.startsWith('/game/live/') || path.startsWith('/game/daily/') || path.startsWith('/play') || path.startsWith('/live')) {
+        return true;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Default Fail-Safe Principle:
+    // If we are on a chess site and cannot 100% prove the game is over, LOCK!
+    // ------------------------------------------------------------------
+    if (host.includes('chess.com') || host.includes('lichess.org')) {
+      return true;
     }
 
     return false;

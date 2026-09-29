@@ -79,12 +79,13 @@ export class StockfishInBrowser {
 
       window.addEventListener('message', messageHandler);
 
-      // Fallback timeout in case frame takes long
+      // Timeout guard: if engine fails to reply readyok, do NOT falsely mark ready
       setTimeout(() => {
-        this.isReady = true;
-        if (this.onReadyCallback) this.onReadyCallback();
-        resolve(true);
-      }, 2000);
+        if (!this.isReady) {
+          console.warn('[Stockfish In-Browser] ⚠️ 引擎初始化就绪等待超时 (Stockfish init timeout)');
+          resolve(false);
+        }
+      }, 5000);
     });
 
     return this.initPromise;
@@ -93,6 +94,10 @@ export class StockfishInBrowser {
   async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1) {
     if (!this.isReady) {
       await this.initialize();
+    }
+
+    if (!this.isReady) {
+      return null;
     }
 
     // In Node.js testing environment without DOM iframe

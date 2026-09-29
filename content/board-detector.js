@@ -374,7 +374,16 @@ export class BoardDetector {
       fenRows.push(rowStr);
     }
 
+    let castling = '';
+    const whiteKingOnE1 = grid[0][4] === 'K';
+    const blackKingOnE8 = grid[7][4] === 'k';
+    if (whiteKingOnE1 && grid[0][7] === 'R') castling += 'K';
+    if (whiteKingOnE1 && grid[0][0] === 'R') castling += 'Q';
+    if (blackKingOnE8 && grid[7][7] === 'r') castling += 'k';
+    if (blackKingOnE8 && grid[7][0] === 'r') castling += 'q';
+    if (!castling) castling = '-';
+
     const activeTurn = this.detectActiveTurn();
-    return `${fenRows.join('/')} ${activeTurn} KQkq - 0 1`;
+    return `${fenRows.join('/')} ${activeTurn} ${castling} - 0 1`;
   }
 }

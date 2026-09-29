@@ -175,6 +175,15 @@ export class IntuitionPanel {
       storedElo = parseInt(localStorage.getItem('maia3_target_elo'), 10) || 1900;
     } catch (e) {}
     this.currentElo = storedElo;
+
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['defaultElo', 'maia3_target_elo'], (res) => {
+        const val = res?.defaultElo || res?.maia3_target_elo;
+        if (val && val !== this.currentElo) {
+          this.setElo(val, false);
+        }
+      });
+    }
     this.currentData = null;
     this.currentTurn = 'w';
     this.latency = 0;
@@ -558,6 +567,40 @@ export class IntuitionPanel {
     return this.isClosed;
   }
 
+  setElo(elo, triggerCallback = true) {
+    const val = parseInt(elo, 10);
+    if (isNaN(val)) return;
+    this.currentElo = val;
+    try {
+      localStorage.setItem('maia3_target_elo', String(val));
+    } catch (e) {}
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.set({ defaultElo: val, maia3_target_elo: val });
+    }
+    if (this.container) {
+      const eloVal = this.container.querySelector('#maia-elo-val');
+      const eloSlider = this.container.querySelector('#maia-elo-slider');
+      const eloDesc = this.container.querySelector('#maia-elo-desc');
+      const segments = this.container.querySelectorAll('[data-elo]');
+      if (eloVal) eloVal.textContent = val;
+      if (eloSlider) eloSlider.value = val;
+      if (eloDesc) {
+        const descMap = this.t('eloDesc');
+        eloDesc.textContent = descMap[val] || (this.lang === 'zh' ? `当前: ${val} 等级分直觉` : `Target: ${val} Elo Intuition`);
+      }
+      segments.forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.elo, 10) === val);
+      });
+    }
+    if (this.fab) {
+      const eloBadge = this.fab.querySelector('#weui-float-elo');
+      if (eloBadge) eloBadge.textContent = val;
+    }
+    if (triggerCallback && this.onEloChange) {
+      this.onEloChange(val);
+    }
+  }
+
   bindEvents() {
     // 1. WeChat Capsule Close Button (⊙) -> Minimizes to WeChat Floating Ball
     const closeBtn = this.container.querySelector('#weui-btn-close');
@@ -616,35 +659,14 @@ export class IntuitionPanel {
     segments.forEach(btn => {
       btn.addEventListener('click', () => {
         const elo = parseInt(btn.dataset.elo, 10);
-        this.currentElo = elo;
-        try {
-          localStorage.setItem('maia3_target_elo', String(elo));
-        } catch (e) {}
-        updateActiveEloButton(elo);
-        if (eloSlider) eloSlider.value = elo;
-        if (eloVal) eloVal.textContent = elo;
-        if (this.fab) {
-          const eloBadge = this.fab.querySelector('#weui-float-elo');
-          if (eloBadge) eloBadge.textContent = elo;
-        }
-        if (this.onEloChange) this.onEloChange(elo);
+        this.setElo(elo);
       });
     });
 
     if (eloSlider) {
       eloSlider.addEventListener('input', (e) => {
         const elo = parseInt(e.target.value, 10);
-        this.currentElo = elo;
-        try {
-          localStorage.setItem('maia3_target_elo', String(elo));
-        } catch (e) {}
-        if (eloVal) eloVal.textContent = elo;
-        updateActiveEloButton(elo);
-        if (this.fab) {
-          const eloBadge = this.fab.querySelector('#weui-float-elo');
-          if (eloBadge) eloBadge.textContent = elo;
-        }
-        if (this.onEloChange) this.onEloChange(elo);
+        this.setElo(elo);
       });
     }
 
@@ -856,6 +878,10 @@ export class IntuitionPanel {
         throw new Error(this.lang === 'zh' ? '未配置全局分析器' : 'Review analyzer not configured');
       }
       const results = await this.onAnalyzeGame(forceRefresh);
+      if (this.isFairPlayLocked) {
+        reviewDrawer.style.display = 'none';
+        return;
+      }
       if (results) {
         this.lastReviewResult = results;
         this.renderReviewResults(results);

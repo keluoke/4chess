@@ -5,10 +5,32 @@
 
 (function() {
   let worker = null;
-  let currentReqId = null;
-  let lastInfo = null;
   let engineName = 'Stockfish 19 Lite WASM';
   const multiPvMap = new Map();
+  let lastInfo = null;
+
+  // UCI Synchronization & Request Queue State
+  let activeRequest = null;
+  let queuedRequest = null;
+  let isSearching = false;
+  let isStopping = false;
+
+  function executeSearch(req) {
+    if (!worker) return;
+    isSearching = true;
+    isStopping = false;
+    activeRequest = req;
+    lastInfo = null;
+    multiPvMap.clear();
+
+    if (req.multipv > 1) {
+      worker.postMessage(`setoption name MultiPV value ${req.multipv}`);
+    } else {
+      worker.postMessage('setoption name MultiPV value 1');
+    }
+    worker.postMessage(`position fen ${req.fen}`);
+    worker.postMessage(`go depth ${req.depth}`);
+  }
 
   function initWorker() {
     let initialized = false;
@@ -34,8 +56,23 @@
           }
 
           if (line === 'readyok') {
-            initialized = true;
-            window.parent.postMessage({ type: 'STOCKFISH_READY', engineName }, '*');
+            if (!initialized) {
+              initialized = true;
+              window.parent.postMessage({ type: 'STOCKFISH_READY', engineName }, '*');
+            }
+
+            if (isStopping) {
+              isStopping = false;
+              isSearching = false;
+              multiPvMap.clear();
+              lastInfo = null;
+
+              if (queuedRequest) {
+                const next = queuedRequest;
+                queuedRequest = null;
+                executeSearch(next);
+              }
+            }
             return;
           }
 
@@ -90,15 +127,16 @@
           }
 
           // Parse bestmove line:
-          // bestmove e2e4 ponder e7e5
           if (line.startsWith('bestmove')) {
             const parts = line.split(/\s+/);
             const bestMove = parts[1] && parts[1] !== '(none)' ? parts[1] : null;
 
-            if (currentReqId !== null) {
+            if (isSearching && activeRequest && !isStopping) {
               const best = multiPvMap.get(1) || lastInfo;
-              const resId = currentReqId;
-              currentReqId = null;
+              const resId = activeRequest.id;
+              const resFen = activeRequest.fen;
+              activeRequest = null;
+              isSearching = false;
 
               const lines = [];
               for (const [idx, item] of multiPvMap.entries()) {
@@ -120,6 +158,7 @@
               window.parent.postMessage({
                 type: 'STOCKFISH_RESULT',
                 id: resId,
+                fen: resFen,
                 bestMove,
                 scoreText: best ? best.scoreText : (lastInfo ? lastInfo.scoreText : '0.00'),
                 scoreCp: best ? best.scoreCp : (lastInfo ? lastInfo.scoreCp : 0),
@@ -128,9 +167,19 @@
                 pv: best ? best.pv : (lastInfo ? lastInfo.pv : []),
                 lines
               }, '*');
-            }
 
-            multiPvMap.clear();
+              multiPvMap.clear();
+
+              if (queuedRequest) {
+                const next = queuedRequest;
+                queuedRequest = null;
+                executeSearch(next);
+              }
+            } else {
+              // Residual bestmove from an aborted/stopping search: discard!
+              multiPvMap.clear();
+              lastInfo = null;
+            }
           }
         };
 
@@ -151,29 +200,42 @@
   }
 
   window.addEventListener('message', function(e) {
+    // Security boundary: Only accept messages from parent window
+    if (e.source !== window.parent) return;
+
     const data = e.data;
     if (!data || !worker) return;
 
     if (data.type === 'EVALUATE') {
-      currentReqId = data.id;
-      lastInfo = null;
-      multiPvMap.clear();
+      const req = {
+        id: data.id,
+        fen: data.fen,
+        depth: data.depth || 6,
+        multipv: data.multipv || 1
+      };
 
-      const fen = data.fen;
-      const depth = data.depth || 6;
-      const multipv = data.multipv || 1;
-
-      if (multipv > 1) {
-        worker.postMessage(`setoption name MultiPV value ${multipv}`);
+      if (!isSearching && !isStopping) {
+        executeSearch(req);
       } else {
-        worker.postMessage('setoption name MultiPV value 1');
+        // Search currently running: queue this request and stop old search cleanly
+        queuedRequest = req;
+        if (!isStopping) {
+          isStopping = true;
+          activeRequest = null; // Invalidate so residual bestmove is discarded
+          worker.postMessage('stop');
+          worker.postMessage('isready');
+        }
       }
-      worker.postMessage('stop');
-      worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go depth ${depth}`);
     } else if (data.type === 'STOP') {
-      currentReqId = null;
-      worker.postMessage('stop');
+      queuedRequest = null;
+      if (isSearching && !isStopping) {
+        isStopping = true;
+        activeRequest = null;
+        worker.postMessage('stop');
+        worker.postMessage('isready');
+      } else if (!isSearching) {
+        worker.postMessage('stop');
+      }
     }
   });
 

@@ -73,14 +73,26 @@ export async function initMaiaExtension() {
       if (!moves || moves.length === 0) {
         throw new Error(panel.lang === 'zh' ? '当前页面未检测到棋步记录，请在对局或复盘页面使用。' : 'No move list detected on current page.');
       }
-      return await analyzer.analyzeGame(moves, {
+      const reviewResult = await analyzer.analyzeGame(moves, {
         depth: 6,
         elo: panel.currentElo,
         forceRefresh,
         onProgress: (prog) => {
+          if (FairPlayGuard.isLiveGameInProgress()) {
+            analyzer.cancel();
+            return;
+          }
           panel.updateReviewProgress(prog);
         }
       });
+
+      if (FairPlayGuard.isLiveGameInProgress()) {
+        throw new Error(panel.lang === 'zh'
+          ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
+          : '🛡️ Live game active! Per Fair Play rules, engine review is disabled during live games.');
+      }
+
+      return reviewResult;
     },
     onCancelReview: () => {
       analyzer.cancel();
@@ -145,9 +157,11 @@ export async function initMaiaExtension() {
 
     const t0 = performance.now();
     try {
+      if (FairPlayGuard.isLiveGameInProgress() || abortCheck()) return;
+
       // Phase 1: Instant Maia-3 Human Intuition (0 wait, non-blocking)
       const maiaResult = await engine.predict(fen, panel.currentElo, null, abortCheck);
-      if (abortCheck() || !maiaResult) return;
+      if (abortCheck() || !maiaResult || FairPlayGuard.isLiveGameInProgress()) return;
 
       const latency = performance.now() - t0;
 
@@ -180,36 +194,35 @@ export async function initMaiaExtension() {
       }
 
       // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia)
-      if (engine.stockfishInBrowser.isReady) {
+      if (engine.stockfishInBrowser.isReady && !FairPlayGuard.isLiveGameInProgress() && !abortCheck()) {
         engine.evaluateStockfishAsync(fen, (sfRes) => {
-          if (!abortCheck() && sfRes) {
-            const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
-            combined.blunderContext = blunderContext;
-            combined.viewMode = viewMode;
-            overlay.render(combined);
-            panel.update(combined, latency);
+          if (abortCheck() || FairPlayGuard.isLiveGameInProgress() || !sfRes) return;
+          const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
+          combined.blunderContext = blunderContext;
+          combined.viewMode = viewMode;
+          overlay.render(combined);
+          panel.update(combined, latency);
 
-            if (blunderContext) {
-              const isZh = panel.lang === 'zh';
-              const isTrap = blunderContext.isHumanTrap || blunderContext.severity === 'blunder';
-              const badgeText = isTrap
-                ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
-                : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
-              const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
-              const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
+          if (blunderContext) {
+            const isZh = panel.lang === 'zh';
+            const isTrap = blunderContext.isHumanTrap || blunderContext.severity === 'blunder';
+            const badgeText = isTrap
+              ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
+              : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
+            const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
+            const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
 
-              const insightHtml = isZh
-                ? `实战<strong>${sideText}</strong>走棋: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (直觉概率 <strong>${probText}</strong>)` : ''}，而引擎推荐最优走法为 <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>。<br/>` +
-                  `局面损耗: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> 兵 (局势变动: ${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`
-                : `Played by <strong>${sideText}</strong>: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (Intuition: <strong>${probText}</strong>)` : ''}, while Engine recommends <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>.<br/>` +
-                  `Centipawn loss: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> (${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`;
+            const insightHtml = isZh
+              ? `实战<strong>${sideText}</strong>走棋: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (直觉概率 <strong>${probText}</strong>)` : ''}，而引擎推荐最优走法为 <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>。<br/>` +
+                `局面损耗: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> 兵 (局势变动: ${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`
+              : `Played by <strong>${sideText}</strong>: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (Intuition: <strong>${probText}</strong>)` : ''}, while Engine recommends <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>.<br/>` +
+                `Centipawn loss: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> (${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`;
 
-              panel.showCustomInsight({
-                badge: badgeText,
-                text: insightHtml,
-                isTrap
-              });
-            }
+            panel.showCustomInsight({
+              badge: badgeText,
+              text: insightHtml,
+              isTrap
+            });
           }
         });
       }
@@ -294,7 +307,13 @@ export async function initMaiaExtension() {
     if (isLive !== panel.isFairPlayLocked) {
       panel.setFairPlayLocked(isLive);
       if (isLive) {
+        // Increment predictionEpoch to IMMEDIATELY abort any in-flight asynchronous evaluation
+        predictionEpoch++;
+        // Immediately abort any full-game review in progress
+        analyzer.cancel();
+        // Immediately clear board visuals
         overlay.clear();
+        // Immediately stop Stockfish engine
         if (engine.stockfishInBrowser?.isReady) {
           engine.stockfishInBrowser.stop();
         }
@@ -326,6 +345,9 @@ export async function initMaiaExtension() {
       } else if (msg.type === 'CLOSE_PANEL') {
         panel.close();
         sendResponse({ closed: true });
+      } else if (msg.type === 'SET_ELO' && typeof msg.elo === 'number') {
+        panel.setElo(msg.elo);
+        sendResponse({ ok: true, elo: msg.elo });
       }
     });
   }

@@ -66,13 +66,20 @@ export class ChessBoard {
 
     this.turn = tokens[1] === 'b' ? 'b' : 'w';
     
-    // Castling
+    // Castling (validate against physical pieces on starting squares)
     const castlingStr = tokens[2] || '-';
+    const whiteKingAtE1 = this.board[4]?.color === 'w' && this.board[4]?.type === 'k';
+    const blackKingAtE8 = this.board[60]?.color === 'b' && this.board[60]?.type === 'k';
+    const whiteRookAtH1 = this.board[7]?.color === 'w' && this.board[7]?.type === 'r';
+    const whiteRookAtA1 = this.board[0]?.color === 'w' && this.board[0]?.type === 'r';
+    const blackRookAtH8 = this.board[63]?.color === 'b' && this.board[63]?.type === 'r';
+    const blackRookAtA8 = this.board[56]?.color === 'b' && this.board[56]?.type === 'r';
+
     this.castling = {
-      K: castlingStr.includes('K'),
-      Q: castlingStr.includes('Q'),
-      k: castlingStr.includes('k'),
-      q: castlingStr.includes('q')
+      K: castlingStr.includes('K') && whiteKingAtE1 && whiteRookAtH1,
+      Q: castlingStr.includes('Q') && whiteKingAtE1 && whiteRookAtA1,
+      k: castlingStr.includes('k') && blackKingAtE8 && blackRookAtH8,
+      q: castlingStr.includes('q') && blackKingAtE8 && blackRookAtA8
     };
 
     // En passant
@@ -105,10 +112,12 @@ export class ChessBoard {
 
     fen += ` ${this.turn} `;
     let castling = '';
-    if (this.castling.K) castling += 'K';
-    if (this.castling.Q) castling += 'Q';
-    if (this.castling.k) castling += 'k';
-    if (this.castling.q) castling += 'q';
+    const whiteKingAtE1 = this.board[4]?.color === 'w' && this.board[4]?.type === 'k';
+    const blackKingAtE8 = this.board[60]?.color === 'b' && this.board[60]?.type === 'k';
+    if (this.castling.K && whiteKingAtE1 && this.board[7]?.color === 'w' && this.board[7]?.type === 'r') castling += 'K';
+    if (this.castling.Q && whiteKingAtE1 && this.board[0]?.color === 'w' && this.board[0]?.type === 'r') castling += 'Q';
+    if (this.castling.k && blackKingAtE8 && this.board[63]?.color === 'b' && this.board[63]?.type === 'r') castling += 'k';
+    if (this.castling.q && blackKingAtE8 && this.board[56]?.color === 'b' && this.board[56]?.type === 'r') castling += 'q';
     fen += (castling || '-') + ' ';
     fen += (this.epSquare !== null ? ChessBoard.indexToSquare(this.epSquare) : '-') + ' ';
     fen += `${this.halfMoves} ${this.fullMoves}`;
@@ -314,25 +323,29 @@ export class ChessBoard {
           }
         }
 
-        // Castling
+        // Castling (requiring corresponding rook on starting square)
         if (color === 'w' && r === 0 && f === 4) {
-          if (this.castling.K && !this.board[5] && !this.board[6]) {
+          const rH1 = this.board[7];
+          if (this.castling.K && rH1 && rH1.color === 'w' && rH1.type === 'r' && !this.board[5] && !this.board[6]) {
             if (!this.isSquareAttacked(4, 'b') && !this.isSquareAttacked(5, 'b') && !this.isSquareAttacked(6, 'b')) {
               moves.push({ from: 4, to: 6, piece: p, castling: 'K' });
             }
           }
-          if (this.castling.Q && !this.board[1] && !this.board[2] && !this.board[3]) {
+          const rA1 = this.board[0];
+          if (this.castling.Q && rA1 && rA1.color === 'w' && rA1.type === 'r' && !this.board[1] && !this.board[2] && !this.board[3]) {
             if (!this.isSquareAttacked(4, 'b') && !this.isSquareAttacked(3, 'b') && !this.isSquareAttacked(2, 'b')) {
               moves.push({ from: 4, to: 2, piece: p, castling: 'Q' });
             }
           }
         } else if (color === 'b' && r === 7 && f === 4) {
-          if (this.castling.k && !this.board[61] && !this.board[62]) {
+          const rH8 = this.board[63];
+          if (this.castling.k && rH8 && rH8.color === 'b' && rH8.type === 'r' && !this.board[61] && !this.board[62]) {
             if (!this.isSquareAttacked(60, 'w') && !this.isSquareAttacked(61, 'w') && !this.isSquareAttacked(62, 'w')) {
               moves.push({ from: 60, to: 62, piece: p, castling: 'k' });
             }
           }
-          if (this.castling.q && !this.board[57] && !this.board[58] && !this.board[59]) {
+          const rA8 = this.board[56];
+          if (this.castling.q && rA8 && rA8.color === 'b' && rA8.type === 'r' && !this.board[57] && !this.board[58] && !this.board[59]) {
             if (!this.isSquareAttacked(60, 'w') && !this.isSquareAttacked(59, 'w') && !this.isSquareAttacked(58, 'w')) {
               moves.push({ from: 60, to: 58, piece: p, castling: 'q' });
             }
