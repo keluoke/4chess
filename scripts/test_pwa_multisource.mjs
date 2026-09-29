@@ -35,22 +35,22 @@ if (!swContent.includes('addEventListener(\'install\'') || !swContent.includes('
 }
 console.log('✅ analysis/sw.js exists and implements Service Worker lifecycle');
 
-// Check Cloudflare Pages _headers & _redirects
-const headersPath = resolve(rootDir, '_headers');
+// Check Cloudflare Pages cloudflare/headers & cloudflare/redirects
+const headersPath = resolve(rootDir, 'cloudflare/headers');
 if (!existsSync(headersPath)) {
-  throw new Error('_headers does not exist!');
+  throw new Error('cloudflare/headers does not exist!');
 }
 const headersContent = readFileSync(headersPath, 'utf8');
 if (!headersContent.includes('Cross-Origin-Opener-Policy') || !headersContent.includes('application/wasm')) {
-  throw new Error('_headers missing COOP/COEP or wasm mime type!');
+  throw new Error('cloudflare/headers missing COOP/COEP or wasm mime type!');
 }
-console.log('✅ Cloudflare Pages _headers has COOP/COEP for multithreaded WASM');
+console.log('✅ Cloudflare Pages cloudflare/headers has COOP/COEP for multithreaded WASM');
 
-const redirectsPath = resolve(rootDir, '_redirects');
+const redirectsPath = resolve(rootDir, 'cloudflare/redirects');
 if (!existsSync(redirectsPath)) {
-  throw new Error('_redirects does not exist!');
+  throw new Error('cloudflare/redirects does not exist!');
 }
-console.log('✅ Cloudflare Pages _redirects configured');
+console.log('✅ Cloudflare Pages cloudflare/redirects configured');
 
 // Check functions/api/chesscom.js
 const funcPath = resolve(rootDir, 'functions/api/chesscom.js');

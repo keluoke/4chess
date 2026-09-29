@@ -12,8 +12,14 @@ __pycache__/
 env/
 maia3_src/
 
-# OS
+# Cloudflare Pages generated in CI/build
+_headers
+_redirects
+
+# Local tooling & OS
 .DS_Store
 .wrangler/
 .workbuddy/
+
+
 
