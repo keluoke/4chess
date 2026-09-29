@@ -36,11 +36,26 @@
     let initialized = false;
     let readyTimer = null;
 
+    const sf19Url = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
+      ? chrome.runtime.getURL('lib/stockfish-19.js#stockfish.wasm,worker')
+      : '../lib/stockfish-19.js#stockfish.wasm,worker';
+
+    const sfFallbackUrl = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
+      ? chrome.runtime.getURL('lib/stockfish.js')
+      : '../lib/stockfish.js';
+
     function tryWorker(scriptUrl, name) {
       try {
         const w = new Worker(scriptUrl);
         w.onerror = function(err) {
           console.error(`[Stockfish Sandbox] Worker error on ${name}:`, err);
+          if (!initialized && scriptUrl.includes('stockfish-19')) {
+            console.warn('[Stockfish Sandbox] Worker error on Stockfish 19, falling back to stockfish.js...');
+            try { w.terminate(); } catch (e) {}
+            clearTimeout(readyTimer);
+            worker = tryWorker(sfFallbackUrl, 'Stockfish Fallback');
+            return;
+          }
           window.parent.postMessage({
             type: 'STOCKFISH_ERROR',
             error: err?.message || 'Stockfish Worker execution failed'
@@ -199,15 +214,24 @@
 
     readyTimer = setTimeout(() => {
       if (!initialized) {
-        console.error('[Stockfish Sandbox] Stockfish 19 Lite WASM initialization timed out (8000ms).');
-        window.parent.postMessage({
-          type: 'STOCKFISH_ERROR',
-          error: 'Stockfish 19 Lite WASM 引擎就绪等待超时 (8000ms)'
-        }, '*');
+        console.warn('[Stockfish Sandbox] Stockfish 19 Lite WASM timed out (8000ms), attempting fallback to stockfish.js...');
+        try { if (worker) worker.terminate(); } catch (e) {}
+        worker = tryWorker(sfFallbackUrl, 'Stockfish Fallback');
+        if (!worker) {
+          window.parent.postMessage({
+            type: 'STOCKFISH_ERROR',
+            error: 'Stockfish 引擎就绪等待超时'
+          }, '*');
+        }
       }
     }, 8000);
 
-    worker = tryWorker('../lib/stockfish-19.js#stockfish.wasm,worker', 'Stockfish 19 Lite WASM');
+    worker = tryWorker(sf19Url, 'Stockfish 19 Lite WASM');
+    if (!worker) {
+      console.warn('[Stockfish Sandbox] Failed to instantiate Stockfish 19, trying fallback...');
+      clearTimeout(readyTimer);
+      worker = tryWorker(sfFallbackUrl, 'Stockfish Fallback');
+    }
   }
 
   let stopWatchdog = null;

@@ -37,8 +37,6 @@ export class StockfishInBrowser {
       if (!frame) {
         frame = document.createElement('iframe');
         frame.id = 'maia3-stockfish-frame';
-        frame.setAttribute('credentialless', '');
-        frame.setAttribute('allow', 'cross-origin-isolated');
         frame.style.position = 'absolute';
         frame.style.width = '0px';
         frame.style.height = '0px';
