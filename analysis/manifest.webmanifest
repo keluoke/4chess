@@ -1,6 +1,6 @@
 {
-  "name": "4Chess Review | 直觉与引擎深度复盘",
-  "short_name": "4Chess Review",
+  "name": "歧路 Diverge · 全盘分析",
+  "short_name": "歧路 Diverge",
   "description": "基于 Maia-3 人类直觉模型与 Stockfish 双引擎的纯前端深度复盘工作台",
   "start_url": "./index.html",
   "scope": "./",
@@ -21,6 +21,15 @@
       "type": "image/png"
     }
   ],
+  "share_target": {
+    "action": "./index.html",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "file_handlers": [
     {
       "action": "./index.html",

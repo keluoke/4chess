@@ -111,6 +111,22 @@ export class ModelCache {
     }
   }
 
+  static async hasModel() {
+    try {
+      const db = await this.openDB();
+      if (!db) return false;
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.count();
+        req.onsuccess = () => resolve(req.result > 0);
+        req.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+
   static async clearAll() {
     try {
       const db = await this.openDB();

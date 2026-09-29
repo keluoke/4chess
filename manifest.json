@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Maia 3 · 人类直觉热力图与预测器",
+  "name": "歧路 Diverge · 人类直觉与双引擎研判",
   "version": "1.0.0",
   "description": "纯浏览器端运行的 Maia 3 人类直觉与 Stockfish 19 双引擎研判扩展，在 Lichess / Chess.com 提供赛后深度复盘与局面研判。",
   "icons": {
@@ -10,7 +10,7 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "Maia 3 人类直觉设置"
+    "default_title": "歧路 Diverge 设置"
   },
   "background": {
     "service_worker": "background.js",

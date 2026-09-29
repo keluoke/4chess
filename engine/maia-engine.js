@@ -26,6 +26,15 @@ export class MaiaEngine {
     this.lruCache = new Map();
     this.MAX_CACHE_SIZE = 150;
 
+    // Web Worker state
+    this.worker = null;
+    this.workerReqId = 0;
+    this.workerPending = new Map();
+    this._workerProgress = null;
+    this._workerLoadResolve = null;
+    this._workerLoadReject = null;
+    this.initWorker();
+
     // Independent status tracking for both engines
     this.status = {
       maia: {
@@ -58,6 +67,57 @@ export class MaiaEngine {
     }
   }
 
+  initWorker() {
+    if (typeof Worker === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+    try {
+      const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.getURL && window.location.protocol === 'chrome-extension:';
+      const workerUrl = isExtension
+        ? chrome.runtime.getURL('engine/maia-worker.js')
+        : new URL('./maia-worker.js', import.meta.url).href;
+
+      this.worker = new Worker(workerUrl, { type: 'module' });
+      this.backendName = '浏览器端 Web Worker + Stockfish WASM';
+      this.worker.onmessage = (e) => this.handleWorkerMessage(e.data);
+      this.worker.onerror = (err) => {
+        console.warn('[Maia Engine] Dedicated Worker error, falling back to direct in-thread:', err);
+        this.worker = null;
+        this.backendName = '浏览器端 Float32 JS + Stockfish WASM';
+      };
+    } catch (err) {
+      console.warn('[Maia Engine] Worker creation failed, using direct in-thread:', err);
+      this.worker = null;
+    }
+  }
+
+  handleWorkerMessage(msg) {
+    const { type, id, data, prog, result, error, success } = msg || {};
+    if (type === 'progress') {
+      const progressData = data || prog;
+      if (this._workerProgress && progressData) {
+        this._workerProgress(progressData);
+      }
+    } else if (type === 'loadModel_result') {
+      if (this._workerLoadResolve) {
+        if (success) {
+          this._workerLoadResolve(true);
+        } else {
+          this._workerLoadReject(new Error(error || 'Worker model loading failed'));
+        }
+        this._workerLoadResolve = null;
+        this._workerLoadReject = null;
+      }
+    } else if (type === 'predict_result') {
+      if (this.workerPending.has(id)) {
+        const { resolve, reject } = this.workerPending.get(id);
+        this.workerPending.delete(id);
+        if (error) reject(new Error(error));
+        else resolve(result);
+      }
+    }
+  }
+
   notifyStatus() {
     if (this.onStatusChange) {
       this.onStatusChange({ ...this.status });
@@ -68,6 +128,10 @@ export class MaiaEngine {
     this.isReady = false;
     this.isLoading = false;
     this.initPromise = null;
+    this.lruCache.clear();
+    if (this.worker) {
+      this.worker.postMessage({ type: 'reset' });
+    }
     this.maiaInBrowser.reset();
     if (overrideUrl) {
       await ModelCache.clearAll();
@@ -128,7 +192,7 @@ export class MaiaEngine {
 
     for (const url of candidates) {
       try {
-        await this.maiaInBrowser.loadModel(url, (prog) => {
+        const onProgress = (prog) => {
           this.status.maia.state = prog.percent === 100 ? 'ready' : 'downloading';
           this.status.maia.percent = prog.percent;
           this.status.maia.speed = prog.speedMBps;
@@ -136,7 +200,21 @@ export class MaiaEngine {
           this.status.maia.totalMB = prog.totalMB;
           this.status.maia.source = prog.source === 'cache' ? 'IndexedDB 缓存' : 'Cloudflare CDN';
           this.notifyStatus();
-        });
+        };
+
+        if (this.worker) {
+          await new Promise((resolve, reject) => {
+            this._workerProgress = onProgress;
+            this._workerLoadResolve = resolve;
+            this._workerLoadReject = reject;
+            this.worker.postMessage({
+              type: 'loadModel',
+              data: { url }
+            });
+          });
+        } else {
+          await this.maiaInBrowser.loadModel(url, onProgress);
+        }
         loaded = true;
         break;
       } catch (err) {
@@ -267,8 +345,39 @@ export class MaiaEngine {
 
     const tStart = performance.now();
 
-    // 3. Run Maia-3 in-browser prediction
-    const maiaRes = await this.maiaInBrowser.predict(chess, elo, abortCheck);
+    // 3. Run Maia-3 prediction (via dedicated Web Worker or direct in-thread fallback)
+    let maiaRes = null;
+    if (this.worker) {
+      const reqId = ++this.workerReqId;
+      const p = new Promise((resolve, reject) => {
+        this.workerPending.set(reqId, { resolve, reject });
+        this.worker.postMessage({
+          type: 'predict',
+          id: reqId,
+          data: { fen, elo }
+        });
+      });
+
+      if (abortCheck) {
+        let checkTimer = null;
+        const abortWatcher = new Promise((resolve) => {
+          checkTimer = setInterval(() => {
+            if (abortCheck()) {
+              clearInterval(checkTimer);
+              this.worker.postMessage({ type: 'abort', id: reqId });
+              this.workerPending.delete(reqId);
+              resolve(null);
+            }
+          }, 20);
+        });
+        maiaRes = await Promise.race([p, abortWatcher]);
+        if (checkTimer) clearInterval(checkTimer);
+      } else {
+        maiaRes = await p;
+      }
+    } else {
+      maiaRes = await this.maiaInBrowser.predict(chess, elo, abortCheck);
+    }
     if (!maiaRes) return null; // Aborted by user moving again
 
     // 4. Human vs Stockfish Comparative Insight

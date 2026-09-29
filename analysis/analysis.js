@@ -10,6 +10,7 @@ import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { BoardUI } from './board-ui.js';
 import { EvalChart } from './eval-chart.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
+import { ModelCache } from '../engine/model-cache.js';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -136,12 +137,37 @@ class AnalysisStudioApp {
       this.el.dotSf.className = 'status-dot error';
     });
 
-    // Maia 3 lifecycle monitoring
-    this.maiaEngine.initialize().then(() => {
-      this.el.dotMaia.className = 'status-dot ready';
-    }).catch(() => {
-      this.el.dotMaia.className = 'status-dot error';
+    // Maia 3 lifecycle monitoring: if cached locally in IndexedDB, load instantly; otherwise defer until review starts
+    ModelCache.hasModel().then((isCached) => {
+      if (isCached) {
+        this.maiaEngine.initialize().then(() => {
+          this.el.dotMaia.className = 'status-dot ready';
+        }).catch(() => {
+          this.el.dotMaia.className = 'status-dot error';
+        });
+      } else {
+        this.el.dotMaia.className = 'status-dot';
+      }
     });
+
+    // Register PWA File Handling API (launchQueue)
+    if ('launchQueue' in window && typeof window.LaunchParams !== 'undefined' && 'files' in window.LaunchParams.prototype) {
+      window.launchQueue.setConsumer(async (launchParams) => {
+        if (!launchParams.files || !launchParams.files.length) return;
+        for (const fileHandle of launchParams.files) {
+          try {
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            if (text) {
+              this.smartLoadInput(text, file.name);
+              break;
+            }
+          } catch (e) {
+            console.warn('[PWA] launchQueue file load failed:', e);
+          }
+        }
+      });
+    }
   }
 
   initUI() {
@@ -530,8 +556,9 @@ class AnalysisStudioApp {
       const hashParams = new URLSearchParams(hash);
       const searchParams = new URLSearchParams(window.location.search);
 
-      const pgnParam = hashParams.get('pgn') || searchParams.get('pgn');
-      const urlParam = hashParams.get('url') || searchParams.get('url');
+      const textParam = hashParams.get('text') || searchParams.get('text');
+      const pgnParam = hashParams.get('pgn') || searchParams.get('pgn') || (textParam && (textParam.includes('1.') || textParam.includes('[Event')) ? textParam : null);
+      const urlParam = hashParams.get('url') || searchParams.get('url') || (textParam && textParam.startsWith('http') ? textParam : null);
       const eloParam = hashParams.get('elo') || searchParams.get('elo');
 
       if (eloParam) {
@@ -630,9 +657,74 @@ class AnalysisStudioApp {
         this.el.boardStatusText.textContent = '开局局面 · 请导入对局或选择示例开始复盘';
       }
       if (this.el.divergenceContent) {
-        this.el.divergenceContent.textContent = '点击上方“导入 PGN”或选择示例对局开始深度人机分歧复盘。';
+        this.el.divergenceContent.textContent = '点击下方“导入已完赛对局”或选择示例对局开始深度人机分歧复盘。';
       }
+      this.renderEmptyHomeState();
     }
+  }
+
+  /**
+   * Renders an interactive, welcoming hero card for blank landing visits
+   */
+  renderEmptyHomeState() {
+    this.el.blunderList.replaceChildren();
+
+    const heroCard = document.createElement('div');
+    heroCard.className = 'studio-home-hero';
+
+    heroCard.innerHTML = `
+      <div class="home-hero-header">
+        <div class="home-hero-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21v-8"></path>
+            <path d="M12 13c0-4.5-6-4.5-6-9"></path>
+            <path d="M12 13c0-4.5 6-4.5 6-9"></path>
+            <polyline points="3 7 6 4 9 7"></polyline>
+            <polyline points="15 7 18 4 21 7"></polyline>
+          </svg>
+        </div>
+        <div class="home-hero-title">全盘复盘 · 人机分歧研判</div>
+        <div class="home-hero-subtitle">纯前端运行的 Maia-3 人类直觉与 Stockfish 19 双引擎，挖掘关键妙手与直觉俗手</div>
+      </div>
+
+      <div class="home-hero-actions">
+        <button type="button" class="btn-home-primary" id="btn-home-import">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          导入已完赛对局 (PGN / 网址)
+        </button>
+      </div>
+
+      <div class="home-hero-samples">
+        <div class="home-samples-label">或选择经典名局体验：</div>
+        <div class="home-samples-chips">
+          <button type="button" class="btn-sample-chip" id="btn-chip-fischer">♟️ 菲舍尔“世纪之局” (1956)</button>
+          <button type="button" class="btn-sample-chip" id="btn-chip-kasparov">♟️ 卡斯帕罗夫不朽之局 (1999)</button>
+        </div>
+      </div>
+
+      <div class="home-hero-tips">
+        <div class="home-tip-item">⚡ 支持直接拖放 .pgn 棋谱文件或文本</div>
+        <div class="home-tip-item">📱 PWA 模式下可直接在系统文件管理器“以此应用打开”</div>
+      </div>
+    `;
+
+    heroCard.querySelector('#btn-home-import')?.addEventListener('click', () => {
+      this.openPgnModal();
+    });
+    heroCard.querySelector('#btn-chip-fischer')?.addEventListener('click', () => {
+      this.el.sampleFischer?.click();
+      this.el.btnSubmitPgn?.click();
+    });
+    heroCard.querySelector('#btn-chip-kasparov')?.addEventListener('click', () => {
+      this.el.sampleKasparov?.click();
+      this.el.btnSubmitPgn?.click();
+    });
+
+    this.el.blunderList.appendChild(heroCard);
   }
 
   /**
