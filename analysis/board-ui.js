@@ -282,22 +282,54 @@ export class BoardUI {
 
       line.style.opacity = arrow.opacity || '0.9';
       group.appendChild(line);
+    }
 
-      // Probability Badge label on target
-      if (arrow.label) {
+    // Second pass: Render labels grouped by destination square to prevent overlapping
+    const targetMap = new Map();
+    for (const arrow of this.arrows) {
+      if (!arrow.to || !arrow.label) continue;
+      if (!targetMap.has(arrow.to)) {
+        targetMap.set(arrow.to, []);
+      }
+      targetMap.get(arrow.to).push(arrow);
+    }
+
+    for (const [toSq, targetArrows] of targetMap.entries()) {
+      const p2 = this.getSquareCenterPercent(toSq);
+      const count = targetArrows.length;
+
+      targetArrows.forEach((arrow, idx) => {
+        let labelColor = '#07C160';
+        if (arrow.color === 'gold' || arrow.color === 'yellow' || arrow.color === '#F59E0B') {
+          labelColor = '#f59e0b';
+        } else if (arrow.color === 'red' || arrow.color === '#EF4444') {
+          labelColor = '#ef4444';
+        } else if (arrow.color === 'blue') {
+          labelColor = '#3B82F6';
+        }
+
+        // Stagger vertical offset so multiple labels landing on the same square stay perfectly legible
+        let offsetY = -3.0; // percent
+        if (count === 2) {
+          offsetY = idx === 0 ? -4.0 : 3.6;
+        } else if (count >= 3) {
+          offsetY = idx === 0 ? -4.4 : (idx === 1 ? 0 : 4.4);
+        }
+
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', `${p2.x}%`);
-        text.setAttribute('y', `${p2.y - 3}%`);
-        text.setAttribute('fill', '#ffffff');
-        text.setAttribute('font-size', '11px');
+        text.setAttribute('y', `${p2.y + offsetY}%`);
+        text.setAttribute('fill', labelColor);
+        text.setAttribute('font-size', count > 2 ? '10px' : '11px');
         text.setAttribute('font-weight', '700');
         text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
         text.setAttribute('paint-order', 'stroke');
-        text.setAttribute('stroke', 'rgba(0,0,0,0.85)');
-        text.setAttribute('stroke-width', '3px');
+        text.setAttribute('stroke', '#0f172a');
+        text.setAttribute('stroke-width', '3.5px');
         text.textContent = arrow.label;
         group.appendChild(text);
-      }
+      });
     }
   }
 

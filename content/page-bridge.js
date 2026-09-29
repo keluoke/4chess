@@ -45,7 +45,27 @@
     }
   }
 
-  // Support both CustomEvent and postMessage
+  function extractGameData() {
+    try {
+      var b = document.querySelector('wc-chess-board') || document.querySelector('chess-board');
+      var g = b ? (b.game || b.controller) : null;
+      var pgn = (g && typeof g.getPGN === 'function' ? g.getPGN() : '') ||
+                (b && typeof b.getPGN === 'function' ? b.getPGN() : '') ||
+                (g && g.getOptions && g.getOptions().pgn ? g.getOptions().pgn : '') || '';
+      var moveList = (g && g.moveList) || (g && g.getOptions && g.getOptions().moveList) || '';
+      var movesAttr = (b && typeof b.getAttribute === 'function' ? b.getAttribute('moves') : '') || '';
+      return { pgn: pgn, moveList: moveList, movesAttr: movesAttr };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  window.addEventListener('__MAIA_PAGE_DATA_REQ__', function() {
+    var data = extractGameData();
+    window.dispatchEvent(new CustomEvent('__MAIA_PAGE_DATA_RES__', { detail: data }));
+  });
+
+  // Support both CustomEvent and postMessage for jump
   window.addEventListener('__MAIA_JUMP_REQ__', function(e) {
     var ply = e && e.detail && typeof e.detail.ply === 'number' ? e.detail.ply : null;
     if (ply !== null) executeJump(ply);
@@ -59,5 +79,5 @@
     }
   });
 
-  console.log('[Maia-3] Main World Controller Bridge initialized ♟️');
+  console.log('[Maia-3] Main World Controller & Data Bridge initialized ♟️');
 })();

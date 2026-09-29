@@ -1,10 +1,20 @@
 /**
  * Maia-3 In-Browser Neural Engine (Scheme 0: Pure Client-Side Zero-Dependency)
- * Executes the authentic Maia-3 Chessformer model directly in JavaScript / WebGPU.
+ * Executes the authentic Maia-3 Chessformer model directly in JavaScript Float32.
  * 100% offline, zero external server, zero Python, zero configuration.
  */
 
 import { ModelCache } from './model-cache.js';
+
+function getModelCacheKey(url) {
+  let hash = 0;
+  for (let i = 0; i < url.length; i++) {
+    hash = ((hash << 5) - hash) + url.charCodeAt(i);
+    hash |= 0;
+  }
+  const baseName = url.split('/').pop().replace(/\.bin$/, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'maia3';
+  return `maia3_v1_${baseName}_${Math.abs(hash).toString(36)}`;
+}
 
 export class MaiaInBrowserEngine {
   constructor() {
@@ -37,10 +47,14 @@ export class MaiaInBrowserEngine {
         arrayBuffer = urlOrBuffer;
         this.modelSource = 'memory';
       } else if (typeof urlOrBuffer === 'string') {
-        const cacheKey = urlOrBuffer.split('/').pop().replace(/\.bin$/, '') || 'maia3-5m';
+        const cacheKey = getModelCacheKey(urlOrBuffer);
         // 1. Try loading from persistent IndexedDB cache (0ms instant)
         try {
-          const cached = (await ModelCache.getModel(cacheKey)) || (cacheKey === 'maia3_model' ? await ModelCache.getModel('maia3-5m') : null);
+          let cached = await ModelCache.getModel(cacheKey);
+          if (!cached) {
+            // Check legacy fallback keys
+            cached = (await ModelCache.getModel('maia3_model')) || (await ModelCache.getModel('maia3-5m'));
+          }
           if (cached && cached.byteLength > 1000000) {
             arrayBuffer = cached;
             this.modelSource = 'cache';

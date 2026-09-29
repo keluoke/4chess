@@ -90,15 +90,46 @@ chrome.runtime.onInstalled.addListener(() => {
   // Initialize default user settings in chrome.storage.local
   chrome.storage.local.set({
     defaultElo: 1900,
-    preferredBackend: 'webgpu',
+    preferredBackend: 'inbrowser',
     showHeatmap: true,
     showArrows: true,
     heatmapOpacity: 0.55
   });
 });
 
+const sandboxTokens = new Map();
+
+function cleanExpiredTokens() {
+  const now = Date.now();
+  for (const [token, exp] of sandboxTokens.entries()) {
+    if (exp <= now) sandboxTokens.delete(token);
+  }
+}
+
 // Handle background requests (bypasses webpage CSP & forbidden headers)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'ACQUIRE_SANDBOX_TOKEN') {
+    cleanExpiredTokens();
+    const token = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : ('sb_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+    sandboxTokens.set(token, Date.now() + 30000);
+    sendResponse({ ok: true, token });
+    return true;
+  }
+
+  if (msg.type === 'VERIFY_SANDBOX_TOKEN') {
+    cleanExpiredTokens();
+    const token = msg.token;
+    if (token && sandboxTokens.has(token) && sandboxTokens.get(token) > Date.now()) {
+      sandboxTokens.delete(token);
+      sendResponse({ ok: true });
+    } else {
+      sendResponse({ ok: false, error: 'Invalid or expired sandbox token' });
+    }
+    return true;
+  }
+
   if (msg.type === 'FETCH_CHESSCOM_GAME_PGN') {
     handleFetchChesscomGame(msg.gameId, msg.usernames || [], msg.gameType || 'live')
       .then(sendResponse)

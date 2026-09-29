@@ -51,14 +51,12 @@ export class FairPlayGuard {
       const drawBtn = document.querySelector(
         'button.draw-yes, .game__controls .draw-yes, button[data-action="draw-yes"]'
       );
-      const hasCanMove = document.querySelector('cg-board.can-move, .your-turn');
-      const isBroadcastRelay = path.startsWith('/broadcast');
-      const hasRunningClock = !isBroadcastRelay && document.querySelector('.rclock-running, .rclock .running');
+      const hasRunningClock = document.querySelector('.rclock-running, .rclock .running, .clock-running, .rclock.running');
 
       const hasResignBtn = FairPlayGuard.isVisibleAndActive(resignBtn);
       const hasDrawBtn = FairPlayGuard.isVisibleAndActive(drawBtn);
 
-      if (hasResignBtn || hasDrawBtn || hasCanMove || hasRunningClock) {
+      if (hasResignBtn || hasDrawBtn || hasRunningClock) {
         return true; // LIVE GAME ACTIVE!
       }
     }
@@ -79,42 +77,37 @@ export class FairPlayGuard {
         'button[aria-label="提议和棋" i], button[aria-label*="Offer draw" i], .draw-button-component, [data-cy="draw-button"], ' +
         '.game-controls-button[aria-label="Draw" i], .game-controls-button[aria-label="和棋" i], button.draw-yes'
       );
-      const canMoveEl = document.querySelector('wc-chess-board, chess-board');
-      const canMoveVal = canMoveEl ? canMoveEl.getAttribute('can-move') : null;
-      const hasCanMove = canMoveVal !== null && canMoveVal !== 'false' && canMoveVal !== '0';
-      const isEventRelay = path.startsWith('/events');
-      const hasRunningClock = !isEventRelay && document.querySelector(
-        '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
+      const hasRunningClock = document.querySelector(
+        '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running, .clock.clock-running'
       );
 
       const hasAbortBtn = FairPlayGuard.isVisibleAndActive(abortBtn);
       const hasResignBtn = FairPlayGuard.isVisibleAndActive(resignBtn);
       const hasDrawBtn = FairPlayGuard.isVisibleAndActive(drawBtn);
 
-      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasCanMove || hasRunningClock) {
+      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasRunningClock) {
         return true; // LIVE GAME ACTIVE!
       }
     }
 
     // ------------------------------------------------------------------
-    // 2. Whitelisted Safe Environments (Analysis, Study, Lessons - /tv EXCLUDED)
+    // 2. Whitelisted Safe Environments (Analysis, Study, Lessons - STRICT ONLY)
+    // /tv, /broadcast, /events are deliberately excluded to ensure no active games run engine
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
       if (path.startsWith('/analysis') ||
           path.startsWith('/study') ||
-          path.startsWith('/broadcast') ||
           path.startsWith('/editor') ||
           path.startsWith('/practice') ||
           path.startsWith('/training') ||
           path.startsWith('/learn') ||
           path.startsWith('/puzzle')) {
-        return false; // Whitelisted safe (non-game analysis/study/puzzle/relay)
+        return false; // Whitelisted safe non-game analysis/study/puzzle
       }
     }
 
     if (host.includes('chess.com')) {
       if (path.startsWith('/analysis') ||
-          path.startsWith('/events') ||
           path.startsWith('/puzzles') ||
           path.startsWith('/library') ||
           path.startsWith('/lessons') ||
@@ -122,98 +115,98 @@ export class FairPlayGuard {
           path.startsWith('/classroom') ||
           path.startsWith('/vision') ||
           path.startsWith('/drills')) {
-        return false; // Whitelisted safe (non-game analysis/lessons/drills/events)
+        return false; // Whitelisted safe non-game analysis/lessons/drills
       }
     }
 
     // ------------------------------------------------------------------
     // 3. Trusted Game-Over / Concluded Evidence Check (Post-Game Archives)
+    // Evidence must be explicitly bound to the current concluded game and visible.
+    // Generic dialogs, links to /analysis, or new-game buttons do NOT qualify.
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
-      // 1. Result elements or match crosstable
-      const resultEl = document.querySelector('.result-wrap .result, .result-wrap, .crosstable__match, .crosstable');
+      const hasRunningClock = document.querySelector('.rclock-running, .rclock .running, .clock-running, .rclock.running');
+      if (hasRunningClock) {
+        return true;
+      }
 
-      // 2. Computer analysis and review underboard elements (e.g. computer analysis tab)
-      const hasAnalysisTools = document.querySelector(
-        '.computer-analysis, .analyse__tools, .analyse-panels, .analyse__underboard, ' +
-        '.ceval, .request-analysis, .future-game-analysis, [data-panel="analysis"], ' +
-        '.fbt[data-act="analysis"], a[href*="/analysis"]'
-      );
+      // 1. Result elements or match status text
+      const resultEl = document.querySelector('.result-wrap .result, .result-wrap');
+      const statusEl = document.querySelector('.game__meta .status, .game__meta');
+      const statusText = ((statusEl?.textContent || '') + ' ' + (resultEl?.textContent || '')).trim();
 
-      // 3. Post-game controls & rating changes (only present after match conclusion)
-      const hasPostGameMeta = document.querySelector(
-        '.game__meta__players good, .game__meta__players bad, .player good, .player bad, ' +
-        '.game__meta time.timeago, .round__side time.timeago, .fbt[data-act="rematch"], .fbt[data-act="new-opponent"], ' +
-        '[data-hint*="Rematch" i], [data-hint*="再来一局" i]'
-      );
-
-      // 4. Status text conclusion check (bilingual: English + Chinese)
-      const statusText = (document.querySelector('.game__meta .status, .game__meta')?.textContent || '') +
-                         ' ' + (resultEl?.textContent || '');
       const isStatusConcluded = /checkmate|mate|time\s*out|timeout|time\s*forfeit|resign|drawn?|stalemate|abandoned|left the game|rules infraction|cheat|victor|defeat|won|lost|获胜|胜出|胜|赢|负|败|认输|超时|将死|和棋|离开对局|违规|1-0|0-1|1\/2/i.test(statusText);
 
-      if (resultEl || hasAnalysisTools || hasPostGameMeta || isStatusConcluded) {
+      // 2. Dedicated Computer analysis container (only after game conclusion)
+      const hasComputerAnalysis = document.querySelector('.computer-analysis');
+
+      if ((resultEl && isStatusConcluded) || (statusEl && isStatusConcluded) || (hasComputerAnalysis && isStatusConcluded)) {
         return false; // Concluded historical match or post-game computer analysis!
       }
 
-      // Fail-Safe: On a Lichess game path without confirmed conclusion, assume live game!
+      // Fail-Safe: On any Lichess game path without confirmed conclusion, assume live game!
       if (/^\/[a-zA-Z0-9]{8,12}/.test(path)) {
         return true;
       }
     }
 
     if (host.includes('chess.com')) {
+      const hasRunningClock = document.querySelector(
+        '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running, .clock.clock-running'
+      );
+      if (hasRunningClock) {
+        return true;
+      }
+
       const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
       const isMetaConcluded = /won by|drawn by|won on time|won on disconnection|resignation|checkmate/i.test(metaDesc);
 
-      // 1. Game over modals, dialogs, player result banners
+      // 1. Specific Game over modals and player result banners (must be visible and active!)
+      // Excludes generic .board-dialog-component to avoid false-unlocks on promotion/settings dialogs
       const gameOverEl = document.querySelector(
         '.game-over-modal, [data-cy="game-over-modal"], ' +
         '.game-over-dialog, [data-cy="game-over-dialog"], ' +
-        '.board-dialog-component, [class*="board-dialog"], ' +
         '.game-over-header-component, [class*="game-over-header"], ' +
         '.game-over-player-component, [class*="game-over-player"], ' +
         '.game-over-message-component, [class*="game-over-message"], ' +
         '.live-game-over-component, [class*="live-game-over"], ' +
         '.game-result-component, [class*="game-result"]'
       );
+      const isGameOverVisible = FairPlayGuard.isVisibleAndActive(gameOverEl);
 
-      // 2. Post-game action buttons (Game Review, Rematch, New Game)
-      const postGameActionBtn = document.querySelector(
-        '[data-cy="game-review-button"], button.game-review-buttons-review, ' +
-        'button.game-review-button-component, [class*="game-review-button"], ' +
-        '[data-cy="new-game-button"], button.new-game-button-component, ' +
-        '[data-cy="rematch-button"], button[aria-label*="Rematch" i], ' +
-        'button[aria-label*="再来一局" i], button[aria-label*="新对局" i], ' +
-        '.game-over-buttons-component, [class*="game-over-buttons"], ' +
-        'a[href*="/analysis/game/live/"], a[href*="/analysis/game/daily/"]'
-      );
-
-      // 3. Move list termination result node (e.g. 1-0, 0-1, 1/2-1/2)
+      // 2. Move list termination result node (e.g. 1-0, 0-1, 1/2-1/2)
       const moveListResult = document.querySelector(
         '.move-list-result, [class*="move-list-result"], ' +
         '.vertical-move-list-result, [class*="vertical-move-list"] [class*="result"]'
       );
-      const isMoveListConcluded = moveListResult && /1-0|0-1|1\/2/i.test(moveListResult.textContent || '');
+      const isMoveListConcluded = moveListResult && FairPlayGuard.isVisibleAndActive(moveListResult) &&
+        /1-0|0-1|1\/2/i.test(moveListResult.textContent || '');
 
-      // 4. Status text conclusion check
-      const statusText = (gameOverEl?.textContent || '') + ' ' + (moveListResult?.textContent || '');
+      // 3. Status text conclusion check
+      const statusText = ((isGameOverVisible ? gameOverEl?.textContent : '') + ' ' + (moveListResult?.textContent || '')).trim();
       const isStatusConcluded = /checkmate|resignation|resigned|time out|timeout|drawn|stalemate|agreed|abandoned|insufficient material|won by|won on|drawn by|game over|获胜|胜出|认输|超时|和棋|绝杀|对局结束/i.test(statusText);
 
-      // Verify that clock is NOT running
-      const isEventRelay = path.startsWith('/events');
-      const hasRunningClock = !isEventRelay && document.querySelector(
-        '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
-      );
-
-      if (!hasRunningClock && (isMetaConcluded || gameOverEl || postGameActionBtn || isMoveListConcluded || isStatusConcluded)) {
-        return false; // Concluded historical/post-game match!
+      // On live arenas (/play, /live), only unlock if there is an active, visible game-over modal with confirmed status
+      const isPlayArena = path.startsWith('/play') || path.startsWith('/live');
+      if (isPlayArena) {
+        if (isGameOverVisible && (isStatusConcluded || isMoveListConcluded)) {
+          return false;
+        }
+        // In live play arena without confirmed visible conclusion: strict lock (covers delay loading and modal dismissal)
+        return true;
       }
 
-      // Daily or Live game paths without verified conclusion:
-      // Fail-Safe: Must be locked!
-      if (path.startsWith('/game/live/') || path.startsWith('/game/daily/') || path.startsWith('/play') || path.startsWith('/live')) {
+      // On game archive or daily game paths:
+      const isGamePath = path.startsWith('/game/live/') || path.startsWith('/game/daily/');
+      if (isGamePath) {
+        if ((isGameOverVisible && isStatusConcluded) || isMoveListConcluded || isMetaConcluded) {
+          return false;
+        }
         return true;
+      }
+
+      if ((isGameOverVisible && isStatusConcluded) || isMoveListConcluded || isMetaConcluded) {
+        return false;
       }
     }
 

@@ -14,11 +14,17 @@ export class GameAnalyzer {
     this.isAnalyzing = false;
     this.isCancelled = false;
     this.lastReviewResult = null;
+    this._runCounter = 0;
+    this._currentRunId = 0;
   }
 
   cancel() {
     this.isCancelled = true;
+    this._currentRunId = ++this._runCounter;
     this.isAnalyzing = false;
+    if (this.stockfish?.stop) {
+      try { this.stockfish.stop(); } catch (e) {}
+    }
   }
 
   /**
@@ -164,26 +170,7 @@ export class GameAnalyzer {
         resolve(e.detail || null);
       };
       window.addEventListener('__MAIA_PAGE_DATA_RES__', handler);
-
-      const script = document.createElement('script');
-      script.textContent = `
-        (function() {
-          try {
-            const b = document.querySelector('wc-chess-board, chess-board');
-            const g = b?.game || b?.controller;
-            const pgn = g?.getPGN?.() || b?.getPGN?.() || g?.getOptions?.()?.pgn || '';
-            const moveList = g?.moveList || g?.getOptions?.()?.moveList || '';
-            const movesAttr = b?.getAttribute?.('moves') || '';
-            window.dispatchEvent(new CustomEvent('__MAIA_PAGE_DATA_RES__', {
-              detail: { pgn, moveList, movesAttr }
-            }));
-          } catch (e) {
-            window.dispatchEvent(new CustomEvent('__MAIA_PAGE_DATA_RES__', { detail: null }));
-          }
-        })();
-      `;
-      (document.head || document.documentElement).appendChild(script);
-      script.remove();
+      window.dispatchEvent(new CustomEvent('__MAIA_PAGE_DATA_REQ__'));
 
       setTimeout(() => {
         if (!resolved) {
@@ -681,7 +668,12 @@ export class GameAnalyzer {
    * Run full game analysis
    */
   async analyzeGame(moves, options = {}) {
-    if (this.isAnalyzing) return null;
+    if (this.isAnalyzing) {
+      this.cancel();
+      await new Promise(r => setTimeout(r, 20));
+    }
+    const runId = ++this._runCounter;
+    this._currentRunId = runId;
     this.isAnalyzing = true;
     this.isCancelled = false;
 
@@ -739,7 +731,7 @@ export class GameAnalyzer {
 
       // Step 1: Evaluate each position with Stockfish 19
       for (let i = 0; i < totalPositions; i++) {
-        if (this.isCancelled) {
+        if (this.isCancelled || this._currentRunId !== runId) {
           this.isAnalyzing = false;
           return null;
         }
@@ -895,44 +887,40 @@ export class GameAnalyzer {
         }
 
         // Sampling Strategy: Balanced sampling for both divergence archetypes:
-        // Type 1 Candidates (✨ 超越直觉): Played engine best move (cleanPlayed === cleanBest, lossCp <= 15, ply >= 6)
-        // Type 2 Candidates (💡 直觉陷阱): Significant loss (lossCp >= 40)
+        // Sampling Strategy: Evaluate Maia intuition for all candidate 妙手 and 俗手:
+        // 1. Potential 俗手: significant loss (lossCp >= 80)
+        // 2. Potential 妙手: played engine best move (cleanPlayed === cleanBest, lossCp <= 10, ply >= 4)
         const priorityIndices = [];
         const seenIdx = new Set();
 
-        // 1. Candidate traps: largest centipawn losses (up to 9 moves)
+        // 1. Candidate 俗手 (直觉陷阱): moves with significant centipawn loss
         const candidateLosses = analyzedMoves
           .map((m, idx) => ({ m, idx }))
-          .filter(item => item.m.lossCp >= 40)
+          .filter(item => item.m.lossCp >= 80)
           .sort((a, b) => b.m.lossCp - a.m.lossCp);
-        for (const item of candidateLosses.slice(0, 9)) {
+        for (const item of candidateLosses) {
           seenIdx.add(item.idx);
           priorityIndices.push(item.idx);
         }
 
-        // 2. Candidate beyond-intuition: played engine best moves with tactical relevance (up to 8 moves)
+        // 2. Candidate 妙手 (超越直觉): played engine best moves
         const candidateBests = analyzedMoves
           .map((m, idx) => ({ m, idx }))
           .filter(item => {
             const cleanPlayed = item.m.san.replace(/[+#?!]/g, '');
             const cleanBest = (item.m.bestSan || '').replace(/[+#?!]/g, '');
-            return item.m.ply >= 6 && item.m.lossCp <= 15 && cleanPlayed && cleanBest && cleanPlayed === cleanBest;
-          })
-          .sort((a, b) => {
-            // Prioritize tactical interest: captures (+3), checks (+2), non-pawn moves (+1), deep ply (+1)
-            const scoreTactical = (m) => (m.san.includes('x') ? 3 : 0) + (m.san.includes('+') ? 2 : 0) + (/^[NBRQK]/.test(m.san) ? 1 : 0) + (m.ply >= 12 ? 1 : 0);
-            return scoreTactical(b.m) - scoreTactical(a.m);
+            return item.m.ply >= 4 && item.m.lossCp <= 10 && cleanPlayed && cleanBest && cleanPlayed === cleanBest;
           });
-        for (const item of candidateBests.slice(0, 8)) {
+        for (const item of candidateBests) {
           if (!seenIdx.has(item.idx)) {
             seenIdx.add(item.idx);
             priorityIndices.push(item.idx);
           }
         }
 
-        // 3. Opening anchor moves (ply 1-4) to establish opening baseline if space permits
+        // 3. Opening anchor moves (ply 1-4)
         for (let i = 0; i < Math.min(4, analyzedMoves.length); i++) {
-          if (priorityIndices.length >= 18) break;
+          if (priorityIndices.length >= 24) break;
           if (!seenIdx.has(i)) {
             seenIdx.add(i);
             priorityIndices.push(i);
@@ -944,7 +932,7 @@ export class GameAnalyzer {
 
         const totalToPredict = priorityIndices.length;
         for (let j = 0; j < totalToPredict; j++) {
-          if (this.isCancelled) break;
+          if (this.isCancelled || this._currentRunId !== runId) break;
           const idx = priorityIndices[j];
           const mv = analyzedMoves[idx];
 
@@ -978,33 +966,28 @@ export class GameAnalyzer {
               const matchedProb = matchedIdx !== -1 && typeof pred.moves[matchedIdx].prob === 'number' ? pred.moves[matchedIdx].prob : 0;
               mv.humanProbability = matchedIdx !== -1 ? matchedProb : 0;
 
-              // Type 1: ✨ 超越直觉 · 走出引擎一选 (Beyond Intuition)
-              // Condition: Played move matches Stockfish best recommendation, but Maia intuition favored another move
-              // and human probability for this move is low (< 20% or unranked in top 2).
-              const isBestMove = cleanPlayed && cleanBest && cleanPlayed === cleanBest && mv.lossCp <= 15;
-              if (isBestMove && mv.ply >= 6) {
+              // Type 1: ✨ 妙手 (实战下出了引擎一选且 Stockfish 引擎评估收益超过 Maia 一选)
+              const isEngineBest = cleanPlayed && cleanBest && cleanPlayed === cleanBest && mv.lossCp <= 10;
+              if (isEngineBest && mv.ply >= 4) {
                 const maiaPrefersOther = cleanMaia && cleanMaia !== cleanPlayed;
-                const isUnintuitive = maiaPrefersOther && (matchedIdx === -1 || matchedIdx > 1 || matchedProb < 20.0);
-                if (isUnintuitive) {
+                if (maiaPrefersOther) {
                   mv.isBeyondIntuition = true;
                   mv.divergenceType = 'beyond_intuition';
-                  const probTxt = matchedIdx !== -1 ? `${Math.round(matchedProb)}% 棋手考虑` : '人类直觉罕见';
+                  const probTxt = matchedIdx !== -1 ? `${Math.round(matchedProb)}% 棋手走出` : '人类直觉罕见';
                   const topTxt = top.prob ? `${Math.round(top.prob)}%` : '';
-                  mv.divergenceNote = `走出引擎一选 ${cleanBest}，打破人类直觉习惯 (人类倾向 ${cleanMaia} ${topTxt}，实战走法仅 ${probTxt})`;
+                  mv.divergenceNote = `走出引擎一选 ${cleanBest}，评估收益超越人类直觉首选 (直觉一选 ${cleanMaia} ${topTxt}，实战走法仅 ${probTxt})`;
                 }
               }
 
-              // Type 2: 💡 直觉陷阱 · 惯性失误 (Intuition Trap)
-              // Condition: Played move aligns with Maia top intuition (Rank #1 or #2, or prob >= 20%),
-              // but Stockfish reveals significant loss (lossCp >= 45).
-              if (mv.lossCp >= 45) {
-                const isIntuitiveMistake = (cleanPlayed === cleanMaia) || (matchedIdx !== -1 && matchedIdx <= 1) || (matchedProb >= 20.0);
-                if (isIntuitiveMistake) {
-                  mv.isHumanTrap = true;
-                  mv.divergenceType = 'intuition_trap';
-                  const probTxt = matchedProb > 0 ? `约 ${Math.round(matchedProb)}% 棋手易犯同类错` : '多数人类棋手在此局面都会产生该直觉错觉';
-                  mv.divergenceNote = `落入直觉陷阱 (${probTxt})，引擎评估损耗 ${(mv.lossCp / 100).toFixed(1)} 兵，最佳应走 ${cleanBest}`;
-                }
+              // Type 2: 💡 俗手 (实战下出了 Maia 一选或二选但导致 Stockfish 评估收益大幅下降)
+              // 条件: 实战走出 Maia 一选 (matchedIdx === 0) 或 二选 (matchedIdx === 1)，且损耗 >= 0.8 兵 (lossCp >= 80)
+              const isMaiaTop1Or2 = (cleanPlayed === cleanMaia) || (matchedIdx === 0 || matchedIdx === 1);
+              if (isMaiaTop1Or2 && mv.lossCp >= 80) {
+                mv.isHumanTrap = true;
+                mv.divergenceType = 'intuition_trap';
+                const rankTxt = (cleanPlayed === cleanMaia || matchedIdx === 0) ? '直觉一选' : '直觉二选';
+                const probTxt = matchedProb > 0 ? `直觉概率 ${Math.round(matchedProb)}%` : '';
+                mv.divergenceNote = `落入俗手惯性 (实战下出${rankTxt}${probTxt ? ' ' + probTxt : ''})，导致局面评估大幅损耗 ${(mv.lossCp / 100).toFixed(1)} 兵，最佳应走 ${cleanBest}`;
               }
             }
           } catch (e) {
@@ -1013,27 +996,31 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 4: Filter & converge into Human-Machine Divergence Moments (人机分歧关键瞬间)
-      const divergenceMoments = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap');
-
-      // If divergence moments are few (< 4), also include pure critical blunders as secondary moments
-      const fallbackBlunders = analyzedMoves
-        .filter(m => !m.divergenceType && (m.severity === 'blunder' || m.lossCp >= 150))
-        .sort((a, b) => b.lossCp - a.lossCp)
-        .slice(0, Math.max(0, 4 - divergenceMoments.length));
-
-      // Replay chronologically for intuitive game story walkthrough
-      const keyMoments = [...divergenceMoments, ...fallbackBlunders]
-        .sort((a, b) => a.ply - b.ply)
-        .slice(0, 16);
+      // Step 4: Strictly retain ONLY the two specified archetypes:
+      // 1. 妙手: 实战下出了引擎一选且 Stockfish 评估收益超过 Maia 一选
+      // 2. 俗手: 实战下出了 Maia 一选或二选但导致 Stockfish 评估收益大幅下降
+      const keyMoments = analyzedMoves
+        .filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap')
+        .sort((a, b) => a.ply - b.ply);
 
       const beyondIntuitionCount = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition').length;
       const intuitionTrapsCount = analyzedMoves.filter(m => m.divergenceType === 'intuition_trap').length;
 
+      if (this.isCancelled || this._currentRunId !== runId) {
+        this.isAnalyzing = false;
+        return null;
+      }
+
       const result = {
+        runId,
+        gameKey: cacheKey,
+        elo,
+        depth,
         totalMoves: positions.length - 1,
         isPartial: !!positions.isPartial,
         stoppedAtPly: positions.stoppedAtPly || null,
+        unparsedSan: positions.unparsedSan || null,
+        rawTotalMoves: moves.length,
         blundersCount,
         mistakesCount,
         inaccuraciesCount,
@@ -1045,10 +1032,12 @@ export class GameAnalyzer {
         keyMoments
       };
 
-      this.lastReviewResult = result;
-      this.isAnalyzing = false;
+      if (this._currentRunId === runId) {
+        this.lastReviewResult = result;
+        this.isAnalyzing = false;
+      }
 
-      if (onProgress) {
+      if (onProgress && this._currentRunId === runId) {
         onProgress({
           phase: 'done',
           current: totalPositions,
@@ -1057,14 +1046,16 @@ export class GameAnalyzer {
         });
       }
 
-      // Save to Persistent Cache ONLY if complete and no engine evaluation failures occurred
-      if (cacheKey && !positions.isPartial && evalFailures === 0) {
+      // Save to Persistent Cache ONLY if complete, not cancelled, and no engine evaluation failures occurred
+      if (cacheKey && !positions.isPartial && evalFailures === 0 && this._currentRunId === runId) {
         await GameAnalyzer.saveCachedReview(cacheKey, result);
       }
 
-      return result;
+      return (this._currentRunId === runId) ? result : null;
     } catch (err) {
-      this.isAnalyzing = false;
+      if (this._currentRunId === runId) {
+        this.isAnalyzing = false;
+      }
       throw err;
     }
   }

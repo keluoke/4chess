@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Exports PyTorch Maia-3 checkpoint (.pt) to a high-speed zero-copy binary format
-for in-browser WebGPU and WebAssembly execution in the Chrome extension.
+for in-browser JavaScript Float32 and WebAssembly execution in the Chrome extension.
 """
 
 import sys

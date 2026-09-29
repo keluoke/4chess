@@ -58,6 +58,14 @@ body {
 
 .studio-logo {
   font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-fork-icon {
+  color: var(--brand-green, #07C160);
+  display: block;
 }
 
 .studio-title {

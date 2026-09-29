@@ -28,6 +28,7 @@ export class StockfishInBrowser {
     this.isStopping = false;
     this.activeRequest = null;
     this.queuedRequest = null;
+    this.port = null;
   }
 
   async initialize() {
@@ -285,51 +286,96 @@ export class StockfishInBrowser {
     }
     this.iframe = frame;
 
-    if (!this._hasListener) {
-      window.addEventListener('message', (event) => {
-        if (this.iframe && event.source !== this.iframe.contentWindow) return;
-        const data = event.data;
-        if (!data) return;
+    // Establish private MessageChannel for strict sandbox boundary
+    if (this.port) {
+      try { this.port.close(); } catch (e) {}
+      this.port = null;
+    }
+    const channel = new MessageChannel();
+    this.port = channel.port1;
 
-        if (data.type === 'STOCKFISH_READY') {
-          if (this._initTimeout) {
-            clearTimeout(this._initTimeout);
-            this._initTimeout = null;
-          }
-          this.isReady = true;
-          if (data.engineName) this.engineName = data.engineName;
-          console.log(`[Stockfish In-Browser] ✅ WebAssembly 引擎已就绪 (${this.engineName})!`);
-          if (this.onReadyCallback) this.onReadyCallback(this.engineName);
-          if (this._readyResolve) {
-            const r = this._readyResolve;
-            this._readyResolve = null;
-            r(true);
-          }
-        } else if (data.type === 'STOCKFISH_RESULT') {
-          const req = this.pendingRequests.get(data.id);
-          if (req) {
-            this.pendingRequests.delete(data.id);
-            req.resolve(data);
-          }
-        } else if (data.type === 'STOCKFISH_ERROR') {
-          console.warn('[Stockfish In-Browser] ⚠️ Error:', data.error);
-          if (this._initTimeout) {
-            clearTimeout(this._initTimeout);
-            this._initTimeout = null;
-          }
-          if (!this.isReady && this._readyResolve) {
-            if (this.iframe && this.iframe.parentNode) {
-              try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
-            }
-            this.iframe = null;
-            this.initPromise = null;
-            const r = this._readyResolve;
-            this._readyResolve = null;
-            r(false);
-          }
+    this.port.onmessage = (event) => {
+      const data = event.data;
+      if (!data) return;
+
+      if (data.type === 'STOCKFISH_READY') {
+        if (this._initTimeout) {
+          clearTimeout(this._initTimeout);
+          this._initTimeout = null;
         }
+        this.isReady = true;
+        if (data.engineName) this.engineName = data.engineName;
+        console.log(`[Stockfish In-Browser] ✅ WebAssembly 引擎已就绪 (${this.engineName})!`);
+        if (this.onReadyCallback) this.onReadyCallback(this.engineName);
+        if (this._readyResolve) {
+          const r = this._readyResolve;
+          this._readyResolve = null;
+          r(true);
+        }
+      } else if (data.type === 'STOCKFISH_RESULT') {
+        const req = this.pendingRequests.get(data.id);
+        if (req) {
+          this.pendingRequests.delete(data.id);
+          req.resolve(data);
+        }
+      } else if (data.type === 'STOCKFISH_ERROR') {
+        console.warn('[Stockfish In-Browser] ⚠️ Error:', data.error);
+        if (this._initTimeout) {
+          clearTimeout(this._initTimeout);
+          this._initTimeout = null;
+        }
+        if (!this.isReady && this._readyResolve) {
+          if (this.iframe && this.iframe.parentNode) {
+            try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
+          }
+          this.iframe = null;
+          this.initPromise = null;
+          const r = this._readyResolve;
+          this._readyResolve = null;
+          r(false);
+        }
+      }
+    };
+
+    let portTransferred = false;
+    let onWindowMsg = null;
+
+    const handshake = (token) => {
+      const sendPort = () => {
+        if (portTransferred) return;
+        try {
+          if (this.iframe && this.iframe.contentWindow) {
+            portTransferred = true;
+            if (onWindowMsg) {
+              window.removeEventListener('message', onWindowMsg);
+              onWindowMsg = null;
+            }
+            this.iframe.contentWindow.postMessage({ type: 'INIT_AUTH_PORT', token }, '*', [channel.port2]);
+          }
+        } catch (e) {
+          console.warn('[Stockfish In-Browser] Failed to post INIT_AUTH_PORT:', e);
+        }
+      };
+
+      onWindowMsg = (e) => {
+        if (e.data && e.data.type === 'SANDBOX_READY_FOR_PORT') {
+          sendPort();
+        }
+      };
+      window.addEventListener('message', onWindowMsg);
+
+      this.iframe.addEventListener('load', () => {
+        setTimeout(sendPort, 40);
+      }, { once: true });
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: 'ACQUIRE_SANDBOX_TOKEN' }, (res) => {
+        const token = res?.ok ? res.token : null;
+        handshake(token);
       });
-      this._hasListener = true;
+    } else {
+      handshake('standalone_token');
     }
 
     if (this._initTimeout) {
@@ -338,6 +384,10 @@ export class StockfishInBrowser {
     }
     this._initTimeout = setTimeout(() => {
       this._initTimeout = null;
+      if (onWindowMsg) {
+        window.removeEventListener('message', onWindowMsg);
+        onWindowMsg = null;
+      }
       if (!this.isReady) {
         console.warn('[Stockfish In-Browser] ⚠️ 引擎初始化就绪等待超时 (Stockfish init timeout)');
         if (this.iframe && this.iframe.parentNode) {
@@ -351,7 +401,7 @@ export class StockfishInBrowser {
           r(false);
         }
       }
-    }, 7500);
+    }, 16000);
   }
 
   async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1) {
@@ -425,14 +475,14 @@ export class StockfishInBrowser {
           this.queuedRequest = req;
           this.stop();
         }
-      } else if (this.iframe?.contentWindow) {
-        this.iframe.contentWindow.postMessage({
+      } else if (this.port) {
+        this.port.postMessage({
           type: 'EVALUATE',
           id: reqId,
           fen,
           depth,
           multipv
-        }, '*');
+        });
       } else {
         clearTimeout(timer);
         this.pendingRequests.delete(reqId);
@@ -447,8 +497,8 @@ export class StockfishInBrowser {
         this.isStopping = true;
         this.worker.postMessage('stop');
       }
-    } else if (this.iframe?.contentWindow) {
-      this.iframe.contentWindow.postMessage({ type: 'STOP' }, '*');
+    } else if (this.port) {
+      this.port.postMessage({ type: 'STOP' });
     }
   }
 
@@ -461,6 +511,10 @@ export class StockfishInBrowser {
     this.initPromise = null;
     this._readyResolve = null;
 
+    if (this.port) {
+      try { this.port.close(); } catch (e) {}
+      this.port = null;
+    }
     if (this.worker) {
       try { this.worker.terminate(); } catch (e) {}
       this.worker = null;

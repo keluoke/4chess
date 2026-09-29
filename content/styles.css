@@ -118,6 +118,9 @@
 .weui-float-icon {
   font-size: 16px;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .weui-float-title {
@@ -172,6 +175,14 @@
 .weui-navbar__icon {
   font-size: 15px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weui-fork-icon {
+  color: var(--weui-BRAND);
+  display: block;
 }
 
 .weui-navbar__title {
@@ -799,6 +810,25 @@
   border-left-color: var(--weui-RED);
 }
 
+.weui-insight-box strong {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.weui-insight-box.alert-trap strong {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.weui-fair-play-lock-box {
+  animation: weuiLockPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes weuiLockPulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+
 .weui-insight-header {
   display: flex;
   align-items: center;
@@ -880,7 +910,9 @@
    WeChat Game Review (全局棋局复盘与关键损耗排行榜)
    ========================================================================== */
 .weui-review-entry {
-  padding: 8px 12px;
+  padding: 0;
+  width: 100%;
+  margin-top: auto;
 }
 
 .weui-btn-review {

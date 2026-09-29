@@ -134,26 +134,65 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
-  // Scenario 4: Chess.com Board Dialog Component
+  // Scenario 4: Chess.com Generic Board Dialog (e.g. promo or settings dialog) -> MUST REMAIN LOCKED
   total++;
-  if (await testScenario('Chess.com Game Concluded with Board Dialog', {
+  if (await testScenario('Chess.com Generic Board Dialog (must remain locked)', {
     url: 'https://www.chess.com/play/online',
     elements: {
-      '.board-dialog-component': { textContent: 'Black won on time' },
-      'button.game-review-buttons-review': {}
+      '.board-dialog-component': { textContent: 'Select promotion piece' }
+    },
+    expectedLocked: true
+  })) passed++;
+
+  // Scenario 5: Chess.com Game Concluded with Game-Over Dialog
+  total++;
+  if (await testScenario('Chess.com Game Concluded with Game Over Dialog', {
+    url: 'https://www.chess.com/play/online',
+    elements: {
+      '.game-over-dialog': { textContent: 'Black won on time' }
     },
     expectedLocked: false
   })) passed++;
 
-  // Scenario 5: Chess.com Analysis Board
+  // Scenario 6: Chess.com /events with running clock -> MUST BE LOCKED!
+  total++;
+  if (await testScenario('Chess.com /events with running clock (must be locked)', {
+    url: 'https://www.chess.com/events/2026-speed-chess-championship',
+    elements: {
+      '.clock-running': { textContent: '01:45' }
+    },
+    expectedLocked: true
+  })) passed++;
+
+  // Scenario 7: Chess.com Stale/Hidden Game Over Modal on /play/online -> MUST BE LOCKED!
+  total++;
+  if (await testScenario('Chess.com Stale/Hidden Game Over Modal on /play/online (must be locked)', {
+    url: 'https://www.chess.com/play/online',
+    elements: {
+      '.game-over-modal': { textContent: 'White won by checkmate', hidden: true }
+    },
+    expectedLocked: true
+  })) passed++;
+
+  // Scenario 8: Chess.com Delayed Loading on /play/online (empty DOM) -> MUST BE LOCKED!
+  total++;
+  if (await testScenario('Chess.com Delayed Loading on /play/online (fail-safe locked)', {
+    url: 'https://www.chess.com/play/online',
+    elements: {},
+    expectedLocked: true
+  })) passed++;
+
+  // Scenario 9: Chess.com Analysis Board (interactive board must NOT be falsely locked)
   total++;
   if (await testScenario('Chess.com Analysis Board (/analysis)', {
     url: 'https://www.chess.com/analysis',
-    elements: {},
+    elements: {
+      'wc-chess-board[can-move]': {}
+    },
     expectedLocked: false
   })) passed++;
 
-  // Scenario 6: Lichess Live Game in Progress
+  // Scenario 10: Lichess Live Game in Progress
   total++;
   if (await testScenario('Lichess Live Game (clock running, resign button active)', {
     url: 'https://lichess.org/abcd1234',
@@ -164,7 +203,27 @@ async function runAll() {
     expectedLocked: true
   })) passed++;
 
-  // Scenario 7: Lichess Game Over
+  // Scenario 11: Lichess /broadcast with running clock -> MUST BE LOCKED!
+  total++;
+  if (await testScenario('Lichess /broadcast with running clock (must be locked)', {
+    url: 'https://lichess.org/broadcast/candidates-2026/round-1/12345678',
+    elements: {
+      '.rclock-running': { textContent: '12:30' }
+    },
+    expectedLocked: true
+  })) passed++;
+
+  // Scenario 12: Lichess Live Game with Navbar <a href="/analysis"> -> MUST REMAIN LOCKED!
+  total++;
+  if (await testScenario('Lichess Live Game with Navbar a[href*="/analysis"] (must be locked)', {
+    url: 'https://lichess.org/abcd1234',
+    elements: {
+      'a[href*="/analysis"]': { textContent: 'Analysis Board' }
+    },
+    expectedLocked: true
+  })) passed++;
+
+  // Scenario 13: Lichess Game Over
   total++;
   if (await testScenario('Lichess Game Concluded (.result-wrap)', {
     url: 'https://lichess.org/abcd1234',
@@ -175,7 +234,7 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
-  // Scenario 8: Lichess Analysis Board
+  // Scenario 14: Lichess Analysis Board
   total++;
   if (await testScenario('Lichess Analysis Board (/analysis)', {
     url: 'https://lichess.org/analysis',
@@ -183,7 +242,7 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
-  // Scenario 9: Lichess Game Over with "Black left the game • White is victorious" (NKf48lZ4)
+  // Scenario 15: Lichess Game Over with "Black left the game • White is victorious" (NKf48lZ4)
   total++;
   if (await testScenario('Lichess Concluded: Black left the game • White is victorious (NKf48lZ4)', {
     url: 'https://lichess.org/NKf48lZ4/black#20',
@@ -194,18 +253,18 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
-  // Scenario 10: Lichess Computer Analysis Tab (Request Computer Analysis page)
+  // Scenario 16: Lichess Computer Analysis Tab (Request Computer Analysis page)
   total++;
   if (await testScenario('Lichess Computer Analysis Page (.computer-analysis)', {
     url: 'https://lichess.org/NKf48lZ4/black#20',
     elements: {
       '.computer-analysis': {},
-      '.analyse__tools': {}
+      '.game__meta .status': { textContent: 'White won by resignation' }
     },
     expectedLocked: false
   })) passed++;
 
-  // Scenario 11: Lichess Concluded in Chinese language
+  // Scenario 17: Lichess Concluded in Chinese language
   total++;
   if (await testScenario('Lichess Concluded in Chinese (黑方离开对局 • 白方胜)', {
     url: 'https://lichess.org/12345678',

@@ -21,7 +21,7 @@ export class MaiaEngine {
     this.isReady = false;
     this.isLoading = false;
     this.initPromise = null;
-    this.backendName = '浏览器端 WebGPU / JS + WebAssembly';
+    this.backendName = '浏览器端 Float32 JS + Stockfish WASM';
     this.modelName = 'Maia-3 5M Chessformer';
     this.lruCache = new Map();
     this.MAX_CACHE_SIZE = 150;
@@ -62,7 +62,7 @@ export class MaiaEngine {
     this.initPromise = null;
     this.maiaInBrowser.reset();
     if (overrideUrl) {
-      await ModelCache.clearCache('maia3-5m');
+      await ModelCache.clearAll();
     }
     return this.initialize(overrideUrl);
   }

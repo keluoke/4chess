@@ -5,7 +5,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const statusPill = document.getElementById('status-pill');
   const eloSelect = document.getElementById('default-elo');
-  const backendSelect = document.getElementById('backend-pref');
   const cdnInput = document.getElementById('cdn-url');
   const presetSelect = document.getElementById('model-preset-select');
   const panelSwitch = document.getElementById('toggle-panel-switch');
@@ -80,12 +79,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
       }
-    });
-  }
-
-  if (backendSelect) {
-    backendSelect.addEventListener('change', (e) => {
-      chrome.storage.local.set({ preferredBackend: e.target.value });
     });
   }
 

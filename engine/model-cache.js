@@ -110,4 +110,24 @@ export class ModelCache {
       return false;
     }
   }
+
+  static async clearAll() {
+    try {
+      const db = await this.openDB();
+      if (!db) return false;
+
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.clear();
+        req.onsuccess = () => {
+          console.log('[ModelCache] 🧹 IndexedDB 所有版本模型缓存已彻底清空');
+          resolve(true);
+        };
+        req.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      return false;
+    }
+  }
 }

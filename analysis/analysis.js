@@ -46,6 +46,9 @@ class AnalysisStudioApp {
     this.positions = [];
     this.reviewResult = null;
     this.currentPly = 0;
+    this.gameEpoch = 0;
+    this.reviewEpoch = 0;
+    this.currentGameKey = '';
 
     this.isBranching = false;
     this.branchFen = null;
@@ -153,6 +156,20 @@ class AnalysisStudioApp {
     });
   }
 
+  setComparePlayedSan(san, badgeText = null, badgeBg = null, badgeColor = null) {
+    this.el.comparePlayedSan.replaceChildren();
+    this.el.comparePlayedSan.appendChild(document.createTextNode(san || '—'));
+    if (badgeText) {
+      const badge = document.createElement('span');
+      badge.className = 'compare-match-badge';
+      if (badgeBg) badge.style.background = badgeBg;
+      if (badgeColor) badge.style.color = badgeColor;
+      badge.textContent = badgeText;
+      this.el.comparePlayedSan.appendChild(document.createTextNode(' '));
+      this.el.comparePlayedSan.appendChild(badge);
+    }
+  }
+
   bindEvents() {
     // Elo selector
     this.el.eloSelector.addEventListener('change', (e) => {
@@ -164,16 +181,13 @@ class AnalysisStudioApp {
         }
       } catch (err) {}
 
-      // Reset active move Maia prediction so it recalculates for the new ELO
-      if (this.currentPly > 0) {
-        const moveReview = this.reviewResult?.allMoves?.find(m => m.ply === this.currentPly);
-        if (moveReview) {
-          moveReview.maiaTopSan = null;
-          moveReview.maiaTopUci = null;
-          moveReview.maiaTopProb = null;
-        }
+      // Invalidate review result so old Elo data is not mixed
+      this.reviewResult = null;
+      if (this.moves && this.moves.length > 0) {
+        this.runFullReview(false);
+      } else {
+        this.updateActivePositionAnalysis();
       }
-      this.updateActivePositionAnalysis();
     });
 
     // Board controls
@@ -499,7 +513,7 @@ class AnalysisStudioApp {
 
       if (eloParam) {
         const parsedElo = parseInt(eloParam, 10);
-        if ([1100, 1500, 1900].includes(parsedElo)) {
+        if ([1100, 1500, 1900, 2200].includes(parsedElo)) {
           this.currentElo = parsedElo;
           if (this.el.eloSelector) this.el.eloSelector.value = String(parsedElo);
         }
@@ -557,6 +571,12 @@ class AnalysisStudioApp {
   }
 
   loadGameData(game) {
+    if (!game) return;
+    this.analyzer.cancel();
+    this.gameEpoch++;
+    this.reviewEpoch++;
+    this.reviewResult = null;
+
     if (game.white) this.el.metaWhite.textContent = `⚪ ${game.white}`;
     if (game.black) this.el.metaBlack.textContent = `⚫ ${game.black}`;
     if (game.result) this.el.metaResult.textContent = game.result;
@@ -565,16 +585,50 @@ class AnalysisStudioApp {
       this.parsePgnHeaders(game.pgn);
     }
 
+    let parsedMoves = [];
     if (game.moves && game.moves.length > 0) {
-      this.moves = game.moves;
+      parsedMoves = game.moves;
     } else if (game.pgn) {
-      this.moves = GameAnalyzer.parsePgn(game.pgn);
+      parsedMoves = GameAnalyzer.parsePgn(game.pgn);
     }
 
-    if (this.moves.length === 0) return;
+    if (parsedMoves.length === 0) return;
 
-    this.positions = GameAnalyzer.buildPositionChain(this.moves);
-    this.el.moveCountBadge.textContent = String(this.moves.length);
+    if (parsedMoves.startFen) {
+      const testBoard = new ChessBoard();
+      if (!testBoard.load(parsedMoves.startFen)) {
+        console.warn('[Analysis Studio] Invalid start FEN in game data, skipped.');
+        return;
+      }
+    }
+
+    const positions = GameAnalyzer.buildPositionChain(parsedMoves);
+    if (!positions || positions.length <= 1) return;
+
+    if (positions.isPartial) {
+      const validMoves = parsedMoves.slice(0, positions.length - 1);
+      validMoves.isPartial = true;
+      validMoves.stoppedAtPly = positions.stoppedAtPly;
+      validMoves.unparsedSan = positions.unparsedSan;
+      validMoves.rawTotalMoves = parsedMoves.length;
+      if (parsedMoves.startFen) validMoves.startFen = parsedMoves.startFen;
+      this.moves = validMoves;
+    } else {
+      this.moves = parsedMoves;
+    }
+
+    this.positions = positions;
+    this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
+
+    // Reset UI state immediately
+    this.evalChart.setData([]);
+    this.el.blunderCountBadge.textContent = '0';
+    this.el.blunderList.replaceChildren();
+    this.el.divergenceContent.textContent = '—';
+    this.el.divergenceBadge.textContent = '—';
+    this.boardUI.setArrows([]);
+
+    this.el.moveCountBadge.textContent = this.moves.isPartial ? `${this.moves.length} (已截断)` : String(this.moves.length);
 
     this.renderMoveList();
     this.goToPly(0);
@@ -587,16 +641,62 @@ class AnalysisStudioApp {
   }
 
   loadGameFromPgn(pgnText) {
-    this.parsePgnHeaders(pgnText);
+    if (!pgnText || typeof pgnText !== 'string') return;
     const parsedMoves = GameAnalyzer.parsePgn(pgnText);
     if (!parsedMoves || parsedMoves.length === 0) {
-      alert('未能解析该 PGN 文本，请确认格式是否正确。');
+      alert('未能解析该 PGN 文本，未影响当前棋局。');
       return;
     }
 
-    this.moves = parsedMoves;
-    this.positions = GameAnalyzer.buildPositionChain(this.moves);
-    this.el.moveCountBadge.textContent = String(this.moves.length);
+    // If starting FEN is specified, validate it first
+    if (parsedMoves.startFen) {
+      const testBoard = new ChessBoard();
+      if (!testBoard.load(parsedMoves.startFen)) {
+        alert('PGN 中的起始 FEN 格式非法，已拒绝加载，未影响当前有效棋局。');
+        return;
+      }
+    }
+
+    const positions = GameAnalyzer.buildPositionChain(parsedMoves);
+    if (!positions || positions.length <= 1) {
+      alert('未能从该 PGN 解析出任何有效走法，未影响当前棋局。');
+      return;
+    }
+
+    // Cancel existing analyzer task to prevent cross-game results
+    this.analyzer.cancel();
+    this.gameEpoch++;
+    this.reviewEpoch++;
+    this.reviewResult = null;
+
+    // Reset UI state immediately
+    this.evalChart.setData([]);
+    this.el.blunderCountBadge.textContent = '0';
+    this.el.blunderList.replaceChildren();
+    this.el.divergenceContent.textContent = '—';
+    this.el.divergenceBadge.textContent = '—';
+    this.boardUI.setArrows([]);
+
+    // Check if partial replay occurred
+    if (positions.isPartial) {
+      const validMoves = parsedMoves.slice(0, positions.length - 1);
+      validMoves.isPartial = true;
+      validMoves.stoppedAtPly = positions.stoppedAtPly;
+      validMoves.unparsedSan = positions.unparsedSan;
+      validMoves.rawTotalMoves = parsedMoves.length;
+      if (parsedMoves.startFen) validMoves.startFen = parsedMoves.startFen;
+      this.moves = validMoves;
+    } else {
+      this.moves = parsedMoves;
+    }
+
+    this.positions = positions;
+    this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
+
+    this.parsePgnHeaders(pgnText);
+    this.el.moveCountBadge.textContent = this.moves.isPartial
+      ? `${this.moves.length} (已截断)`
+      : String(this.moves.length);
 
     this.renderMoveList();
     this.goToPly(0);
@@ -622,24 +722,39 @@ class AnalysisStudioApp {
   }
 
   async runFullReview(forceRefresh = false) {
+    if (!this.moves || this.moves.length === 0) return;
+
+    const targetGameEpoch = this.gameEpoch;
+    const targetReviewEpoch = ++this.reviewEpoch;
+    const targetGameKey = this.currentGameKey;
+    const targetElo = this.currentElo;
+
     this.el.progressCard.style.display = 'flex';
     this.el.progressBar.style.width = '0%';
     this.el.percentText.textContent = '0%';
     this.el.phaseText.textContent = '正在准备引擎评估...';
 
-    this.el.blunderList.innerHTML = `
-      <div style="padding: 28px; text-align: center; color: var(--brand-green); font-size: 13px;">
-        <div style="margin-bottom: 8px; font-weight: 600;">⚡ 正在分析全盘对局...</div>
-        <div style="font-size: 11.5px; color: var(--text-dim);" id="blunder-loading-detail">正在启动计算与直觉引擎...</div>
-      </div>
-    `;
+    this.el.blunderList.replaceChildren();
+    const loadingCard = document.createElement('div');
+    loadingCard.style.cssText = 'padding: 28px; text-align: center; color: var(--brand-green); font-size: 13px;';
+    const lTitle = document.createElement('div');
+    lTitle.style.cssText = 'margin-bottom: 8px; font-weight: 600;';
+    lTitle.textContent = '⚡ 正在分析全盘对局...';
+    loadingCard.appendChild(lTitle);
+    const lDetail = document.createElement('div');
+    lDetail.style.cssText = 'font-size: 11.5px; color: var(--text-dim);';
+    lDetail.id = 'blunder-loading-detail';
+    lDetail.textContent = '正在启动计算与直觉引擎...';
+    loadingCard.appendChild(lDetail);
+    this.el.blunderList.appendChild(loadingCard);
 
     try {
       const result = await this.analyzer.analyzeGame(this.moves, {
         depth: 6,
-        elo: this.currentElo,
+        elo: targetElo,
         forceRefresh,
         onProgress: (prog) => {
+          if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
           this.el.progressBar.style.width = `${prog.percent}%`;
           this.el.percentText.textContent = `${prog.percent}%`;
           const detailEl = document.getElementById('blunder-loading-detail');
@@ -657,20 +772,43 @@ class AnalysisStudioApp {
 
       this.el.progressCard.style.display = 'none';
 
+      // Verify epoch and game key to ensure results from a stale task or different game are not applied
+      if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch || this.currentGameKey !== targetGameKey || this.currentElo !== targetElo) {
+        console.log('[Analysis Studio] Discarded stale review result from superseded game/request');
+        return;
+      }
+
       if (result) {
         this.applyReviewResult(result);
       }
     } catch (err) {
+      if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
       console.error('[Analysis Studio] Review failed:', err);
       this.el.progressCard.style.display = 'none';
-      this.el.divergenceContent.innerHTML = `<span style="color: var(--brand-red);">⚠️ 复盘分析出错: ${err.message}</span>`;
-      this.el.blunderList.innerHTML = `
-        <div style="padding: 28px; text-align: center; color: var(--brand-red); font-size: 13px;">
-          <div style="margin-bottom: 8px;">⚠️ 棋局分析未能完成: ${err.message}</div>
-          <button type="button" class="btn-header btn-primary" id="btn-retry-review" style="margin: 0 auto; display: inline-flex;">重试分析</button>
-        </div>
-      `;
-      document.getElementById('btn-retry-review')?.addEventListener('click', () => this.runFullReview(true));
+
+      this.el.divergenceContent.replaceChildren();
+      const errSpan = document.createElement('span');
+      errSpan.style.color = 'var(--brand-red)';
+      errSpan.textContent = `⚠️ 复盘分析出错: ${err.message}`;
+      this.el.divergenceContent.appendChild(errSpan);
+
+      this.el.blunderList.replaceChildren();
+      const errBox = document.createElement('div');
+      errBox.style.cssText = 'padding: 28px; text-align: center; color: var(--brand-red); font-size: 13px;';
+      const msgDiv = document.createElement('div');
+      msgDiv.style.marginBottom = '8px';
+      msgDiv.textContent = `⚠️ 棋局分析未能完成: ${err.message}`;
+      errBox.appendChild(msgDiv);
+
+      const retryBtn = document.createElement('button');
+      retryBtn.type = 'button';
+      retryBtn.className = 'btn-header btn-primary';
+      retryBtn.style.cssText = 'margin: 0 auto; display: inline-flex;';
+      retryBtn.textContent = '重试分析';
+      retryBtn.addEventListener('click', () => this.runFullReview(true));
+      errBox.appendChild(retryBtn);
+
+      this.el.blunderList.appendChild(errBox);
     }
   }
 
@@ -716,21 +854,20 @@ class AnalysisStudioApp {
       filteredMoments = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap);
     }
 
+    this.el.blunderList.replaceChildren();
+
     if (!filteredMoments || filteredMoments.length === 0) {
       const emptyMsg = this.currentDivergenceFilter === 'beyond'
-        ? '本盘未检测到超越直觉的关键棋步'
+        ? '本盘未检测到实战超越人类直觉的妙手'
         : (this.currentDivergenceFilter === 'trap'
-          ? '本盘未检测到显著的惯性直觉陷阱'
-          : '👏 本盘棋质量极高！未检测到显著的人机分歧瞬间或严重失误。');
-      this.el.blunderList.innerHTML = `
-        <div style="padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;">
-          ${emptyMsg}
-        </div>
-      `;
+          ? '本盘未检测到落入直觉惯性的俗手'
+          : '👏 本盘棋未检测到显著的妙手或俗手分歧瞬间。');
+      const emptyBox = document.createElement('div');
+      emptyBox.style.cssText = 'padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;';
+      emptyBox.textContent = emptyMsg;
+      this.el.blunderList.appendChild(emptyBox);
       return;
     }
-
-    this.el.blunderList.innerHTML = '';
 
     filteredMoments.forEach((item, index) => {
       const card = document.createElement('div');
@@ -750,56 +887,124 @@ class AnalysisStudioApp {
       const lossPawnsNum = Math.abs((item.lossCp || 0) / 100).toFixed(1);
       const bestMoveText = (item.bestSan && item.bestSan !== '?') ? item.bestSan : null;
 
-      let typeTag = '';
-      let rightTag = '';
-      let subContent = '';
+      const cardMain = document.createElement('div');
+      cardMain.className = 'blunder-card-main';
+
+      const cardTop = document.createElement('div');
+      cardTop.className = 'blunder-card-top';
+
+      const cardTitle = document.createElement('div');
+      cardTitle.className = 'blunder-card-title';
+
+      const moveNumSpan = document.createElement('span');
+      moveNumSpan.className = 'blunder-move-num';
+      moveNumSpan.textContent = `${item.moveNumber}.`;
+      cardTitle.appendChild(moveNumSpan);
+
+      const sideIconSpan = document.createElement('span');
+      sideIconSpan.className = 'blunder-side-icon';
+      sideIconSpan.textContent = sideIcon;
+      cardTitle.appendChild(sideIconSpan);
+
+      const sanSpan = document.createElement('span');
+      sanSpan.className = 'blunder-san';
+      sanSpan.textContent = item.san;
+      cardTitle.appendChild(sanSpan);
+
+      cardTop.appendChild(cardTitle);
+
+      const tagsGroup = document.createElement('div');
+      tagsGroup.className = 'blunder-tags-group';
+
+      const typeTag = document.createElement('span');
+      typeTag.className = 'blunder-type-tag';
+
+      const rightTag = document.createElement('span');
+      rightTag.className = 'blunder-loss-tag';
+
+      const cardSub = document.createElement('div');
+      cardSub.className = 'blunder-card-sub';
 
       if (isBeyond) {
-        typeTag = `<span class="blunder-type-tag tag-beyond" title="打破人类直觉习惯，走出 Stockfish 引擎最佳一选">✨ 超越直觉</span>`;
-        rightTag = `<span class="blunder-loss-tag tag-gain" title="走出引擎一选">走出引擎一选</span>`;
-        const altText = item.maiaTopSan
-          ? `人类惯性倾向: <strong style="color: #e6a520;">${item.maiaTopSan}</strong> ${item.maiaTopProb ? '(' + Math.round(item.maiaTopProb) + '%)' : ''}`
-          : '突破常规人类直觉惯性';
-        subContent = `<span class="sub-trap-prob" style="color: var(--text-dim);">${altText}</span>`;
+        typeTag.classList.add('tag-beyond');
+        typeTag.title = '实战下出 Stockfish 引擎一选，评估收益超越 Maia 直觉一选';
+        typeTag.textContent = '✨ 妙手';
+        rightTag.classList.add('tag-gain');
+        rightTag.title = '走出引擎一选';
+        rightTag.textContent = '走出引擎一选';
+
+        const subProb = document.createElement('span');
+        subProb.className = 'sub-trap-prob';
+        subProb.style.color = 'var(--text-dim)';
+        if (item.maiaTopSan) {
+          subProb.appendChild(document.createTextNode('人类惯性倾向: '));
+          const topStrong = document.createElement('strong');
+          topStrong.style.color = '#e6a520';
+          topStrong.textContent = item.maiaTopSan;
+          subProb.appendChild(topStrong);
+          if (item.maiaTopProb) {
+            subProb.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
+          }
+        } else {
+          subProb.textContent = '突破常规人类直觉惯性';
+        }
+        cardSub.appendChild(subProb);
       } else if (isTrap) {
-        typeTag = `<span class="blunder-type-tag tag-trap" title="惯性直觉盲区：多数人类棋手在此局面都会产生视觉错觉走错">💡 直觉陷阱</span>`;
-        rightTag = `<span class="blunder-loss-tag" title="相比最佳着法的损耗">损耗 -${lossPawnsNum} 兵</span>`;
-        const trapProbText = item.humanProbability ? `约 ${Math.round(item.humanProbability)}% 棋手易犯同类错` : '易受人类惯性诱导';
-        subContent = `
-          ${bestMoveText ? `<span class="sub-best-move">最佳走法: <strong>${bestMoveText}</strong></span> · ` : ''}
-          <span class="sub-trap-prob">${trapProbText}</span>
-        `;
+        typeTag.classList.add('tag-trap');
+        typeTag.title = '实战下出 Maia 直觉一/二选，但导致局面评估大幅下降';
+        typeTag.textContent = '💡 俗手';
+        rightTag.title = '相比最佳着法的损耗';
+        rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
+
+        if (bestMoveText) {
+          const subBest = document.createElement('span');
+          subBest.className = 'sub-best-move';
+          subBest.appendChild(document.createTextNode('最佳走法: '));
+          const bStrong = document.createElement('strong');
+          bStrong.textContent = bestMoveText;
+          subBest.appendChild(bStrong);
+          subBest.appendChild(document.createTextNode(' · '));
+          cardSub.appendChild(subBest);
+        }
+
+        const subTrap = document.createElement('span');
+        subTrap.className = 'sub-trap-prob';
+        subTrap.textContent = item.humanProbability ? `约 ${Math.round(item.humanProbability)}% 棋手易犯同类错` : '易受人类惯性诱导';
+        cardSub.appendChild(subTrap);
       } else {
-        // Fallback pure blunder
-        let sevTag = '<span class="blunder-type-tag tag-blunder">大漏 ??</span>';
-        if (item.severity === 'mistake') sevTag = '<span class="blunder-type-tag tag-mistake">失误 ?</span>';
-        else if (item.severity === 'inaccuracy') sevTag = '<span class="blunder-type-tag tag-inaccuracy">疑问手 ?!</span>';
-        typeTag = sevTag;
-        rightTag = `<span class="blunder-loss-tag" title="相比最佳着法的损耗">损耗 -${lossPawnsNum} 兵</span>`;
-        subContent = bestMoveText ? `<span class="sub-best-move">最佳走法: <strong>${bestMoveText}</strong></span>` : '';
+        if (item.severity === 'mistake') {
+          typeTag.classList.add('tag-mistake');
+          typeTag.textContent = '失误 ?';
+        } else if (item.severity === 'inaccuracy') {
+          typeTag.classList.add('tag-inaccuracy');
+          typeTag.textContent = '疑问手 ?!';
+        } else {
+          typeTag.classList.add('tag-blunder');
+          typeTag.textContent = '大漏 ??';
+        }
+        rightTag.title = '相比最佳着法的损耗';
+        rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
+
+        if (bestMoveText) {
+          const subBest = document.createElement('span');
+          subBest.className = 'sub-best-move';
+          subBest.appendChild(document.createTextNode('最佳走法: '));
+          const bStrong = document.createElement('strong');
+          bStrong.textContent = bestMoveText;
+          subBest.appendChild(bStrong);
+          cardSub.appendChild(subBest);
+        }
       }
 
-      card.innerHTML = `
-        <div class="blunder-card-main">
-          <div class="blunder-card-top">
-            <div class="blunder-card-title">
-              <span class="blunder-move-num">${item.moveNumber}.</span>
-              <span class="blunder-side-icon">${sideIcon}</span>
-              <span class="blunder-san">${item.san}</span>
-            </div>
-            <div class="blunder-tags-group">
-              ${typeTag}
-            </div>
-            ${rightTag}
-          </div>
-          <div class="blunder-card-sub">
-            ${subContent}
-          </div>
-        </div>
-      `;
+      tagsGroup.appendChild(typeTag);
+      cardTop.appendChild(tagsGroup);
+      cardTop.appendChild(rightTag);
+
+      cardMain.appendChild(cardTop);
+      cardMain.appendChild(cardSub);
+      card.appendChild(cardMain);
 
       card.addEventListener('click', () => {
-        // Highlight active card
         this.el.blunderList.querySelectorAll('.blunder-card').forEach(c => c.classList.remove('active'));
         card.classList.add('active');
         this.goToPly(item.ply);
@@ -815,40 +1020,101 @@ class AnalysisStudioApp {
   }
 
   renderMoveList() {
-    this.el.moveNotationTable.innerHTML = '';
-    const totalMoves = this.moves.length;
+    this.el.moveNotationTable.replaceChildren();
+    if (!this.moves || this.moves.length === 0) return;
 
-    for (let i = 0; i < totalMoves; i += 2) {
-      const moveNum = Math.floor(i / 2) + 1;
-      const whiteMove = this.moves[i];
-      const blackMove = this.moves[i + 1] || null;
+    // Group moves into rows based on fullmove numbers
+    // Correctly handles White-first, Black-first, and custom starting move numbers
+    const rowsMap = new Map();
 
+    for (let i = 0; i < this.moves.length; i++) {
+      const m = this.moves[i];
+      const pos = this.positions[i + 1];
+      const moveNum = pos ? pos.moveNumber : (m.moveNumber || Math.floor(i / 2) + 1);
+      const turn = pos ? pos.turn : (m.turn || (i % 2 === 0 ? 'w' : 'b'));
+
+      if (!rowsMap.has(moveNum)) {
+        rowsMap.set(moveNum, { moveNum, white: null, black: null });
+      }
+      const rowData = rowsMap.get(moveNum);
+      if (turn === 'w') {
+        rowData.white = m;
+      } else {
+        rowData.black = m;
+      }
+    }
+
+    for (const [moveNum, rowData] of rowsMap.entries()) {
       const row = document.createElement('div');
       row.className = 'notation-row';
 
-      row.innerHTML = `
-        <span class="notation-num">${moveNum}.</span>
-        <div class="notation-move" id="move-ply-${whiteMove.ply}">
-          <span>${whiteMove.san}</span>
-          <span class="annotation-badge" id="badge-ply-${whiteMove.ply}"></span>
-        </div>
-        ${blackMove ? `
-          <div class="notation-move" id="move-ply-${blackMove.ply}">
-            <span>${blackMove.san}</span>
-            <span class="annotation-badge" id="badge-ply-${blackMove.ply}"></span>
-          </div>
-        ` : '<div class="notation-move" style="visibility: hidden;"></div>'}
-      `;
+      const numSpan = document.createElement('span');
+      numSpan.className = 'notation-num';
+      numSpan.textContent = `${moveNum}.`;
+      row.appendChild(numSpan);
 
-      // Click event for white move
-      const wEl = row.querySelector(`#move-ply-${whiteMove.ply}`);
-      wEl.addEventListener('click', () => this.goToPly(whiteMove.ply));
+      // White slot
+      if (rowData.white) {
+        const wEl = document.createElement('div');
+        wEl.className = 'notation-move';
+        wEl.id = `move-ply-${rowData.white.ply}`;
 
-      // Click event for black move
-      if (blackMove) {
-        const bEl = row.querySelector(`#move-ply-${blackMove.ply}`);
-        bEl.addEventListener('click', () => this.goToPly(blackMove.ply));
+        const sanSpan = document.createElement('span');
+        sanSpan.textContent = rowData.white.san;
+        wEl.appendChild(sanSpan);
+
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = 'annotation-badge';
+        badgeSpan.id = `badge-ply-${rowData.white.ply}`;
+        wEl.appendChild(badgeSpan);
+
+        wEl.addEventListener('click', () => this.goToPly(rowData.white.ply));
+        row.appendChild(wEl);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'notation-move';
+        const dots = document.createElement('span');
+        dots.textContent = '...';
+        dots.style.color = 'var(--text-dim)';
+        placeholder.appendChild(dots);
+        row.appendChild(placeholder);
       }
+
+      // Black slot
+      if (rowData.black) {
+        const bEl = document.createElement('div');
+        bEl.className = 'notation-move';
+        bEl.id = `move-ply-${rowData.black.ply}`;
+
+        const sanSpan = document.createElement('span');
+        sanSpan.textContent = rowData.black.san;
+        bEl.appendChild(sanSpan);
+
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = 'annotation-badge';
+        badgeSpan.id = `badge-ply-${rowData.black.ply}`;
+        bEl.appendChild(badgeSpan);
+
+        bEl.addEventListener('click', () => this.goToPly(rowData.black.ply));
+        row.appendChild(bEl);
+      } else {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'notation-move';
+        emptyEl.style.visibility = 'hidden';
+        row.appendChild(emptyEl);
+      }
+
+      this.el.moveNotationTable.appendChild(row);
+    }
+
+    // If truncated/partial, append a safe notice
+    if (this.positions?.isPartial) {
+      const partialRow = document.createElement('div');
+      partialRow.className = 'notation-partial-notice';
+      partialRow.style.cssText = 'padding: 8px 12px; margin: 8px 0; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; font-size: 11.5px; color: #f59e0b;';
+      partialRow.textContent = `⚠️ 棋谱在第 ${this.positions.stoppedAtPly} 步 ("${this.positions.unparsedSan || '未知'}") 存在非法走法，后续未加载`;
+      this.el.moveNotationTable.appendChild(partialRow);
+    }
 
       this.el.moveNotationTable.appendChild(row);
     }
@@ -965,9 +1231,12 @@ class AnalysisStudioApp {
         this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
         this.el.compareIntuitionMeta.textContent = '';
 
+        const targetGameEpoch = this.gameEpoch;
         const targetPly = this.currentPly;
-        this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, this.currentElo).then(pred => {
-          if (this.currentPly !== targetPly) return;
+        const targetElo = this.currentElo;
+
+        this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, targetElo).then(pred => {
+          if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly || this.currentElo !== targetElo) return;
           if (pred && pred.moves && pred.moves.length > 0) {
             const top = pred.moves[0];
             moveReview.maiaTopSan = top.san || null;
@@ -986,11 +1255,13 @@ class AnalysisStudioApp {
             const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
 
             if (isBeyond) {
-              this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(0, 210, 255, 0.18); color: #00d2ff;">= 引擎一选 ✨</span>`;
+              this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
             } else if (isTrap) {
-              this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b;">= 直觉陷阱 💡</span>`;
+              this.setComparePlayedSan(moveReview.san, '= 直觉陷阱 💡', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
             } else if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
-              this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(230,165,32,0.15); color: #e6a520;">= 直觉</span>`;
+              this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
+            } else {
+              this.setComparePlayedSan(moveReview.san);
             }
 
             // Draw gold arrow if different from engine best
@@ -1011,7 +1282,6 @@ class AnalysisStudioApp {
       }
 
       // 3. Played move
-      this.el.comparePlayedSan.textContent = moveReview.san;
       this.el.comparePlayedMeta.textContent = moveReview.evalAfter ? `结果 ${moveReview.evalAfter}` : '';
 
       // Highlight played card based on severity
@@ -1034,13 +1304,15 @@ class AnalysisStudioApp {
 
       // Add match indicator on played card
       if (isBeyond) {
-        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(0, 210, 255, 0.18); color: #00d2ff;">= 引擎一选 ✨</span>`;
+        this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
       } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
-        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge">= 引擎</span>`;
+        this.setComparePlayedSan(moveReview.san, '= 引擎');
       } else if (isTrap) {
-        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b;">= 直觉陷阱 💡</span>`;
+        this.setComparePlayedSan(moveReview.san, '= 直觉陷阱 💡', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
-        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(230,165,32,0.15); color: #e6a520;">= 直觉</span>`;
+        this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
+      } else {
+        this.setComparePlayedSan(moveReview.san);
       }
 
       // --- Badge ---

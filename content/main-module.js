@@ -65,8 +65,8 @@ export async function initMaiaExtension() {
     onOpenStandaloneAnalysis: async () => {
       if (FairPlayGuard.isLiveGameInProgress()) {
         panel.showToast(panel.lang === 'zh'
-          ? '🛡️ 当前对局仍在进行中，为恪守公平竞技守则，请待对局结束后开启复盘分析。'
-          : '🛡️ Match in progress. Game review will unlock after the game.');
+          ? '🔒 当前对局仍在进行中，为恪守公平竞技守则，请待对局结束后开启全盘分析。'
+          : '🔒 Match in progress. Full game analysis will unlock after the game.');
         return;
       }
 
@@ -133,7 +133,7 @@ export async function initMaiaExtension() {
           type: 'OPEN_ANALYSIS_TAB',
           gameData
         }, () => {
-          panel.showToast(panel.lang === 'zh' ? '✓ 已在新标签页开启复盘分析' : '✓ Opened Game Review in new tab');
+          panel.showToast(panel.lang === 'zh' ? '✓ 已在新标签页开启全盘分析' : '✓ Opened Full Game Analysis in new tab');
         });
       }
     }
@@ -200,15 +200,9 @@ export async function initMaiaExtension() {
         const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
         const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
 
-        const insightHtml = isZh
-          ? `实战<strong>${sideText}</strong>走棋: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (直觉概率 <strong>${probText}</strong>)` : ''}，而引擎推荐最优走法为 <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>。<br/>` +
-            `局面损耗: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> 兵 (局势变动: ${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`
-          : `Played by <strong>${sideText}</strong>: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (Intuition: <strong>${probText}</strong>)` : ''}, while Engine recommends <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>.<br/>` +
-            `Centipawn loss: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> (${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`;
-
         panel.showCustomInsight({
           badge: badgeText,
-          text: insightHtml,
+          blunderInfo: blunderContext,
           isTrap
         });
       }
@@ -229,18 +223,10 @@ export async function initMaiaExtension() {
             const badgeText = isTrap
               ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
               : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
-            const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
-            const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
-
-            const insightHtml = isZh
-              ? `实战<strong>${sideText}</strong>走棋: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (直觉概率 <strong>${probText}</strong>)` : ''}，而引擎推荐最优走法为 <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>。<br/>` +
-                `局面损耗: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> 兵 (局势变动: ${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`
-              : `Played by <strong>${sideText}</strong>: <strong style="color: #FA5151;">${blunderContext.san}</strong>${probText ? ` (Intuition: <strong>${probText}</strong>)` : ''}, while Engine recommends <strong style="color: var(--weui-BRAND);">${blunderContext.bestSan}</strong>.<br/>` +
-                `Centipawn loss: <strong style="color: #FA5151;">${blunderContext.lossPawns}</strong> (${blunderContext.evalBefore} ➔ ${blunderContext.evalAfter})`;
 
             panel.showCustomInsight({
               badge: badgeText,
-              text: insightHtml,
+              blunderInfo: blunderContext,
               isTrap
             });
           }

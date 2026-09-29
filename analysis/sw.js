@@ -1,9 +1,10 @@
 /**
- * 4Chess Review PWA Service Worker
- * Provides offline capabilities, caching for Stockfish WASM, app shell, and UI assets.
+ * 4Chess Review PWA Service Worker (v1.1.0)
+ * Provides offline capabilities, versioned caching for Stockfish WASM, app shell, and UI assets.
+ * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-v1';
+const CACHE_NAME = '4chess-review-v1.1.0';
 
 const STATIC_ASSETS = [
   './',
@@ -30,7 +31,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Best-effort cache of static assets
       return Promise.allSettled(
         STATIC_ASSETS.map((url) =>
           cache.add(url).catch((err) => {
@@ -48,6 +48,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[SW] Purging outdated cache:', key);
             return caches.delete(key);
           }
         })
@@ -66,12 +67,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 1. Navigation & HTML Entry: Network-First (ensures fresh deploys, falls back to cache offline)
+  const isHtmlRequest = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('.html');
+  if (isHtmlRequest) {
+    event.respondWith(
+      fetch(req).then((freshRes) => {
+        if (freshRes && freshRes.status === 200) {
+          const clone = freshRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+        }
+        return freshRes;
+      }).catch(() => {
+        return caches.match(req).then((cached) => cached || caches.match('./index.html'));
+      })
+    );
+    return;
+  }
+
+  // 2. Static Assets (Scripts, Styles, WASM, Images): Cache-First with Background Revalidation
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) {
-        // Return cached, but revalidate in background if online
         fetch(req).then((fresh) => {
-          if (fresh && fresh.status === 200) {
+          if (fresh && fresh.status === 200 && (url.protocol === 'http:' || url.protocol === 'https:')) {
             caches.open(CACHE_NAME).then((cache) => cache.put(req, fresh));
           }
         }).catch(() => {});

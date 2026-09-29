@@ -49,60 +49,130 @@ export class ChessBoard {
     }
     if (tokens.length < 2) return false;
 
-    this.board.fill(null);
     const rows = tokens[0].split('/');
     if (rows.length !== 8) return false;
 
+    const tempBoard = new Array(64).fill(null);
     let whiteKings = 0;
     let blackKings = 0;
+    let whiteKingIdx = -1;
+    let blackKingIdx = -1;
 
     for (let r = 7; r >= 0; r--) {
       const row = rows[7 - r];
       let f = 0;
       for (const char of row) {
-        if (/\d/.test(char)) {
+        if (/^[1-8]$/.test(char)) {
           f += parseInt(char, 10);
-        } else {
+          if (f > 8) return false; // Rank exceeds 8 squares!
+        } else if (/^[pnbrqkPNBRQK]$/.test(char)) {
+          if (f >= 8) return false; // Rank exceeds 8 squares!
           const color = char === char.toUpperCase() ? 'w' : 'b';
           const type = char.toLowerCase();
-          if (type === 'k') {
-            if (color === 'w') whiteKings++;
-            else blackKings++;
-          }
           const idx = r * 8 + f;
-          this.board[idx] = { color, type };
+          if (type === 'k') {
+            if (color === 'w') {
+              whiteKings++;
+              whiteKingIdx = idx;
+            } else {
+              blackKings++;
+              blackKingIdx = idx;
+            }
+          }
+          if (type === 'p' && (r === 0 || r === 7)) {
+            return false; // Pawns cannot be on rank 1 or 8
+          }
+          tempBoard[idx] = { color, type };
           f++;
+        } else {
+          // Illegal character (e.g. 'Z', '0', punctuation)
+          return false;
         }
+      }
+      if (f !== 8) {
+        return false; // Rank must sum up to exactly 8 squares
       }
     }
 
-    // A valid chess board MUST have exactly 1 white king and 1 black king
+    // Exactly 1 white king and 1 black king
     if (whiteKings !== 1 || blackKings !== 1) {
       return false;
     }
 
-    this.turn = tokens[1] === 'b' ? 'b' : 'w';
-    
-    // Castling (validate against physical pieces on starting squares)
-    const castlingStr = tokens[2] || '-';
-    const whiteKingAtE1 = this.board[4]?.color === 'w' && this.board[4]?.type === 'k';
-    const blackKingAtE8 = this.board[60]?.color === 'b' && this.board[60]?.type === 'k';
-    const whiteRookAtH1 = this.board[7]?.color === 'w' && this.board[7]?.type === 'r';
-    const whiteRookAtA1 = this.board[0]?.color === 'w' && this.board[0]?.type === 'r';
-    const blackRookAtH8 = this.board[63]?.color === 'b' && this.board[63]?.type === 'r';
-    const blackRookAtA8 = this.board[56]?.color === 'b' && this.board[56]?.type === 'r';
+    // Kings cannot be adjacent to each other
+    const wkRank = Math.floor(whiteKingIdx / 8);
+    const wkFile = whiteKingIdx % 8;
+    const bkRank = Math.floor(blackKingIdx / 8);
+    const bkFile = blackKingIdx % 8;
+    if (Math.abs(wkRank - bkRank) <= 1 && Math.abs(wkFile - bkFile) <= 1) {
+      return false;
+    }
 
-    this.castling = {
+    // Turn
+    const turnToken = tokens[1];
+    if (turnToken !== 'w' && turnToken !== 'b') {
+      return false;
+    }
+    const turn = turnToken;
+
+    // Castling flags
+    const castlingStr = tokens[2] || '-';
+    if (!/^(-|[KQkq]{1,4})$/.test(castlingStr)) {
+      return false;
+    }
+
+    const whiteKingAtE1 = tempBoard[4]?.color === 'w' && tempBoard[4]?.type === 'k';
+    const blackKingAtE8 = tempBoard[60]?.color === 'b' && tempBoard[60]?.type === 'k';
+    const whiteRookAtH1 = tempBoard[7]?.color === 'w' && tempBoard[7]?.type === 'r';
+    const whiteRookAtA1 = tempBoard[0]?.color === 'w' && tempBoard[0]?.type === 'r';
+    const blackRookAtH8 = tempBoard[63]?.color === 'b' && tempBoard[63]?.type === 'r';
+    const blackRookAtA8 = tempBoard[56]?.color === 'b' && tempBoard[56]?.type === 'r';
+
+    const castling = {
       K: castlingStr.includes('K') && whiteKingAtE1 && whiteRookAtH1,
       Q: castlingStr.includes('Q') && whiteKingAtE1 && whiteRookAtA1,
       k: castlingStr.includes('k') && blackKingAtE8 && blackRookAtH8,
       q: castlingStr.includes('q') && blackKingAtE8 && blackRookAtA8
     };
 
-    // En passant
-    this.epSquare = (tokens[3] && tokens[3] !== '-') ? ChessBoard.squareToIndex(tokens[3]) : null;
-    this.halfMoves = parseInt(tokens[4] || '0', 10);
-    this.fullMoves = parseInt(tokens[5] || '1', 10);
+    // En passant square
+    let epSquare = null;
+    const epStr = tokens[3] || '-';
+    if (epStr !== '-') {
+      if (!/^[a-h][36]$/.test(epStr)) {
+        return false;
+      }
+      const epIdx = ChessBoard.squareToIndex(epStr);
+      const epRank = Math.floor(epIdx / 8);
+      if (turn === 'w' && epRank !== 5) return false; // Rank 6 (0-indexed 5) for black pawn double step
+      if (turn === 'b' && epRank !== 2) return false; // Rank 3 (0-indexed 2) for white pawn double step
+      epSquare = epIdx;
+    }
+
+    const halfMoves = tokens[4] ? parseInt(tokens[4], 10) : 0;
+    const fullMoves = tokens[5] ? parseInt(tokens[5], 10) : 1;
+    if (isNaN(halfMoves) || halfMoves < 0) return false;
+    if (isNaN(fullMoves) || fullMoves < 1) return false;
+
+    // Check if the side not to move is currently in check (impossible position)
+    const prevBoard = this.board;
+    this.board = tempBoard;
+    const inactiveColor = turn === 'w' ? 'b' : 'w';
+    const inactiveKingIdx = inactiveColor === 'w' ? whiteKingIdx : blackKingIdx;
+    const isInactiveKingInCheck = this.isSquareAttacked(inactiveKingIdx, turn);
+    this.board = prevBoard;
+
+    if (isInactiveKingInCheck) {
+      return false;
+    }
+
+    // All validations succeeded -> Commit transactional update
+    this.board = tempBoard;
+    this.turn = turn;
+    this.castling = castling;
+    this.epSquare = epSquare;
+    this.halfMoves = halfMoves;
+    this.fullMoves = fullMoves;
     return true;
   }
 

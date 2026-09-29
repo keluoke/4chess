@@ -126,21 +126,54 @@ export class EvalChart {
       const evalSign = item.cp > 0 ? `+${(item.cp / 100).toFixed(2)}` : (item.cp / 100).toFixed(2);
       const evalColor = item.cp > 40 ? '#4ade80' : (item.cp < -40 ? '#f87171' : 'var(--text-muted)');
 
-      let extraBadge = '';
-      if (item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition) {
-        extraBadge = ` · <span style="color: #00d2ff; font-weight: 700;">✨ 超越直觉 (走出引擎一选)</span>`;
-      } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
-        extraBadge = ` · <span style="color: #f59e0b; font-weight: 700;">💡 直觉陷阱 (-${item.lossPawns})</span>`;
-      } else if (item.severity === 'blunder') {
-        extraBadge = ` · <span style="color: #f87171; font-weight: 700;">大漏 (${item.lossPawns})</span>`;
-      } else if (item.severity === 'mistake') {
-        extraBadge = ` · <span style="color: #fbbf24; font-weight: 700;">失误 (${item.lossPawns})</span>`;
-      }
+      this.tooltip.replaceChildren();
 
-      this.tooltip.innerHTML = `
-        <div style="font-weight: 600; margin-bottom: 2px;">第 ${item.moveNumber} 步 (${sideText} ${item.san})${extraBadge}</div>
-        <div style="color: var(--text-dim); font-size: 10.5px;">白方局势: <strong style="color: ${evalColor};">${evalSign}</strong></div>
-      `;
+      const topRow = document.createElement('div');
+      topRow.style.fontWeight = '600';
+      topRow.style.marginBottom = '2px';
+
+      topRow.appendChild(document.createTextNode(`第 ${item.moveNumber} 步 (${sideText} `));
+      const sanSpan = document.createElement('span');
+      sanSpan.textContent = item.san;
+      topRow.appendChild(sanSpan);
+      topRow.appendChild(document.createTextNode(')'));
+
+      if (item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition) {
+        const badge = document.createElement('span');
+        badge.style.color = '#00d2ff';
+        badge.style.fontWeight = '700';
+        badge.textContent = ' · ✨ 超越直觉 (走出引擎一选)';
+        topRow.appendChild(badge);
+      } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
+        const badge = document.createElement('span');
+        badge.style.color = '#f59e0b';
+        badge.style.fontWeight = '700';
+        badge.textContent = ` · 💡 直觉陷阱 (-${item.lossPawns})`;
+        topRow.appendChild(badge);
+      } else if (item.severity === 'blunder') {
+        const badge = document.createElement('span');
+        badge.style.color = '#f87171';
+        badge.style.fontWeight = '700';
+        badge.textContent = ` · 大漏 (${item.lossPawns})`;
+        topRow.appendChild(badge);
+      } else if (item.severity === 'mistake') {
+        const badge = document.createElement('span');
+        badge.style.color = '#fbbf24';
+        badge.style.fontWeight = '700';
+        badge.textContent = ` · 失误 (${item.lossPawns})`;
+        topRow.appendChild(badge);
+      }
+      this.tooltip.appendChild(topRow);
+
+      const evalRow = document.createElement('div');
+      evalRow.style.color = 'var(--text-dim)';
+      evalRow.style.fontSize = '10.5px';
+      evalRow.appendChild(document.createTextNode('白方局势: '));
+      const evalStrong = document.createElement('strong');
+      evalStrong.style.color = evalColor;
+      evalStrong.textContent = evalSign;
+      evalRow.appendChild(evalStrong);
+      this.tooltip.appendChild(evalRow);
     });
 
     this.svg.addEventListener('mouseleave', () => {

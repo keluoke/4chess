@@ -10,7 +10,7 @@
 
 const I18N = {
   zh: {
-    panelTitle: 'Maia 3 直觉',
+    panelTitle: '歧路 Diverge',
     white: '⚪ 白方',
     black: '⚫ 黑方',
     whiteThinking: '⚪ 白方 · 研判中',
@@ -53,15 +53,15 @@ const I18N = {
     intuitionBadge: '💡 人类直觉首选',
     evalLabel: '局面',
     deltaLoss: '直觉损耗',
-    floatTitle: 'Maia 3',
-    btnStandaloneStudio: '复盘分析',
+    floatTitle: '歧路 Diverge',
+    btnStandaloneStudio: '全盘分析',
     fairPlayTitle: '对局进行中 · 公平竞技保护',
     fairPlayDesc: '为恪守国际象棋反作弊守则，在实时对局进行期间严禁提供任何引擎建议、直觉箭头与意图热力图。',
-    fairPlayUnlockTip: '✓ 对局结束后将自动解锁复盘分析与局面研判',
+    fairPlayUnlockTip: '✓ 对局结束后将自动解锁全盘分析与局面研判',
     fairPlayLocked: '对局中 · 已锁定'
   },
   en: {
-    panelTitle: 'Maia 3 Intuition',
+    panelTitle: 'Diverge',
     white: '⚪ White',
     black: '⚫ Black',
     whiteThinking: '⚪ White · Thinking',
@@ -104,8 +104,8 @@ const I18N = {
     intuitionBadge: '💡 Human Intuition',
     evalLabel: 'Eval',
     deltaLoss: 'Intuition Loss',
-    floatTitle: 'Maia 3',
-    btnStandaloneStudio: 'Game Review',
+    floatTitle: 'Diverge',
+    btnStandaloneStudio: 'Full Game Analysis',
     fairPlayTitle: 'Live Game Active · Fair Play Guard',
     fairPlayDesc: 'Per Fair Play Anti-Cheat rules, engine assistance, candidate arrows, and attention heatmaps are strictly disabled during live matches.',
     fairPlayUnlockTip: '✓ Unlocks automatically upon game conclusion',
@@ -133,42 +133,99 @@ export class IntuitionPanel {
     let closedPref = false;
     try {
       closedPref = sessionStorage.getItem('maia3_panel_closed') === 'true';
-      localStorage.removeItem('maia3_panel_closed');
     } catch (e) {}
     this.isClosed = closedPref;
     this.isFairPlayLocked = false;
+    this.currentElo = 1900;
+    this.lang = (navigator.language && navigator.language.startsWith('zh')) ? 'zh' : 'en';
 
-    let storedElo = 1900;
-    try {
-      storedElo = parseInt(localStorage.getItem('maia3_target_elo'), 10) || 1900;
-    } catch (e) {}
-    this.currentElo = storedElo;
-
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['defaultElo', 'maia3_target_elo'], (res) => {
-        const val = res?.defaultElo || res?.maia3_target_elo;
-        if (val && val !== this.currentElo) {
-          this.setElo(val, false);
-        }
-      });
-    }
     this.currentData = null;
     this.currentTurn = 'w';
     this.latency = 0;
     this.lastReviewResult = null;
     this.reviewFilter = 'all';
 
-    let storedLang = 'zh';
-    try {
-      storedLang = localStorage.getItem('maia3_lang') || (navigator.language?.startsWith('zh') ? 'zh' : 'en');
-    } catch(e) {}
-    this.lang = storedLang;
-
     this.showHeatmap = true;
     this.showArrows = true;
     this.opacity = 0.55;
 
     this.init();
+
+    // Asynchronously synchronize preferences from chrome.storage.local (avoiding host localStorage pollution)
+    this._getStorage(['defaultElo', 'maia3_target_elo', 'maia3_lang', 'maia3_panel_pos', 'maia3_fab_pos'], (res) => {
+      const val = res?.defaultElo || res?.maia3_target_elo;
+      if (val && val !== this.currentElo) {
+        this.setElo(val, false);
+      }
+      if (res?.maia3_lang && res.maia3_lang !== this.lang) {
+        this.setLanguage(res.maia3_lang);
+      }
+      if (res?.maia3_panel_pos && this.container) {
+        try {
+          const { left, top } = typeof res.maia3_panel_pos === 'string' ? JSON.parse(res.maia3_panel_pos) : res.maia3_panel_pos;
+          if (typeof left === 'number' && typeof top === 'number' &&
+              left >= 0 && left < window.innerWidth - 100 &&
+              top >= 0 && top < window.innerHeight - 50) {
+            this.container.style.left = `${left}px`;
+            this.container.style.top = `${top}px`;
+            this.container.style.right = 'auto';
+          }
+        } catch (e) {}
+      }
+      if (res?.maia3_fab_pos && this.fab) {
+        try {
+          const { left, top } = typeof res.maia3_fab_pos === 'string' ? JSON.parse(res.maia3_fab_pos) : res.maia3_fab_pos;
+          if (typeof left === 'number' && typeof top === 'number') {
+            this.fab.style.left = `${left}px`;
+            this.fab.style.top = `${top}px`;
+            this.fab.style.right = 'auto';
+          }
+        } catch (e) {}
+      }
+      // Purge any legacy keys left in host page localStorage
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        try {
+          localStorage.removeItem('maia3_target_elo');
+          localStorage.removeItem('maia3_lang');
+          localStorage.removeItem('maia3_panel_pos');
+          localStorage.removeItem('maia3_fab_pos');
+          localStorage.removeItem('maia3_panel_closed');
+        } catch (e) {}
+      }
+    });
+  }
+
+  _getStorage(keys, callback) {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(keys, callback);
+    } else {
+      const res = {};
+      const keyList = Array.isArray(keys) ? keys : [keys];
+      for (const k of keyList) {
+        try {
+          const val = localStorage.getItem(k);
+          if (val !== null) res[k] = val;
+        } catch (e) {}
+      }
+      callback(res);
+    }
+  }
+
+  _setStorage(items) {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.set(items);
+      try {
+        for (const k of Object.keys(items)) {
+          localStorage.removeItem(k);
+        }
+      } catch (e) {}
+    } else {
+      try {
+        for (const [k, v] of Object.entries(items)) {
+          localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+        }
+      } catch (e) {}
+    }
   }
 
   init() {
@@ -189,38 +246,50 @@ export class IntuitionPanel {
     this.fab.className = 'weui-float-ball';
     this.fab.setAttribute('role', 'button');
     this.fab.setAttribute('tabindex', '0');
-    this.fab.title = '打开 Maia 3 微信浮窗面板 (点击恢复)';
+    this.fab.title = this.lang === 'zh' ? '打开 歧路 Diverge 悬浮面板 (点击恢复)' : 'Open Diverge Panel';
     this.fab.innerHTML = `
       <span class="weui-float-dot"></span>
-      <span class="weui-float-icon">🧠</span>
-      <span class="weui-float-title">Maia 3</span>
+      <span class="weui-float-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="weui-fork-icon">
+          <path d="M12 21v-8"></path>
+          <path d="M12 13c0-4.5-6-4.5-6-9"></path>
+          <path d="M12 13c0-4.5 6-4.5 6-9"></path>
+          <polyline points="3 7 6 4 9 7"></polyline>
+          <polyline points="15 7 18 4 21 7"></polyline>
+        </svg>
+      </span>
+      <span class="weui-float-title">${this.t('floatTitle')}</span>
       <span id="weui-float-elo" class="weui-float-badge">${this.currentElo}</span>
     `;
 
-    // 4. Restore Panel Position
-    const savedPos = localStorage.getItem('maia3_panel_pos');
-    if (savedPos) {
+    // 4. Restore Panel Position (synchronous fallback when chrome.storage unavailable)
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
       try {
-        const { left, top } = JSON.parse(savedPos);
-        if (typeof left === 'number' && typeof top === 'number' &&
-            left >= 0 && left < window.innerWidth - 100 &&
-            top >= 0 && top < window.innerHeight - 50) {
-          this.container.style.left = `${left}px`;
-          this.container.style.top = `${top}px`;
-          this.container.style.right = 'auto';
+        const savedPos = localStorage.getItem('maia3_panel_pos');
+        if (savedPos) {
+          const { left, top } = JSON.parse(savedPos);
+          if (typeof left === 'number' && typeof top === 'number' &&
+              left >= 0 && left < window.innerWidth - 100 &&
+              top >= 0 && top < window.innerHeight - 50) {
+            this.container.style.left = `${left}px`;
+            this.container.style.top = `${top}px`;
+            this.container.style.right = 'auto';
+          }
         }
       } catch (e) {}
     }
 
-    // 5. Restore Floating Ball Position
-    const savedFabPos = localStorage.getItem('maia3_fab_pos');
-    if (savedFabPos) {
+    // 5. Restore Floating Ball Position (synchronous fallback when chrome.storage unavailable)
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
       try {
-        const { left, top } = JSON.parse(savedFabPos);
-        if (typeof left === 'number' && typeof top === 'number') {
-          this.fab.style.left = `${left}px`;
-          this.fab.style.top = `${top}px`;
-          this.fab.style.right = 'auto';
+        const savedFabPos = localStorage.getItem('maia3_fab_pos');
+        if (savedFabPos) {
+          const { left, top } = JSON.parse(savedFabPos);
+          if (typeof left === 'number' && typeof top === 'number') {
+            this.fab.style.left = `${left}px`;
+            this.fab.style.top = `${top}px`;
+            this.fab.style.right = 'auto';
+          }
         }
       } catch (e) {}
     }
@@ -273,7 +342,15 @@ export class IntuitionPanel {
       <!-- WeChat Mini-Program Top Bar & Capsule (顶部导航条与经典小程序胶囊) -->
       <div class="weui-navbar" id="maia-drag-handle">
         <div class="weui-navbar__left">
-          <span class="weui-navbar__icon">🧠</span>
+          <span class="weui-navbar__icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="weui-fork-icon">
+              <path d="M12 21v-8"></path>
+              <path d="M12 13c0-4.5-6-4.5-6-9"></path>
+              <path d="M12 13c0-4.5 6-4.5 6-9"></path>
+              <polyline points="3 7 6 4 9 7"></polyline>
+              <polyline points="15 7 18 4 21 7"></polyline>
+            </svg>
+          </span>
           <span class="weui-navbar__title" id="txt-panel-title">${this.t('panelTitle')}</span>
           <span id="maia-turn-pill" class="weui-turn-tag turn-white">${this.t('white')}</span>
         </div>
@@ -394,18 +471,6 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- Game Review Studio Entry Button -->
-        <div class="weui-review-entry" style="margin-top: 2px; margin-bottom: 2px;">
-          <button type="button" id="btn-trigger-standalone" class="weui-btn-review" style="width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; font-weight: 600; border-radius: 8px; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); color: var(--weui-BRAND); cursor: pointer; transition: all 0.15s ease;" title="${this.lang === 'zh' ? '在独立工作台中复盘分析' : 'Open in Game Review Studio'}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-            <span id="lbl-btn-standalone">${this.t('btnStandaloneStudio')}</span>
-          </button>
-        </div>
-
         <!-- Candidate Moves List Group -->
         <div>
           <div class="weui-cells__title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -427,6 +492,18 @@ export class IntuitionPanel {
           <div id="maia-insight-text">
             ...
           </div>
+        </div>
+
+        <!-- Full Game Analysis Studio Entry Button (全盘分析按钮，置于悬浮窗最下方) -->
+        <div class="weui-review-entry" style="margin-top: 2px; margin-bottom: 2px;">
+          <button type="button" id="btn-trigger-standalone" class="weui-btn-review" style="width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; font-weight: 600; border-radius: 8px; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); color: var(--weui-BRAND); cursor: pointer; transition: all 0.15s ease;" title="${this.lang === 'zh' ? '在独立工作台中全盘分析' : 'Open in Full Game Analysis'}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            <span id="lbl-btn-standalone">${this.t('btnStandaloneStudio')}</span>
+          </button>
         </div>
       </div>
     `;
@@ -475,7 +552,7 @@ export class IntuitionPanel {
 
         if (hasMoved) {
           const rect = this.fab.getBoundingClientRect();
-          localStorage.setItem('maia3_fab_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+          this._setStorage({ maia3_fab_pos: { left: rect.left, top: rect.top } });
         }
       };
 
@@ -507,7 +584,6 @@ export class IntuitionPanel {
     }
     try {
       sessionStorage.setItem('maia3_panel_closed', 'true');
-      localStorage.removeItem('maia3_panel_closed');
     } catch (e) {}
   }
 
@@ -519,7 +595,6 @@ export class IntuitionPanel {
     }
     try {
       sessionStorage.setItem('maia3_panel_closed', 'false');
-      localStorage.removeItem('maia3_panel_closed');
     } catch (e) {}
   }
 
@@ -531,12 +606,7 @@ export class IntuitionPanel {
     const val = parseInt(elo, 10);
     if (isNaN(val)) return;
     this.currentElo = val;
-    try {
-      localStorage.setItem('maia3_target_elo', String(val));
-    } catch (e) {}
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.set({ defaultElo: val, maia3_target_elo: val });
-    }
+    this._setStorage({ defaultElo: val, maia3_target_elo: val });
     if (this.container) {
       const eloVal = this.container.querySelector('#maia-elo-val');
       const eloSlider = this.container.querySelector('#maia-elo-slider');
@@ -800,14 +870,25 @@ export class IntuitionPanel {
     return dict[key] || '';
   }
 
+  _appendFormattedText(container, text) {
+    if (!container || !text) return;
+    const parts = String(text).split(/(<strong>.*?<\/strong>)/g);
+    for (const part of parts) {
+      if (!part) continue;
+      const strongMatch = part.match(/^<strong>(.*?)<\/strong>$/);
+      if (strongMatch) {
+        const strongEl = document.createElement('strong');
+        strongEl.textContent = strongMatch[1];
+        container.appendChild(strongEl);
+      } else {
+        container.appendChild(document.createTextNode(part));
+      }
+    }
+  }
+
   setLanguage(lang) {
     this.lang = lang;
-    try {
-      localStorage.setItem('maia3_lang', lang);
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        chrome.storage.local.set({ maia3_lang: lang });
-      }
-    } catch (e) {}
+    this._setStorage({ maia3_lang: lang });
 
     const langBtns = this.container.querySelectorAll('[data-lang]');
     langBtns.forEach(btn => {
@@ -879,6 +960,11 @@ export class IntuitionPanel {
     const lblBtnStandalone = this.container.querySelector('#lbl-btn-standalone');
     if (lblBtnStandalone) lblBtnStandalone.textContent = this.t('btnStandaloneStudio');
 
+    const triggerBtn = this.container.querySelector('#btn-trigger-standalone');
+    if (triggerBtn) {
+      triggerBtn.title = this.lang === 'zh' ? '在独立工作台中全盘分析' : 'Open in Full Game Analysis';
+    }
+
     const turnPill = this.container.querySelector('#maia-turn-pill');
     if (turnPill) {
       const isWhite = this.currentTurn === 'w';
@@ -927,7 +1013,7 @@ export class IntuitionPanel {
         window.removeEventListener('mouseup', onMouseUp);
 
         const rect = this.container.getBoundingClientRect();
-        localStorage.setItem('maia3_panel_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+        this._setStorage({ maia3_panel_pos: { left: rect.left, top: rect.top } });
       };
 
       window.addEventListener('mousemove', onMouseMove);
@@ -952,7 +1038,20 @@ export class IntuitionPanel {
       if (movesHeader) movesHeader.textContent = this.lang === 'zh' ? '公平竞技保护 (Fair Play)' : 'Fair Play Guard';
       if (timeEl) timeEl.textContent = this.t('fairPlayLocked');
       if (turnPill) {
-        turnPill.textContent = this.lang === 'zh' ? '🛡️ 对局中' : '🛡️ Live';
+        turnPill.replaceChildren();
+        const lockSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        lockSvg.setAttribute('width', '11');
+        lockSvg.setAttribute('height', '11');
+        lockSvg.setAttribute('viewBox', '0 0 24 24');
+        lockSvg.setAttribute('fill', 'none');
+        lockSvg.setAttribute('stroke', 'currentColor');
+        lockSvg.setAttribute('stroke-width', '2.2');
+        lockSvg.setAttribute('stroke-linecap', 'round');
+        lockSvg.setAttribute('stroke-linejoin', 'round');
+        lockSvg.style.cssText = 'display: inline-block; vertical-align: -1px; margin-right: 3px;';
+        lockSvg.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+        turnPill.appendChild(lockSvg);
+        turnPill.appendChild(document.createTextNode(this.lang === 'zh' ? '对局中' : 'Live'));
         turnPill.className = 'weui-turn-tag';
       }
 
@@ -965,7 +1064,15 @@ export class IntuitionPanel {
       if (movesContainer) {
         movesContainer.innerHTML = `
           <div class="weui-fair-play-banner" style="padding: 24px 14px; text-align: center;">
-            <div style="font-size: 32px; margin-bottom: 8px;">🛡️</div>
+            <div class="weui-fair-play-lock-box" style="margin-bottom: 12px; display: flex; justify-content: center; align-items: center;">
+              <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(7, 193, 96, 0.08); border: 1px solid rgba(7, 193, 96, 0.22); display: flex; align-items: center; justify-content: center;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--weui-BRAND)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2.5" ry="2.5"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  <circle cx="12" cy="16.5" r="1.3" fill="var(--weui-BRAND)" stroke="none"></circle>
+                </svg>
+              </div>
+            </div>
             <div style="font-size: 13.5px; font-weight: 700; color: #FFF; margin-bottom: 6px;">
               ${this.t('fairPlayTitle')}
             </div>
@@ -1126,7 +1233,17 @@ export class IntuitionPanel {
           insightBadge.textContent = this.lang === 'zh' ? '🐟 Stockfish 建议' : '🐟 Stockfish Advice';
           insightBadge.className = 'weui-insight-badge';
           insightBox.className = 'weui-insight-box';
-          insightText.innerHTML = `${this.lang === 'zh' ? `建议走 <strong>${sf.bestMove.san}</strong> (评估评分: ${sf.score})。` : `Recommended <strong>${sf.bestMove.san}</strong> (Eval: ${sf.score}).`}<br><span style="color: var(--weui-FG-1); font-size: 11px;">${this.lang === 'zh' ? 'Maia-3 载入就绪后将立即呈现人类直觉热力图。' : 'Attention heatmap will display once Maia-3 is ready.'}</span>`;
+          insightText.replaceChildren();
+
+          const recText = document.createTextNode(this.lang === 'zh' ? '建议走 ' : 'Recommended ');
+          const moveStrong = document.createElement('strong');
+          moveStrong.textContent = sf.bestMove.san;
+          const evalText = document.createTextNode(` (${this.lang === 'zh' ? '评估评分' : 'Eval'}: ${sf.score})。`);
+          const br = document.createElement('br');
+          const subSpan = document.createElement('span');
+          subSpan.style.cssText = 'color: var(--weui-FG-1); font-size: 11px;';
+          subSpan.textContent = this.lang === 'zh' ? 'Maia-3 载入就绪后将立即呈现人类直觉热力图。' : 'Attention heatmap will display once Maia-3 is ready.';
+          insightText.append(recText, moveStrong, evalText, br, subSpan);
         }
       } else {
         if (timeEl) timeEl.textContent = this.lang === 'zh' ? '载入中...' : 'Loading...';
@@ -1178,25 +1295,50 @@ export class IntuitionPanel {
       insightBadge.className = `weui-insight-badge ${comp.agreed ? '' : 'badge-trap'}`;
       insightBox.className = `weui-insight-box ${comp.agreed ? '' : 'alert-trap'}`;
       
-      let sfHtml = '';
+      insightText.replaceChildren();
+      const summaryEl = document.createElement('span');
+      this._appendFormattedText(summaryEl, summary);
+      insightText.appendChild(summaryEl);
+
       if (predictionData.stockfish && predictionData.stockfish.bestMove) {
         const sf = predictionData.stockfish;
         const sfLabel = this.lang === 'zh' ? '🐟 顶级引擎建议' : '🐟 Engine Best';
         const evalPrefix = this.lang === 'zh' ? '局面' : 'Eval';
-        const deltaHtml = comp.deltaText ? `<span class="weui-delta-tag ${parseFloat(comp.deltaText) <= -1.0 ? 'tag-blunder' : 'tag-slight'}" style="margin-left: 6px;" title="${this.t('deltaLoss')}">Δ ${comp.deltaText}</span>` : '';
-        sfHtml = `
-          <div class="weui-sf-mini-row" style="margin-top: 6px; padding-top: 4px; border-top: 0.5px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-            <span>${sfLabel}: <strong>${sf.bestMove.san}</strong> ${deltaHtml}</span>
-            <span class="weui-sf-eval" style="color: var(--weui-BRAND); font-weight: 700;">${evalPrefix} ${sf.score}</span>
-          </div>
-        `;
+
+        const miniRow = document.createElement('div');
+        miniRow.className = 'weui-sf-mini-row';
+        miniRow.style.cssText = 'margin-top: 6px; padding-top: 4px; border-top: 0.5px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; font-size: 11px;';
+
+        const leftSpan = document.createElement('span');
+        leftSpan.textContent = `${sfLabel}: `;
+        const sfStrong = document.createElement('strong');
+        sfStrong.textContent = sf.bestMove.san;
+        leftSpan.appendChild(sfStrong);
+
+        if (comp.deltaText) {
+          const deltaSpan = document.createElement('span');
+          const isBlunder = parseFloat(comp.deltaText) <= -1.0;
+          deltaSpan.className = `weui-delta-tag ${isBlunder ? 'tag-blunder' : 'tag-slight'}`;
+          deltaSpan.style.marginLeft = '6px';
+          deltaSpan.title = this.t('deltaLoss');
+          deltaSpan.textContent = `Δ ${comp.deltaText}`;
+          leftSpan.appendChild(deltaSpan);
+        }
+
+        const rightSpan = document.createElement('span');
+        rightSpan.className = 'weui-sf-eval';
+        rightSpan.style.cssText = 'color: var(--weui-BRAND); font-weight: 700;';
+        rightSpan.textContent = `${evalPrefix} ${sf.score}`;
+
+        miniRow.append(leftSpan, rightSpan);
+        insightText.appendChild(miniRow);
       }
-      insightText.innerHTML = `${summary}${sfHtml}`;
     } else if (predictionData.analysis) {
       insightBadge.textContent = this.t('intuitionBadge');
       insightBadge.className = 'weui-insight-badge';
       insightBox.className = 'weui-insight-box';
-      insightText.textContent = predictionData.analysis.commentary;
+      insightText.replaceChildren();
+      this._appendFormattedText(insightText, predictionData.analysis.commentary);
     }
 
     // Maia Human Candidates Move List
@@ -1219,32 +1361,62 @@ export class IntuitionPanel {
       const isSfMatch = predictionData.stockfish?.bestMove?.uci === move.uci || move.isBest;
       const barColor = isSfMatch ? 'var(--weui-BRAND)' : (idx === 0 ? 'var(--weui-BRAND)' : 'rgba(255, 255, 255, 0.35)');
 
-      let deltaBadge = '';
+      const mainDiv = document.createElement('div');
+      mainDiv.className = 'weui-move-main';
+
+      const leftDiv = document.createElement('div');
+      leftDiv.className = 'weui-move-left';
+
+      const rankTag = document.createElement('span');
+      rankTag.className = `weui-rank-tag ${idx === 0 ? 'rank-1' : ''}`;
+      rankTag.textContent = `${idx + 1}`;
+
+      const sanSpan = document.createElement('span');
+      sanSpan.className = 'weui-move-san';
+      sanSpan.textContent = `${move.san} `;
+      if (isSfMatch) {
+        const matchTag = document.createElement('span');
+        matchTag.style.cssText = 'font-size: 9.5px; color: var(--weui-BRAND); font-weight: 700;';
+        matchTag.textContent = `(${this.t('consensus')})`;
+        sanSpan.appendChild(matchTag);
+      }
+      leftDiv.append(rankTag, sanSpan);
+
+      const rightDiv = document.createElement('div');
+      rightDiv.className = 'weui-move-right';
+
       if (move.deltaText !== undefined) {
+        const deltaTag = document.createElement('span');
         if (move.deltaText === '0.00' || isSfMatch) {
-          deltaBadge = `<span class="weui-delta-tag tag-best" title="${this.lang === 'zh' ? '引擎最佳' : 'Best'} (Δ 0.00)">0.00</span>`;
+          deltaTag.className = 'weui-delta-tag tag-best';
+          deltaTag.title = `${this.lang === 'zh' ? '引擎最佳' : 'Best'} (Δ 0.00)`;
+          deltaTag.textContent = '0.00';
         } else {
           const numDelta = parseFloat(move.deltaText);
           const isBlunder = numDelta <= -1.0;
-          deltaBadge = `<span class="weui-delta-tag ${isBlunder ? 'tag-blunder' : 'tag-slight'}" title="${this.t('deltaLoss')} Δ: ${move.deltaText}">Δ ${move.deltaText}</span>`;
+          deltaTag.className = `weui-delta-tag ${isBlunder ? 'tag-blunder' : 'tag-slight'}`;
+          deltaTag.title = `${this.t('deltaLoss')} Δ: ${move.deltaText}`;
+          deltaTag.textContent = `Δ ${move.deltaText}`;
         }
+        rightDiv.appendChild(deltaTag);
       }
 
-      row.innerHTML = `
-        <div class="weui-move-main">
-          <div class="weui-move-left">
-            <span class="weui-rank-tag ${idx === 0 ? 'rank-1' : ''}">${idx + 1}</span>
-            <span class="weui-move-san">${move.san} ${isSfMatch ? `<span style="font-size: 9.5px; color: var(--weui-BRAND); font-weight: 700;">(${this.t('consensus')})</span>` : ''}</span>
-          </div>
-          <div class="weui-move-right">
-            ${deltaBadge}
-            <span class="weui-move-prob">${move.prob}%</span>
-          </div>
-        </div>
-        <div class="weui-progress-track">
-          <div class="weui-progress-bar" style="width: ${move.prob}%; background: ${barColor};"></div>
-        </div>
-      `;
+      const probSpan = document.createElement('span');
+      probSpan.className = 'weui-move-prob';
+      probSpan.textContent = `${move.prob}%`;
+      rightDiv.appendChild(probSpan);
+
+      mainDiv.append(leftDiv, rightDiv);
+
+      const trackDiv = document.createElement('div');
+      trackDiv.className = 'weui-progress-track';
+      const barDiv = document.createElement('div');
+      barDiv.className = 'weui-progress-bar';
+      barDiv.style.width = `${move.prob}%`;
+      barDiv.style.background = barColor;
+      trackDiv.appendChild(barDiv);
+
+      row.append(mainDiv, trackDiv);
 
       row.addEventListener('mouseenter', () => {
         if (this.onMoveHover) this.onMoveHover(move.uci);
@@ -1257,7 +1429,7 @@ export class IntuitionPanel {
     });
   }
 
-  showCustomInsight({ badge, text, isTrap = false }) {
+  showCustomInsight({ badge, text, isTrap = false, blunderInfo = null }) {
     if (!this.container) return;
     const insightCard = this.container.querySelector('#maia-insight-card');
     const badgeEl = this.container.querySelector('#maia-insight-badge');
@@ -1268,6 +1440,62 @@ export class IntuitionPanel {
     badgeEl.className = `weui-insight-badge ${isTrap ? 'badge-trap' : ''}`;
     insightCard.className = `weui-insight-box ${isTrap ? 'alert-trap' : ''}`;
     insightCard.style.display = 'block';
+
+    textEl.replaceChildren();
+
+    if (blunderInfo) {
+      const isZh = this.lang === 'zh';
+      const sideText = blunderInfo.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
+      const probText = blunderInfo.humanProbability ? `${blunderInfo.humanProbability}%` : null;
+
+      const line1 = document.createElement('div');
+      const label1 = document.createTextNode(isZh ? '实战' : 'Played by ');
+      const sideEl = document.createElement('strong');
+      sideEl.textContent = sideText;
+      const labelMid = document.createTextNode(isZh ? '走棋: ' : ': ');
+      const playedEl = document.createElement('strong');
+      playedEl.style.color = '#FA5151';
+      playedEl.textContent = blunderInfo.san || '';
+
+      line1.append(label1, sideEl, labelMid, playedEl);
+
+      if (probText) {
+        const probSpan = document.createElement('span');
+        probSpan.textContent = ` (${isZh ? '直觉概率 ' : 'Intuition: '}`;
+        const probStrong = document.createElement('strong');
+        probStrong.textContent = probText;
+        probSpan.appendChild(probStrong);
+        probSpan.appendChild(document.createTextNode(')'));
+        line1.appendChild(probSpan);
+      }
+
+      const recLabel = document.createTextNode(isZh ? '，而引擎推荐最优走法为 ' : ', while Engine recommends ');
+      const bestEl = document.createElement('strong');
+      bestEl.style.color = 'var(--weui-BRAND)';
+      bestEl.textContent = blunderInfo.bestSan || '';
+      line1.append(recLabel, bestEl);
+      line1.appendChild(document.createTextNode('。'));
+
+      const line2 = document.createElement('div');
+      line2.style.marginTop = '3px';
+      line2.style.fontSize = '11px';
+      line2.style.color = 'var(--weui-FG-1)';
+
+      const lossLabel = document.createTextNode(isZh ? '局面损耗: ' : 'Centipawn loss: ');
+      const lossEl = document.createElement('strong');
+      lossEl.style.color = '#FA5151';
+      lossEl.textContent = `${blunderInfo.lossPawns || 0}`;
+      const lossUnit = document.createTextNode(isZh
+        ? ` 兵 (局势变动: ${blunderInfo.evalBefore || '0.00'} ➔ ${blunderInfo.evalAfter || '0.00'})`
+        : ` (${blunderInfo.evalBefore || '0.00'} ➔ ${blunderInfo.evalAfter || '0.00'})`);
+
+      line2.append(lossLabel, lossEl, lossUnit);
+      textEl.append(line1, line2);
+    } else if (text instanceof Node) {
+      textEl.appendChild(text);
+    } else if (typeof text === 'string') {
+      this._appendFormattedText(textEl, text);
+    }
   }
 
   showToast(msg, duration = 3000) {
