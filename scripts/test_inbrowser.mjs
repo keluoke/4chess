@@ -8,8 +8,16 @@ const __dirname = path.dirname(__filename);
 
 async function main() {
   const binPath = path.resolve(__dirname, '../models/maia3_model.bin');
-  const buffer = fs.readFileSync(binPath);
-  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  let arrayBuffer;
+  if (fs.existsSync(binPath)) {
+    const buffer = fs.readFileSync(binPath);
+    arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  } else {
+    console.log('[Test] Downloading model from CDN for Node.js verification...');
+    const resp = await fetch('https://weights.4chess.cc/maia3_model.bin');
+    if (!resp.ok) throw new Error(`CDN returned HTTP ${resp.status}`);
+    arrayBuffer = await resp.arrayBuffer();
+  }
 
   const engine = new MaiaEngine();
   // Manually load array buffer into maiaInBrowser for Node.js test

@@ -90,8 +90,7 @@ simoextension/
 ├── cloudflare/                # Cloudflare 边缘部署配置
 │   ├── headers                # COOP/COEP 安全响应头及 WASM MIME 声明
 │   └── redirects              # 路由重定向规则
-├── models/
-│   └── maia3_model.bin        # 真实 Maia-3 5M 二进制模型权重 (27.97 MB, ~7.33M 权重元素)
+├── models/                    # 模型权重存储规范 (大文件严禁入库，统一由专用 CDN 流式下发并持久化于 IndexedDB)
 ├── lib/
 │   ├── stockfish-19.js        # Stockfish 19 Emscripten 胶水脚本
 │   └── stockfish.wasm         # Stockfish 19 WebAssembly 引擎二进制文件

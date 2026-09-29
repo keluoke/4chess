@@ -96,7 +96,7 @@ export class MaiaEngine {
       this.notifyStatus();
     });
 
-    // 2. Resolve Model Source (Override URL -> Custom Cloudflare CDN -> Local Extension Package -> Default CDN)
+    // 2. Resolve Model Source: Dedicated Cloudflare CDN / R2 Bucket (with browser IndexedDB persistent cache)
     let customCdn = overrideUrl || '';
     if (!customCdn && typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
@@ -112,13 +112,7 @@ export class MaiaEngine {
     // 1. Primary Default: User's dedicated Cloudflare CDN bucket
     candidates.push('https://weights.4chess.cc/maia3_model.bin');
 
-    // 2. Extension packaged local file
-    if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-      candidates.push(chrome.runtime.getURL('models/maia3_model.bin'));
-    } else {
-      candidates.push('models/maia3_model.bin');
-    }
-    // 3. High-speed mirror fallback
+    // 2. High-speed mirror fallback
     candidates.push('https://maia3-cdn.pages.dev/models/maia3_model.bin');
 
     let loaded = false;
@@ -132,7 +126,7 @@ export class MaiaEngine {
           this.status.maia.speed = prog.speedMBps;
           this.status.maia.loadedMB = prog.receivedMB;
           this.status.maia.totalMB = prog.totalMB;
-          this.status.maia.source = prog.source === 'cache' ? 'IndexedDB 缓存' : (prog.source === 'cdn' ? 'Cloudflare CDN' : '扩展内置');
+          this.status.maia.source = prog.source === 'cache' ? 'IndexedDB 缓存' : 'Cloudflare CDN';
           this.notifyStatus();
         });
         loaded = true;

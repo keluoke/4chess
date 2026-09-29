@@ -1,8 +1,8 @@
-# Checkpoints and models (large binaries)
+# Checkpoints and models (large binaries >25MB forbidden in repo / Cloudflare Pages)
 *.pt
 *.onnx
 *.bin
-!models/maia3_model.bin
+models/*.bin
 
 # Python
 __pycache__/

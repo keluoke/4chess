@@ -35,7 +35,7 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
   }
 
-  async loadModel(urlOrBuffer = 'models/maia3_model.bin', onProgress = null) {
+  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null) {
     if (this.isReady) return true;
     if (this.initPromise) return this.initPromise;
 

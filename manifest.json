@@ -65,7 +65,6 @@
         "engine/*",
         "lib/stockfish-19.js",
         "lib/stockfish.wasm",
-        "models/maia3_model.bin",
         "icons/*"
       ],
       "matches": [
