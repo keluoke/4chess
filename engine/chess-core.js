@@ -254,6 +254,10 @@ export class ChessBoard {
     return this.isSquareAttacked(kingIdx, opponent);
   }
 
+  isCheck(color = this.turn) {
+    return this.inCheck(color);
+  }
+
   generatePseudoLegalMoves() {
     const moves = [];
     const color = this.turn;
@@ -507,9 +511,11 @@ export class ChessBoard {
       this.undoMove(state);
     }
 
-    // Attach UCI and SAN
+    // Attach UCI, SAN, and algebraic squares
     for (const move of legal) {
-      move.uci = ChessBoard.indexToSquare(move.from) + ChessBoard.indexToSquare(move.to) + (move.promo || '');
+      move.fromSq = ChessBoard.indexToSquare(move.from);
+      move.toSq = ChessBoard.indexToSquare(move.to);
+      move.uci = move.fromSq + move.toSq + (move.promo || '');
       move.san = this.moveToSan(move, legal);
     }
     return legal;

@@ -172,9 +172,31 @@ export async function initMaiaExtension() {
         }
       } catch (e) {}
 
+      const sanitizedMoves = (moves || []).map(m => ({
+        ply: m.ply,
+        moveNumber: m.moveNumber,
+        turn: m.turn,
+        san: m.san,
+        uci: m.uci || null,
+        from: m.from || null,
+        to: m.to || null,
+        element: null
+      }));
+
+      const cleanReview = analyzer.lastReviewResult ? {
+        totalMoves: analyzer.lastReviewResult.totalMoves,
+        blundersCount: analyzer.lastReviewResult.blundersCount,
+        mistakesCount: analyzer.lastReviewResult.mistakesCount,
+        inaccuraciesCount: analyzer.lastReviewResult.inaccuraciesCount,
+        acplWhite: analyzer.lastReviewResult.acplWhite,
+        acplBlack: analyzer.lastReviewResult.acplBlack,
+        allMoves: (analyzer.lastReviewResult.allMoves || []).map(m => ({ ...m, element: null })),
+        keyMoments: (analyzer.lastReviewResult.keyMoments || []).map(m => ({ ...m, element: null }))
+      } : null;
+
       const gameData = {
-        moves,
-        cachedReview: analyzer.lastReviewResult || null,
+        moves: sanitizedMoves,
+        cachedReview: cleanReview,
         white: whitePlayer,
         black: blackPlayer,
         result: gameResult,

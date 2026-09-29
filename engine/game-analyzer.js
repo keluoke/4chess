@@ -514,8 +514,8 @@ export class GameAnalyzer {
         turn: sidePlayed,
         san: mItem.san,
         uci: matched.uci || `${matched.fromSq || matched.from}${matched.toSq || matched.to}`,
-        from: matched.fromSq || matched.from,
-        to: matched.toSq || matched.to,
+        from: matched.fromSq || ChessBoard.indexToSquare(matched.from),
+        to: matched.toSq || ChessBoard.indexToSquare(matched.to),
         fen: chess.getFen(),
         moveEl: mItem.element
       });

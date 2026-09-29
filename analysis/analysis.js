@@ -361,6 +361,13 @@ class AnalysisStudioApp {
     this.el.percentText.textContent = '0%';
     this.el.phaseText.textContent = '正在准备全盘引擎评估...';
 
+    this.el.blunderList.innerHTML = `
+      <div style="padding: 28px; text-align: center; color: var(--brand-green); font-size: 13px;">
+        <div style="margin-bottom: 8px; font-weight: 600;">⚡ 正在深度复盘棋局并计算局面损耗...</div>
+        <div style="font-size: 11.5px; color: var(--text-dim);" id="blunder-loading-detail">正在初始化 Stockfish 19 与 Maia 3 引擎</div>
+      </div>
+    `;
+
     try {
       const result = await this.analyzer.analyzeGame(this.moves, {
         depth: 6,
@@ -369,10 +376,15 @@ class AnalysisStudioApp {
         onProgress: (prog) => {
           this.el.progressBar.style.width = `${prog.percent}%`;
           this.el.percentText.textContent = `${prog.percent}%`;
+          const detailEl = document.getElementById('blunder-loading-detail');
           if (prog.phase === 'evaluating') {
-            this.el.phaseText.textContent = `Stockfish 19 WASM 评估中 (${prog.current}/${prog.total}) · ${prog.currentMove || ''}`;
+            const txt = `Stockfish 19 WASM 评估中 (${prog.current}/${prog.total}) · ${prog.currentMove || ''}`;
+            this.el.phaseText.textContent = txt;
+            if (detailEl) detailEl.textContent = txt;
           } else if (prog.phase === 'intuition') {
-            this.el.phaseText.textContent = `Maia 3 直觉陷阱测算中 (${prog.current}/${prog.total}) · ${prog.currentMove || ''}`;
+            const txt = `Maia 3 直觉陷阱测算中 (${prog.current}/${prog.total}) · ${prog.currentMove || ''}`;
+            this.el.phaseText.textContent = txt;
+            if (detailEl) detailEl.textContent = txt;
           }
         }
       });
@@ -386,6 +398,13 @@ class AnalysisStudioApp {
       console.error('[Analysis Studio] Review failed:', err);
       this.el.progressCard.style.display = 'none';
       this.el.divergenceContent.innerHTML = `<span style="color: var(--brand-red);">⚠️ 复盘分析出错: ${err.message}</span>`;
+      this.el.blunderList.innerHTML = `
+        <div style="padding: 28px; text-align: center; color: var(--brand-red); font-size: 13px;">
+          <div style="margin-bottom: 8px;">⚠️ 棋局复盘未能完成: ${err.message}</div>
+          <button type="button" class="btn-header btn-primary" id="btn-retry-review" style="margin: 0 auto; display: inline-flex;">⚡ 重试复盘</button>
+        </div>
+      `;
+      document.getElementById('btn-retry-review')?.addEventListener('click', () => this.runFullReview(true));
     }
   }
 
@@ -497,10 +516,14 @@ class AnalysisStudioApp {
     this.exitBranchMode();
 
     // Highlight card
+    const moments = this.reviewResult?.keyMoments || [];
+    const idx = moments.indexOf(item);
     const cards = this.el.blunderList.querySelectorAll('.blunder-card');
     cards.forEach(c => c.classList.remove('active'));
-    const matchedCard = this.el.blunderList.querySelector(`.blunder-card[data-index="${momentsIndex(item)}"]`);
-    if (matchedCard) matchedCard.classList.add('active');
+    if (idx !== -1) {
+      const matchedCard = this.el.blunderList.querySelector(`.blunder-card[data-index="${idx}"]`);
+      if (matchedCard) matchedCard.classList.add('active');
+    }
 
     if (viewMode === 'decision') {
       // 1. Board setup at fenBefore
@@ -581,10 +604,6 @@ class AnalysisStudioApp {
         走棋完成: <strong style="color: var(--brand-red);">${item.san}</strong>。<br/>
         局势从 <strong>${item.evalBefore}</strong> 急剧转向 <strong>${item.evalAfter}</strong> (净亏损 <strong>${item.lossPawns}</strong> 兵)。
       `;
-    }
-
-    function momentsIndex(m) {
-      return (moments || []).indexOf(m);
     }
   }
 
@@ -825,7 +844,15 @@ class AnalysisStudioApp {
   }
 }
 
-// Instantiate on DOMContentLoaded
-window.addEventListener('DOMContentLoaded', () => {
-  new AnalysisStudioApp();
-});
+// Safe instantiation for both pre-loaded and deferred execution
+function initApp() {
+  if (!window.__maiaStudioApp) {
+    window.__maiaStudioApp = new AnalysisStudioApp();
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

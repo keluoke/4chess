@@ -112,7 +112,13 @@ export class BoardUI {
 
   setPosition(fen, lastMove = null) {
     this.chess.load(fen);
-    this.lastMove = lastMove;
+    if (lastMove && typeof lastMove === 'object') {
+      const from = (typeof lastMove.from === 'number') ? ChessBoard.indexToSquare(lastMove.from) : lastMove.from;
+      const to = (typeof lastMove.to === 'number') ? ChessBoard.indexToSquare(lastMove.to) : lastMove.to;
+      this.lastMove = { from, to };
+    } else {
+      this.lastMove = null;
+    }
     this.selectedSq = null;
     this.legalMovesForSelected = [];
     this.render();
@@ -150,7 +156,7 @@ export class BoardUI {
         sqDiv.classList.remove('selected', 'last-move-from', 'last-move-to', 'check');
 
         // Check highlight
-        if (this.chess.isCheck()) {
+        if (this.chess.inCheck ? this.chess.inCheck() : (this.chess.isCheck && this.chess.isCheck())) {
           const kingPiece = this.chess.turn === 'w' ? 'K' : 'k';
           const p = this.chess.board[r * 8 + f];
           if (p && (p.color === 'w' ? 'K' : 'k') === kingPiece && p.type === 'k') {
@@ -207,7 +213,10 @@ export class BoardUI {
   }
 
   getSquareCenterPercent(sq) {
-    if (!sq || sq.length < 2) return { x: 0, y: 0 };
+    if (typeof sq === 'number') {
+      sq = ChessBoard.indexToSquare(sq);
+    }
+    if (!sq || typeof sq !== 'string' || sq.length < 2) return { x: 0, y: 0 };
     const f = sq.charCodeAt(0) - 97;
     const r = parseInt(sq[1], 10) - 1;
     const isBlack = this.orientation === 'black';
