@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Maia 3 · 人类直觉热力图与预测器",
   "version": "1.0.0",
-  "description": "基于 WebGPU / WebAssembly 驱动的 Maia 3 (Chessformer) 人类直觉预测插件，在 Lichess / Chess.com 实时呈现直觉热力图与着法预测。",
+  "description": "纯浏览器端运行的 Maia 3 人类直觉与 Stockfish 19 双引擎研判扩展，在 Lichess / Chess.com 提供赛后深度复盘与局面研判。",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -23,7 +23,8 @@
   "host_permissions": [
     "https://lichess.org/*",
     "https://*.chess.com/*",
-    "https://*/*"
+    "https://weights.4chess.cc/*",
+    "https://maia3-cdn.pages.dev/*"
   ],
   "content_scripts": [
     {
@@ -54,12 +55,14 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "content/*",
-        "engine/*",
-        "models/*",
-        "lib/*",
-        "icons/*",
-        "analysis/*"
+        "engine/stockfish-sandbox.html",
+        "engine/stockfish-sandbox.js",
+        "lib/stockfish-19.js",
+        "lib/stockfish.wasm",
+        "models/maia3_model.bin",
+        "icons/icon16.png",
+        "icons/icon48.png",
+        "icons/icon128.png"
       ],
       "matches": [
         "https://lichess.org/*",

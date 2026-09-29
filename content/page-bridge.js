@@ -52,6 +52,7 @@
   });
 
   window.addEventListener('message', function(e) {
+    if (e.source !== window) return;
     if (e.data && e.data.type === '__MAIA_JUMP_REQ__') {
       var ply = typeof e.data.ply === 'number' ? e.data.ply : null;
       if (ply !== null) executeJump(ply);

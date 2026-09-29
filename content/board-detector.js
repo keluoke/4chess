@@ -179,12 +179,33 @@ export class BoardDetector {
     let replaySuccess = true;
 
     for (let i = 0; i <= activeIdx; i++) {
-      const rawText = moveEls[i].textContent.replace(/\d+[\.\s]+/g, '').trim();
+      const el = moveEls[i];
+      const rawText = el.textContent.replace(/\d+[\.\s]+/g, '').trim();
       if (!rawText) continue;
 
-      const san = rawText.split(/\s+/)[0];
+      let san = rawText.split(/\s+/)[0];
+
+      // Figurine / Piece Icon recovery (Chess.com uses SVG/font icons instead of letter prefixes)
+      const iconEl = el.querySelector('[class*="knight"], [class*="bishop"], [class*="rook"], [class*="queen"], [class*="king"], [data-piece]');
+      if (iconEl && san && /^[a-h1-8x+#=\-]+$/i.test(san)) {
+        const cls = iconEl.className || '';
+        const dp = iconEl.getAttribute('data-piece');
+        let prefix = '';
+        if (dp) prefix = dp.toUpperCase();
+        else if (cls.includes('knight')) prefix = 'N';
+        else if (cls.includes('bishop')) prefix = 'B';
+        else if (cls.includes('rook')) prefix = 'R';
+        else if (cls.includes('queen')) prefix = 'Q';
+        else if (cls.includes('king')) prefix = 'K';
+        if (prefix) san = prefix + san;
+      }
+
+      const cleanSan = san.replace(/[+#?!]/g, '');
       const legals = chess.getLegalMoves();
-      const matched = legals.find(m => m.san === san || m.uci === san);
+      const matched = legals.find(m => {
+        const mClean = m.san.replace(/[+#?!]/g, '');
+        return mClean === cleanSan || m.uci === cleanSan || mClean.toLowerCase() === cleanSan.toLowerCase();
+      });
 
       if (matched) {
         chess.makeMove(matched);

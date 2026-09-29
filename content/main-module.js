@@ -255,24 +255,35 @@ export async function initMaiaExtension() {
   engine.stockfishInBrowser.onReadyCallback = () => {
     engine.status.stockfish.state = 'ready';
     engine.notifyStatus();
-    if (currentFen) {
+    if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
       runPrediction(currentFen);
     }
   };
 
-  // Start dual-engine initialization asynchronously
-  engine.initialize().then(() => {
-    if (engine.stockfishInBrowser?.isReady) {
-      console.log('[Maia-3] ✅ 双引擎 (Maia-3 + Stockfish) 均已就绪！');
-    } else {
-      console.log(`[Maia-3] ℹ️ Maia-3 已就绪 (Stockfish 状态: ${engine.status.stockfish.state})`);
-    }
-    if (currentFen) {
-      runPrediction(currentFen);
-    }
-  }).catch(err => {
-    console.warn('[Maia-3] Engine initialization notice:', err?.message || err);
-  });
+  // Lazy engine initialization: avoid eager 28MB download/WASM spin-up on homepages or active games
+  let engineInitStarted = false;
+  const ensureEngineInitialized = () => {
+    if (engineInitStarted) return;
+    if (FairPlayGuard.isLiveGameInProgress()) return;
+    engineInitStarted = true;
+    engine.initialize().then(() => {
+      if (engine.stockfishInBrowser?.isReady) {
+        console.log('[Maia-3] ✅ 双引擎 (Maia-3 + Stockfish) 均已就绪！');
+      } else {
+        console.log(`[Maia-3] ℹ️ Maia-3 已就绪 (Stockfish 状态: ${engine.status.stockfish.state})`);
+      }
+      if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
+        runPrediction(currentFen);
+      }
+    }).catch(err => {
+      console.warn('[Maia-3] Engine initialization notice:', err?.message || err);
+    });
+  };
+
+  // If in safe environment on load (analysis/puzzles/study/post-game), initialize engine lazily
+  if (!FairPlayGuard.isLiveGameInProgress()) {
+    ensureEngineInitialized();
+  }
 
   detector = new BoardDetector(async ({ fen, orientation, platform }) => {
     currentFen = fen;
@@ -300,6 +311,7 @@ export async function initMaiaExtension() {
       return;
     } else {
       panel.setFairPlayLocked(false);
+      ensureEngineInitialized();
     }
 
     // Immediately clear stale arrows and set evaluating state
@@ -312,7 +324,7 @@ export async function initMaiaExtension() {
   detector.start();
   console.log('[Maia-3] Extension successfully hooked into analysis environment! ♟️');
 
-  // Instant 0ms observer for Fair Play state transitions (e.g. game finishes or starts)
+  // Instant observer for Fair Play state transitions (e.g. game finishes or starts)
   const handleFairPlayChange = (isLive) => {
     if (isLive !== panel.isFairPlayLocked) {
       panel.setFairPlayLocked(isLive);
@@ -327,9 +339,12 @@ export async function initMaiaExtension() {
         if (engine.stockfishInBrowser?.isReady) {
           engine.stockfishInBrowser.stop();
         }
-      } else if (currentFen) {
-        // Game concluded! Re-enable evaluation for post-game review
-        runPrediction(currentFen);
+      } else {
+        // Game concluded! Re-enable evaluation and ensure engine is initialized for post-game review
+        ensureEngineInitialized();
+        if (currentFen) {
+          runPrediction(currentFen);
+        }
       }
     }
   };

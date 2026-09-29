@@ -209,15 +209,23 @@ export class FairPlayGuard {
   }
 
   /**
-   * Start 0ms instant DOM mutation watcher for Fair Play lockdown
+   * Start DOM mutation watcher for Fair Play lockdown
+   * Throttles DOM querySelector checks so running clocks don't cause CPU churn.
    */
   static startObserver(onChange) {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
-    if (this._observer) this._observer.disconnect();
+    if (this._observer) {
+      this._observer.disconnect();
+      this._observer = null;
+    }
+    if (this._throttleTimer) {
+      clearTimeout(this._throttleTimer);
+      this._throttleTimer = null;
+    }
 
     this.lastState = FairPlayGuard.isLiveGameInProgress();
 
-    const check = () => {
+    const runCheck = () => {
       const current = FairPlayGuard.isLiveGameInProgress();
       if (current !== this.lastState) {
         this.lastState = current;
@@ -225,7 +233,15 @@ export class FairPlayGuard {
       }
     };
 
-    this._observer = new MutationObserver(check);
+    const throttledCheck = () => {
+      if (this._throttleTimer) return;
+      this._throttleTimer = setTimeout(() => {
+        this._throttleTimer = null;
+        runCheck();
+      }, 150);
+    };
+
+    this._observer = new MutationObserver(throttledCheck);
     const target = document.body || document.documentElement;
     if (target) {
       this._observer.observe(target, {
@@ -236,8 +252,8 @@ export class FairPlayGuard {
       });
     }
 
-    window.addEventListener('popstate', check);
-    check();
+    window.addEventListener('popstate', runCheck);
+    runCheck();
   }
 }
 

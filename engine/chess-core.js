@@ -26,12 +26,7 @@ export class ChessBoard {
     this.halfMoves = 0;
     this.fullMoves = 1;
     this.history = [];
-    this.isValid = true;
-    const ok = this.load(fen);
-    if (!ok && fen !== ChessBoard.INITIAL_FEN) {
-      this.isValid = false;
-      this.load(ChessBoard.INITIAL_FEN);
-    }
+    this.isValid = this.load(fen);
   }
 
   static squareToIndex(sq) {
@@ -425,7 +420,15 @@ export class ChessBoard {
     };
 
     const p = this.board[move.from];
+    const isCapture = !!move.capture || !!this.board[move.to] || !!move.enPassant;
     this.board[move.from] = null;
+
+    // Update 50-move half-move clock (reset on pawn moves and captures)
+    if (p.type === 'p' || isCapture) {
+      this.halfMoves = 0;
+    } else {
+      this.halfMoves++;
+    }
 
     // Handle En Passant capture
     if (move.enPassant) {

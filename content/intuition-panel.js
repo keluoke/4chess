@@ -323,8 +323,8 @@ export class IntuitionPanel {
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
           <div style="display: flex; gap: 5px;">
-            <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_model.bin">5M (28M)</button>
-            <button type="button" class="weui-preset-btn active" data-url="https://weights.4chess.cc/maia3_23m.bin">23M (104M)</button>
+            <button type="button" class="weui-preset-btn active" data-url="https://weights.4chess.cc/maia3_model.bin">5M (28M)</button>
+            <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin">23M (104M)</button>
             <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_79m_fp16.bin">79M (159M)</button>
           </div>
         </div>
@@ -333,7 +333,7 @@ export class IntuitionPanel {
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-cdn-url">${this.t('lbl-cdn-url') || this.t('lblCdnUrl')}</div>
           <div style="display: flex; gap: 6px;">
-            <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_23m.bin" value="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: var(--weui-BG-3); border: 0.5px solid var(--weui-BORDER); color: #FFF; padding: 4px 8px; border-radius: 6px; font-size: 10.5px; font-family: monospace;">
+            <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_model.bin" value="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: var(--weui-BG-3); border: 0.5px solid var(--weui-BORDER); color: #FFF; padding: 4px 8px; border-radius: 6px; font-size: 10.5px; font-family: monospace;">
             <button type="button" id="cdn-save-btn" class="weui-btn-primary" style="padding: 4px 10px; font-size: 11px;">${this.t('btnSave')}</button>
           </div>
         </div>
@@ -629,7 +629,15 @@ export class IntuitionPanel {
 
     if (typeof chrome !== 'undefined' && chrome.storage?.local && cdnInput) {
       chrome.storage.local.get(['cloudflareCdnUrl'], (res) => {
-        cdnInput.value = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_23m.bin';
+        const url = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
+        cdnInput.value = url;
+        this.container.querySelectorAll('.weui-preset-btn').forEach(btn => {
+          if (btn.getAttribute('data-url') === url) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        });
       });
     }
 

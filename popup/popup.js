@@ -10,15 +10,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const presetSelect = document.getElementById('model-preset-select');
   const panelSwitch = document.getElementById('toggle-panel-switch');
 
-  // 1. Dual Engine Engine Status
-  const hasWebGPU = !!navigator.gpu;
-  if (hasWebGPU) {
-    statusPill.textContent = '🟢 WebGPU + WASM 就绪';
-    statusPill.style.color = '#10b981';
-  } else {
-    statusPill.textContent = '🟢 WebAssembly 就绪';
-    statusPill.style.color = '#38bdf8';
-  }
+  // 1. Dual Engine Status
+  statusPill.textContent = '🟢 JS Float32 + SF19 就绪';
+  statusPill.style.color = '#07C160';
 
   // 2. Query active tab to sync panel switch state
   if (chrome.tabs && chrome.tabs.query) {
@@ -53,11 +47,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 4. Load saved preferences
-  chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'preferredBackend', 'cloudflareCdnUrl'], (res) => {
+  chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'cloudflareCdnUrl'], (res) => {
     const elo = res.defaultElo || res.maia3_target_elo || 1900;
     if (eloSelect) eloSelect.value = elo;
-    if (res.preferredBackend && backendSelect) backendSelect.value = res.preferredBackend;
-    const currentUrl = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_23m.bin';
+    const currentUrl = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
     if (cdnInput) cdnInput.value = currentUrl;
 
     if (presetSelect) {

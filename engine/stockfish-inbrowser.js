@@ -287,6 +287,7 @@ export class StockfishInBrowser {
 
     if (!this._hasListener) {
       window.addEventListener('message', (event) => {
+        if (this.iframe && event.source !== this.iframe.contentWindow) return;
         const data = event.data;
         if (!data) return;
 

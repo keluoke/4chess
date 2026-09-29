@@ -202,6 +202,10 @@ export class MaiaEngine {
     }
 
     const chess = new ChessBoard(fen);
+    if (!chess.isValid) {
+      console.warn(`[Maia Engine] Invalid FEN rejected: "${fen}"`);
+      return null;
+    }
     const legalMoves = chess.getLegalMoves();
 
     if (legalMoves.length === 0) {
@@ -226,57 +230,6 @@ export class MaiaEngine {
       };
     }
 
-    // 0. Auto-probe local GPU engine server if running on 127.0.0.1:8765 (Apple Silicon MPS / CUDA 8ms)
-    const localData = await this.tryLocalServerPredict(fen, elo);
-    if (localData && localData.moves && localData.moves.length > 0) {
-      const scoredMoves = localData.moves.map(m => ({
-        ...m,
-        from: typeof m.from === 'string' ? ChessBoard.squareToIndex(m.from) : m.from,
-        to: typeof m.to === 'string' ? ChessBoard.squareToIndex(m.to) : m.to
-      }));
-
-      const topMove = scoredMoves[0];
-      let comparison = null;
-      if (topMove && sfRes && sfRes.bestMove) {
-        const isConsensus = topMove.uci === sfRes.bestMove.uci;
-        comparison = {
-          agreed: isConsensus,
-          badge: isConsensus ? '🎯 人机高度共识' : '⚠️ 人机着法分歧',
-          summary: isConsensus ?
-            `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！` :
-            `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (${sfRes.score})。`
-        };
-      }
-
-      const localResult = {
-        isAvailable: true,
-        isMaiaReady: true,
-        isStockfishReady: this.stockfishInBrowser.isReady,
-        fen: localData.fen || fen,
-        elo,
-        turn: localData.activeTurn || chess.turn,
-        backend: `⚡ 本地硬件加速 ${localData.model || 'Maia-3'} (${localData.device || 'GPU'})`,
-        modelName: localData.model || 'Maia-3',
-        status: this.status,
-        heatmap: new Float32Array(localData.heatmap || 64),
-        moves: scoredMoves,
-        stockfish: sfRes,
-        comparison,
-        analysis: {
-          topMove: topMove?.uci,
-          commentary: comparison?.summary || `直觉候选: ${topMove.san} (${topMove.prob}%)`,
-          isTacticalTrap: comparison ? !comparison.agreed : false
-        },
-        latencyMs: localData.latencyMs || 8
-      };
-
-      if (this.lruCache.size >= this.MAX_CACHE_SIZE) {
-        const firstKey = this.lruCache.keys().next().value;
-        this.lruCache.delete(firstKey);
-      }
-      this.lruCache.set(cacheKey, localResult);
-      return localResult;
-    }
 
     // 1. If Maia-3 model is loading, await initialization promise
     if (!this.isReady && this.initPromise) {
@@ -427,7 +380,7 @@ export class MaiaEngine {
 
   evaluateStockfishAsync(fen, callback) {
     if (!this.stockfishInBrowser.isReady) return;
-    this.stockfishInBrowser.evaluate(fen, 8, 800).then(sfRes => {
+    this.stockfishInBrowser.evaluate(fen, 8, 800, 3).then(sfRes => {
       if (callback && sfRes) callback(sfRes);
     }).catch(() => {});
   }
@@ -450,33 +403,5 @@ export class MaiaEngine {
       }
     };
   }
-
-  async tryLocalServerPredict(fen, elo) {
-    const now = Date.now();
-    if (this._localServerOfflineUntil && now < this._localServerOfflineUntil) {
-      return null;
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 80);
-      const res = await fetch('http://127.0.0.1:8765/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fen, elo, top_k: 5 }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'ok' && data.moves) {
-          this._localServerOfflineUntil = null;
-          return data;
-        }
-      }
-    } catch (e) {
-      this._localServerOfflineUntil = now + 3000;
-    }
-    return null;
-  }
 }
+

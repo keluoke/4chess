@@ -239,7 +239,12 @@ export class GameAnalyzer {
     // ------------------------------------------------------------------
     if (window.location.hostname.includes('lichess')) {
       const lichessMatch = window.location.pathname.match(/^\/([a-zA-Z0-9]{8,12})/);
-      if (lichessMatch && lichessMatch[1]) {
+      const NON_GAME_PATHS = new Set([
+        'analysis', 'training', 'practice', 'puzzles', 'study', 'editor',
+        'learn', 'tournament', 'broadcast', 'insights', 'streamer', 'patron',
+        'stat', 'class', 'inbox', 'forum', 'team', 'player', 'coach'
+      ]);
+      if (lichessMatch && lichessMatch[1] && !NON_GAME_PATHS.has(lichessMatch[1].toLowerCase())) {
         const cleanId = lichessMatch[1].slice(0, 8);
         console.log(`[GameAnalyzer] ⚡ Fetching Lichess game data for ID ${cleanId}...`);
 
