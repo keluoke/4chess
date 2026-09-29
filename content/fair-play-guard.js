@@ -13,6 +13,23 @@
 
 export class FairPlayGuard {
   /**
+   * Helper to check if a control element is actually visible, enabled, and interactive
+   */
+  static isVisibleAndActive(el) {
+    if (!el) return false;
+    if (el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
+    if (el.closest('[hidden], [aria-hidden="true"], .hidden')) return false;
+    if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+    try {
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || '1') < 0.1) {
+        return false;
+      }
+    } catch (e) {}
+    return true;
+  }
+
+  /**
    * Returns true if an active live game is currently being played
    */
   static isLiveGameInProgress() {
@@ -28,15 +45,18 @@ export class FairPlayGuard {
     // Under NO circumstances may whitelist or completion indicators override active game controls!
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
-      const hasResignBtn = document.querySelector(
+      const resignBtn = document.querySelector(
         'button.resign, .game__controls .resign, button[data-action="resign"], [data-hint*="Resign" i], [data-hint*="认输" i]'
       );
-      const hasDrawBtn = document.querySelector(
+      const drawBtn = document.querySelector(
         'button.draw-yes, .game__controls .draw-yes, button[data-action="draw-yes"]'
       );
       const hasCanMove = document.querySelector('cg-board.can-move, .your-turn');
       const isBroadcastRelay = path.startsWith('/broadcast');
       const hasRunningClock = !isBroadcastRelay && document.querySelector('.rclock-running, .rclock .running');
+
+      const hasResignBtn = FairPlayGuard.isVisibleAndActive(resignBtn);
+      const hasDrawBtn = FairPlayGuard.isVisibleAndActive(drawBtn);
 
       if (hasResignBtn || hasDrawBtn || hasCanMove || hasRunningClock) {
         return true; // LIVE GAME ACTIVE!
@@ -44,26 +64,30 @@ export class FairPlayGuard {
     }
 
     if (host.includes('chess.com')) {
-      const hasAbortBtn = document.querySelector(
-        'button[aria-label*="Abort" i], button[aria-label*="放弃" i], button[aria-label*="取消" i], ' +
+      const abortBtn = document.querySelector(
+        'button[aria-label="Abort" i], button[aria-label="放弃" i], button[aria-label="取消" i], ' +
         '[data-cy="abort-button"], button.game-controls-abort, .abort-button-component, ' +
-        '.game-controls-button[aria-label*="Abort" i], .game-controls-button[aria-label*="放弃" i]'
+        '.game-controls-button[aria-label="Abort" i], .game-controls-button[aria-label="放弃" i]'
       );
-      const hasResignBtn = document.querySelector(
-        'button[aria-label*="Resign" i], button[aria-label*="认输" i], .resign-button-component, ' +
-        'button.game-controls-resign, [data-cy="resign-button"], .game-controls-button[aria-label*="Resign" i], ' +
-        '.game-controls-button[aria-label*="认输" i], button.resign'
+      const resignBtn = document.querySelector(
+        'button[aria-label="Resign" i], button[aria-label="认输" i], .resign-button-component, ' +
+        'button.game-controls-resign, [data-cy="resign-button"], .game-controls-button[aria-label="Resign" i], ' +
+        '.game-controls-button[aria-label="认输" i], button.resign'
       );
-      const hasDrawBtn = document.querySelector(
-        'button[aria-label*="Draw" i], button[aria-label*="和棋" i], button[aria-label*="Offer Draw" i], ' +
-        'button[aria-label*="提议和棋" i], .draw-button-component, [data-cy="draw-button"], ' +
-        '.game-controls-button[aria-label*="Draw" i], .game-controls-button[aria-label*="和棋" i], button.draw-yes'
+      const drawBtn = document.querySelector(
+        'button[aria-label="Draw" i], button[aria-label="和棋" i], button[aria-label="Offer Draw" i], ' +
+        'button[aria-label="提议和棋" i], button[aria-label*="Offer draw" i], .draw-button-component, [data-cy="draw-button"], ' +
+        '.game-controls-button[aria-label="Draw" i], .game-controls-button[aria-label="和棋" i], button.draw-yes'
       );
       const hasCanMove = document.querySelector('wc-chess-board[can-move], chess-board[can-move]');
       const isEventRelay = path.startsWith('/events');
       const hasRunningClock = !isEventRelay && document.querySelector(
         '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
       );
+
+      const hasAbortBtn = FairPlayGuard.isVisibleAndActive(abortBtn);
+      const hasResignBtn = FairPlayGuard.isVisibleAndActive(resignBtn);
+      const hasDrawBtn = FairPlayGuard.isVisibleAndActive(drawBtn);
 
       if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasCanMove || hasRunningClock) {
         return true; // LIVE GAME ACTIVE!
@@ -122,14 +146,48 @@ export class FairPlayGuard {
       const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
       const isMetaConcluded = /won by|drawn by|won on time|won on disconnection|resignation|checkmate/i.test(metaDesc);
 
+      // 1. Game over modals, dialogs, player result banners
       const gameOverEl = document.querySelector(
-        '.game-over-modal, .game-result-component, .live-game-over-component, ' +
-        '[data-cy="game-review-button"], .game-review-buttons-review, .game-over-dialog, ' +
-        '.game-over-header-component, [data-cy="game-over-modal"], .game-over-player-component'
+        '.game-over-modal, [data-cy="game-over-modal"], ' +
+        '.game-over-dialog, [data-cy="game-over-dialog"], ' +
+        '.board-dialog-component, [class*="board-dialog"], ' +
+        '.game-over-header-component, [class*="game-over-header"], ' +
+        '.game-over-player-component, [class*="game-over-player"], ' +
+        '.game-over-message-component, [class*="game-over-message"], ' +
+        '.live-game-over-component, [class*="live-game-over"], ' +
+        '.game-result-component, [class*="game-result"]'
       );
 
-      if (isMetaConcluded || gameOverEl) {
-        return false; // Concluded historical match
+      // 2. Post-game action buttons (Game Review, Rematch, New Game)
+      const postGameActionBtn = document.querySelector(
+        '[data-cy="game-review-button"], button.game-review-buttons-review, ' +
+        'button.game-review-button-component, [class*="game-review-button"], ' +
+        '[data-cy="new-game-button"], button.new-game-button-component, ' +
+        '[data-cy="rematch-button"], button[aria-label*="Rematch" i], ' +
+        'button[aria-label*="再来一局" i], button[aria-label*="新对局" i], ' +
+        '.game-over-buttons-component, [class*="game-over-buttons"], ' +
+        'a[href*="/analysis/game/live/"], a[href*="/analysis/game/daily/"]'
+      );
+
+      // 3. Move list termination result node (e.g. 1-0, 0-1, 1/2-1/2)
+      const moveListResult = document.querySelector(
+        '.move-list-result, [class*="move-list-result"], ' +
+        '.vertical-move-list-result, [class*="vertical-move-list"] [class*="result"]'
+      );
+      const isMoveListConcluded = moveListResult && /1-0|0-1|1\/2/i.test(moveListResult.textContent || '');
+
+      // 4. Status text conclusion check
+      const statusText = (gameOverEl?.textContent || '') + ' ' + (moveListResult?.textContent || '');
+      const isStatusConcluded = /checkmate|resignation|resigned|time out|timeout|drawn|stalemate|agreed|abandoned|insufficient material|won by|won on|drawn by|game over|获胜|胜出|认输|超时|和棋|绝杀|对局结束/i.test(statusText);
+
+      // Verify that clock is NOT running
+      const isEventRelay = path.startsWith('/events');
+      const hasRunningClock = !isEventRelay && document.querySelector(
+        '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
+      );
+
+      if (!hasRunningClock && (isMetaConcluded || gameOverEl || postGameActionBtn || isMoveListConcluded || isStatusConcluded)) {
+        return false; // Concluded historical/post-game match!
       }
 
       // Daily or Live game paths without verified conclusion:

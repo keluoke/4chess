@@ -15,4 +15,5 @@ maia3_src/
 # OS
 .DS_Store
 .wrangler/
+.workbuddy/
 
