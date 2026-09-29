@@ -9,6 +9,7 @@ import { MaiaEngine } from '../engine/maia-engine.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { BoardUI } from './board-ui.js';
 import { EvalChart } from './eval-chart.js';
+import { FairPlayGuard } from '../content/fair-play-guard.js';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -121,7 +122,7 @@ class AnalysisStudioApp {
 
   initEngines() {
     this.stockfish = new StockfishInBrowser();
-    this.maiaEngine = new MaiaEngine();
+    this.maiaEngine = new MaiaEngine(null, this.stockfish);
     this.analyzer = new GameAnalyzer(this.stockfish, this.maiaEngine);
 
     // Stockfish lifecycle monitoring
@@ -399,19 +400,28 @@ class AnalysisStudioApp {
       const gameId = lichessMatch[1].slice(0, 8);
       this.showToast(`🔍 正在从 Lichess 获取对局 (${gameId})...`, 5000);
       try {
-        const resp = await fetch(`https://lichess.org/game/export/${gameId}?clocks=true&evals=true`);
+        const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true&clocks=true`, {
+          headers: { 'Accept': 'application/json' }
+        });
         if (resp.ok) {
-          const pgn = await resp.text();
-          if (pgn && pgn.includes('1.')) {
-            this.showToast(`✅ 成功载入 Lichess 对局 (${gameId})`);
-            this.loadGameFromPgn(pgn);
+          const data = await resp.json();
+          // Boundary Fair Play Verification: strictly refuse active matches!
+          const v = FairPlayGuard.verifyConcludedGame(data);
+          if (!v.ok) {
+            this.analyzer.cancel();
+            this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+            return false;
+          }
+          if (data.pgn && data.pgn.includes('1.')) {
+            this.showToast(`✅ 成功载入 Lichess 完赛对局 (${gameId})`);
+            this.startNewSession({ pgn: data.pgn, autoReview: true });
             return true;
           }
         }
       } catch (err) {
         console.warn('[Analysis Studio] Lichess export error:', err);
       }
-      this.showToast(`❌ 未能从 Lichess 获取该对局，请确认对局公开或直接粘贴 PGN`);
+      this.showToast(`❌ 未能从 Lichess 获取该对局，请确认对局公开且已完赛`);
       return false;
     }
 
@@ -429,10 +439,18 @@ class AnalysisStudioApp {
         const resp = await fetch(proxyUrl);
         if (resp.ok) {
           const data = await resp.json();
-          const pgn = data.game?.pgn || data.pgn;
+          const gameObj = data.game || data;
+          // Boundary Fair Play Verification: strictly refuse active matches!
+          const v = FairPlayGuard.verifyConcludedGame(gameObj);
+          if (!v.ok) {
+            this.analyzer.cancel();
+            this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+            return false;
+          }
+          const pgn = gameObj.pgn || data.pgn;
           if (pgn) {
-            this.showToast(`✅ 成功载入 Chess.com 对局 (${gameId})`);
-            this.loadGameFromPgn(pgn);
+            this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
+            this.startNewSession({ pgn, autoReview: true });
             return true;
           }
         }
@@ -443,54 +461,60 @@ class AnalysisStudioApp {
       // If running inside Chrome extension, fallback to background script
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         try {
-          const res = await new Promise(res => {
-            chrome.runtime.sendMessage({ type: 'FETCH_CHESSCOM_GAME_PGN', gameId, gameType: type }, res);
+          const res = await new Promise(resolve => {
+            chrome.runtime.sendMessage({ type: 'FETCH_CHESSCOM_GAME_PGN', gameId, gameType: type }, resolve);
           });
-          if (res?.ok && res.pgn) {
-            this.showToast(`✅ 成功载入 Chess.com 对局 (${gameId})`);
-            this.loadGameFromPgn(res.pgn);
-            return true;
+          if (res?.ok) {
+            const v = FairPlayGuard.verifyConcludedGame(res);
+            if (!v.ok) {
+              this.analyzer.cancel();
+              this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+              return false;
+            }
+            if (res.pgn) {
+              this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
+              this.startNewSession({ pgn: res.pgn, autoReview: true });
+              return true;
+            }
           }
         } catch (e) {}
       }
 
-      this.showToast(`⚠️ Chess.com 对局接口受限，建议在对局页面直接点击插件复盘或复制 PGN`);
+      this.showToast(`⚠️ Chess.com 对局接口受限，建议在对局完赛后直接在对局页点击扩展或复制 PGN`);
       return false;
     }
 
-    // 3. Detect FEN Position string
+    // 3. Detect FEN Position string (Single position / puzzle)
     const fenParts = text.split(/\s+/);
     if (fenParts.length >= 2 && fenParts[0].split('/').length === 8) {
-      try {
-        this.moves = [];
-        this.positions = [{
-          ply: 0,
-          moveNumber: 1,
-          turn: fenParts[1] === 'b' ? 'b' : 'w',
-          san: 'FEN',
-          fen: text,
-          moveEl: null
-        }];
-        this.boardUI.setPosition(text, null);
-        this.el.metaWhite.textContent = '⚪ 自由局面分析';
-        this.el.metaBlack.textContent = '⚫ FEN';
-        this.el.metaResult.textContent = '*';
-        this.el.moveCountBadge.textContent = '0';
-        this.renderMoveList();
-        this.goToPly(0);
+      const ok = this.startNewSession({
+        fen: text,
+        white: '自由局面分析',
+        black: 'FEN',
+        result: '*',
+        autoReview: false
+      });
+      if (ok) {
         this.showToast('♟️ 已载入 FEN 局面');
         return true;
-      } catch (e) {
-        console.warn('[Analysis Studio] FEN load error:', e);
       }
     }
 
     // 4. Default: Standard PGN text
     if (text.includes('1.') || text.includes('[Event')) {
+      const v = FairPlayGuard.verifyConcludedGame(text);
+      if (!v.ok && v.isLive) {
+        this.analyzer.cancel();
+        this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+        return false;
+      }
       const label = sourceName ? ` (${sourceName})` : '';
-      this.loadGameFromPgn(text);
-      this.showToast(`♟️ 成功载入 PGN 棋谱${label}`);
-      return true;
+      const ok = this.startNewSession({ pgn: text, autoReview: true });
+      if (ok) {
+        this.showToast(`♟️ 成功载入 PGN 棋谱${label}`);
+        return true;
+      }
+      return false;
     }
 
     this.showToast('⚠️ 未能识别该内容，请确认是否为有效 PGN 文本或对局链接');
@@ -501,7 +525,6 @@ class AnalysisStudioApp {
     let loaded = false;
 
     // 1. Try URL parameters (Hash # or Search ?)
-    // Hash is ideal: keeps entire PGN client-side without sending to Cloudflare/CDN servers
     try {
       const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
       const hashParams = new URLSearchParams(hash);
@@ -525,14 +548,17 @@ class AnalysisStudioApp {
           try {
             const reDecoded = decodeURIComponent(cleanPgn);
             if (reDecoded) cleanPgn = reDecoded;
-          } catch (e) {
-            // Keep cleanPgn as-is if already decoded
-          }
+          } catch (e) {}
         }
         if (cleanPgn) {
-          this.loadGameFromPgn(cleanPgn);
-          loaded = true;
-          return;
+          const v = FairPlayGuard.verifyConcludedGame(cleanPgn);
+          if (!v.ok && v.isLive) {
+            this.showToast(`🔒 公平竞技保护：${v.reason}`, 7000);
+          } else {
+            this.startNewSession({ pgn: cleanPgn, autoReview: true });
+            loaded = true;
+            return;
+          }
         }
       }
 
@@ -542,9 +568,7 @@ class AnalysisStudioApp {
           try {
             const reDecoded = decodeURIComponent(cleanUrl);
             if (reDecoded) cleanUrl = reDecoded;
-          } catch (e) {
-            // Keep cleanUrl as-is
-          }
+          } catch (e) {}
         }
         if (cleanUrl) {
           const ok = await this.smartLoadInput(cleanUrl);
@@ -572,128 +596,133 @@ class AnalysisStudioApp {
 
         const game = stored?.active_analysis_game;
         if (game && (game.moves?.length > 0 || game.pgn)) {
-          this.loadGameData(game);
-          loaded = true;
+          const v = FairPlayGuard.verifyConcludedGame(game);
+          if (!v.ok && v.isLive) {
+            this.showToast(`🔒 公平竞技保护：${v.reason}`, 7000);
+          } else {
+            this.startNewSession({
+              pgn: game.pgn,
+              moves: game.moves,
+              white: game.white,
+              black: game.black,
+              result: game.result,
+              cachedReview: game.cachedReview,
+              autoReview: !game.cachedReview
+            });
+            loaded = true;
+          }
         }
       } catch (err) {
         console.warn('[Analysis Studio] Storage load error:', err);
       }
     }
 
-    // 3. Fallback to Fischer sample game
+    // 3. Clean On-Demand Initial State (Do NOT auto-burn CPU or download weights on empty visits!)
     if (!loaded) {
-      this.loadGameFromPgn(SAMPLE_GAMES.fischer);
+      this.startNewSession({
+        fen: ChessBoard.INITIAL_FEN,
+        white: '开局准备',
+        black: '等待导入',
+        result: '*',
+        autoReview: false
+      });
+      if (this.el.boardStatusText) {
+        this.el.boardStatusText.textContent = '开局局面 · 请导入对局或选择示例开始复盘';
+      }
+      if (this.el.divergenceContent) {
+        this.el.divergenceContent.textContent = '点击上方“导入 PGN”或选择示例对局开始深度人机分歧复盘。';
+      }
     }
   }
 
-  loadGameData(game) {
-    if (!game) return;
+  /**
+   * Unified Game Session Lifecycle Coordinator
+   * Guarantees old task cancellation, epoch bumping, UI clearing, and clean state loading.
+   */
+  startNewSession({
+    pgn = null,
+    moves = null,
+    fen = null,
+    white = null,
+    black = null,
+    result = null,
+    cachedReview = null,
+    autoReview = true
+  } = {}) {
+    // 1. Immediately abort running tasks and advance session epochs
     this.analyzer.cancel();
     this.gameEpoch++;
     this.reviewEpoch++;
     this.reviewResult = null;
+    this.isBranching = false;
+    this.branchFen = null;
+    if (this.el.branchBanner) this.el.branchBanner.style.display = 'none';
 
-    if (game.white) this.el.metaWhite.textContent = `⚪ ${game.white}`;
-    if (game.black) this.el.metaBlack.textContent = `⚫ ${game.black}`;
-    if (game.result) this.el.metaResult.textContent = game.result;
-
-    if (game.pgn) {
-      this.parsePgnHeaders(game.pgn);
-    }
-
-    let parsedMoves = [];
-    if (game.moves && game.moves.length > 0) {
-      parsedMoves = game.moves;
-    } else if (game.pgn) {
-      parsedMoves = GameAnalyzer.parsePgn(game.pgn);
-    }
-
-    if (parsedMoves.length === 0) return;
-
-    if (parsedMoves.startFen) {
-      const testBoard = new ChessBoard();
-      if (!testBoard.load(parsedMoves.startFen)) {
-        console.warn('[Analysis Studio] Invalid start FEN in game data, skipped.');
-        return;
-      }
-    }
-
-    const positions = GameAnalyzer.buildPositionChain(parsedMoves);
-    if (!positions || positions.length <= 1) return;
-
-    if (positions.isPartial) {
-      const validMoves = parsedMoves.slice(0, positions.length - 1);
-      validMoves.isPartial = true;
-      validMoves.stoppedAtPly = positions.stoppedAtPly;
-      validMoves.unparsedSan = positions.unparsedSan;
-      validMoves.rawTotalMoves = parsedMoves.length;
-      if (parsedMoves.startFen) validMoves.startFen = parsedMoves.startFen;
-      this.moves = validMoves;
-    } else {
-      this.moves = parsedMoves;
-    }
-
-    this.positions = positions;
-    this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
-
-    // Reset UI state immediately
+    // 2. Reset UI state immediately
     this.evalChart.setData([]);
     this.el.blunderCountBadge.textContent = '0';
     this.el.blunderList.replaceChildren();
     this.el.divergenceContent.textContent = '—';
     this.el.divergenceBadge.textContent = '—';
-    this.boardUI.setArrows([]);
+    this.boardUI.clearArrows();
+    this.resetComparePanel();
 
-    this.el.moveCountBadge.textContent = this.moves.isPartial ? `${this.moves.length} (已截断)` : String(this.moves.length);
-
-    this.renderMoveList();
-    this.goToPly(0);
-
-    if (game.cachedReview) {
-      this.applyReviewResult(game.cachedReview);
-    } else {
-      this.runFullReview(false);
+    // 3. Single FEN setup mode (puzzle, free board, initial start)
+    if (fen && (!moves || moves.length === 0) && !pgn) {
+      const testBoard = new ChessBoard();
+      if (!testBoard.load(fen)) {
+        console.warn('[Analysis Studio] Invalid start FEN in session:', fen);
+        return false;
+      }
+      this.moves = [];
+      this.positions = [{
+        ply: 0,
+        moveNumber: testBoard.fullMoves || 1,
+        turn: testBoard.turn,
+        san: 'Start',
+        fen: testBoard.getFen(),
+        moveEl: null
+      }];
+      this.currentGameKey = `fen_${fen.replace(/\s+/g, '_')}`;
+      this.el.metaWhite.textContent = `⚪ ${white || '白方'}`;
+      this.el.metaBlack.textContent = `⚫ ${black || '黑方'}`;
+      this.el.metaResult.textContent = result || '*';
+      this.el.moveCountBadge.textContent = '0';
+      this.renderMoveList();
+      this.goToPly(0);
+      if (autoReview) {
+        this.runFullReview(false);
+      }
+      return true;
     }
-  }
 
-  loadGameFromPgn(pgnText) {
-    if (!pgnText || typeof pgnText !== 'string') return;
-    const parsedMoves = GameAnalyzer.parsePgn(pgnText);
+    // 4. Game mode (structured moves array or PGN text)
+    let parsedMoves = [];
+    if (moves && moves.length > 0) {
+      parsedMoves = moves;
+    } else if (pgn) {
+      parsedMoves = GameAnalyzer.parsePgn(pgn);
+    }
+
     if (!parsedMoves || parsedMoves.length === 0) {
-      alert('未能解析该 PGN 文本，未影响当前棋局。');
-      return;
+      alert('未能解析出有效走法数据');
+      return false;
     }
 
-    // If starting FEN is specified, validate it first
     if (parsedMoves.startFen) {
       const testBoard = new ChessBoard();
       if (!testBoard.load(parsedMoves.startFen)) {
-        alert('PGN 中的起始 FEN 格式非法，已拒绝加载，未影响当前有效棋局。');
-        return;
+        alert('PGN 中的起始 FEN 格式非法，已拒绝加载。');
+        return false;
       }
     }
 
     const positions = GameAnalyzer.buildPositionChain(parsedMoves);
     if (!positions || positions.length <= 1) {
-      alert('未能从该 PGN 解析出任何有效走法，未影响当前棋局。');
-      return;
+      alert('未能从该棋谱构建出有效局面链。');
+      return false;
     }
 
-    // Cancel existing analyzer task to prevent cross-game results
-    this.analyzer.cancel();
-    this.gameEpoch++;
-    this.reviewEpoch++;
-    this.reviewResult = null;
-
-    // Reset UI state immediately
-    this.evalChart.setData([]);
-    this.el.blunderCountBadge.textContent = '0';
-    this.el.blunderList.replaceChildren();
-    this.el.divergenceContent.textContent = '—';
-    this.el.divergenceBadge.textContent = '—';
-    this.boardUI.setArrows([]);
-
-    // Check if partial replay occurred
     if (positions.isPartial) {
       const validMoves = parsedMoves.slice(0, positions.length - 1);
       validMoves.isPartial = true;
@@ -709,14 +738,49 @@ class AnalysisStudioApp {
     this.positions = positions;
     this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
 
-    this.parsePgnHeaders(pgnText);
+    // Update metadata headers
+    if (pgn) {
+      this.parsePgnHeaders(pgn);
+    } else {
+      if (white) this.el.metaWhite.textContent = `⚪ ${white}`;
+      if (black) this.el.metaBlack.textContent = `⚫ ${black}`;
+      if (result) this.el.metaResult.textContent = result;
+    }
+
     this.el.moveCountBadge.textContent = this.moves.isPartial
       ? `${this.moves.length} (已截断)`
       : String(this.moves.length);
 
     this.renderMoveList();
     this.goToPly(0);
-    this.runFullReview(false);
+
+    if (cachedReview) {
+      this.applyReviewResult(cachedReview);
+    } else if (autoReview) {
+      this.runFullReview(false);
+    }
+    return true;
+  }
+
+  loadGameData(game) {
+    if (!game) return;
+    return this.startNewSession({
+      pgn: game.pgn,
+      moves: game.moves,
+      white: game.white,
+      black: game.black,
+      result: game.result,
+      cachedReview: game.cachedReview,
+      autoReview: !game.cachedReview
+    });
+  }
+
+  loadGameFromPgn(pgnText, autoReview = true) {
+    if (!pgnText || typeof pgnText !== 'string') return;
+    return this.startNewSession({
+      pgn: pgnText,
+      autoReview
+    });
   }
 
   parsePgnHeaders(pgnText) {

@@ -274,6 +274,77 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
+  // --- Platform Import Boundary Verification Tests (P0 Gatekeeper) ---
+  const { FairPlayGuard } = await import('../content/fair-play-guard.js');
+
+  // Scenario 18: Lichess Live Game Import Boundary (status: started, Result: *)
+  total++;
+  const lichessLive = FairPlayGuard.verifyConcludedGame({
+    id: 'rQcbeYAC',
+    status: 'started',
+    pgn: '[Event "rated bullet game"]\n[Result "*"]\n[Termination "Unterminated"]\n\n1. d4 Nf6'
+  });
+  if (!lichessLive.ok && lichessLive.isLive) {
+    console.log('✅ [PASS] Lichess Live Game Import -> strictly rejected & locked');
+    passed++;
+  } else {
+    console.error('❌ [FAIL] Lichess Live Game Import was not locked:', lichessLive);
+  }
+
+  // Scenario 19: Lichess Concluded Game Import Boundary (status: timeout, Result: 1-0)
+  total++;
+  const lichessConcluded = FairPlayGuard.verifyConcludedGame({
+    id: 'NKf48lZ4',
+    status: 'timeout',
+    pgn: '[Event "rated blitz game"]\n[Result "1-0"]\n[Termination "Time forfeit"]\n\n1. e4 d6'
+  });
+  if (lichessConcluded.ok) {
+    console.log('✅ [PASS] Lichess Concluded Game Import -> verified & accepted');
+    passed++;
+  } else {
+    console.error('❌ [FAIL] Lichess Concluded Game Import rejected:', lichessConcluded);
+  }
+
+  // Scenario 20: Chess.com Active Live Game Import Boundary (isFinished: false)
+  total++;
+  const chesscomLive = FairPlayGuard.verifyConcludedGame({
+    isFinished: false,
+    status: 'in_progress',
+    pgn: '[Event "Live Chess"]\n[Result "*"]\n\n1. e4 e5'
+  });
+  if (!chesscomLive.ok && chesscomLive.isLive) {
+    console.log('✅ [PASS] Chess.com Live Game Import (isFinished: false) -> strictly rejected & locked');
+    passed++;
+  } else {
+    console.error('❌ [FAIL] Chess.com Live Game Import was not locked:', chesscomLive);
+  }
+
+  // Scenario 21: Chess.com Concluded Game Import Boundary (isFinished: true, Result: 0-1)
+  total++;
+  const chesscomConcluded = FairPlayGuard.verifyConcludedGame({
+    isFinished: true,
+    status: 'finished',
+    pgn: '[Event "Live Chess"]\n[Result "0-1"]\n[Termination "won by resignation"]\n\n1. e4 e5 2. Nf3'
+  });
+  if (chesscomConcluded.ok) {
+    console.log('✅ [PASS] Chess.com Concluded Game Import (isFinished: true) -> verified & accepted');
+    passed++;
+  } else {
+    console.error('❌ [FAIL] Chess.com Concluded Game Import rejected:', chesscomConcluded);
+  }
+
+  // Scenario 22: Fail-Safe for Incomplete / Ongoing PGN with Result: *
+  total++;
+  const unfinishedPgn = FairPlayGuard.verifyConcludedGame(
+    '[Event "Casual Game"]\n[Result "*"]\n\n1. d4 d5'
+  );
+  if (!unfinishedPgn.ok && unfinishedPgn.isLive) {
+    console.log('✅ [PASS] Ongoing PGN with Result: * -> fail-safe locked');
+    passed++;
+  } else {
+    console.error('❌ [FAIL] Ongoing PGN with Result: * was not locked:', unfinishedPgn);
+  }
+
   console.log(`\n[Test Results]: ${passed}/${total} scenarios passed.`);
   if (passed === total) {
     console.log('🎉 All Fair Play Guard tests passed successfully!');

@@ -91,6 +91,29 @@ ws.addEventListener('message', (evt) => {
   }
 });
 
+// Step A: Verify initial on-demand clean home state (no automatic computation on blank start!)
+await sleep(1000);
+const initialCheck = await send('Runtime.evaluate', {
+  expression: `(() => {
+    return {
+      hasApp: !!window.__maiaStudioApp,
+      hasReview: !!window.__maiaStudioApp?.reviewResult,
+      boardStatus: window.__maiaStudioApp?.el?.boardStatusText?.textContent || ''
+    };
+  })()`,
+  returnByValue: true
+});
+console.log('[E2E Test] Clean Home State verified:', initialCheck?.result?.value);
+
+// Step B: Trigger sample Fischer game review
+console.log('[E2E Test] Triggering Fischer sample game import & analysis...');
+await send('Runtime.evaluate', {
+  expression: `(() => {
+    document.getElementById('sample-fischer')?.click();
+    document.getElementById('btn-submit-pgn')?.click();
+  })()`
+});
+
 console.log('[E2E Test] Awaiting review execution (polling for completion)...');
 for (let i = 0; i < 120; i++) {
   await sleep(500);

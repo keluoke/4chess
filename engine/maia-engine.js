@@ -13,9 +13,9 @@ import { StockfishInBrowser } from './stockfish-inbrowser.js';
 import { ModelCache } from './model-cache.js';
 
 export class MaiaEngine {
-  constructor(onStatusChange = null) {
+  constructor(onStatusChange = null, stockfishInstance = null) {
     this.maiaInBrowser = new MaiaInBrowserEngine();
-    this.stockfishInBrowser = new StockfishInBrowser();
+    this.stockfishInBrowser = stockfishInstance || new StockfishInBrowser();
     this.targetElo = 1900;
     this.onStatusChange = onStatusChange;
     this.isReady = false;
@@ -38,16 +38,24 @@ export class MaiaEngine {
         error: null
       },
       stockfish: {
-        state: 'initializing', // 'ready' | 'error'
+        state: this.stockfishInBrowser.isReady ? 'ready' : 'initializing',
         error: null
       }
     };
 
     // Forward Stockfish ready callback
-    this.stockfishInBrowser.onReadyCallback = () => {
+    if (this.stockfishInBrowser.isReady) {
       this.status.stockfish.state = 'ready';
-      this.notifyStatus();
-    };
+    } else {
+      const existingCb = this.stockfishInBrowser.onReadyCallback;
+      this.stockfishInBrowser.onReadyCallback = () => {
+        if (existingCb) {
+          try { existingCb(); } catch (e) {}
+        }
+        this.status.stockfish.state = 'ready';
+        this.notifyStatus();
+      };
+    }
   }
 
   notifyStatus() {

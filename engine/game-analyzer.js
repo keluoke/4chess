@@ -6,6 +6,7 @@
  */
 
 import { ChessBoard } from './chess-core.js';
+import { FairPlayGuard } from '../content/fair-play-guard.js';
 
 export class GameAnalyzer {
   constructor(stockfishEngine, maiaEngine) {
@@ -737,10 +738,10 @@ export class GameAnalyzer {
         }
 
         // Live game lockdown check
-        if (typeof window !== 'undefined' && window.FairPlayGuard && window.FairPlayGuard.isLiveGameInProgress()) {
+        if (FairPlayGuard?.isLiveGameInProgress && FairPlayGuard.isLiveGameInProgress()) {
           this.isCancelled = true;
           this.isAnalyzing = false;
-          throw new Error('公平竞技保护生效中，禁止进行复盘分析');
+          throw new Error('公平竞技保护生效中：检测到棋盘处于实时对局进行状态，已中止复盘分析');
         }
 
         if (onProgress) {
@@ -966,28 +967,24 @@ export class GameAnalyzer {
               const matchedProb = matchedIdx !== -1 && typeof pred.moves[matchedIdx].prob === 'number' ? pred.moves[matchedIdx].prob : 0;
               mv.humanProbability = matchedIdx !== -1 ? matchedProb : 0;
 
-              // Type 1: ✨ 妙手 (实战下出了引擎一选且 Stockfish 引擎评估收益超过 Maia 一选)
+              // Type 1 Candidate: Potential 妙手 (实战初筛走出引擎一选且评估超越 Maia 一选)
               const isEngineBest = cleanPlayed && cleanBest && cleanPlayed === cleanBest && mv.lossCp <= 10;
               if (isEngineBest && mv.ply >= 4) {
                 const maiaPrefersOther = cleanMaia && cleanMaia !== cleanPlayed;
                 if (maiaPrefersOther) {
-                  mv.isBeyondIntuition = true;
-                  mv.divergenceType = 'beyond_intuition';
-                  const probTxt = matchedIdx !== -1 ? `${Math.round(matchedProb)}% 棋手走出` : '人类直觉罕见';
-                  const topTxt = top.prob ? `${Math.round(top.prob)}%` : '';
-                  mv.divergenceNote = `走出引擎一选 ${cleanBest}，评估收益超越人类直觉首选 (直觉一选 ${cleanMaia} ${topTxt}，实战走法仅 ${probTxt})`;
+                  mv.isBeyondIntuitionCandidate = true;
+                  mv._candidateProbTxt = matchedIdx !== -1 ? `${Math.round(matchedProb)}% 棋手走出` : '人类惯性罕见';
+                  mv._candidateTopTxt = top.prob ? `${Math.round(top.prob)}%` : '';
+                  mv._candidateMaiaSan = cleanMaia;
                 }
               }
 
-              // Type 2: 💡 俗手 (实战下出了 Maia 一选或二选但导致 Stockfish 评估收益大幅下降)
-              // 条件: 实战走出 Maia 一选 (matchedIdx === 0) 或 二选 (matchedIdx === 1)，且损耗 >= 0.8 兵 (lossCp >= 80)
+              // Type 2 Candidate: Potential 俗手 (实战下出了 Maia 一选或二选但初筛显示损失 >= 80cp)
               const isMaiaTop1Or2 = (cleanPlayed === cleanMaia) || (matchedIdx === 0 || matchedIdx === 1);
               if (isMaiaTop1Or2 && mv.lossCp >= 80) {
-                mv.isHumanTrap = true;
-                mv.divergenceType = 'intuition_trap';
-                const rankTxt = (cleanPlayed === cleanMaia || matchedIdx === 0) ? '直觉一选' : '直觉二选';
-                const probTxt = matchedProb > 0 ? `直觉概率 ${Math.round(matchedProb)}%` : '';
-                mv.divergenceNote = `落入俗手惯性 (实战下出${rankTxt}${probTxt ? ' ' + probTxt : ''})，导致局面评估大幅损耗 ${(mv.lossCp / 100).toFixed(1)} 兵，最佳应走 ${cleanBest}`;
+                mv.isHumanTrapCandidate = true;
+                mv._candidateRankTxt = (cleanPlayed === cleanMaia || matchedIdx === 0) ? '常见走法一选' : '常见走法二选';
+                mv._candidateProbTxt = matchedProb > 0 ? `直觉概率 ${Math.round(matchedProb)}%` : '';
               }
             }
           } catch (e) {
@@ -996,9 +993,55 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 4: Strictly retain ONLY the two specified archetypes:
-      // 1. 妙手: 实战下出了引擎一选且 Stockfish 评估收益超过 Maia 一选
-      // 2. 俗手: 实战下出了 Maia 一选或二选但导致 Stockfish 评估收益大幅下降
+      // Step 4: Secondary Deep Verification Pass (二次加深复核)
+      // For all candidate key moments, perform deeper Stockfish evaluation (depth 12)
+      // to filter out shallow-search horizon illusions before confirming strong labels.
+      const candidateList = analyzedMoves.filter(m => m.isBeyondIntuitionCandidate || m.isHumanTrapCandidate);
+      for (const cm of candidateList) {
+        if (this.isCancelled || this._currentRunId !== runId) break;
+        try {
+          const deepEval = await this.stockfish.evaluate(cm.fenBefore, 12, 3500, 1);
+          if (deepEval && deepEval.bestMove) {
+            const deepBestSan = (deepEval.bestMove.san || '').replace(/[+#?!]/g, '');
+            const cleanPlayed = cm.san.replace(/[+#?!]/g, '');
+
+            if (cm.isBeyondIntuitionCandidate) {
+              // Confirm 妙手 only if deeper search still validates this move as best
+              if (deepBestSan === cleanPlayed) {
+                cm.isBeyondIntuition = true;
+                cm.divergenceType = 'beyond_intuition';
+                cm.divergenceNote = `走出深度引擎一选 ${cleanPlayed}，经加深复核(d12)确认超越人类常规惯性 (常见首选 ${cm._candidateMaiaSan} ${cm._candidateTopTxt}，实战走法仅 ${cm._candidateProbTxt})`;
+              } else {
+                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 候选妙手未通过加深复核(d12更优为 ${deepBestSan})，已降级消除误报`);
+              }
+            } else if (cm.isHumanTrapCandidate) {
+              // Confirm 俗手 only if deep search confirms played move is not best and incurs loss
+              if (deepBestSan !== cleanPlayed) {
+                cm.isHumanTrap = true;
+                cm.divergenceType = 'intuition_trap';
+                cm.divergenceNote = `落入俗手惯性 (实战下出${cm._candidateRankTxt}${cm._candidateProbTxt ? ' ' + cm._candidateProbTxt : ''})，经加深复核(d12)确认导致局面严重受损，最佳应走 ${deepBestSan}`;
+              }
+            }
+          } else {
+            // Fallback if deep eval timed out
+            if (cm.isBeyondIntuitionCandidate) {
+              cm.isBeyondIntuition = true;
+              cm.divergenceType = 'beyond_intuition';
+              cm.divergenceNote = `走出引擎一选 ${cm.bestSan}，评估超越人类常规惯性`;
+            } else if (cm.isHumanTrapCandidate) {
+              cm.isHumanTrap = true;
+              cm.divergenceType = 'intuition_trap';
+              cm.divergenceNote = `落入俗手惯性 (实战下出${cm._candidateRankTxt})，最佳应走 ${cm.bestSan}`;
+            }
+          }
+        } catch (err) {
+          console.warn('[GameAnalyzer] Deep verification error on ply', cm.ply, err);
+        }
+      }
+
+      // Step 5: Strictly retain ONLY confirmed archetypes:
+      // 1. 妙手: 实战走出引擎一选且 Stockfish 评估收益超过 Maia 一选 (经二次加深复核)
+      // 2. 俗手: 实战走出 Maia 一选或二选但导致 Stockfish 评估收益大幅下降 (经二次加深复核)
       const keyMoments = analyzedMoves
         .filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap')
         .sort((a, b) => a.ply - b.ply);

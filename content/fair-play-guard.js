@@ -268,6 +268,85 @@ export class FairPlayGuard {
     window.addEventListener('popstate', runCheck);
     runCheck();
   }
+
+  /**
+   * Strictly verify if game data / PGN / platform API response represents a legitimately concluded game.
+   * Serves as the immutable boundary gatekeeper for PWA imports, URL fetches, and standalone analysis.
+   * Fail-Safe Principle: If conclusion cannot be verified beyond 100% doubt, returns { ok: false, isLive: true, reason: '...' }.
+   */
+  static verifyConcludedGame(data) {
+    if (!data) {
+      return { ok: false, isLive: false, reason: '对局数据为空，无法验证完赛状态' };
+    }
+
+    // 1. Explicit boolean isFinished flag (e.g. Chess.com callback / API)
+    if (typeof data.isFinished === 'boolean' && !data.isFinished) {
+      return {
+        ok: false,
+        isLive: true,
+        reason: '该对局仍在进行中 (isFinished: false)，恪守公平竞技守则，严禁对局中计算'
+      };
+    }
+
+    // 2. Explicit status check (Lichess & Chess.com JSON)
+    if (data.status) {
+      const liveStatuses = new Set(['started', 'created', 'in_progress', 'live', 'playing']);
+      const s = String(data.status).toLowerCase();
+      if (liveStatuses.has(s)) {
+        return {
+          ok: false,
+          isLive: true,
+          reason: `平台对局处于进行中状态 (${data.status})，公平竞技保护已激活`
+        };
+      }
+    }
+
+    // 3. PGN text or PGN headers check
+    const pgnText = typeof data === 'string' ? data : (data.pgn || '');
+    if (pgnText && typeof pgnText === 'string') {
+      const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
+      const terminationMatch = pgnText.match(/\[Termination\s+"([^"]+)"\]/i);
+      const result = resultMatch ? resultMatch[1].trim() : (data.result || '');
+      const termination = terminationMatch ? terminationMatch[1].trim() : '';
+
+      // Standard PGN specification: '*' signifies game in progress or unfinished
+      if (result === '*' || result === '') {
+        return {
+          ok: false,
+          isLive: true,
+          reason: '对局结果为未定 (*)，判定为进行中或未完赛对局'
+        };
+      }
+
+      // Check for unterminated live marker
+      if (/unterminated|live|ongoing/i.test(termination)) {
+        return {
+          ok: false,
+          isLive: true,
+          reason: `对局终局描述为未完赛 (${termination})`
+        };
+      }
+
+      // Result must be a recognized legitimate outcome
+      if (!['1-0', '0-1', '1/2-1/2'].includes(result)) {
+        return {
+          ok: false,
+          isLive: false,
+          reason: `未知对局结果格式 (${result})，无法确认终局`
+        };
+      }
+    } else if (data.result) {
+      if (data.result === '*' || !['1-0', '0-1', '1/2-1/2'].includes(data.result)) {
+        return {
+          ok: false,
+          isLive: true,
+          reason: '无法从对局结果确认完赛状态'
+        };
+      }
+    }
+
+    return { ok: true, isLive: false, reason: null };
+  }
 }
 
 if (typeof window !== 'undefined') {

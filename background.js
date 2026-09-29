@@ -197,12 +197,25 @@ async function handleFetchChesscomGame(gameId, usernames = [], gameType = 'live'
           const moves = tcnToSanMoves(cbData.game.moveList);
           if (moves.length > 0) {
             const pgn = movesToPgn(moves, cbData.game.pgnHeaders || {});
-            return { ok: true, pgn, moves, source: `chesscom-${type}-callback-tcn` };
+            return {
+              ok: true,
+              pgn,
+              moves,
+              isFinished: cbData.game.isFinished,
+              status: cbData.game.status,
+              source: `chesscom-${type}-callback-tcn`
+            };
           }
         }
         const directPgn = cbData.game?.pgn || cbData.pgn;
         if (directPgn) {
-          return { ok: true, pgn: directPgn, source: `chesscom-${type}-callback` };
+          return {
+            ok: true,
+            pgn: directPgn,
+            isFinished: cbData.game?.isFinished,
+            status: cbData.game?.status,
+            source: `chesscom-${type}-callback`
+          };
         }
       }
     } catch (e) {
@@ -227,7 +240,13 @@ async function handleFetchLichessGame(gameId) {
     if (resp.ok) {
       const data = await resp.json();
       if (data.pgn) {
-        return { ok: true, pgn: data.pgn, movesStr: data.moves, source: 'lichess-export-json' };
+        return {
+          ok: true,
+          pgn: data.pgn,
+          movesStr: data.moves,
+          status: data.status,
+          source: 'lichess-export-json'
+        };
       }
     }
   } catch (e) {
