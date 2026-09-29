@@ -130,7 +130,12 @@ export class IntuitionPanel {
 
     this.container = null;
     this.fab = null;
-    this.isClosed = localStorage.getItem('maia3_panel_closed') === 'true';
+    let closedPref = false;
+    try {
+      closedPref = sessionStorage.getItem('maia3_panel_closed') === 'true';
+      localStorage.removeItem('maia3_panel_closed');
+    } catch (e) {}
+    this.isClosed = closedPref;
     this.isFairPlayLocked = false;
 
     let storedElo = 1900;
@@ -231,17 +236,32 @@ export class IntuitionPanel {
 
     this.renderSkeleton();
 
-    // 7. Mount both to DOM
+    // 7. Mount both to DOM inside document.body
     const mount = () => {
-      const parent = document.body || document.documentElement;
-      if (parent) {
-        if (!parent.contains(this.container)) parent.appendChild(this.container);
-        if (!parent.contains(this.fab)) parent.appendChild(this.fab);
+      if (document.body) {
+        if (!document.body.contains(this.container)) {
+          document.body.appendChild(this.container);
+        }
+        if (!document.body.contains(this.fab)) {
+          document.body.appendChild(this.fab);
+        }
+      } else if (document.documentElement) {
+        if (!document.documentElement.contains(this.container)) {
+          document.documentElement.appendChild(this.container);
+        }
+        if (!document.documentElement.contains(this.fab)) {
+          document.documentElement.appendChild(this.fab);
+        }
       }
     };
     mount();
     if (!document.body) {
-      window.addEventListener('DOMContentLoaded', mount);
+      window.addEventListener('DOMContentLoaded', () => {
+        if (document.body) {
+          document.body.appendChild(this.container);
+          document.body.appendChild(this.fab);
+        }
+      });
     }
 
     this.setupDraggable();
@@ -485,7 +505,10 @@ export class IntuitionPanel {
       const eloBadge = this.fab.querySelector('#weui-float-elo');
       if (eloBadge) eloBadge.textContent = this.currentElo;
     }
-    localStorage.setItem('maia3_panel_closed', 'true');
+    try {
+      sessionStorage.setItem('maia3_panel_closed', 'true');
+      localStorage.removeItem('maia3_panel_closed');
+    } catch (e) {}
   }
 
   open() {
@@ -494,7 +517,10 @@ export class IntuitionPanel {
     if (this.fab) {
       this.fab.style.display = 'none';
     }
-    localStorage.setItem('maia3_panel_closed', 'false');
+    try {
+      sessionStorage.setItem('maia3_panel_closed', 'false');
+      localStorage.removeItem('maia3_panel_closed');
+    } catch (e) {}
   }
 
   isPanelClosed() {

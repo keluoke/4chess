@@ -79,7 +79,9 @@ export class FairPlayGuard {
         'button[aria-label="提议和棋" i], button[aria-label*="Offer draw" i], .draw-button-component, [data-cy="draw-button"], ' +
         '.game-controls-button[aria-label="Draw" i], .game-controls-button[aria-label="和棋" i], button.draw-yes'
       );
-      const hasCanMove = document.querySelector('wc-chess-board[can-move], chess-board[can-move]');
+      const canMoveEl = document.querySelector('wc-chess-board, chess-board');
+      const canMoveVal = canMoveEl ? canMoveEl.getAttribute('can-move') : null;
+      const hasCanMove = canMoveVal !== null && canMoveVal !== 'false' && canMoveVal !== '0';
       const isEventRelay = path.startsWith('/events');
       const hasRunningClock = !isEventRelay && document.querySelector(
         '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
