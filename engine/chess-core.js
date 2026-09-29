@@ -42,7 +42,13 @@ export class ChessBoard {
 
   load(fen) {
     if (!fen || typeof fen !== 'string') return false;
-    let clean = decodeURIComponent(fen).replace(/_/g, ' ').trim();
+    let clean = fen;
+    if (clean.includes('%')) {
+      try {
+        clean = decodeURIComponent(clean);
+      } catch (e) {}
+    }
+    clean = clean.replace(/_/g, ' ').trim();
     let tokens = clean.split(/\s+/);
     if (tokens.length === 1 && tokens[0].split('/').length === 8) {
       tokens = [tokens[0], 'w', '-', '-', '0', '1'];

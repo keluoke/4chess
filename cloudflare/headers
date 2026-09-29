@@ -1,7 +1,6 @@
 # Cloudflare Pages Headers for High-Performance WebAssembly and PWA
 /*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
   Access-Control-Allow-Origin: *
 
 # Ensure WebAssembly MIME type is served correctly

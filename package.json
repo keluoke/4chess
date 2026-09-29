@@ -1,0 +1,11 @@
+{
+  "name": "diverge-chess-analysis",
+  "version": "1.0.0",
+  "description": "歧路 Diverge · Standalone Deep Analysis Studio",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/prepare_cloudflare.mjs",
+    "test": "node scripts/test_fair_play.mjs && node scripts/test_security_audit.mjs"
+  },
+  "private": true
+}

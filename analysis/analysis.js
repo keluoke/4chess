@@ -520,18 +520,34 @@ class AnalysisStudioApp {
       }
 
       if (pgnParam) {
-        const decodedPgn = decodeURIComponent(pgnParam);
-        if (decodedPgn) {
-          this.loadGameFromPgn(decodedPgn);
+        let cleanPgn = pgnParam;
+        if (cleanPgn.includes('%')) {
+          try {
+            const reDecoded = decodeURIComponent(cleanPgn);
+            if (reDecoded) cleanPgn = reDecoded;
+          } catch (e) {
+            // Keep cleanPgn as-is if already decoded
+          }
+        }
+        if (cleanPgn) {
+          this.loadGameFromPgn(cleanPgn);
           loaded = true;
           return;
         }
       }
 
       if (urlParam) {
-        const decodedUrl = decodeURIComponent(urlParam);
-        if (decodedUrl) {
-          const ok = await this.smartLoadInput(decodedUrl);
+        let cleanUrl = urlParam;
+        if (cleanUrl.includes('%')) {
+          try {
+            const reDecoded = decodeURIComponent(cleanUrl);
+            if (reDecoded) cleanUrl = reDecoded;
+          } catch (e) {
+            // Keep cleanUrl as-is
+          }
+        }
+        if (cleanUrl) {
+          const ok = await this.smartLoadInput(cleanUrl);
           if (ok) {
             loaded = true;
             return;
@@ -1114,9 +1130,6 @@ class AnalysisStudioApp {
       partialRow.style.cssText = 'padding: 8px 12px; margin: 8px 0; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; font-size: 11.5px; color: #f59e0b;';
       partialRow.textContent = `⚠️ 棋谱在第 ${this.positions.stoppedAtPly} 步 ("${this.positions.unparsedSan || '未知'}") 存在非法走法，后续未加载`;
       this.el.moveNotationTable.appendChild(partialRow);
-    }
-
-      this.el.moveNotationTable.appendChild(row);
     }
   }
 

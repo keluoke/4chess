@@ -163,7 +163,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         let targetUrl = chrome.runtime.getURL('analysis/index.html');
 
         if (useWeb && gameData.pgn) {
-          const base = (settings?.webReviewBaseUrl || 'https://4chess.cc/analysis/').replace(/\/$/, '');
+          let base = (settings?.webReviewBaseUrl || 'https://4chess.cc/analysis').replace(/\/+$/, '');
+          if (!base.endsWith('/analysis')) {
+            base = `${base}/analysis`;
+          }
           const pgnParam = encodeURIComponent(gameData.pgn);
           const elo = settings?.defaultElo || 1900;
           targetUrl = `${base}/#pgn=${pgnParam}&elo=${elo}`;
