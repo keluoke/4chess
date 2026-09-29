@@ -754,7 +754,7 @@ export class GameAnalyzer {
             phase: 'evaluating',
             current: i + 1,
             total: totalPositions,
-            percent: Math.round(((i + 1) / totalPositions) * 85),
+            percent: Math.min(50, Math.max(1, Math.round(((i + 1) / totalPositions) * 50))),
             currentMove: positions[i].san
           });
         }
@@ -869,7 +869,7 @@ export class GameAnalyzer {
         });
       }
 
-      // Step 3: Maia intuition prediction for EVERY move (batch)
+      // Step 3: Maia intuition prediction for key positions & decisive turns
       if (this.maiaEngine && analyzedMoves.length > 0) {
         if (!this.maiaEngine.isReady) {
           if (onProgress) {
@@ -877,7 +877,7 @@ export class GameAnalyzer {
               phase: 'intuition',
               current: 0,
               total: analyzedMoves.length,
-              percent: 70,
+              percent: 50,
               currentMove: '等待直觉引擎就绪...'
             });
           }
@@ -889,16 +889,41 @@ export class GameAnalyzer {
           }
         }
 
-        for (let j = 0; j < analyzedMoves.length; j++) {
+        // Prioritize moves: notable losses (lossCp >= 40) and opening moves (ply <= 6)
+        const priorityIndices = [];
+        const seenIdx = new Set();
+        analyzedMoves.forEach((m, idx) => {
+          if (m.lossCp >= 40 || m.ply <= 6) {
+            priorityIndices.push(idx);
+            seenIdx.add(idx);
+          }
+        });
+
+        // Ensure we cover at least top 14 decisive moves
+        const sortedByLoss = analyzedMoves
+          .map((m, idx) => ({ m, idx }))
+          .sort((a, b) => b.m.lossCp - a.m.lossCp);
+        for (const item of sortedByLoss) {
+          if (priorityIndices.length >= 16) break;
+          if (!seenIdx.has(item.idx) && item.m.lossCp > 0) {
+            seenIdx.add(item.idx);
+            priorityIndices.push(item.idx);
+          }
+        }
+        priorityIndices.sort((a, b) => a - b);
+
+        const totalToPredict = priorityIndices.length;
+        for (let j = 0; j < totalToPredict; j++) {
           if (this.isCancelled) break;
-          const mv = analyzedMoves[j];
+          const idx = priorityIndices[j];
+          const mv = analyzedMoves[idx];
 
           if (onProgress) {
             onProgress({
               phase: 'intuition',
               current: j + 1,
-              total: analyzedMoves.length,
-              percent: 70 + Math.round(((j + 1) / analyzedMoves.length) * 25),
+              total: totalToPredict,
+              percent: Math.min(98, 50 + Math.round(((j + 1) / totalToPredict) * 48)),
               currentMove: mv.san
             });
           }
@@ -936,14 +961,15 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 4: Filter & rank critical moments (combining intuition trap bonus and practical loss)
+      // Step 4: Filter & rank critical moments (focus on genuine blunders, mistakes, and intuition traps)
       const keyMoments = analyzedMoves
-        .filter(m => m.lossCp >= 40)
+        .filter(m => m.lossCp >= 80 || (m.isHumanTrap && m.lossCp >= 50))
         .sort((a, b) => {
-          const scoreA = a.lossCp + (a.isHumanTrap ? 150 : 0);
-          const scoreB = b.lossCp + (b.isHumanTrap ? 150 : 0);
+          const scoreA = a.lossCp + (a.isHumanTrap ? 120 : 0);
+          const scoreB = b.lossCp + (b.isHumanTrap ? 120 : 0);
           return scoreB - scoreA;
-        });
+        })
+        .slice(0, 12);
 
       const result = {
         totalMoves: positions.length - 1,
@@ -960,6 +986,15 @@ export class GameAnalyzer {
 
       this.lastReviewResult = result;
       this.isAnalyzing = false;
+
+      if (onProgress) {
+        onProgress({
+          phase: 'done',
+          current: totalPositions,
+          total: totalPositions,
+          percent: 100
+        });
+      }
 
       // Save to Persistent Cache ONLY if complete and no engine evaluation failures occurred
       if (cacheKey && !positions.isPartial && evalFailures === 0) {

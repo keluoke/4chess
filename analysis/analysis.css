@@ -406,10 +406,27 @@ body {
   margin-bottom: 8px;
 }
 
+.eval-chart-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .eval-chart-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+.eval-chart-badge {
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  transition: all 0.2s ease;
 }
 
 .eval-chart-legend {
@@ -425,19 +442,39 @@ body {
   gap: 4px;
 }
 
-.dot-red { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-red); }
-.dot-orange { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-gold); }
-.dot-blue { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-blue); }
+.dot-red { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; }
+.dot-orange { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
+.dot-gold { width: 7px; height: 7px; border-radius: 50%; background: #e6a520; }
 
 .eval-chart-body {
   width: 100%;
-  height: 90px;
+  height: 125px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
 }
 
 .eval-chart-svg {
   width: 100%;
   height: 100%;
   cursor: crosshair;
+}
+
+.eval-chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(18, 24, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #fff;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  display: none;
+  z-index: 10;
+  backdrop-filter: blur(4px);
 }
 
 /* Divergence Insight Box */
@@ -607,7 +644,7 @@ body {
 .blunder-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .blunder-card {
@@ -616,8 +653,8 @@ body {
   border-radius: 8px;
   padding: 10px 14px;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   transition: all 0.15s ease;
   cursor: pointer;
 }
@@ -628,57 +665,113 @@ body {
 }
 
 .blunder-card.active {
-  border-color: var(--brand-gold);
-  background: rgba(250, 157, 59, 0.06);
+  border-color: rgba(230, 165, 32, 0.6);
+  background: rgba(230, 165, 32, 0.08);
 }
 
-.blunder-card-header {
+.blunder-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.blunder-card-top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
+  width: 100%;
 }
 
-.blunder-move-title {
-  font-size: 13px;
+.blunder-card-title {
+  font-size: 13.5px;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  color: var(--text-main);
 }
 
-.badge-blunder {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(250, 81, 81, 0.15);
-  color: var(--brand-red);
+.blunder-move-num {
+  color: var(--text-muted);
   font-weight: 600;
 }
 
-.badge-trap {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(250, 157, 59, 0.18);
-  color: var(--brand-gold);
-  font-weight: 700;
+.blunder-side-icon {
+  font-size: 11px;
 }
 
-.blunder-eval-row {
+.blunder-san {
+  color: var(--text-main);
+}
+
+.blunder-tags-group {
   display: flex;
-  justify-content: space-between;
-  font-size: 12px;
+  align-items: center;
+  gap: 5px;
+}
+
+.blunder-type-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.tag-blunder {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.tag-mistake {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.tag-inaccuracy {
+  background: rgba(245, 158, 11, 0.12);
+  color: #eab308;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.tag-trap {
+  background: rgba(230, 165, 32, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(230, 165, 32, 0.35);
+}
+
+.blunder-loss-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  white-space: nowrap;
+  margin-left: auto;
+  background: rgba(239, 68, 68, 0.08);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.blunder-card-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
   color: var(--text-muted);
 }
 
-.blunder-card-loss {
-  font-size: 11px;
+.sub-best-move strong {
+  color: var(--brand-green);
   font-weight: 700;
-  color: var(--brand-red);
-  white-space: nowrap;
-  flex-shrink: 0;
+}
+
+.sub-trap-prob {
+  color: #fbbf24;
+  font-size: 11px;
 }
 
 /* Move Notation Table */

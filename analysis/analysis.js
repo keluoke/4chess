@@ -462,33 +462,51 @@ class AnalysisStudioApp {
       const card = document.createElement('div');
       card.className = 'blunder-card';
       card.dataset.index = index;
+      card.dataset.ply = item.ply;
 
       const isWhite = item.turn === 'w';
       const sideIcon = isWhite ? '⚪' : '⚫';
 
-      let sevClass = 'badge-blunder';
-      let sevText = '??';
-      if (item.severity === 'mistake') {
-        sevClass = 'badge-trap';
-        sevText = '?';
+      let sevTag = '';
+      if (item.severity === 'blunder') {
+        sevTag = `<span class="blunder-type-tag tag-blunder">大漏 ??</span>`;
+      } else if (item.severity === 'mistake') {
+        sevTag = `<span class="blunder-type-tag tag-mistake">失误 ?</span>`;
       } else if (item.severity === 'inaccuracy') {
-        sevClass = 'badge-trap';
-        sevText = '?!';
+        sevTag = `<span class="blunder-type-tag tag-inaccuracy">疑问手 ?!</span>`;
       }
 
-      const trapHtml = item.isHumanTrap
-        ? `<span class="badge-trap" title="直觉概率 ${item.humanProbability || 0}%">💡 ${Math.round(item.humanProbability || 0)}%</span>`
-        : '';
+      let trapTag = '';
+      let trapSub = '';
+      if (item.isHumanTrap) {
+        trapTag = `<span class="blunder-type-tag tag-trap" title="直觉盲区：多数人类棋手在此局面都会受直觉诱导而犯下此错">直觉陷阱 💡</span>`;
+        if (typeof item.humanProbability === 'number' && item.humanProbability > 0) {
+          trapSub = ` · <span class="sub-trap-prob">约 ${Math.round(item.humanProbability)}% 棋手直觉误选</span>`;
+        }
+      }
+
+      const lossPawnsNum = Math.abs((item.lossCp || 0) / 100).toFixed(1);
+      const bestMoveText = (item.bestSan && item.bestSan !== '?') ? item.bestSan : null;
 
       card.innerHTML = `
-        <div class="blunder-card-header">
-          <div class="blunder-move-title">
-            <span>${item.moveNumber}. ${sideIcon} ${item.san}</span>
-            <span class="${sevClass}">${sevText}</span>
-            ${trapHtml}
+        <div class="blunder-card-main">
+          <div class="blunder-card-top">
+            <div class="blunder-card-title">
+              <span class="blunder-move-num">${item.moveNumber}.</span>
+              <span class="blunder-side-icon">${sideIcon}</span>
+              <span class="blunder-san">${item.san}</span>
+            </div>
+            <div class="blunder-tags-group">
+              ${sevTag}
+              ${trapTag}
+            </div>
+            <span class="blunder-loss-tag" title="相比最佳着法的优势损耗">损耗 ${lossPawnsNum} 兵</span>
+          </div>
+          <div class="blunder-card-sub">
+            ${bestMoveText ? `<span class="sub-best-move">最佳走法: <strong>${bestMoveText}</strong></span>` : ''}
+            ${trapSub}
           </div>
         </div>
-        <span class="blunder-card-loss">${item.lossPawns}</span>
       `;
 
       card.addEventListener('click', () => {
@@ -593,6 +611,17 @@ class AnalysisStudioApp {
     this.boardUI.setPosition(currentPos.fen, lastMove);
     this.evalChart.setCursor(clampedPly);
     this.highlightMoveRow(clampedPly);
+
+    // Sync active blunder card if present
+    const blunderCards = this.el.blunderList.querySelectorAll('.blunder-card');
+    blunderCards.forEach(c => {
+      if (parseInt(c.dataset.ply, 10) === clampedPly) {
+        c.classList.add('active');
+        c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        c.classList.remove('active');
+      }
+    });
 
     if (clampedPly === 0) {
       this.el.boardStatusText.textContent = '开局局面';

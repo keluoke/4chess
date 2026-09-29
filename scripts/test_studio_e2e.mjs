@@ -114,7 +114,7 @@ const testResult = await send('Runtime.evaluate', {
     const blunderCards = document.querySelectorAll('.blunder-card');
     const moveRows = document.querySelectorAll('.notation-row');
     const chartDots = document.querySelectorAll('#eval-dots-group circle');
-    const chartArea = document.querySelector('#eval-area-path')?.getAttribute('d');
+    const chartArea = document.querySelector('#eval-white-area')?.getAttribute('d') || document.querySelector('#eval-line-path')?.getAttribute('d');
 
     // 2. Test Clicking Move 15 in Notation Table
     const move15 = document.querySelector('#move-ply-15');
