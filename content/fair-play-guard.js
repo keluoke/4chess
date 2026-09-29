@@ -130,12 +130,30 @@ export class FairPlayGuard {
     // 3. Trusted Game-Over / Concluded Evidence Check (Post-Game Archives)
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
-      const resultEl = document.querySelector('.result-wrap .result, .crosstable__match');
-      const statusText = document.querySelector('.game__meta .status')?.textContent || '';
-      const isStatusConcluded = /checkmate|time out|resigns|drawn|stalemate|abandoned|rules infraction|victory|defeat/i.test(statusText);
+      // 1. Result elements or match crosstable
+      const resultEl = document.querySelector('.result-wrap .result, .result-wrap, .crosstable__match, .crosstable');
 
-      if (resultEl || isStatusConcluded) {
-        return false; // Concluded historical match
+      // 2. Computer analysis and review underboard elements (e.g. computer analysis tab)
+      const hasAnalysisTools = document.querySelector(
+        '.computer-analysis, .analyse__tools, .analyse-panels, .analyse__underboard, ' +
+        '.ceval, .request-analysis, .future-game-analysis, [data-panel="analysis"], ' +
+        '.fbt[data-act="analysis"], a[href*="/analysis"]'
+      );
+
+      // 3. Post-game controls & rating changes (only present after match conclusion)
+      const hasPostGameMeta = document.querySelector(
+        '.game__meta__players good, .game__meta__players bad, .player good, .player bad, ' +
+        '.game__meta time.timeago, .round__side time.timeago, .fbt[data-act="rematch"], .fbt[data-act="new-opponent"], ' +
+        '[data-hint*="Rematch" i], [data-hint*="再来一局" i]'
+      );
+
+      // 4. Status text conclusion check (bilingual: English + Chinese)
+      const statusText = (document.querySelector('.game__meta .status, .game__meta')?.textContent || '') +
+                         ' ' + (resultEl?.textContent || '');
+      const isStatusConcluded = /checkmate|mate|time\s*out|timeout|time\s*forfeit|resign|drawn?|stalemate|abandoned|left the game|rules infraction|cheat|victor|defeat|won|lost|获胜|胜出|胜|赢|负|败|认输|超时|将死|和棋|离开对局|违规|1-0|0-1|1\/2/i.test(statusText);
+
+      if (resultEl || hasAnalysisTools || hasPostGameMeta || isStatusConcluded) {
+        return false; // Concluded historical match or post-game computer analysis!
       }
 
       // Fail-Safe: On a Lichess game path without confirmed conclusion, assume live game!

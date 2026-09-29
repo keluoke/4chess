@@ -183,6 +183,38 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
+  // Scenario 9: Lichess Game Over with "Black left the game • White is victorious" (NKf48lZ4)
+  total++;
+  if (await testScenario('Lichess Concluded: Black left the game • White is victorious (NKf48lZ4)', {
+    url: 'https://lichess.org/NKf48lZ4/black#20',
+    elements: {
+      '.game__meta .status': { textContent: 'Black left the game • White is victorious' },
+      '.round__side time.timeago': { textContent: '3 weeks ago' }
+    },
+    expectedLocked: false
+  })) passed++;
+
+  // Scenario 10: Lichess Computer Analysis Tab (Request Computer Analysis page)
+  total++;
+  if (await testScenario('Lichess Computer Analysis Page (.computer-analysis)', {
+    url: 'https://lichess.org/NKf48lZ4/black#20',
+    elements: {
+      '.computer-analysis': {},
+      '.analyse__tools': {}
+    },
+    expectedLocked: false
+  })) passed++;
+
+  // Scenario 11: Lichess Concluded in Chinese language
+  total++;
+  if (await testScenario('Lichess Concluded in Chinese (黑方离开对局 • 白方胜)', {
+    url: 'https://lichess.org/12345678',
+    elements: {
+      '.game__meta .status': { textContent: '黑方离开对局 • 白方胜' }
+    },
+    expectedLocked: false
+  })) passed++;
+
   console.log(`\n[Test Results]: ${passed}/${total} scenarios passed.`);
   if (passed === total) {
     console.log('🎉 All Fair Play Guard tests passed successfully!');
