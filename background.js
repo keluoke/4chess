@@ -115,16 +115,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'OPEN_ANALYSIS_TAB') {
     const gameData = msg.gameData || {};
-    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl'], (settings) => {
+
+    // Ensure PGN text is generated if moves are present
+    if (!gameData.pgn && gameData.moves && gameData.moves.length > 0) {
+      gameData.pgn = movesToPgn(gameData.moves, {
+        White: gameData.white || 'White',
+        Black: gameData.black || 'Black',
+        Result: gameData.result || '*'
+      });
+    }
+
+    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl', 'defaultElo'], (settings) => {
       chrome.storage.local.set({ active_analysis_game: gameData }, () => {
+        // Default to true: open 4chess.cc web review directly!
+        const useWeb = settings?.useWebReview !== false;
         let targetUrl = chrome.runtime.getURL('analysis/index.html');
-        if (settings?.useWebReview && gameData.pgn) {
-          const base = (settings.webReviewBaseUrl || 'https://4chess.cc/analysis/').replace(/\/$/, '');
+
+        if (useWeb && gameData.pgn) {
+          const base = (settings?.webReviewBaseUrl || 'https://4chess.cc/analysis/').replace(/\/$/, '');
           const pgnParam = encodeURIComponent(gameData.pgn);
-          targetUrl = `${base}/#pgn=${pgnParam}`;
+          const elo = settings?.defaultElo || 1900;
+          targetUrl = `${base}/#pgn=${pgnParam}&elo=${elo}`;
         }
+
         chrome.tabs.create({ url: targetUrl }, (tab) => {
-          sendResponse({ ok: true, tabId: tab?.id });
+          sendResponse({ ok: true, tabId: tab?.id, targetUrl });
         });
       });
     });
