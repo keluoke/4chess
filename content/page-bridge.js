@@ -9,10 +9,8 @@
   if (window.__MAIA_MAIN_BRIDGE_INITIALIZED__) return;
   window.__MAIA_MAIN_BRIDGE_INITIALIZED__ = true;
 
-  window.addEventListener('__MAIA_JUMP_REQ__', function(e) {
-    var ply = e && e.detail && typeof e.detail.ply === 'number' ? e.detail.ply : null;
-    if (ply === null) return;
-
+  function executeJump(ply) {
+    if (typeof ply !== 'number') return;
     try {
       // 1. Lichess Lila Analysis Controller
       if (window.lichess && window.lichess.analysis) {
@@ -26,7 +24,7 @@
         }
       }
 
-      // 2. Chess.com Board & Game Controllers
+      // 2. Chess.com Web Component Controllers
       var board = document.querySelector('wc-chess-board') || document.querySelector('chess-board');
       if (board) {
         if (board.game && typeof board.game.goToPly === 'function') {
@@ -44,6 +42,19 @@
       }
     } catch (err) {
       console.warn('[Maia-3 Bridge] Jump error:', err);
+    }
+  }
+
+  // Support both CustomEvent and postMessage
+  window.addEventListener('__MAIA_JUMP_REQ__', function(e) {
+    var ply = e && e.detail && typeof e.detail.ply === 'number' ? e.detail.ply : null;
+    if (ply !== null) executeJump(ply);
+  });
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === '__MAIA_JUMP_REQ__') {
+      var ply = typeof e.data.ply === 'number' ? e.data.ply : null;
+      if (ply !== null) executeJump(ply);
     }
   });
 

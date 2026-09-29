@@ -936,12 +936,13 @@ export class GameAnalyzer {
     // Helper: dispatch full synthetic pointer/mouse events across shadow DOM boundaries
     const dispatchSyntheticClick = (el) => {
       if (!el) return;
-      const opts = { bubbles: true, cancelable: true, composed: true, view: window, buttons: 1 };
-      try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (e) {}
-      try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (e) {}
-      try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (e) {}
-      try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (e) {}
-      try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (e) {}
+      const optsDown = { bubbles: true, cancelable: true, composed: true, view: window, buttons: 1, button: 0 };
+      const optsUp = { bubbles: true, cancelable: true, composed: true, view: window, buttons: 0, button: 0 };
+      try { el.dispatchEvent(new PointerEvent('pointerdown', optsDown)); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('mousedown', optsDown)); } catch (e) {}
+      try { el.dispatchEvent(new PointerEvent('pointerup', optsUp)); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('mouseup', optsUp)); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('click', optsUp)); } catch (e) {}
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
     };
 
@@ -955,10 +956,11 @@ export class GameAnalyzer {
       moveItem.element.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // 1. Dispatch Main World Controller Request Event
+    // 1. Dispatch Main World Controller Request Event (CustomEvent + postMessage)
     if (typeof window !== 'undefined') {
       try {
         window.dispatchEvent(new CustomEvent('__MAIA_JUMP_REQ__', { detail: { ply } }));
+        window.postMessage({ type: '__MAIA_JUMP_REQ__', ply }, '*');
       } catch (e) {}
     }
 
