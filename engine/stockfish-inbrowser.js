@@ -37,6 +37,8 @@ export class StockfishInBrowser {
       if (!frame) {
         frame = document.createElement('iframe');
         frame.id = 'maia3-stockfish-frame';
+        frame.setAttribute('credentialless', '');
+        frame.setAttribute('allow', 'cross-origin-isolated');
         frame.style.position = 'absolute';
         frame.style.width = '0px';
         frame.style.height = '0px';
@@ -83,15 +85,29 @@ export class StockfishInBrowser {
             }
           } else if (data.type === 'STOCKFISH_ERROR') {
             console.warn('[Stockfish In-Browser] ⚠️ Error:', data.error);
+            if (!this.isReady && this._readyResolve) {
+              if (this.iframe && this.iframe.parentNode) {
+                this.iframe.parentNode.removeChild(this.iframe);
+              }
+              this.iframe = null;
+              this.initPromise = null;
+              const r = this._readyResolve;
+              this._readyResolve = null;
+              r(false);
+            }
           }
         });
         this._hasListener = true;
       }
 
-      // Timeout guard: if engine fails to reply readyok, do NOT falsely mark ready, allow retry
+      // Timeout guard: if engine fails to reply readyok, do NOT falsely mark ready, allow retry with fresh iframe
       setTimeout(() => {
         if (!this.isReady) {
           console.warn('[Stockfish In-Browser] ⚠️ 引擎初始化就绪等待超时 (Stockfish init timeout)');
+          if (this.iframe && this.iframe.parentNode) {
+            this.iframe.parentNode.removeChild(this.iframe);
+          }
+          this.iframe = null;
           this.initPromise = null;
           if (this._readyResolve) {
             const r = this._readyResolve;
@@ -187,5 +203,15 @@ export class StockfishInBrowser {
     if (this.iframe?.contentWindow) {
       this.iframe.contentWindow.postMessage({ type: 'STOP' }, '*');
     }
+  }
+
+  reset() {
+    this.isReady = false;
+    this.initPromise = null;
+    this._readyResolve = null;
+    if (this.iframe && this.iframe.parentNode) {
+      try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
+    }
+    this.iframe = null;
   }
 }

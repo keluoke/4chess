@@ -267,6 +267,9 @@ export class BoardDetector {
     if (fen && (fen !== this.lastFen || this.lastOrientation !== this.orientation)) {
       this.lastFen = fen;
       this.lastOrientation = this.orientation;
+      if (typeof window !== 'undefined') {
+        window.__MAIA_CURRENT_FEN__ = fen;
+      }
 
       if (this.onPositionChange) {
         this.onPositionChange({

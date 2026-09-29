@@ -919,12 +919,13 @@ export class GameAnalyzer {
   }
 
   /**
-   * Jump to a specific move on the board (Lichess & Chess.com)
+   * Jump to a specific move on the board (Lichess & Chess.com) with true board verification
    * @param {Object} moveItem - The blunder or move object
    * @param {number|null} targetPly - Explicit ply to jump to (defaults to decision point before move: moveItem.ply - 1)
+   * @param {string|null} targetFen - Target FEN to verify board arrival
    */
-  static jumpToMove(moveItem, targetPly = null) {
-    if (!moveItem) return false;
+  static async jumpToMove(moveItem, targetPly = null, targetFen = null) {
+    if (!moveItem) return { ok: false, reason: 'no_move_item' };
     const ply = (targetPly !== null && typeof targetPly === 'number')
       ? targetPly
       : Math.max(0, (moveItem.ply || 1) - 1);
@@ -944,103 +945,40 @@ export class GameAnalyzer {
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
     };
 
-    // If original DOM element is available and still connected, directly click it
+    // Expected board piece placement for verification
+    const expectedFen = targetFen || (targetPly === moveItem.ply ? moveItem.fenAfter : moveItem.fenBefore);
+    const expectedBoard = expectedFen ? expectedFen.split(' ')[0] : null;
+
+    // Direct DOM element click if available and matches
     if (targetPly === null && moveItem.element && typeof document !== 'undefined' && document.contains(moveItem.element)) {
       dispatchSyntheticClick(moveItem.element);
       moveItem.element.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-      return true;
     }
 
-    // -------------------------------------------------------------
-    // Platform 1: Lichess
-    // -------------------------------------------------------------
-    if (isLichess) {
-      let lichessJumpTriggered = false;
-      // Main World API jump (Lila official controller API: jumpToMain or jump with tree path)
+    // 1. Dispatch Main World Controller Request Event
+    if (typeof window !== 'undefined') {
       try {
-        const script = document.createElement('script');
-        script.textContent = `
-          (function() {
-            try {
-              if (window.lichess && window.lichess.analysis) {
-                if (typeof window.lichess.analysis.jumpToMain === 'function') {
-                  window.lichess.analysis.jumpToMain(${ply});
-                  return;
-                }
-                if (window.lichess.analysis.tree && typeof window.lichess.analysis.tree.pathAtMain === 'function') {
-                  window.lichess.analysis.jump(window.lichess.analysis.tree.pathAtMain(${ply}));
-                  return;
-                }
-                if (typeof window.lichess.analysis.jump === 'function') {
-                  window.lichess.analysis.jump(${ply});
-                }
-              }
-            } catch (e) {}
-          })();
-        `;
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        lichessJumpTriggered = true;
+        window.dispatchEvent(new CustomEvent('__MAIA_JUMP_REQ__', { detail: { ply } }));
       } catch (e) {}
+    }
 
+    // 2. DOM-level fallback navigation
+    if (isLichess) {
       if (ply === 0) {
         const firstBtn = document.querySelector('.analyse__controls .first, button[data-act="first"]');
-        if (firstBtn) {
-          dispatchSyntheticClick(firstBtn);
-          return true;
-        }
+        if (firstBtn) dispatchSyntheticClick(firstBtn);
       } else {
         const lichessMoves = Array.from(document.querySelectorAll('.analyse__moves move, rm6 move, .tview2 u, .analyse__moves u'));
         if (lichessMoves[ply - 1]) {
           dispatchSyntheticClick(lichessMoves[ply - 1]);
           lichessMoves[ply - 1].scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-          return true;
         }
       }
-
-      return lichessJumpTriggered;
-    }
-
-    // -------------------------------------------------------------
-    // Platform 2: Chess.com Multi-Tier Strategy (Without URL Conflict)
-    // -------------------------------------------------------------
-    if (isChesscom) {
-      let chesscomJumpTriggered = false;
-      // Tier 1: Main World Injected Bridge (native chess-board controller API)
-      try {
-        const script = document.createElement('script');
-        script.textContent = `
-          (function() {
-            try {
-              const b = document.querySelector('wc-chess-board, chess-board');
-              const targets = [b?.game, b?.game?.controller, b?.controller, b];
-              for (const tgt of targets) {
-                if (!tgt) continue;
-                for (const m of ['goToPly', 'jumpToPly', 'goTo', 'jumpTo', 'seek', 'goToMove']) {
-                  if (typeof tgt[m] === 'function') {
-                    tgt[m](${ply});
-                    return;
-                  }
-                }
-              }
-            } catch (e) {}
-          })();
-        `;
-        (document.head || document.documentElement).appendChild(script);
-        script.remove();
-        chesscomJumpTriggered = true;
-      } catch (e) {}
-
-      // Tier 2: Directly dispatch synthetic click on target move node in DOM
+    } else if (isChesscom) {
       if (ply === 0) {
         const firstBtn = document.querySelector('button[data-cy="nav-first"], button[aria-label*="First" i], button.chevron-first, .board-controls-first, [class*="chevron-first"], [data-tab="first"]');
-        if (firstBtn) {
-          dispatchSyntheticClick(firstBtn);
-          console.log(`[GameAnalyzer] ✅ Jumped to ply 0 via nav-first button`);
-          return true;
-        }
+        if (firstBtn) dispatchSyntheticClick(firstBtn);
       } else {
-        // Direct data-ply attribute match
         const plySelectors = [
           `[data-ply="${ply}"]`,
           `wc-vertical-move-list [data-ply="${ply}"]`,
@@ -1048,74 +986,71 @@ export class GameAnalyzer {
           `.move-list-wrapper [data-ply="${ply}"]`,
           `.main-line-row [data-ply="${ply}"]`
         ];
+        let found = false;
         for (const sel of plySelectors) {
           const el = document.querySelector(sel);
           if (el) {
             dispatchSyntheticClick(el);
             el.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-            console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via selector "${sel}"`);
-            return true;
+            found = true;
+            break;
           }
         }
-
-        // Sequential index matching in move list:
-        // Filter out move-number labels (e.g. "1.", "2.", "15.") so array is strictly half-moves [ply1, ply2, ply3, ...]
-        const moveContainers = document.querySelectorAll('wc-vertical-move-list, .vertical-move-list, .move-list-wrapper, .keyboard-move-list, .main-line-row');
-        for (const container of moveContainers) {
-          const nodes = Array.from(container.querySelectorAll('.node, [class*="move-node"], [class*="node-text"]')).filter(el => {
-            if (el.classList.contains('node-number') || el.classList.contains('move-number') || el.classList.contains('round-number')) return false;
-            const text = (el.textContent || '').trim();
-            if (/^\d+\.?$/.test(text)) return false;
-            return text.length > 0 || el.querySelector('[class*="piece"], [data-piece]');
-          });
-
-          if (nodes.length >= ply) {
-            const targetEl = nodes[ply - 1];
-            if (targetEl) {
-              dispatchSyntheticClick(targetEl);
-              targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-              console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via move list node [${ply - 1}]`);
-              return true;
+        if (!found) {
+          const moveContainers = document.querySelectorAll('wc-vertical-move-list, .vertical-move-list, .move-list-wrapper, .keyboard-move-list, .main-line-row');
+          for (const container of moveContainers) {
+            const nodes = Array.from(container.querySelectorAll('.node, [class*="move-node"], [class*="node-text"]')).filter(el => {
+              if (el.classList.contains('node-number') || el.classList.contains('move-number') || el.classList.contains('round-number')) return false;
+              const text = (el.textContent || '').trim();
+              if (/^\d+\.?$/.test(text)) return false;
+              return text.length > 0 || el.querySelector('[class*="piece"], [data-piece]');
+            });
+            if (nodes.length >= ply && nodes[ply - 1]) {
+              dispatchSyntheticClick(nodes[ply - 1]);
+              nodes[ply - 1].scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+              found = true;
+              break;
             }
           }
         }
-
-        // Global fallback for move nodes across document
-        const allMoveNodes = Array.from(document.querySelectorAll('.vertical-move-list .node, .move-list-wrapper .node, wc-vertical-move-list .node, .keyboard-move-list .node, .main-line-row .node')).filter(el => {
-          if (el.classList.contains('node-number') || el.classList.contains('move-number') || el.classList.contains('round-number')) return false;
-          const text = (el.textContent || '').trim();
-          if (/^\d+\.?$/.test(text)) return false;
-          return text.length > 0 || el.querySelector('[class*="piece"], [data-piece]');
-        });
-
-        if (allMoveNodes.length >= ply) {
-          const targetEl = allMoveNodes[ply - 1];
-          if (targetEl) {
-            dispatchSyntheticClick(targetEl);
-            targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-            console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via global move node [${ply - 1}]`);
-            return true;
-          }
-        }
       }
-
-      // Tier 3: Use navigation buttons (nav-first then N times nav-next)
-      const navFirst = document.querySelector('button[data-cy="nav-first"], button[aria-label*="First" i], button.chevron-first, .board-controls-first, [data-tab="first"]');
-      const navNext = document.querySelector('button[data-cy="nav-next"], button[aria-label*="Next" i], button.chevron-right, .board-controls-next, [data-tab="next"]');
-      if (navFirst && navNext) {
-        dispatchSyntheticClick(navFirst);
-        if (ply > 0) {
-          for (let step = 0; step < ply; step++) {
-            dispatchSyntheticClick(navNext);
-          }
-        }
-        console.log(`[GameAnalyzer] ✅ Jumped to ply ${ply} via nav-first + ${ply}x nav-next`);
-        return true;
-      }
-
-      return chesscomJumpTriggered;
     }
 
-    return false;
+    // 3. Verification Loop: Wait up to 500ms to confirm board actually reaches target state
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return { ok: true, ply };
+    }
+
+    const t0 = Date.now();
+    while (Date.now() - t0 < 500) {
+      // Check FEN match
+      if (expectedBoard && window.__MAIA_CURRENT_FEN__) {
+        if (window.__MAIA_CURRENT_FEN__.split(' ')[0] === expectedBoard) {
+          return { ok: true, ply, fen: window.__MAIA_CURRENT_FEN__ };
+        }
+      }
+
+      // Check DOM move highlight match
+      if (isChesscom) {
+        const activeNode = document.querySelector(`[data-ply="${ply}"].selected, [data-ply="${ply}"][class*="selected"], [data-ply="${ply}"][class*="highlight"]`);
+        if (activeNode) {
+          return { ok: true, ply, method: 'dom-selected' };
+        }
+      } else if (isLichess) {
+        const activeMove = document.querySelector('.analyse__moves move.active, rm6 move.active, .tview2 u.active');
+        if (activeMove) {
+          const allMoves = Array.from(document.querySelectorAll('.analyse__moves move, rm6 move, .tview2 u'));
+          const idx = allMoves.indexOf(activeMove);
+          if (idx !== -1 && idx === ply - 1) {
+            return { ok: true, ply, method: 'lichess-active' };
+          }
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 35));
+    }
+
+    // Board did not update after 500ms
+    return { ok: false, reason: 'board_did_not_change', ply };
   }
 }

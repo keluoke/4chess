@@ -11,8 +11,60 @@ import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
 import { FairPlayGuard } from './fair-play-guard.js';
 
+function injectMainWorldControllerBridge() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('maia-main-world-bridge')) return;
+  try {
+    const script = document.createElement('script');
+    script.id = 'maia-main-world-bridge';
+    script.textContent = `(${function() {
+      window.addEventListener('__MAIA_JUMP_REQ__', function(e) {
+        var ply = e && e.detail && typeof e.detail.ply === 'number' ? e.detail.ply : null;
+        if (ply === null) return;
+        try {
+          // Lichess Lila Controller
+          if (window.lichess && window.lichess.analysis) {
+            if (typeof window.lichess.analysis.jumpToMain === 'function') {
+              window.lichess.analysis.jumpToMain(ply);
+              return;
+            }
+            if (typeof window.lichess.analysis.jump === 'function') {
+              window.lichess.analysis.jump(ply);
+              return;
+            }
+          }
+          // Chess.com Controllers
+          var b = document.querySelector('chess-board') || document.querySelector('wc-chess-board');
+          if (b) {
+            if (b.game && typeof b.game.goToPly === 'function') {
+              b.game.goToPly(ply);
+              return;
+            }
+            if (b.controller && typeof b.controller.goToPly === 'function') {
+              b.controller.goToPly(ply);
+              return;
+            }
+            if (b.game && typeof b.game.jumpToPly === 'function') {
+              b.game.jumpToPly(ply);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('[Maia-3 Bridge] Jump error:', err);
+        }
+      });
+    }.toString()})();`;
+    (document.head || document.documentElement).appendChild(script);
+  } catch (e) {
+    console.warn('[Maia-3] Could not inject main world bridge:', e);
+  }
+}
+
 export async function initMaiaExtension() {
   console.log('[Maia-3] 🚀 Starting Human Intuition Extension (Scheme 0 Standalone)...');
+
+  // Inject Main World Controller Bridge for Lila (Lichess) & Chess.com native jump
+  injectMainWorldControllerBridge();
 
   let currentFen = null;
   let currentOrientation = 'white';
@@ -108,8 +160,13 @@ export async function initMaiaExtension() {
     onCancelReview: () => {
       analyzer.cancel();
     },
-    onJumpToMove: (item, targetPly = null) => {
-      GameAnalyzer.jumpToMove(item, targetPly);
+    onJumpToMove: async (item, targetPly = null, targetFen = null) => {
+      const jumpRes = await GameAnalyzer.jumpToMove(item, targetPly, targetFen);
+      if (!jumpRes?.ok) {
+        panel.showToast(panel.lang === 'zh'
+          ? `未能自动跳转棋盘，请在棋谱中手动点击`
+          : `Could not jump board automatically. Please click move in the move list.`);
+      }
     },
     onSelectBlunder: async (results, index, moments, viewMode = 'decision') => {
       const item = moments[index];
@@ -119,33 +176,14 @@ export async function initMaiaExtension() {
       const targetPly = viewMode === 'result' ? item.ply : Math.max(0, item.ply - 1);
       const targetFen = viewMode === 'result' ? item.fenAfter : item.fenBefore;
 
-      const jumped = GameAnalyzer.jumpToMove(item, targetPly);
+      const jumpRes = await GameAnalyzer.jumpToMove(item, targetPly, targetFen);
 
-      // Wait briefly for board DOM mutation observer (detector) to pick up the new position
-      let boardUpdated = false;
-      const targetBoard = targetFen ? targetFen.split(' ')[0] : null;
-
-      for (let attempt = 0; attempt < 8; attempt++) {
-        await new Promise(r => setTimeout(r, 50));
-        if (currentFen && currentFen.split(' ')[0] === targetBoard) {
-          boardUpdated = true;
-          break;
-        }
-      }
-
-      if (boardUpdated) {
-        // Board successfully jumped to target position!
-        await runPrediction(currentFen, item, viewMode);
+      if (jumpRes && jumpRes.ok) {
+        await runPrediction(targetFen, item, viewMode);
       } else {
-        // Board did not update automatically
-        if (!jumped) {
-          panel.showToast(panel.lang === 'zh'
-            ? `未能自动跳转棋盘，请在棋谱中手动点击第 ${item.moveNumber} 步`
-            : `Could not jump board automatically. Please click move ${item.moveNumber} in the move list.`);
-        }
-        if (currentFen && currentFen.split(' ')[0] === targetBoard) {
-          await runPrediction(currentFen, item, viewMode);
-        }
+        panel.showToast(panel.lang === 'zh'
+          ? `未能自动跳转棋盘，请在棋谱中手动点击第 ${item.moveNumber} 步`
+          : `Could not jump board automatically. Please click move ${item.moveNumber} in the move list.`);
       }
     },
     onClearBlunderDrill: () => {
@@ -167,6 +205,8 @@ export async function initMaiaExtension() {
     if (FairPlayGuard.isLiveGameInProgress()) {
       overlay.clear();
       panel.setFairPlayLocked(true);
+      predictionEpoch++;
+      analyzer.cancel();
       if (engine.stockfishInBrowser?.isReady) {
         engine.stockfishInBrowser.stop();
       }
@@ -179,8 +219,8 @@ export async function initMaiaExtension() {
     overlay.clear();
     panel.setEvaluating(fen);
 
-    // Stop previous Stockfish evaluation to free up CPU
-    if (engine.stockfishInBrowser?.isReady) {
+    // Stop previous Stockfish evaluation to free up CPU, but NEVER interrupt an active full-game review
+    if (engine.stockfishInBrowser?.isReady && !analyzer.isAnalyzing) {
       engine.stockfishInBrowser.stop();
     }
 
@@ -286,6 +326,9 @@ export async function initMaiaExtension() {
   detector = new BoardDetector(async ({ fen, orientation, platform }) => {
     currentFen = fen;
     currentOrientation = orientation;
+    if (typeof window !== 'undefined') {
+      window.__MAIA_CURRENT_FEN__ = fen;
+    }
 
     // Attach overlay to current board container
     if (detector.containerEl) {

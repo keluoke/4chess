@@ -40,13 +40,11 @@
       try {
         const w = new Worker(scriptUrl);
         w.onerror = function(err) {
-          console.warn(`[Stockfish Sandbox] Worker error on ${name}:`, err);
-          if (!initialized && scriptUrl.includes('stockfish-19')) {
-            console.log('[Stockfish Sandbox] Falling back to stockfish.js...');
-            try { w.terminate(); } catch (e) {}
-            clearTimeout(readyTimer);
-            worker = tryWorker('../lib/stockfish.js', 'Stockfish WASM');
-          }
+          console.error(`[Stockfish Sandbox] Worker error on ${name}:`, err);
+          window.parent.postMessage({
+            type: 'STOCKFISH_ERROR',
+            error: err?.message || 'Stockfish Worker execution failed'
+          }, '*');
         };
 
         w.onmessage = function(e) {
@@ -201,18 +199,15 @@
 
     readyTimer = setTimeout(() => {
       if (!initialized) {
-        console.warn('[Stockfish Sandbox] Stockfish 19 did not ready in 2000ms, falling back to stockfish.js...');
-        try { if (worker) worker.terminate(); } catch (e) {}
-        worker = tryWorker('../lib/stockfish.js', 'Stockfish WASM');
+        console.error('[Stockfish Sandbox] Stockfish 19 Lite WASM initialization timed out (8000ms).');
+        window.parent.postMessage({
+          type: 'STOCKFISH_ERROR',
+          error: 'Stockfish 19 Lite WASM 引擎就绪等待超时 (8000ms)'
+        }, '*');
       }
-    }, 2000);
+    }, 8000);
 
-    const origTry = tryWorker;
-    worker = origTry('../lib/stockfish-19.js#stockfish.wasm,worker', 'Stockfish 19 Lite WASM');
-    if (!worker) {
-      clearTimeout(readyTimer);
-      worker = origTry('../lib/stockfish.js', 'Stockfish WASM');
-    }
+    worker = tryWorker('../lib/stockfish-19.js#stockfish.wasm,worker', 'Stockfish 19 Lite WASM');
   }
 
   let stopWatchdog = null;
@@ -224,17 +219,21 @@
       clearTimeout(stopWatchdog);
       stopWatchdog = setTimeout(() => {
         if (isStopping) {
+          console.warn('[Stockfish Sandbox] Worker failed to stop within 1000ms, terminating hung worker and restarting...');
+          try { worker.terminate(); } catch (e) {}
           isStopping = false;
           isSearching = false;
+          activeRequest = null;
           multiPvMap.clear();
           lastInfo = null;
+          initWorker();
           if (queuedRequest) {
             const next = queuedRequest;
             queuedRequest = null;
-            executeSearch(next);
+            setTimeout(() => executeSearch(next), 60);
           }
         }
-      }, 400);
+      }, 1000);
     }
   }
 

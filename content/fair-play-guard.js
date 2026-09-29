@@ -182,3 +182,7 @@ export class FairPlayGuard {
     check();
   }
 }
+
+if (typeof window !== 'undefined') {
+  window.FairPlayGuard = FairPlayGuard;
+}
