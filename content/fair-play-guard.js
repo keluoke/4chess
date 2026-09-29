@@ -24,39 +24,8 @@ export class FairPlayGuard {
     const path = window.location.pathname;
 
     // ------------------------------------------------------------------
-    // 1. Whitelisted Safe Environments (Always Safe: Non-Game Analysis/Study)
-    // ------------------------------------------------------------------
-    if (host.includes('lichess.org')) {
-      if (path.startsWith('/analysis') ||
-          path.startsWith('/study') ||
-          path.startsWith('/broadcast') ||
-          path.startsWith('/editor') ||
-          path.startsWith('/practice') ||
-          path.startsWith('/training') ||
-          path.startsWith('/learn') ||
-          path.startsWith('/puzzle') ||
-          path.startsWith('/tv')) {
-        return false; // Whitelisted safe (analysis/study/broadcast relay)
-      }
-    }
-
-    if (host.includes('chess.com')) {
-      if (path.startsWith('/analysis') ||
-          path.startsWith('/events') ||
-          path.startsWith('/puzzles') ||
-          path.startsWith('/library') ||
-          path.startsWith('/lessons') ||
-          path.startsWith('/explorer') ||
-          path.startsWith('/classroom') ||
-          path.startsWith('/vision') ||
-          path.startsWith('/drills')) {
-        return false; // Whitelisted safe (analysis/lessons/event broadcasts)
-      }
-    }
-
-    // ------------------------------------------------------------------
-    // 2. Active In-Game Controls (Strict Highest Priority - Immediate Lock)
-    // Under NO circumstances may completion indicators override active game controls!
+    // 1. Active In-Game Controls (Absolute Highest Priority - Immediate Lock)
+    // Under NO circumstances may whitelist or completion indicators override active game controls!
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
       const hasResignBtn = document.querySelector(
@@ -65,10 +34,11 @@ export class FairPlayGuard {
       const hasDrawBtn = document.querySelector(
         'button.draw-yes, .game__controls .draw-yes, button[data-action="draw-yes"]'
       );
-      const hasRunningClock = document.querySelector('.rclock-running, .rclock .running');
       const hasCanMove = document.querySelector('cg-board.can-move, .your-turn');
+      const isBroadcastRelay = path.startsWith('/broadcast');
+      const hasRunningClock = !isBroadcastRelay && document.querySelector('.rclock-running, .rclock .running');
 
-      if (hasResignBtn || hasDrawBtn || hasRunningClock || hasCanMove) {
+      if (hasResignBtn || hasDrawBtn || hasCanMove || hasRunningClock) {
         return true; // LIVE GAME ACTIVE!
       }
     }
@@ -89,18 +59,49 @@ export class FairPlayGuard {
         'button[aria-label*="提议和棋" i], .draw-button-component, [data-cy="draw-button"], ' +
         '.game-controls-button[aria-label*="Draw" i], .game-controls-button[aria-label*="和棋" i], button.draw-yes'
       );
-      const hasRunningClock = document.querySelector(
+      const hasCanMove = document.querySelector('wc-chess-board[can-move], chess-board[can-move]');
+      const isEventRelay = path.startsWith('/events');
+      const hasRunningClock = !isEventRelay && document.querySelector(
         '.clock-player-turn.clock-running, .clock-running, .clock-component.clock-running'
       );
-      const hasCanMove = document.querySelector('wc-chess-board[can-move], chess-board[can-move]');
 
-      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasRunningClock || hasCanMove) {
+      if (hasAbortBtn || hasResignBtn || hasDrawBtn || hasCanMove || hasRunningClock) {
         return true; // LIVE GAME ACTIVE!
       }
     }
 
     // ------------------------------------------------------------------
-    // 3. Trusted Game-Over / Concluded Evidence Check
+    // 2. Whitelisted Safe Environments (Analysis, Study, Lessons - /tv EXCLUDED)
+    // ------------------------------------------------------------------
+    if (host.includes('lichess.org')) {
+      if (path.startsWith('/analysis') ||
+          path.startsWith('/study') ||
+          path.startsWith('/broadcast') ||
+          path.startsWith('/editor') ||
+          path.startsWith('/practice') ||
+          path.startsWith('/training') ||
+          path.startsWith('/learn') ||
+          path.startsWith('/puzzle')) {
+        return false; // Whitelisted safe (non-game analysis/study/puzzle/relay)
+      }
+    }
+
+    if (host.includes('chess.com')) {
+      if (path.startsWith('/analysis') ||
+          path.startsWith('/events') ||
+          path.startsWith('/puzzles') ||
+          path.startsWith('/library') ||
+          path.startsWith('/lessons') ||
+          path.startsWith('/explorer') ||
+          path.startsWith('/classroom') ||
+          path.startsWith('/vision') ||
+          path.startsWith('/drills')) {
+        return false; // Whitelisted safe (non-game analysis/lessons/drills/events)
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // 3. Trusted Game-Over / Concluded Evidence Check (Post-Game Archives)
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
       const resultEl = document.querySelector('.result-wrap .result, .crosstable__match');

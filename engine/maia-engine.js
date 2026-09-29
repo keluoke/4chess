@@ -74,13 +74,18 @@ export class MaiaEngine {
     console.log('[Maia Engine] 🚀 正在初始化双引擎 (Cloudflare CDN + WebAssembly)...');
 
     // 1. Initialize Stockfish WebAssembly in parallel
-    this.stockfishInBrowser.initialize().then(() => {
-      this.status.stockfish.state = 'ready';
+    this.stockfishInBrowser.initialize().then((isReady) => {
+      if (isReady && this.stockfishInBrowser.isReady) {
+        this.status.stockfish.state = 'ready';
+      } else {
+        this.status.stockfish.state = 'error';
+        this.status.stockfish.error = 'WebAssembly 初始化超时';
+      }
       this.notifyStatus();
     }).catch(err => {
       console.warn('[Maia Engine] Stockfish 初始化提示:', err);
       this.status.stockfish.state = 'error';
-      this.status.stockfish.error = err.message;
+      this.status.stockfish.error = err?.message || String(err);
       this.notifyStatus();
     });
 

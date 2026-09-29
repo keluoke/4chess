@@ -705,6 +705,16 @@ export class GameAnalyzer {
       const totalPositions = positions.length;
       const evals = [];
       let evalFailures = 0;
+      let consecutiveFailures = 0;
+
+      // Step 0: Pre-flight check - ensure Stockfish is initialized and ready
+      if (this.stockfish && !this.stockfish.isReady) {
+        console.log('[GameAnalyzer] Awaiting Stockfish engine initialization before review...');
+        const ready = await this.stockfish.initialize();
+        if (!ready || !this.stockfish.isReady) {
+          throw new Error('Stockfish WebAssembly 引擎初始化超时或未就绪，无法开始复盘分析');
+        }
+      }
 
       // Step 1: Evaluate each position with Stockfish 19
       for (let i = 0; i < totalPositions; i++) {
@@ -734,11 +744,19 @@ export class GameAnalyzer {
         const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 3500, 1);
         if (!evalRes) {
           evalFailures++;
+          consecutiveFailures++;
           // Reset engine state so timeout doesn't cascade to next move
           if (this.stockfish?.stop) {
             this.stockfish.stop();
           }
           await new Promise(r => setTimeout(r, 20));
+
+          // Early Circuit Breaker: Stop early if engine is permanently dead
+          if (consecutiveFailures >= 3) {
+            throw new Error(`Stockfish 引擎计算无响应 (已连续失败 ${consecutiveFailures} 步)，已触发熔断保护终止复盘。`);
+          }
+        } else {
+          consecutiveFailures = 0;
         }
         evals.push(evalRes);
       }
@@ -937,20 +955,32 @@ export class GameAnalyzer {
     // Platform 1: Lichess
     // -------------------------------------------------------------
     if (isLichess) {
-      // Main World API jump
+      let lichessJumpTriggered = false;
+      // Main World API jump (Lila official controller API: jumpToMain or jump with tree path)
       try {
         const script = document.createElement('script');
         script.textContent = `
           (function() {
             try {
-              if (window.lichess && window.lichess.analysis && typeof window.lichess.analysis.jump === 'function') {
-                window.lichess.analysis.jump(${ply});
+              if (window.lichess && window.lichess.analysis) {
+                if (typeof window.lichess.analysis.jumpToMain === 'function') {
+                  window.lichess.analysis.jumpToMain(${ply});
+                  return;
+                }
+                if (window.lichess.analysis.tree && typeof window.lichess.analysis.tree.pathAtMain === 'function') {
+                  window.lichess.analysis.jump(window.lichess.analysis.tree.pathAtMain(${ply}));
+                  return;
+                }
+                if (typeof window.lichess.analysis.jump === 'function') {
+                  window.lichess.analysis.jump(${ply});
+                }
               }
             } catch (e) {}
           })();
         `;
         (document.head || document.documentElement).appendChild(script);
         script.remove();
+        lichessJumpTriggered = true;
       } catch (e) {}
 
       if (ply === 0) {
@@ -967,12 +997,15 @@ export class GameAnalyzer {
           return true;
         }
       }
+
+      return lichessJumpTriggered;
     }
 
     // -------------------------------------------------------------
     // Platform 2: Chess.com Multi-Tier Strategy (Without URL Conflict)
     // -------------------------------------------------------------
     if (isChesscom) {
+      let chesscomJumpTriggered = false;
       // Tier 1: Main World Injected Bridge (native chess-board controller API)
       try {
         const script = document.createElement('script');
@@ -995,6 +1028,7 @@ export class GameAnalyzer {
         `;
         (document.head || document.documentElement).appendChild(script);
         script.remove();
+        chesscomJumpTriggered = true;
       } catch (e) {}
 
       // Tier 2: Directly dispatch synthetic click on target move node in DOM
@@ -1079,7 +1113,7 @@ export class GameAnalyzer {
         return true;
       }
 
-      return true;
+      return chesscomJumpTriggered;
     }
 
     return false;

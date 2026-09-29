@@ -63,19 +63,6 @@
               initialized = true;
               window.parent.postMessage({ type: 'STOCKFISH_READY', engineName }, '*');
             }
-
-            if (isStopping) {
-              isStopping = false;
-              isSearching = false;
-              multiPvMap.clear();
-              lastInfo = null;
-
-              if (queuedRequest) {
-                const next = queuedRequest;
-                queuedRequest = null;
-                executeSearch(next);
-              }
-            }
             return;
           }
 
@@ -134,7 +121,23 @@
             const parts = line.split(/\s+/);
             const bestMove = parts[1] && parts[1] !== '(none)' ? parts[1] : null;
 
-            if (isSearching && activeRequest && !isStopping) {
+            if (isStopping) {
+              clearTimeout(stopWatchdog);
+              isStopping = false;
+              isSearching = false;
+              activeRequest = null;
+              multiPvMap.clear();
+              lastInfo = null;
+
+              if (queuedRequest) {
+                const next = queuedRequest;
+                queuedRequest = null;
+                executeSearch(next);
+              }
+              return;
+            }
+
+            if (isSearching && activeRequest) {
               const best = multiPvMap.get(1) || lastInfo;
               const resId = activeRequest.id;
               const resFen = activeRequest.fen;
@@ -212,6 +215,29 @@
     }
   }
 
+  let stopWatchdog = null;
+  function triggerStop() {
+    if (isSearching || isStopping) {
+      isStopping = true;
+      activeRequest = null;
+      try { worker.postMessage('stop'); } catch (e) {}
+      clearTimeout(stopWatchdog);
+      stopWatchdog = setTimeout(() => {
+        if (isStopping) {
+          isStopping = false;
+          isSearching = false;
+          multiPvMap.clear();
+          lastInfo = null;
+          if (queuedRequest) {
+            const next = queuedRequest;
+            queuedRequest = null;
+            executeSearch(next);
+          }
+        }
+      }, 400);
+    }
+  }
+
   window.addEventListener('message', function(e) {
     const data = e.data;
     if (!data || !worker) return;
@@ -228,25 +254,12 @@
       if (!isSearching && !isStopping) {
         executeSearch(req);
       } else {
-        // Search currently running: queue this request and stop old search cleanly
         queuedRequest = req;
-        if (!isStopping) {
-          isStopping = true;
-          activeRequest = null; // Invalidate so residual bestmove is discarded
-          worker.postMessage('stop');
-          worker.postMessage('isready');
-        }
+        triggerStop();
       }
     } else if (data.type === 'STOP') {
       queuedRequest = null;
-      if (isSearching && !isStopping) {
-        isStopping = true;
-        activeRequest = null;
-        worker.postMessage('stop');
-        worker.postMessage('isready');
-      } else if (!isSearching) {
-        worker.postMessage('stop');
-      }
+      triggerStop();
     }
   });
 

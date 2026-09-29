@@ -993,7 +993,14 @@ export class IntuitionPanel {
               </div>
               <div class="weui-blunder-eval-row">
                 <span>${isZh ? '局势突变' : 'Eval swing'}: ${item.evalBefore} ➔ ${item.evalAfter}</span>
-                <span class="weui-blunder-jump-btn">${this.t('jumpToMove')}</span>
+              </div>
+              <div class="weui-blunder-actions-row" style="display: flex; gap: 6px; margin-top: 6px;">
+                <button type="button" class="weui-btn-jump-action btn-jump-decision" data-moment-idx="${idx}" data-view="decision" style="flex: 1; padding: 5px 8px; font-size: 10.5px; font-weight: 500; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--weui-FG); cursor: pointer; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                  <span>🎯</span><span>${isZh ? '走棋前决策' : 'Before move'}</span>
+                </button>
+                <button type="button" class="weui-btn-jump-action btn-jump-result" data-moment-idx="${idx}" data-view="result" style="flex: 1; padding: 5px 8px; font-size: 10.5px; font-weight: 500; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--weui-FG); cursor: pointer; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                  <span>👀</span><span>${isZh ? '走棋后局面' : 'After move'}</span>
+                </button>
               </div>
               ${trapHtml}
             </div>
@@ -1017,9 +1024,23 @@ export class IntuitionPanel {
       this.startReview(true);
     });
 
-    // Bind Jump-to-move clicks on blunder cards
+    // Bind Jump-to-move clicks on action buttons
+    reviewBody.querySelectorAll('.weui-btn-jump-action').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.momentIdx, 10);
+        const viewMode = btn.dataset.view || 'decision';
+        const item = filteredMoments[idx];
+        if (!item) return;
+
+        this.startBlunderDrill(results, idx, filteredMoments, viewMode);
+      });
+    });
+
+    // Bind card click default (decision point)
     reviewBody.querySelectorAll('.weui-blunder-card').forEach(card => {
       card.addEventListener('click', (e) => {
+        if (e.target.closest('.weui-btn-jump-action')) return;
         const idx = parseInt(card.dataset.momentIdx, 10);
         const item = filteredMoments[idx];
         if (!item) return;
@@ -1610,7 +1631,10 @@ export class IntuitionPanel {
 
     // Maia Human Candidates Move List
     if (!predictionData.moves || predictionData.moves.length === 0) {
-      movesContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--weui-FG-2); font-size: 11.5px;">${this.t('noLegalMoves')}</div>`;
+      const msg = (predictionData.isReading || !predictionData.fen)
+        ? this.t('readingState')
+        : this.t('noLegalMoves');
+      movesContainer.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--weui-FG-2); font-size: 11.5px;">${msg}</div>`;
       return;
     }
 
@@ -1673,7 +1697,45 @@ export class IntuitionPanel {
     badgeEl.textContent = badge;
     badgeEl.className = `weui-insight-badge ${isTrap ? 'badge-trap' : ''}`;
     insightCard.className = `weui-insight-box ${isTrap ? 'alert-trap' : ''}`;
-    textEl.innerHTML = text;
     insightCard.style.display = 'block';
+  }
+
+  showToast(msg, duration = 3000) {
+    if (!this.container) return;
+    let toast = this.container.querySelector('#maia-panel-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'maia-panel-toast';
+      toast.style.cssText = `
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(17, 24, 39, 0.94);
+        color: #ffffff;
+        font-size: 11px;
+        padding: 7px 15px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+        pointer-events: none;
+        z-index: 10000;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        text-align: center;
+        max-width: 85%;
+        line-height: 1.4;
+      `;
+      this.container.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      if (toast) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(8px)';
+      }
+    }, duration);
   }
 }

@@ -26,7 +26,12 @@ export class ChessBoard {
     this.halfMoves = 0;
     this.fullMoves = 1;
     this.history = [];
-    this.load(fen);
+    this.isValid = true;
+    const ok = this.load(fen);
+    if (!ok && fen !== ChessBoard.INITIAL_FEN) {
+      this.isValid = false;
+      this.load(ChessBoard.INITIAL_FEN);
+    }
   }
 
   static squareToIndex(sq) {
@@ -41,12 +46,20 @@ export class ChessBoard {
   }
 
   load(fen) {
-    const tokens = fen.trim().split(/\s+/);
+    if (!fen || typeof fen !== 'string') return false;
+    let clean = decodeURIComponent(fen).replace(/_/g, ' ').trim();
+    let tokens = clean.split(/\s+/);
+    if (tokens.length === 1 && tokens[0].split('/').length === 8) {
+      tokens = [tokens[0], 'w', '-', '-', '0', '1'];
+    }
     if (tokens.length < 2) return false;
 
     this.board.fill(null);
     const rows = tokens[0].split('/');
     if (rows.length !== 8) return false;
+
+    let whiteKings = 0;
+    let blackKings = 0;
 
     for (let r = 7; r >= 0; r--) {
       const row = rows[7 - r];
@@ -57,11 +70,20 @@ export class ChessBoard {
         } else {
           const color = char === char.toUpperCase() ? 'w' : 'b';
           const type = char.toLowerCase();
+          if (type === 'k') {
+            if (color === 'w') whiteKings++;
+            else blackKings++;
+          }
           const idx = r * 8 + f;
           this.board[idx] = { color, type };
           f++;
         }
       }
+    }
+
+    // A valid chess board MUST have exactly 1 white king and 1 black king
+    if (whiteKings !== 1 || blackKings !== 1) {
+      return false;
     }
 
     this.turn = tokens[1] === 'b' ? 'b' : 'w';

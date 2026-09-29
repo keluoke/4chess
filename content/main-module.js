@@ -119,11 +119,33 @@ export async function initMaiaExtension() {
       const targetPly = viewMode === 'result' ? item.ply : Math.max(0, item.ply - 1);
       const targetFen = viewMode === 'result' ? item.fenAfter : item.fenBefore;
 
-      GameAnalyzer.jumpToMove(item, targetPly);
+      const jumped = GameAnalyzer.jumpToMove(item, targetPly);
 
-      if (targetFen) {
-        currentFen = targetFen;
-        await runPrediction(targetFen, item, viewMode);
+      // Wait briefly for board DOM mutation observer (detector) to pick up the new position
+      let boardUpdated = false;
+      const targetBoard = targetFen ? targetFen.split(' ')[0] : null;
+
+      for (let attempt = 0; attempt < 8; attempt++) {
+        await new Promise(r => setTimeout(r, 50));
+        if (currentFen && currentFen.split(' ')[0] === targetBoard) {
+          boardUpdated = true;
+          break;
+        }
+      }
+
+      if (boardUpdated) {
+        // Board successfully jumped to target position!
+        await runPrediction(currentFen, item, viewMode);
+      } else {
+        // Board did not update automatically
+        if (!jumped) {
+          panel.showToast(panel.lang === 'zh'
+            ? `未能自动跳转棋盘，请在棋谱中手动点击第 ${item.moveNumber} 步`
+            : `Could not jump board automatically. Please click move ${item.moveNumber} in the move list.`);
+        }
+        if (currentFen && currentFen.split(' ')[0] === targetBoard) {
+          await runPrediction(currentFen, item, viewMode);
+        }
       }
     },
     onClearBlunderDrill: () => {
@@ -204,10 +226,10 @@ export async function initMaiaExtension() {
         });
       }
 
-      // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia)
-      if (engine.stockfishInBrowser.isReady && !FairPlayGuard.isLiveGameInProgress() && !abortCheck()) {
+      // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia, mutually exclusive with review)
+      if (engine.stockfishInBrowser.isReady && !FairPlayGuard.isLiveGameInProgress() && !abortCheck() && !analyzer.isAnalyzing) {
         engine.evaluateStockfishAsync(fen, (sfRes) => {
-          if (abortCheck() || FairPlayGuard.isLiveGameInProgress() || !sfRes) return;
+          if (abortCheck() || FairPlayGuard.isLiveGameInProgress() || !sfRes || analyzer.isAnalyzing) return;
           const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
           combined.blunderContext = blunderContext;
           combined.viewMode = viewMode;
@@ -276,6 +298,8 @@ export async function initMaiaExtension() {
     if (FairPlayGuard.isLiveGameInProgress()) {
       overlay.clear();
       panel.setFairPlayLocked(true);
+      predictionEpoch++;
+      analyzer.cancel();
       if (engine.stockfishInBrowser?.isReady) {
         engine.stockfishInBrowser.stop();
       }

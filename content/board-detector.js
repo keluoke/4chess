@@ -285,14 +285,21 @@ export class BoardDetector {
       return replayed.fen;
     }
 
-    // 2. Try URL parameter
-    const urlMatch = window.location.pathname.match(/\/analysis\/(?:standard\/)?([rnbqkpRNBQKP1-8_\/]+(?:_[wb]_.*)?)/);
-    if (urlMatch && urlMatch[1]) {
-      const rawFen = urlMatch[1].replace(/_/g, ' ');
-      if (rawFen.includes('/')) {
-        return rawFen;
+    // 2. Try URL parameter (handling %20, underscores, and full FEN fields)
+    try {
+      const decodedPath = decodeURIComponent(window.location.pathname);
+      const urlMatch = decodedPath.match(/\/analysis\/(?:standard\/)?([rnbqkpRNBQKP1-8\/]+(?:[\s_]+[wb](?:[\s_]+[KQkq\-]+(?:[\s_]+[a-h1-8\-]+(?:[\s_]+\d+[\s_]+\d+)?)?)?)?)/i);
+      if (urlMatch && urlMatch[1]) {
+        let fenCandidate = urlMatch[1].replace(/_/g, ' ').trim();
+        const parts = fenCandidate.split(/\s+/);
+        if (parts[0].split('/').length === 8) {
+          if (parts.length === 1) {
+            fenCandidate += ' w - - 0 1';
+          }
+          return fenCandidate;
+        }
       }
-    }
+    } catch (e) {}
 
     // 3. Fallback: Reconstruct FEN from pieces and verified active turn
     return this.reconstructFenFromPieces();
@@ -303,7 +310,7 @@ export class BoardDetector {
 
     if (this.platform === 'chesscom') {
       const pieces = this.boardEl?.querySelectorAll('.piece') || [];
-      if (pieces.length === 0) return null;
+      if (pieces.length < 2) return null;
 
       pieces.forEach(pieceEl => {
         const classNames = pieceEl.className;
@@ -323,9 +330,10 @@ export class BoardDetector {
       });
     } else if (this.platform === 'lichess') {
       const pieces = this.boardEl?.querySelectorAll('piece') || [];
-      if (pieces.length === 0) return null;
+      if (pieces.length < 2) return null;
 
       const rect = this.boardEl.getBoundingClientRect();
+      if (!rect || rect.width === 0 || rect.height === 0) return null;
       const sqW = rect.width / 8;
       const sqH = rect.height / 8;
 
@@ -352,6 +360,20 @@ export class BoardDetector {
           grid[r][f] = pieceSym;
         }
       });
+    }
+
+    // A valid chess board MUST contain both White and Black Kings!
+    // If either king is missing, the board is still mid-animation or layout has not finished
+    let hasWhiteKing = false;
+    let hasBlackKing = false;
+    for (let r = 0; r < 8; r++) {
+      for (let f = 0; f < 8; f++) {
+        if (grid[r][f] === 'K') hasWhiteKing = true;
+        if (grid[r][f] === 'k') hasBlackKing = true;
+      }
+    }
+    if (!hasWhiteKing || !hasBlackKing) {
+      return null;
     }
 
     const fenRows = [];
