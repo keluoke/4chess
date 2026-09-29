@@ -51,6 +51,7 @@ class AnalysisStudioApp {
     this.branchFen = null;
     this.isPlaying = false;
     this.playTimer = null;
+    this.currentDivergenceFilter = 'all';
 
     this.initElements();
     this.initEngines();
@@ -187,6 +188,17 @@ class AnalysisStudioApp {
     // Tabs
     this.el.tabBlunders.addEventListener('click', () => this.switchTab('blunders'));
     this.el.tabMoves.addEventListener('click', () => this.switchTab('moves'));
+
+    // Divergence Category Filter Pills
+    const filterPills = document.querySelectorAll('.divergence-filters .filter-pill');
+    filterPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        filterPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this.currentDivergenceFilter = pill.dataset.filter || 'all';
+        this.renderBlunderCards(this.reviewResult?.keyMoments || []);
+      });
+    });
 
     // PGN Import Modal
     this.el.btnImportPgn.addEventListener('click', () => {
@@ -682,10 +694,37 @@ class AnalysisStudioApp {
   }
 
   renderBlunderCards(moments) {
-    if (!moments || moments.length === 0) {
+    const list = moments || [];
+
+    // 1. Update filter pill counters
+    const totalAll = list.length;
+    const countBeyond = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition).length;
+    const countTrap = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap).length;
+
+    const elCountAll = document.getElementById('filter-count-all');
+    const elCountBeyond = document.getElementById('filter-count-beyond');
+    const elCountTrap = document.getElementById('filter-count-trap');
+    if (elCountAll) elCountAll.textContent = String(totalAll);
+    if (elCountBeyond) elCountBeyond.textContent = String(countBeyond);
+    if (elCountTrap) elCountTrap.textContent = String(countTrap);
+
+    // 2. Filter moments based on active category pill
+    let filteredMoments = list;
+    if (this.currentDivergenceFilter === 'beyond') {
+      filteredMoments = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition);
+    } else if (this.currentDivergenceFilter === 'trap') {
+      filteredMoments = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap);
+    }
+
+    if (!filteredMoments || filteredMoments.length === 0) {
+      const emptyMsg = this.currentDivergenceFilter === 'beyond'
+        ? '本盘未检测到超越直觉的关键棋步'
+        : (this.currentDivergenceFilter === 'trap'
+          ? '本盘未检测到显著的惯性直觉陷阱'
+          : '👏 本盘棋质量极高！未检测到显著的人机分歧瞬间或严重失误。');
       this.el.blunderList.innerHTML = `
         <div style="padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;">
-          👏 本盘棋质量极高！未检测到显著的局面漏着或失误。
+          ${emptyMsg}
         </div>
       `;
       return;
@@ -693,35 +732,52 @@ class AnalysisStudioApp {
 
     this.el.blunderList.innerHTML = '';
 
-    moments.forEach((item, index) => {
+    filteredMoments.forEach((item, index) => {
       const card = document.createElement('div');
-      card.className = 'blunder-card';
+      const isBeyond = item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition;
+      const isTrap = item.divergenceType === 'intuition_trap' || item.isHumanTrap;
+
+      let cardClass = 'blunder-card';
+      if (isBeyond) cardClass += ' card-beyond-intuition';
+      else if (isTrap) cardClass += ' card-intuition-trap';
+
+      card.className = cardClass;
       card.dataset.index = index;
       card.dataset.ply = item.ply;
 
       const isWhite = item.turn === 'w';
       const sideIcon = isWhite ? '⚪' : '⚫';
-
-      let sevTag = '';
-      if (item.severity === 'blunder') {
-        sevTag = `<span class="blunder-type-tag tag-blunder">大漏 ??</span>`;
-      } else if (item.severity === 'mistake') {
-        sevTag = `<span class="blunder-type-tag tag-mistake">失误 ?</span>`;
-      } else if (item.severity === 'inaccuracy') {
-        sevTag = `<span class="blunder-type-tag tag-inaccuracy">疑问手 ?!</span>`;
-      }
-
-      let trapTag = '';
-      let trapSub = '';
-      if (item.isHumanTrap) {
-        trapTag = `<span class="blunder-type-tag tag-trap" title="直觉盲区：多数人类棋手在此局面都会受直觉诱导而犯下此错">直觉陷阱 💡</span>`;
-        if (typeof item.humanProbability === 'number' && item.humanProbability > 0) {
-          trapSub = ` · <span class="sub-trap-prob">约 ${Math.round(item.humanProbability)}% 棋手直觉误选</span>`;
-        }
-      }
-
       const lossPawnsNum = Math.abs((item.lossCp || 0) / 100).toFixed(1);
       const bestMoveText = (item.bestSan && item.bestSan !== '?') ? item.bestSan : null;
+
+      let typeTag = '';
+      let rightTag = '';
+      let subContent = '';
+
+      if (isBeyond) {
+        typeTag = `<span class="blunder-type-tag tag-beyond" title="打破人类直觉习惯，走出 Stockfish 引擎最佳一选">✨ 超越直觉</span>`;
+        rightTag = `<span class="blunder-loss-tag tag-gain" title="走出引擎一选">走出引擎一选</span>`;
+        const altText = item.maiaTopSan
+          ? `人类惯性倾向: <strong style="color: #e6a520;">${item.maiaTopSan}</strong> ${item.maiaTopProb ? '(' + Math.round(item.maiaTopProb) + '%)' : ''}`
+          : '突破常规人类直觉惯性';
+        subContent = `<span class="sub-trap-prob" style="color: var(--text-dim);">${altText}</span>`;
+      } else if (isTrap) {
+        typeTag = `<span class="blunder-type-tag tag-trap" title="惯性直觉盲区：多数人类棋手在此局面都会产生视觉错觉走错">💡 直觉陷阱</span>`;
+        rightTag = `<span class="blunder-loss-tag" title="相比最佳着法的损耗">损耗 -${lossPawnsNum} 兵</span>`;
+        const trapProbText = item.humanProbability ? `约 ${Math.round(item.humanProbability)}% 棋手易犯同类错` : '易受人类惯性诱导';
+        subContent = `
+          ${bestMoveText ? `<span class="sub-best-move">最佳走法: <strong>${bestMoveText}</strong></span> · ` : ''}
+          <span class="sub-trap-prob">${trapProbText}</span>
+        `;
+      } else {
+        // Fallback pure blunder
+        let sevTag = '<span class="blunder-type-tag tag-blunder">大漏 ??</span>';
+        if (item.severity === 'mistake') sevTag = '<span class="blunder-type-tag tag-mistake">失误 ?</span>';
+        else if (item.severity === 'inaccuracy') sevTag = '<span class="blunder-type-tag tag-inaccuracy">疑问手 ?!</span>';
+        typeTag = sevTag;
+        rightTag = `<span class="blunder-loss-tag" title="相比最佳着法的损耗">损耗 -${lossPawnsNum} 兵</span>`;
+        subContent = bestMoveText ? `<span class="sub-best-move">最佳走法: <strong>${bestMoveText}</strong></span>` : '';
+      }
 
       card.innerHTML = `
         <div class="blunder-card-main">
@@ -732,14 +788,12 @@ class AnalysisStudioApp {
               <span class="blunder-san">${item.san}</span>
             </div>
             <div class="blunder-tags-group">
-              ${sevTag}
-              ${trapTag}
+              ${typeTag}
             </div>
-            <span class="blunder-loss-tag" title="相比最佳着法的优势损耗">损耗 ${lossPawnsNum} 兵</span>
+            ${rightTag}
           </div>
           <div class="blunder-card-sub">
-            ${bestMoveText ? `<span class="sub-best-move">最佳走法: <strong>${bestMoveText}</strong></span>` : ''}
-            ${trapSub}
+            ${subContent}
           </div>
         </div>
       `;
@@ -753,6 +807,11 @@ class AnalysisStudioApp {
 
       this.el.blunderList.appendChild(card);
     });
+
+    if (this.currentPly) {
+      const activeCard = this.el.blunderList.querySelector(`.blunder-card[data-ply="${this.currentPly}"]`);
+      if (activeCard) activeCard.classList.add('active');
+    }
   }
 
   renderMoveList() {
@@ -923,7 +982,14 @@ class AnalysisStudioApp {
             const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
             const cleanMaia = (top.san || '').replace(/[+#?!]/g, '');
             const cleanBest = (moveReview.bestSan || '').replace(/[+#?!]/g, '');
-            if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
+            const isBeyond = moveReview.divergenceType === 'beyond_intuition' || moveReview.isBeyondIntuition;
+            const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
+
+            if (isBeyond) {
+              this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(0, 210, 255, 0.18); color: #00d2ff;">= 引擎一选 ✨</span>`;
+            } else if (isTrap) {
+              this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b;">= 直觉陷阱 💡</span>`;
+            } else if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
               this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(230,165,32,0.15); color: #e6a520;">= 直觉</span>`;
             }
 
@@ -958,31 +1024,50 @@ class AnalysisStudioApp {
         this.el.comparePlayedSan.style.color = 'var(--text-main)';
       }
 
-      // Check for match badges
+      // Check for match badges and divergence states
       const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
       const cleanBest = (moveReview.bestSan || '').replace(/[+#?!]/g, '');
       const cleanMaia = (moveReview.maiaTopSan || '').replace(/[+#?!]/g, '');
 
-      // Add match indicator if played == engine best
-      if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
+      const isBeyond = moveReview.divergenceType === 'beyond_intuition' || moveReview.isBeyondIntuition;
+      const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
+
+      // Add match indicator on played card
+      if (isBeyond) {
+        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(0, 210, 255, 0.18); color: #00d2ff;">= 引擎一选 ✨</span>`;
+      } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
         this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge">= 引擎</span>`;
+      } else if (isTrap) {
+        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(245, 158, 11, 0.18); color: #f59e0b;">= 直觉陷阱 💡</span>`;
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
         this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(230,165,32,0.15); color: #e6a520;">= 直觉</span>`;
       }
 
       // --- Badge ---
-      if (moveReview.severity === 'blunder') {
+      if (isBeyond) {
+        this.el.divergenceBadge.textContent = '✨ 超越直觉 · 走出引擎一选';
+        this.el.divergenceBadge.style.color = '#00d2ff';
+        this.el.divergenceBadge.style.background = 'rgba(0, 210, 255, 0.12)';
+      } else if (isTrap) {
+        this.el.divergenceBadge.textContent = '💡 直觉陷阱 · 惯性失误';
+        this.el.divergenceBadge.style.color = '#f59e0b';
+        this.el.divergenceBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+      } else if (moveReview.severity === 'blunder') {
         this.el.divergenceBadge.textContent = '⚠️ 大漏';
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
+        this.el.divergenceBadge.style.background = 'rgba(250, 81, 81, 0.12)';
       } else if (moveReview.severity === 'mistake') {
         this.el.divergenceBadge.textContent = '⚠️ 失误';
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
+        this.el.divergenceBadge.style.background = 'rgba(250, 81, 81, 0.12)';
       } else if (moveReview.severity === 'inaccuracy') {
         this.el.divergenceBadge.textContent = '⚡ 疑问手';
         this.el.divergenceBadge.style.color = 'var(--brand-gold)';
+        this.el.divergenceBadge.style.background = 'rgba(250, 157, 59, 0.12)';
       } else {
         this.el.divergenceBadge.textContent = '✓ 正常';
         this.el.divergenceBadge.style.color = 'var(--brand-green)';
+        this.el.divergenceBadge.style.background = 'rgba(7, 193, 96, 0.12)';
       }
 
       // --- Arrows ---
@@ -1106,6 +1191,11 @@ class AnalysisStudioApp {
     this.el.comparePlayedSan.style.color = 'var(--text-dim)';
     this.el.comparePlayedMeta.textContent = '';
     this.el.comparePlayedCard.classList.remove('is-blunder');
+    if (this.el.divergenceBadge) {
+      this.el.divergenceBadge.textContent = '局面研判';
+      this.el.divergenceBadge.style.color = 'var(--brand-gold)';
+      this.el.divergenceBadge.style.background = 'rgba(250, 157, 59, 0.12)';
+    }
   }
 
 

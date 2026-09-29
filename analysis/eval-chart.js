@@ -22,9 +22,9 @@ export class EvalChart {
           <span id="eval-chart-cursor-badge" class="eval-chart-badge">0.00</span>
         </div>
         <div class="eval-chart-legend">
+          <span class="legend-item"><span class="dot-cyan"></span> ✨ 超越直觉</span>
+          <span class="legend-item"><span class="dot-gold"></span> 💡 直觉陷阱</span>
           <span class="legend-item"><span class="dot-red"></span> 大漏</span>
-          <span class="legend-item"><span class="dot-orange"></span> 失误</span>
-          <span class="legend-item"><span class="dot-gold"></span> 直觉盲区</span>
         </div>
       </div>
       <div class="eval-chart-body" id="eval-chart-body">
@@ -127,12 +127,14 @@ export class EvalChart {
       const evalColor = item.cp > 40 ? '#4ade80' : (item.cp < -40 ? '#f87171' : 'var(--text-muted)');
 
       let extraBadge = '';
-      if (item.severity === 'blunder') {
+      if (item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition) {
+        extraBadge = ` · <span style="color: #00d2ff; font-weight: 700;">✨ 超越直觉 (走出引擎一选)</span>`;
+      } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
+        extraBadge = ` · <span style="color: #f59e0b; font-weight: 700;">💡 直觉陷阱 (-${item.lossPawns})</span>`;
+      } else if (item.severity === 'blunder') {
         extraBadge = ` · <span style="color: #f87171; font-weight: 700;">大漏 (${item.lossPawns})</span>`;
       } else if (item.severity === 'mistake') {
         extraBadge = ` · <span style="color: #fbbf24; font-weight: 700;">失误 (${item.lossPawns})</span>`;
-      } else if (item.isHumanTrap) {
-        extraBadge = ` · <span style="color: #fcd34d; font-weight: 700;">直觉盲区 💡</span>`;
       }
 
       this.tooltip.innerHTML = `
@@ -198,7 +200,10 @@ export class EvalChart {
         evalText: evalStr || '0.00',
         severity: m.severity || 'normal',
         lossPawns: m.lossPawns || '0.00',
-        isHumanTrap: !!m.isHumanTrap
+        isHumanTrap: !!m.isHumanTrap,
+        isBeyondIntuition: !!m.isBeyondIntuition,
+        divergenceType: m.divergenceType || null,
+        divergenceNote: m.divergenceNote || ''
       };
     });
 
@@ -304,23 +309,30 @@ export class EvalChart {
     // 3. Render Markers on Key Moments
     this.dotsGroup.innerHTML = '';
     points.forEach(p => {
+      const isBeyond = p.d.divergenceType === 'beyond_intuition' || p.d.isBeyondIntuition;
+      const isTrap = p.d.divergenceType === 'intuition_trap' || p.d.isHumanTrap;
       const isBlunder = p.d.severity === 'blunder';
       const isMistake = p.d.severity === 'mistake';
-      const isTrap = p.d.isHumanTrap;
 
-      if (isBlunder || isMistake || isTrap) {
+      if (isBeyond || isTrap || isBlunder || isMistake) {
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('cx', p.x);
         circle.setAttribute('cy', p.y);
 
         let color = '#f59e0b';
         let radius = '4.5';
-        if (isBlunder) {
-          color = '#ef4444';
+        if (isBeyond) {
+          color = '#00d2ff';
           radius = '5.5';
         } else if (isTrap) {
-          color = '#e6a520';
+          color = '#f59e0b';
           radius = '5';
+        } else if (isBlunder) {
+          color = '#ef4444';
+          radius = '5';
+        } else if (isMistake) {
+          color = '#f97316';
+          radius = '4';
         }
 
         circle.setAttribute('r', radius);

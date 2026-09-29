@@ -645,6 +645,8 @@ export class GameAnalyzer {
         blundersCount: result.blundersCount,
         mistakesCount: result.mistakesCount,
         inaccuraciesCount: result.inaccuraciesCount,
+        beyondIntuitionCount: result.beyondIntuitionCount || 0,
+        intuitionTrapsCount: result.intuitionTrapsCount || 0,
         acplWhite: result.acplWhite,
         acplBlack: result.acplBlack,
         cachedAt: Date.now(),
@@ -862,6 +864,9 @@ export class GameAnalyzer {
           fenAfter: posAfter.fen,
           element: posAfter.moveEl,
           isHumanTrap: false,
+          isBeyondIntuition: false,
+          divergenceType: null, // 'beyond_intuition' | 'intuition_trap' | null
+          divergenceNote: '',
           humanProbability: null,
           maiaTopSan: null,
           maiaTopUci: null,
@@ -869,7 +874,7 @@ export class GameAnalyzer {
         });
       }
 
-      // Step 3: Maia intuition prediction for key positions & decisive turns
+      // Step 3: Maia intuition prediction for key positions & human-machine divergence detection
       if (this.maiaEngine && analyzedMoves.length > 0) {
         if (!this.maiaEngine.isReady) {
           if (onProgress) {
@@ -889,27 +894,52 @@ export class GameAnalyzer {
           }
         }
 
-        // Prioritize moves: notable losses (lossCp >= 40) and opening moves (ply <= 6)
+        // Sampling Strategy: Balanced sampling for both divergence archetypes:
+        // Type 1 Candidates (✨ 超越直觉): Played engine best move (cleanPlayed === cleanBest, lossCp <= 15, ply >= 6)
+        // Type 2 Candidates (💡 直觉陷阱): Significant loss (lossCp >= 40)
         const priorityIndices = [];
         const seenIdx = new Set();
-        analyzedMoves.forEach((m, idx) => {
-          if (m.lossCp >= 40 || m.ply <= 6) {
-            priorityIndices.push(idx);
-            seenIdx.add(idx);
-          }
-        });
 
-        // Ensure we cover at least top 14 decisive moves
-        const sortedByLoss = analyzedMoves
+        // 1. Candidate traps: largest centipawn losses (up to 9 moves)
+        const candidateLosses = analyzedMoves
           .map((m, idx) => ({ m, idx }))
+          .filter(item => item.m.lossCp >= 40)
           .sort((a, b) => b.m.lossCp - a.m.lossCp);
-        for (const item of sortedByLoss) {
-          if (priorityIndices.length >= 16) break;
-          if (!seenIdx.has(item.idx) && item.m.lossCp > 0) {
+        for (const item of candidateLosses.slice(0, 9)) {
+          seenIdx.add(item.idx);
+          priorityIndices.push(item.idx);
+        }
+
+        // 2. Candidate beyond-intuition: played engine best moves with tactical relevance (up to 8 moves)
+        const candidateBests = analyzedMoves
+          .map((m, idx) => ({ m, idx }))
+          .filter(item => {
+            const cleanPlayed = item.m.san.replace(/[+#?!]/g, '');
+            const cleanBest = (item.m.bestSan || '').replace(/[+#?!]/g, '');
+            return item.m.ply >= 6 && item.m.lossCp <= 15 && cleanPlayed && cleanBest && cleanPlayed === cleanBest;
+          })
+          .sort((a, b) => {
+            // Prioritize tactical interest: captures (+3), checks (+2), non-pawn moves (+1), deep ply (+1)
+            const scoreTactical = (m) => (m.san.includes('x') ? 3 : 0) + (m.san.includes('+') ? 2 : 0) + (/^[NBRQK]/.test(m.san) ? 1 : 0) + (m.ply >= 12 ? 1 : 0);
+            return scoreTactical(b.m) - scoreTactical(a.m);
+          });
+        for (const item of candidateBests.slice(0, 8)) {
+          if (!seenIdx.has(item.idx)) {
             seenIdx.add(item.idx);
             priorityIndices.push(item.idx);
           }
         }
+
+        // 3. Opening anchor moves (ply 1-4) to establish opening baseline if space permits
+        for (let i = 0; i < Math.min(4, analyzedMoves.length); i++) {
+          if (priorityIndices.length >= 18) break;
+          if (!seenIdx.has(i)) {
+            seenIdx.add(i);
+            priorityIndices.push(i);
+          }
+        }
+
+        // Sort chronologically
         priorityIndices.sort((a, b) => a - b);
 
         const totalToPredict = priorityIndices.length;
@@ -941,17 +971,39 @@ export class GameAnalyzer {
               const cleanMaia = (top.san || '').replace(/[+#?!]/g, '');
 
               // Flag if intuition diverges from engine best
-              mv.isIntuitionDivergence = cleanMaia && cleanBest && cleanMaia !== cleanBest;
+              mv.isIntuitionDivergence = !!(cleanMaia && cleanBest && cleanMaia !== cleanBest);
 
               // Check if the actual played move matches Maia's predictions
               const matchedIdx = pred.moves.findIndex(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
-              if (matchedIdx !== -1) {
-                const matched = pred.moves[matchedIdx];
-                const prob = typeof matched.prob === 'number' ? matched.prob : 0;
-                mv.humanProbability = prob;
-                // Genuine Human Trap: Maia strongly favors this blunder (Rank #1 or #2, or >= 15% probability)
-                if (mv.lossCp >= 40 && (matchedIdx <= 1 || prob >= 15.0)) {
+              const matchedProb = matchedIdx !== -1 && typeof pred.moves[matchedIdx].prob === 'number' ? pred.moves[matchedIdx].prob : 0;
+              mv.humanProbability = matchedIdx !== -1 ? matchedProb : 0;
+
+              // Type 1: ✨ 超越直觉 · 走出引擎一选 (Beyond Intuition)
+              // Condition: Played move matches Stockfish best recommendation, but Maia intuition favored another move
+              // and human probability for this move is low (< 20% or unranked in top 2).
+              const isBestMove = cleanPlayed && cleanBest && cleanPlayed === cleanBest && mv.lossCp <= 15;
+              if (isBestMove && mv.ply >= 6) {
+                const maiaPrefersOther = cleanMaia && cleanMaia !== cleanPlayed;
+                const isUnintuitive = maiaPrefersOther && (matchedIdx === -1 || matchedIdx > 1 || matchedProb < 20.0);
+                if (isUnintuitive) {
+                  mv.isBeyondIntuition = true;
+                  mv.divergenceType = 'beyond_intuition';
+                  const probTxt = matchedIdx !== -1 ? `${Math.round(matchedProb)}% 棋手考虑` : '人类直觉罕见';
+                  const topTxt = top.prob ? `${Math.round(top.prob)}%` : '';
+                  mv.divergenceNote = `走出引擎一选 ${cleanBest}，打破人类直觉习惯 (人类倾向 ${cleanMaia} ${topTxt}，实战走法仅 ${probTxt})`;
+                }
+              }
+
+              // Type 2: 💡 直觉陷阱 · 惯性失误 (Intuition Trap)
+              // Condition: Played move aligns with Maia top intuition (Rank #1 or #2, or prob >= 20%),
+              // but Stockfish reveals significant loss (lossCp >= 45).
+              if (mv.lossCp >= 45) {
+                const isIntuitiveMistake = (cleanPlayed === cleanMaia) || (matchedIdx !== -1 && matchedIdx <= 1) || (matchedProb >= 20.0);
+                if (isIntuitiveMistake) {
                   mv.isHumanTrap = true;
+                  mv.divergenceType = 'intuition_trap';
+                  const probTxt = matchedProb > 0 ? `约 ${Math.round(matchedProb)}% 棋手易犯同类错` : '多数人类棋手在此局面都会产生该直觉错觉';
+                  mv.divergenceNote = `落入直觉陷阱 (${probTxt})，引擎评估损耗 ${(mv.lossCp / 100).toFixed(1)} 兵，最佳应走 ${cleanBest}`;
                 }
               }
             }
@@ -961,15 +1013,22 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 4: Filter & rank critical moments (focus on genuine blunders, mistakes, and intuition traps)
-      const keyMoments = analyzedMoves
-        .filter(m => m.lossCp >= 80 || (m.isHumanTrap && m.lossCp >= 50))
-        .sort((a, b) => {
-          const scoreA = a.lossCp + (a.isHumanTrap ? 120 : 0);
-          const scoreB = b.lossCp + (b.isHumanTrap ? 120 : 0);
-          return scoreB - scoreA;
-        })
-        .slice(0, 12);
+      // Step 4: Filter & converge into Human-Machine Divergence Moments (人机分歧关键瞬间)
+      const divergenceMoments = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap');
+
+      // If divergence moments are few (< 4), also include pure critical blunders as secondary moments
+      const fallbackBlunders = analyzedMoves
+        .filter(m => !m.divergenceType && (m.severity === 'blunder' || m.lossCp >= 150))
+        .sort((a, b) => b.lossCp - a.lossCp)
+        .slice(0, Math.max(0, 4 - divergenceMoments.length));
+
+      // Replay chronologically for intuitive game story walkthrough
+      const keyMoments = [...divergenceMoments, ...fallbackBlunders]
+        .sort((a, b) => a.ply - b.ply)
+        .slice(0, 16);
+
+      const beyondIntuitionCount = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition').length;
+      const intuitionTrapsCount = analyzedMoves.filter(m => m.divergenceType === 'intuition_trap').length;
 
       const result = {
         totalMoves: positions.length - 1,
@@ -978,6 +1037,8 @@ export class GameAnalyzer {
         blundersCount,
         mistakesCount,
         inaccuraciesCount,
+        beyondIntuitionCount,
+        intuitionTrapsCount,
         acplWhite: countWhite > 0 ? Math.round(totalLossWhite / countWhite) : 0,
         acplBlack: countBlack > 0 ? Math.round(totalLossBlack / countBlack) : 0,
         allMoves: analyzedMoves,

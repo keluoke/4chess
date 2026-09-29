@@ -442,9 +442,10 @@ body {
   gap: 4px;
 }
 
+.dot-cyan { width: 7px; height: 7px; border-radius: 50%; background: #00d2ff; box-shadow: 0 0 5px rgba(0, 210, 255, 0.6); }
 .dot-red { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; }
 .dot-orange { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
-.dot-gold { width: 7px; height: 7px; border-radius: 50%; background: #e6a520; }
+.dot-gold { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
 
 .eval-chart-body {
   width: 100%;
@@ -640,7 +641,55 @@ body {
   padding: 14px;
 }
 
-/* Blunder Cards */
+/* Blunder & Divergence Moments */
+.divergence-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.filter-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-pill:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.filter-pill.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.filter-pill.pill-beyond.active {
+  background: rgba(0, 210, 255, 0.15);
+  border-color: #00d2ff;
+  color: #00d2ff;
+}
+
+.filter-pill.pill-trap.active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
 .blunder-list {
   display: flex;
   flex-direction: column;
@@ -667,6 +716,40 @@ body {
 .blunder-card.active {
   border-color: rgba(230, 165, 32, 0.6);
   background: rgba(230, 165, 32, 0.08);
+}
+
+/* Beyond Intuition Card Variation */
+.blunder-card.card-beyond-intuition {
+  border-color: rgba(0, 210, 255, 0.25);
+  background: rgba(0, 210, 255, 0.03);
+}
+
+.blunder-card.card-beyond-intuition:hover {
+  background: rgba(0, 210, 255, 0.06);
+  border-color: rgba(0, 210, 255, 0.45);
+}
+
+.blunder-card.card-beyond-intuition.active {
+  border-color: #00d2ff;
+  background: rgba(0, 210, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.18);
+}
+
+/* Intuition Trap Card Variation */
+.blunder-card.card-intuition-trap {
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.03);
+}
+
+.blunder-card.card-intuition-trap:hover {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.blunder-card.card-intuition-trap.active {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.18);
 }
 
 .blunder-card-main {
@@ -721,6 +804,18 @@ body {
   letter-spacing: 0.2px;
 }
 
+.tag-beyond {
+  background: rgba(0, 210, 255, 0.16);
+  color: #00d2ff;
+  border: 1px solid rgba(0, 210, 255, 0.35);
+}
+
+.tag-trap {
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
 .tag-blunder {
   background: rgba(239, 68, 68, 0.18);
   color: #ef4444;
@@ -739,12 +834,6 @@ body {
   border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
-.tag-trap {
-  background: rgba(230, 165, 32, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(230, 165, 32, 0.35);
-}
-
 .blunder-loss-tag {
   font-size: 11px;
   font-weight: 700;
@@ -754,6 +843,11 @@ body {
   background: rgba(239, 68, 68, 0.08);
   padding: 2px 7px;
   border-radius: 4px;
+}
+
+.blunder-loss-tag.tag-gain {
+  color: #00d2ff;
+  background: rgba(0, 210, 255, 0.1);
 }
 
 .blunder-card-sub {

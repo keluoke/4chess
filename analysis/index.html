@@ -139,11 +139,11 @@
         <div class="divergence-content" id="divergence-content" style="display: none;"></div>
       </div>
 
-      <!-- 3. Dual Tabs: Key Moments & Move Notation -->
+      <!-- 3. Dual Tabs: Human-Machine Divergence Moments & Move Notation -->
       <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="panel-tabs">
           <button type="button" class="tab-btn active" id="tab-blunders">
-            关键瞬间 (<span id="blunder-count-badge">0</span>)
+            人机分歧 (<span id="blunder-count-badge">0</span>)
           </button>
           <button type="button" class="tab-btn" id="tab-moves">
             完整记谱 (<span id="move-count-badge">0</span>)
@@ -151,8 +151,13 @@
         </div>
 
         <div class="tab-content" id="tab-content-area">
-          <!-- Key Moments Tab -->
+          <!-- Divergence Moments Tab -->
           <div id="blunder-tab-content">
+            <div class="divergence-filters" id="divergence-filters">
+              <button type="button" class="filter-pill active" data-filter="all">全部 (<span id="filter-count-all">0</span>)</button>
+              <button type="button" class="filter-pill pill-beyond" data-filter="beyond">✨ 超越直觉 (<span id="filter-count-beyond">0</span>)</button>
+              <button type="button" class="filter-pill pill-trap" data-filter="trap">💡 直觉陷阱 (<span id="filter-count-trap">0</span>)</button>
+            </div>
             <div class="blunder-list" id="blunder-list">
               <div style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
                 正在加载棋局数据...
