@@ -66,6 +66,10 @@ export class StockfishInBrowser {
           if (!data) return;
 
           if (data.type === 'STOCKFISH_READY') {
+            if (this._initTimeout) {
+              clearTimeout(this._initTimeout);
+              this._initTimeout = null;
+            }
             this.isReady = true;
             if (data.engineName) this.engineName = data.engineName;
             console.log(`[Stockfish In-Browser] ✅ WebAssembly 引擎已就绪 (${this.engineName})!`);
@@ -83,9 +87,13 @@ export class StockfishInBrowser {
             }
           } else if (data.type === 'STOCKFISH_ERROR') {
             console.warn('[Stockfish In-Browser] ⚠️ Error:', data.error);
+            if (this._initTimeout) {
+              clearTimeout(this._initTimeout);
+              this._initTimeout = null;
+            }
             if (!this.isReady && this._readyResolve) {
               if (this.iframe && this.iframe.parentNode) {
-                this.iframe.parentNode.removeChild(this.iframe);
+                try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
               }
               this.iframe = null;
               this.initPromise = null;
@@ -99,11 +107,16 @@ export class StockfishInBrowser {
       }
 
       // Timeout guard: if engine fails to reply readyok, do NOT falsely mark ready, allow retry with fresh iframe
-      setTimeout(() => {
+      if (this._initTimeout) {
+        clearTimeout(this._initTimeout);
+        this._initTimeout = null;
+      }
+      this._initTimeout = setTimeout(() => {
+        this._initTimeout = null;
         if (!this.isReady) {
           console.warn('[Stockfish In-Browser] ⚠️ 引擎初始化就绪等待超时 (Stockfish init timeout)');
           if (this.iframe && this.iframe.parentNode) {
-            this.iframe.parentNode.removeChild(this.iframe);
+            try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
           }
           this.iframe = null;
           this.initPromise = null;
@@ -113,7 +126,7 @@ export class StockfishInBrowser {
             r(false);
           }
         }
-      }, 8000);
+      }, 7500);
     });
 
     return this.initPromise;
@@ -204,6 +217,10 @@ export class StockfishInBrowser {
   }
 
   reset() {
+    if (this._initTimeout) {
+      clearTimeout(this._initTimeout);
+      this._initTimeout = null;
+    }
     this.isReady = false;
     this.initPromise = null;
     this._readyResolve = null;

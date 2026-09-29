@@ -32,6 +32,17 @@
         "https://*.chess.com/*"
       ],
       "js": [
+        "content/page-bridge.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://lichess.org/*",
+        "https://*.chess.com/*"
+      ],
+      "js": [
         "content/content.js"
       ],
       "css": [
@@ -57,5 +68,11 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
   }
 }

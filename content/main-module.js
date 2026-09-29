@@ -11,60 +11,8 @@ import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
 import { FairPlayGuard } from './fair-play-guard.js';
 
-function injectMainWorldControllerBridge() {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('maia-main-world-bridge')) return;
-  try {
-    const script = document.createElement('script');
-    script.id = 'maia-main-world-bridge';
-    script.textContent = `(${function() {
-      window.addEventListener('__MAIA_JUMP_REQ__', function(e) {
-        var ply = e && e.detail && typeof e.detail.ply === 'number' ? e.detail.ply : null;
-        if (ply === null) return;
-        try {
-          // Lichess Lila Controller
-          if (window.lichess && window.lichess.analysis) {
-            if (typeof window.lichess.analysis.jumpToMain === 'function') {
-              window.lichess.analysis.jumpToMain(ply);
-              return;
-            }
-            if (typeof window.lichess.analysis.jump === 'function') {
-              window.lichess.analysis.jump(ply);
-              return;
-            }
-          }
-          // Chess.com Controllers
-          var b = document.querySelector('chess-board') || document.querySelector('wc-chess-board');
-          if (b) {
-            if (b.game && typeof b.game.goToPly === 'function') {
-              b.game.goToPly(ply);
-              return;
-            }
-            if (b.controller && typeof b.controller.goToPly === 'function') {
-              b.controller.goToPly(ply);
-              return;
-            }
-            if (b.game && typeof b.game.jumpToPly === 'function') {
-              b.game.jumpToPly(ply);
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('[Maia-3 Bridge] Jump error:', err);
-        }
-      });
-    }.toString()})();`;
-    (document.head || document.documentElement).appendChild(script);
-  } catch (e) {
-    console.warn('[Maia-3] Could not inject main world bridge:', e);
-  }
-}
-
 export async function initMaiaExtension() {
   console.log('[Maia-3] 🚀 Starting Human Intuition Extension (Scheme 0 Standalone)...');
-
-  // Inject Main World Controller Bridge for Lila (Lichess) & Chess.com native jump
-  injectMainWorldControllerBridge();
 
   let currentFen = null;
   let currentOrientation = 'white';
@@ -315,7 +263,11 @@ export async function initMaiaExtension() {
 
   // Start dual-engine initialization asynchronously
   engine.initialize().then(() => {
-    console.log('[Maia-3] ✅ Dual Engine (Maia 3 + Stockfish) fully ready in browser!');
+    if (engine.stockfishInBrowser?.isReady) {
+      console.log('[Maia-3] ✅ 双引擎 (Maia-3 + Stockfish) 均已就绪！');
+    } else {
+      console.log(`[Maia-3] ℹ️ Maia-3 已就绪 (Stockfish 状态: ${engine.status.stockfish.state})`);
+    }
     if (currentFen) {
       runPrediction(currentFen);
     }

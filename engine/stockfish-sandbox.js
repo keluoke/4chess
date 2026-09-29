@@ -37,28 +37,17 @@
     let readyTimer = null;
 
     const sf19Url = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
-      ? chrome.runtime.getURL('lib/stockfish-19.js#stockfish.wasm,worker')
-      : '../lib/stockfish-19.js#stockfish.wasm,worker';
-
-    const sfFallbackUrl = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
-      ? chrome.runtime.getURL('lib/stockfish.js')
-      : '../lib/stockfish.js';
+      ? chrome.runtime.getURL('lib/stockfish-19.js#stockfish.wasm')
+      : '../lib/stockfish-19.js#stockfish.wasm';
 
     function tryWorker(scriptUrl, name) {
       try {
         const w = new Worker(scriptUrl);
         w.onerror = function(err) {
           console.error(`[Stockfish Sandbox] Worker error on ${name}:`, err);
-          if (!initialized && scriptUrl.includes('stockfish-19')) {
-            console.warn('[Stockfish Sandbox] Worker error on Stockfish 19, falling back to stockfish.js...');
-            try { w.terminate(); } catch (e) {}
-            clearTimeout(readyTimer);
-            worker = tryWorker(sfFallbackUrl, 'Stockfish Fallback');
-            return;
-          }
           window.parent.postMessage({
             type: 'STOCKFISH_ERROR',
-            error: err?.message || 'Stockfish Worker execution failed'
+            error: err?.message || 'Stockfish 19 Lite WASM Worker execution failed'
           }, '*');
         };
 
@@ -71,7 +60,10 @@
           }
 
           if (line === 'readyok') {
-            if (readyTimer) clearTimeout(readyTimer);
+            if (readyTimer) {
+              clearTimeout(readyTimer);
+              readyTimer = null;
+            }
             if (!initialized) {
               initialized = true;
               window.parent.postMessage({ type: 'STOCKFISH_READY', engineName }, '*');
@@ -214,24 +206,15 @@
 
     readyTimer = setTimeout(() => {
       if (!initialized) {
-        console.warn('[Stockfish Sandbox] Stockfish 19 Lite WASM timed out (8000ms), attempting fallback to stockfish.js...');
-        try { if (worker) worker.terminate(); } catch (e) {}
-        worker = tryWorker(sfFallbackUrl, 'Stockfish Fallback');
-        if (!worker) {
-          window.parent.postMessage({
-            type: 'STOCKFISH_ERROR',
-            error: 'Stockfish 引擎就绪等待超时'
-          }, '*');
-        }
+        console.error('[Stockfish Sandbox] Stockfish 19 Lite WASM 引擎就绪等待超时 (6000ms)');
+        window.parent.postMessage({
+          type: 'STOCKFISH_ERROR',
+          error: 'Stockfish 19 Lite WASM 引擎就绪等待超时 (6000ms)'
+        }, '*');
       }
-    }, 8000);
+    }, 6000);
 
     worker = tryWorker(sf19Url, 'Stockfish 19 Lite WASM');
-    if (!worker) {
-      console.warn('[Stockfish Sandbox] Failed to instantiate Stockfish 19, trying fallback...');
-      clearTimeout(readyTimer);
-      worker = tryWorker(sfFallbackUrl, 'Stockfish Fallback');
-    }
   }
 
   let stopWatchdog = null;
@@ -250,6 +233,10 @@
           activeRequest = null;
           multiPvMap.clear();
           lastInfo = null;
+          if (readyTimer) {
+            clearTimeout(readyTimer);
+            readyTimer = null;
+          }
           initWorker();
           if (queuedRequest) {
             const next = queuedRequest;

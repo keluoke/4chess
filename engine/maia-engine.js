@@ -141,7 +141,11 @@ export class MaiaEngine {
       this.isLoading = false;
       this.status.maia.state = 'ready';
       this.notifyStatus();
-      console.log('[Maia Engine] ✅ Maia-3 与 Stockfish 双引擎均已就绪！');
+      if (this.stockfishInBrowser?.isReady) {
+        console.log('[Maia Engine] ✅ Maia-3 与 Stockfish 双引擎均已就绪！');
+      } else {
+        console.log(`[Maia Engine] ✅ Maia-3 模型已就绪 (Stockfish 状态: ${this.status.stockfish.state})`);
+      }
       return this.backendName;
     } else {
       this.isLoading = false;
