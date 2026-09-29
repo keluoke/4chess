@@ -62,86 +62,11 @@ export async function initMaiaExtension() {
         console.error('[Maia-3] Re-init error with custom CDN:', e);
       }
     },
-    onAnalyzeGame: async (forceRefresh = false) => {
-      if (FairPlayGuard.isLiveGameInProgress()) {
-        throw new Error(panel.lang === 'zh'
-          ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
-          : '🛡️ Live game active! Per Fair Play rules, engine review is disabled during live games.');
-      }
-      const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
-      const moves = await GameAnalyzer.extractPageMoves(platform);
-      if (!moves || moves.length === 0) {
-        throw new Error(panel.lang === 'zh' ? '当前页面未检测到棋步记录，请在对局或复盘页面使用。' : 'No move list detected on current page.');
-      }
-
-      // Stop any running single-move Stockfish background search and ensure engine is ready
-      if (engine.stockfishInBrowser) {
-        if (!engine.stockfishInBrowser.isReady) {
-          await engine.stockfishInBrowser.initialize();
-        } else {
-          engine.stockfishInBrowser.stop();
-        }
-      }
-      await new Promise(r => setTimeout(r, 60));
-
-      const reviewResult = await analyzer.analyzeGame(moves, {
-        depth: 6,
-        elo: panel.currentElo,
-        forceRefresh,
-        onProgress: (prog) => {
-          if (FairPlayGuard.isLiveGameInProgress()) {
-            analyzer.cancel();
-            return;
-          }
-          panel.updateReviewProgress(prog);
-        }
-      });
-
-      if (FairPlayGuard.isLiveGameInProgress()) {
-        throw new Error(panel.lang === 'zh'
-          ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
-          : '🛡️ Live game active! Per Fair Play rules, engine review is disabled during live games.');
-      }
-
-      return reviewResult;
-    },
-    onCancelReview: () => {
-      analyzer.cancel();
-    },
-    onJumpToMove: async (item, targetPly = null, targetFen = null) => {
-      const jumpRes = await GameAnalyzer.jumpToMove(item, targetPly, targetFen);
-      if (!jumpRes?.ok) {
-        panel.showToast(panel.lang === 'zh'
-          ? `未能自动跳转棋盘，请在棋谱中手动点击`
-          : `Could not jump board automatically. Please click move in the move list.`);
-      }
-    },
-    onSelectBlunder: async (results, index, moments, viewMode = 'decision') => {
-      const item = moments[index];
-      if (!item) return;
-      activeDrill = { results, index, item, viewMode };
-
-      const targetPly = viewMode === 'result' ? item.ply : Math.max(0, item.ply - 1);
-      const targetFen = viewMode === 'result' ? item.fenAfter : item.fenBefore;
-
-      const jumpRes = await GameAnalyzer.jumpToMove(item, targetPly, targetFen);
-
-      if (jumpRes && jumpRes.ok) {
-        await runPrediction(targetFen, item, viewMode);
-      } else {
-        panel.showToast(panel.lang === 'zh'
-          ? `未能自动跳转棋盘，请在棋谱中手动点击第 ${item.moveNumber} 步`
-          : `Could not jump board automatically. Please click move ${item.moveNumber} in the move list.`);
-      }
-    },
-    onClearBlunderDrill: () => {
-      activeDrill = null;
-    },
     onOpenStandaloneAnalysis: async () => {
       if (FairPlayGuard.isLiveGameInProgress()) {
         panel.showToast(panel.lang === 'zh'
-          ? '🛡️ 当前对局仍在进行中！根据反作弊铁律，严禁在对局中开启复盘分析。'
-          : '🛡️ Live game active! Analysis is disabled per Fair Play rules.');
+          ? '🛡️ 当前对局仍在进行中，为恪守公平竞技守则，请待对局结束后开启复盘分析。'
+          : '🛡️ Match in progress. Game review will unlock after the game.');
         return;
       }
 
@@ -208,7 +133,7 @@ export async function initMaiaExtension() {
           type: 'OPEN_ANALYSIS_TAB',
           gameData
         }, () => {
-          panel.showToast(panel.lang === 'zh' ? '🚀 独立大屏深度复盘工作台已开启！' : '🚀 Standalone Studio launched!');
+          panel.showToast(panel.lang === 'zh' ? '✓ 已在新标签页开启复盘分析' : '✓ Opened Game Review in new tab');
         });
       }
     }
@@ -217,7 +142,6 @@ export async function initMaiaExtension() {
   // Notify initial status
   panel.updateEngineStatus(engine.status);
 
-  let activeDrill = null;
   let predictionEpoch = 0;
 
   async function runPrediction(fen, blunderContext = null, viewMode = 'decision') {
@@ -376,25 +300,6 @@ export async function initMaiaExtension() {
       return;
     } else {
       panel.setFairPlayLocked(false);
-    }
-
-    // Blunder drill synchronization with board detector
-    if (activeDrill && activeDrill.item) {
-      const fenBoard = fen.split(' ')[0];
-      const beforeBoard = activeDrill.item.fenBefore ? activeDrill.item.fenBefore.split(' ')[0] : null;
-      const afterBoard = activeDrill.item.fenAfter ? activeDrill.item.fenAfter.split(' ')[0] : null;
-
-      if (fenBoard === beforeBoard) {
-        await runPrediction(fen, activeDrill.item, 'decision');
-        return;
-      } else if (fenBoard === afterBoard) {
-        await runPrediction(fen, activeDrill.item, 'result');
-        return;
-      } else {
-        // User manually navigated away from the blunder drill position!
-        activeDrill = null;
-        panel.clearBlunderDrill();
-      }
     }
 
     // Immediately clear stale arrows and set evaluating state

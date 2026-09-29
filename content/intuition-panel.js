@@ -30,16 +30,16 @@ const I18N = {
     readyWasm: '就绪 (WASM)',
     readyLocal: '就绪 (本地GPU)',
     initError: '启动异常',
-    eloTitle: '目标棋手等级分 (ELO)',
+    eloTitle: '直觉等级分 (ELO)',
     eloDesc: {
-      1100: '当前: 1100 · 初阶棋手直觉',
-      1500: '当前: 1500 · 中阶人类直觉',
-      1900: '当前: 1900 · 进阶高手直觉',
-      2200: '当前: 2200 · 大师巅峰直觉'
+      1100: '1100 · 初学棋手直觉',
+      1500: '1500 · 进阶棋手直觉',
+      1900: '1900 · 俱乐部高手直觉',
+      2200: '2200 · 大师段位直觉'
     },
-    boardVisuals: '棋盘视觉辅助',
-    heatmap: '🔥 棋盘意图热力图',
-    arrows: '🏹 人类直觉候选箭头',
+    boardVisuals: '视觉辅助',
+    heatmap: '意图热力图',
+    arrows: '直觉走法建议',
     candidates: '人类直觉候选着法',
     whiteCandidates: '白方候选着法',
     blackCandidates: '黑方候选着法',
@@ -47,37 +47,17 @@ const I18N = {
     consensus: '共识',
     engineBest: '🐟 引擎最优',
     noLegalMoves: '局面绝杀或无合法着法',
-    readingState: '⏳ 正在读取棋局状态...',
+    readingState: '⏳ 正在读取局面...',
     consensusBadge: '🎯 人机高度共识',
     divergenceBadge: '⚠️ 人机着法分歧',
     intuitionBadge: '💡 人类直觉首选',
     evalLabel: '局面',
     deltaLoss: '直觉损耗',
     floatTitle: 'Maia 3',
-    btnAnalyzeGame: '📊 全局棋局复盘 (损耗榜)',
-    btnStandaloneStudio: '🚀 独立大屏深度复盘',
-    reviewTitle: '📊 全局复盘 · 关键局面损耗榜',
-    reviewRunning: '正在复盘全盘对局...',
-    btnCancelReview: '取消复盘',
-    analyzedMoves: '共分析步数',
-    blunderLabel: '大漏',
-    mistakeLabel: '失误',
-    inaccuracyLabel: '疑问手',
-    filterAll: '全部损耗',
-    filterWhite: '仅白棋',
-    filterBlack: '仅黑棋',
-    jumpToMove: '点击跳转该局面 ➔',
-    noBlundersFound: '👏 棋局质量极高！未发现显著局面损耗手。',
-    humanTrapBadge: '💡 人类直觉盲区',
-    acplWhite: '白方均损',
-    acplBlack: '黑方均损',
-    playedMove: '实战走棋',
-    bestMove: '推荐最优',
-    evalChange: '局势变动',
-    reviewError: '复盘失败',
+    btnStandaloneStudio: '复盘分析',
     fairPlayTitle: '对局进行中 · 公平竞技保护',
     fairPlayDesc: '为恪守国际象棋反作弊守则，在实时对局进行期间严禁提供任何引擎建议、直觉箭头与意图热力图。',
-    fairPlayUnlockTip: '✓ 对局结束后将自动解锁全局复盘与直觉研判',
+    fairPlayUnlockTip: '✓ 对局结束后将自动解锁复盘分析与局面研判',
     fairPlayLocked: '对局中 · 已锁定'
   },
   en: {
@@ -86,12 +66,12 @@ const I18N = {
     black: '⚫ Black',
     whiteThinking: '⚪ White · Thinking',
     blackThinking: '⚫ Black · Thinking',
-    btnMore: 'Settings (Language / Model / CDN)',
+    btnMore: 'Settings (Language / Elo / Visuals / Model)',
     btnClose: 'Minimize to Floating Ball',
-    drawerTitle: '⚙️ Settings / 设置',
-    lblLang: '🌐 Language / 语言:',
-    lblModelSpec: '⚡ Switch Model Weight:',
-    lblCdnUrl: '🔗 Custom CDN URL:',
+    drawerTitle: '⚙️ Settings',
+    lblLang: 'Language:',
+    lblModelSpec: 'Model Weights:',
+    lblCdnUrl: 'Custom Weights URL:',
     btnSave: 'Save',
     btnSaved: 'Saved',
     maiaEngine: 'Maia 3 Intuition',
@@ -101,16 +81,16 @@ const I18N = {
     readyWasm: 'Ready (WASM)',
     readyLocal: 'Ready (Local GPU)',
     initError: 'Init Error',
-    eloTitle: 'Target Player Elo',
+    eloTitle: 'Intuition Rating (ELO)',
     eloDesc: {
-      1100: 'Target: 1100 · Beginner Intuition',
-      1500: 'Target: 1500 · Intermediate Intuition',
-      1900: 'Target: 1900 · Advanced Intuition',
-      2200: 'Target: 2200 · Master Intuition'
+      1100: '1100 · Beginner Intuition',
+      1500: '1500 · Intermediate Intuition',
+      1900: '1900 · Advanced Intuition',
+      2200: '2200 · Master Intuition'
     },
-    boardVisuals: 'Board Overlays',
-    heatmap: '🔥 Attention Heatmap',
-    arrows: '🏹 Intuition Arrows',
+    boardVisuals: 'Visual Overlays',
+    heatmap: 'Attention Heatmap',
+    arrows: 'Intuition Arrows',
     candidates: 'Candidate Moves',
     whiteCandidates: 'White Candidates',
     blackCandidates: 'Black Candidates',
@@ -118,38 +98,18 @@ const I18N = {
     consensus: 'Best',
     engineBest: '🐟 Engine Best',
     noLegalMoves: 'Checkmate or no legal moves',
-    readingState: '⏳ Detecting board position...',
+    readingState: '⏳ Reading position...',
     consensusBadge: '🎯 High Consensus',
     divergenceBadge: '⚠️ Engine Divergence',
     intuitionBadge: '💡 Human Intuition',
     evalLabel: 'Eval',
     deltaLoss: 'Intuition Loss',
     floatTitle: 'Maia 3',
-    btnAnalyzeGame: '📊 Game Review (Blunder List)',
-    btnStandaloneStudio: '🚀 Standalone Studio Review',
-    reviewTitle: '📊 Game Review · Top Loss Moves',
-    reviewRunning: 'Analyzing entire game...',
-    btnCancelReview: 'Cancel Review',
-    analyzedMoves: 'Moves Analyzed',
-    blunderLabel: 'Blunders',
-    mistakeLabel: 'Mistakes',
-    inaccuracyLabel: 'Inaccuracies',
-    filterAll: 'All Losses',
-    filterWhite: 'White',
-    filterBlack: 'Black',
-    jumpToMove: 'Jump to Move ➔',
-    noBlundersFound: '👏 Clean game! No significant blunders detected.',
-    humanTrapBadge: '💡 Human Trap',
-    acplWhite: 'White ACPL',
-    acplBlack: 'Black ACPL',
-    playedMove: 'Played',
-    bestMove: 'Best',
-    evalChange: 'Eval Swing',
-    reviewError: 'Review Failed',
+    btnStandaloneStudio: 'Game Review',
     fairPlayTitle: 'Live Game Active · Fair Play Guard',
     fairPlayDesc: 'Per Fair Play Anti-Cheat rules, engine assistance, candidate arrows, and attention heatmaps are strictly disabled during live matches.',
     fairPlayUnlockTip: '✓ Unlocks automatically upon game conclusion',
-    fairPlayLocked: 'Live Game · Locked'
+    fairPlayLocked: 'Live Match · Locked'
   }
 };
 
@@ -296,10 +256,6 @@ export class IntuitionPanel {
           <span class="weui-navbar__icon">🧠</span>
           <span class="weui-navbar__title" id="txt-panel-title">${this.t('panelTitle')}</span>
           <span id="maia-turn-pill" class="weui-turn-tag turn-white">${this.t('white')}</span>
-          <button type="button" id="weui-btn-back-review" class="weui-back-review-btn" style="display: none;" title="${this.lang === 'zh' ? '返回全局复盘损耗榜' : 'Back to Game Review'}">
-            <span>⬅️</span>
-            <span>${this.lang === 'zh' ? '返回复盘' : 'Review'}</span>
-          </button>
         </div>
         <!-- Iconic WeChat Mini-Program Capsule (小程序双键胶囊) -->
         <div class="weui-capsule">
@@ -316,8 +272,8 @@ export class IntuitionPanel {
         </div>
       </div>
 
-      <!-- Settings Dropdown Drawer (绝对顶层浮动，独立于列表内容，绝对不被遮挡) -->
-      <div id="cdn-config-drawer" class="weui-drawer-overlay" style="display: none;">
+      <!-- Settings Dropdown Drawer (隐藏在设置胶囊内) -->
+      <div id="cdn-config-drawer" class="weui-drawer-overlay" style="display: none; max-height: 480px; overflow-y: auto;">
         <div class="weui-drawer-header">
           <span class="weui-drawer-title" id="txt-drawer-title">${this.t('drawerTitle')}</span>
           <button type="button" id="weui-btn-drawer-close" class="weui-drawer-close">✕</button>
@@ -332,7 +288,7 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- 2. Elo Rating Selector (隐藏在设置菜单内，默认 1900) -->
+        <!-- 2. Elo Rating Selector -->
         <div class="weui-drawer-item">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div class="weui-drawer-label" id="lbl-elo-title">${this.t('eloTitle')}</div>
@@ -348,7 +304,22 @@ export class IntuitionPanel {
           <input type="range" id="maia-elo-slider" min="600" max="2600" step="50" value="${this.currentElo}" class="weui-slider" />
         </div>
 
-        <!-- 3. Model Spec -->
+        <!-- 3. Visual Overlays (意图热力图 & 直觉走法建议藏入设置) -->
+        <div class="weui-drawer-item">
+          <div class="weui-drawer-label" id="lbl-visuals-title">${this.t('boardVisuals')}</div>
+          <div class="weui-cells" style="margin-top: 2px; border-radius: 8px; overflow: hidden; background: var(--weui-BG-3);">
+            <div class="weui-cell" style="padding: 7px 10px;">
+              <div class="weui-cell__bd" id="lbl-heatmap" style="font-size: 11.5px;">${this.t('heatmap')}</div>
+              <input type="checkbox" id="maia-chk-heatmap" class="weui-switch" checked />
+            </div>
+            <div class="weui-cell" style="padding: 7px 10px; border-top: 0.5px solid var(--weui-BORDER);">
+              <div class="weui-cell__bd" id="lbl-arrows" style="font-size: 11.5px;">${this.t('arrows')}</div>
+              <input type="checkbox" id="maia-chk-arrows" class="weui-switch" checked />
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Model Spec -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
           <div style="display: flex; gap: 5px;">
@@ -358,32 +329,13 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- 4. Custom CDN URL -->
+        <!-- 5. Custom CDN URL -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-cdn-url">${this.t('lbl-cdn-url') || this.t('lblCdnUrl')}</div>
           <div style="display: flex; gap: 6px;">
             <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_23m.bin" value="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; background: var(--weui-BG-3); border: 0.5px solid var(--weui-BORDER); color: #FFF; padding: 4px 8px; border-radius: 6px; font-size: 10.5px; font-family: monospace;">
             <button type="button" id="cdn-save-btn" class="weui-btn-primary" style="padding: 4px 10px; font-size: 11px;">${this.t('btnSave')}</button>
           </div>
-        </div>
-      </div>
-
-      <!-- WeChat Game Review Overlay Drawer -->
-      <div id="weui-review-overlay" class="weui-review-overlay" style="display: none;">
-        <div class="weui-review-header">
-          <div class="weui-review-title">
-            <span>📊</span>
-            <span id="lbl-review-title">${this.t('reviewTitle')}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" class="weui-btn-review" id="btn-review-open-studio" style="font-size: 11px; padding: 2px 8px; height: 26px; border-radius: 4px; background: rgba(7, 193, 96, 0.15); border: 0.5px solid rgba(7, 193, 96, 0.4); color: var(--weui-BRAND); cursor: pointer;" title="在独立大屏工作台深度复盘">
-              🚀 独立大屏
-            </button>
-            <button type="button" class="weui-review-close" id="btn-close-review" title="Close">✕</button>
-          </div>
-        </div>
-        <div class="weui-review-body" id="weui-review-body">
-          <!-- Dynamic Content -->
         </div>
       </div>
 
@@ -422,46 +374,16 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- Visual Toggles Group (WeChat Switches) -->
-        <div>
-          <div class="weui-cells__title" id="lbl-visuals-title">${this.t('boardVisuals')}</div>
-          <div class="weui-cells">
-            <div class="weui-cell">
-              <div class="weui-cell__bd" id="lbl-heatmap">${this.t('heatmap')}</div>
-              <input type="checkbox" id="maia-chk-heatmap" class="weui-switch" checked />
-            </div>
-            <div class="weui-cell">
-              <div class="weui-cell__bd" id="lbl-arrows">${this.t('arrows')}</div>
-              <input type="checkbox" id="maia-chk-arrows" class="weui-switch" checked />
-            </div>
-          </div>
-        </div>
-
-        <!-- Game Review Entry Buttons -->
-        <div class="weui-review-entry" style="display: flex; gap: 6px;">
-          <button type="button" id="btn-trigger-review" class="weui-btn-review" style="flex: 1;">
-            <span>📊</span>
-            <span id="lbl-btn-review">${this.t('btnAnalyzeGame')}</span>
-          </button>
-          <button type="button" id="btn-trigger-standalone" class="weui-btn-review" style="flex: 1; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); color: var(--weui-BRAND);" title="${this.lang === 'zh' ? '提取棋谱并在独立全屏工作台中复盘' : 'Open in Standalone Analysis Studio'}">
-            <span>🚀</span>
+        <!-- Game Review Studio Entry Button -->
+        <div class="weui-review-entry" style="margin-top: 2px; margin-bottom: 2px;">
+          <button type="button" id="btn-trigger-standalone" class="weui-btn-review" style="width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; font-weight: 600; border-radius: 8px; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); color: var(--weui-BRAND); cursor: pointer; transition: all 0.15s ease;" title="${this.lang === 'zh' ? '在独立工作台中复盘分析' : 'Open in Game Review Studio'}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
             <span id="lbl-btn-standalone">${this.t('btnStandaloneStudio')}</span>
           </button>
-        </div>
-
-        <!-- Blunder Drill Navigation Box (shown during blunder drill inspection) -->
-        <div id="maia-blunder-drill-box" style="display: none; margin-bottom: 8px;">
-          <div class="weui-drill-nav-bar">
-            <button type="button" class="weui-drill-btn" id="drill-btn-prev">◀ ${this.lang === 'zh' ? '上一处' : 'Prev'}</button>
-            <button type="button" class="weui-drill-btn drill-title-btn" id="drill-btn-list">📋 ${this.lang === 'zh' ? '损耗榜' : 'Blunders'} (1/1)</button>
-            <button type="button" class="weui-drill-btn" id="drill-btn-next">${this.lang === 'zh' ? '下一处' : 'Next'} ▶</button>
-            <button type="button" class="weui-drill-btn drill-exit-btn" id="drill-btn-exit" title="${this.lang === 'zh' ? '退出复盘导览' : 'Exit drill'}">✕</button>
-          </div>
-          <div class="weui-segmented-bar" style="height: 26px; margin-top: 6px;">
-            <button type="button" class="weui-segment active" id="drill-view-decision">⚡ ${this.lang === 'zh' ? '走棋前决策 (当前)' : 'Decision Point'}</button>
-            <button type="button" class="weui-segment" id="drill-view-result">${this.lang === 'zh' ? '走出后局面' : 'Resulting Board'}</button>
-          </div>
-          <div class="weui-blunder-drill-card" id="drill-info-card"></div>
         </div>
 
         <!-- Candidate Moves List Group -->
@@ -743,429 +665,22 @@ export class IntuitionPanel {
       });
     }
 
-    // 6. Game Review Trigger, Back & Close Buttons
-    const triggerReviewBtn = this.container.querySelector('#btn-trigger-review');
+    // 6. Standalone Game Review Button
     const triggerStandaloneBtn = this.container.querySelector('#btn-trigger-standalone');
-    const reviewOpenStudioBtn = this.container.querySelector('#btn-review-open-studio');
-    const reviewDrawer = this.container.querySelector('#weui-review-overlay');
-    const reviewCloseBtn = this.container.querySelector('#btn-close-review');
-    const backReviewBtn = this.container.querySelector('#weui-btn-back-review');
-
-    const handleOpenStudio = (e) => {
-      e.stopPropagation();
-      if (this.onOpenStandaloneAnalysis) {
-        this.onOpenStandaloneAnalysis();
-      }
-    };
-
-    if (triggerStandaloneBtn) triggerStandaloneBtn.addEventListener('click', handleOpenStudio);
-    if (reviewOpenStudioBtn) reviewOpenStudioBtn.addEventListener('click', handleOpenStudio);
-
-    if (triggerReviewBtn && reviewDrawer) {
-      triggerReviewBtn.addEventListener('click', (e) => {
+    if (triggerStandaloneBtn) {
+      triggerStandaloneBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (reviewDrawer.style.display === 'flex') {
-          reviewDrawer.style.display = 'none';
-        } else {
-          if (this.lastReviewResult) {
-            reviewDrawer.style.display = 'flex';
-            if (backReviewBtn) backReviewBtn.style.display = 'none';
-            this.renderReviewResults(this.lastReviewResult);
-          } else {
-            this.startReview();
-          }
-        }
-      });
-    }
-
-    if (backReviewBtn && reviewDrawer) {
-      backReviewBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        reviewDrawer.style.display = 'flex';
-        backReviewBtn.style.display = 'none';
-        if (this.lastReviewResult) {
-          this.renderReviewResults(this.lastReviewResult);
-        }
-      });
-    }
-
-    if (reviewCloseBtn && reviewDrawer) {
-      reviewCloseBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        reviewDrawer.style.display = 'none';
-        if (this.lastReviewResult && backReviewBtn) {
-          backReviewBtn.style.display = 'inline-flex';
-        }
-      });
-    }
-
-    // 7. Blunder Drill Navigation Controls
-    const drillPrevBtn = this.container.querySelector('#drill-btn-prev');
-    const drillNextBtn = this.container.querySelector('#drill-btn-next');
-    const drillListBtn = this.container.querySelector('#drill-btn-list');
-    const drillExitBtn = this.container.querySelector('#drill-btn-exit');
-    const drillViewDecision = this.container.querySelector('#drill-view-decision');
-    const drillViewResult = this.container.querySelector('#drill-view-result');
-
-    if (drillPrevBtn) {
-      drillPrevBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.activeDrill && this.activeDrill.index > 0) {
-          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index - 1, this.activeDrill.filteredMoments, this.activeDrill.viewMode);
-        }
-      });
-    }
-
-    if (drillNextBtn) {
-      drillNextBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.activeDrill && this.activeDrill.index < this.activeDrill.filteredMoments.length - 1) {
-          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index + 1, this.activeDrill.filteredMoments, this.activeDrill.viewMode);
-        }
-      });
-    }
-
-    if (drillListBtn) {
-      drillListBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const drawer = this.container.querySelector('#weui-review-overlay');
-        if (drawer) {
-          drawer.style.display = 'flex';
-          if (this.activeDrill?.results) {
-            this.renderReviewResults(this.activeDrill.results);
-          }
-        }
-      });
-    }
-
-    if (drillExitBtn) {
-      drillExitBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.clearBlunderDrill();
-      });
-    }
-
-    if (drillViewDecision) {
-      drillViewDecision.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.activeDrill && this.activeDrill.viewMode !== 'decision') {
-          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index, this.activeDrill.filteredMoments, 'decision');
-        }
-      });
-    }
-
-    if (drillViewResult) {
-      drillViewResult.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.activeDrill && this.activeDrill.viewMode !== 'result') {
-          this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index, this.activeDrill.filteredMoments, 'result');
+        if (this.onOpenStandaloneAnalysis) {
+          this.onOpenStandaloneAnalysis();
         }
       });
     }
   }
 
-  async startReview(forceRefresh = false) {
-    if (this.isFairPlayLocked) {
-      alert(this.lang === 'zh'
-        ? '🛡️ 当前对局仍在进行中！根据公平竞技铁律，严禁在对局中提供任何引擎与复盘服务。请待对局完全结束后再复盘。'
-        : '🛡️ Live game active! Per Fair Play rules, engine review is disabled during live games.');
-      return;
-    }
-    const reviewDrawer = this.container.querySelector('#weui-review-overlay');
-    const reviewBody = this.container.querySelector('#weui-review-body');
-    if (!reviewDrawer || !reviewBody) return;
 
-    reviewDrawer.style.display = 'flex';
-    reviewBody.innerHTML = `
-      <div class="weui-review-progress-box">
-        <div class="weui-review-progress-title">
-          <span>⏳</span> <span id="review-phase-title">${this.t('reviewRunning')}</span>
-        </div>
-        <div class="weui-progress-track" style="height: 6px;">
-          <div id="review-bar-fill" class="weui-progress-bar" style="width: 0%; background: var(--weui-BRAND);"></div>
-        </div>
-        <div class="weui-review-progress-sub" id="review-progress-detail">0% (0 / 0)</div>
-        <button type="button" class="weui-review-cancel-btn" id="btn-cancel-review">${this.t('btnCancelReview')}</button>
-      </div>
-    `;
-
-    const cancelBtn = reviewBody.querySelector('#btn-cancel-review');
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        if (this.onCancelReview) this.onCancelReview();
-        reviewDrawer.style.display = 'none';
-      });
-    }
-
-    try {
-      if (!this.onAnalyzeGame) {
-        throw new Error(this.lang === 'zh' ? '未配置全局分析器' : 'Review analyzer not configured');
-      }
-      const results = await this.onAnalyzeGame(forceRefresh);
-      if (this.isFairPlayLocked) {
-        reviewDrawer.style.display = 'none';
-        return;
-      }
-      if (results) {
-        this.lastReviewResult = results;
-        this.renderReviewResults(results);
-      }
-    } catch (err) {
-      console.warn('[IntuitionPanel] Review error:', err);
-      reviewBody.innerHTML = `
-        <div class="weui-review-progress-box">
-          <div style="color: var(--weui-RED); font-size: 13px; font-weight: 700;">⚠️ ${this.t('reviewError')}</div>
-          <div style="font-size: 11px; color: var(--weui-FG-HALF); line-height: 1.5;">${err.message || (this.lang === 'zh' ? '无法提取当前棋局走法，请确保棋盘处于对局或复盘模式。' : 'Unable to extract game moves from page.')}</div>
-          <button type="button" class="weui-btn-primary" style="margin-top: 8px; align-self: center;" id="btn-retry-review">${this.lang === 'zh' ? '重试复盘' : 'Retry'}</button>
-        </div>
-      `;
-      reviewBody.querySelector('#btn-retry-review')?.addEventListener('click', () => this.startReview(true));
-    }
-  }
-
-  updateReviewProgress(prog) {
-    if (!this.container) return;
-    const bar = this.container.querySelector('#review-bar-fill');
-    const detail = this.container.querySelector('#review-progress-detail');
-    const title = this.container.querySelector('#review-phase-title');
-    if (bar) bar.style.width = `${prog.percent}%`;
-    if (detail) {
-      const stepText = prog.currentMove ? `· ${prog.currentMove}` : '';
-      detail.textContent = `${prog.percent}% (${prog.current} / ${prog.total}) ${stepText}`;
-    }
-    if (title && prog.phase === 'intuition') {
-      title.textContent = this.lang === 'zh' ? '正在匹配人类直觉盲区...' : 'Detecting human intuition traps...';
-    }
-  }
-
-  renderReviewResults(results) {
-    const reviewBody = this.container.querySelector('#weui-review-body');
-    if (!reviewBody || !results) return;
-
-    const filter = this.reviewFilter || 'all';
-    const filteredMoments = results.keyMoments.filter(m => {
-      if (filter === 'w') return m.turn === 'w';
-      if (filter === 'b') return m.turn === 'b';
-      return true;
-    });
-
-    const isZh = this.lang === 'zh';
-
-    reviewBody.innerHTML = `
-      <!-- Stats Overview Grid -->
-      <div class="weui-review-stats-grid">
-        <div class="weui-stat-card">
-          <div class="weui-stat-num stat-blunder">${results.blundersCount}</div>
-          <div class="weui-stat-label">${this.t('blunderLabel')}</div>
-        </div>
-        <div class="weui-stat-card">
-          <div class="weui-stat-num stat-mistake">${results.mistakesCount}</div>
-          <div class="weui-stat-label">${this.t('mistakeLabel')}</div>
-        </div>
-        <div class="weui-stat-card">
-          <div class="weui-stat-num stat-inaccuracy">${results.inaccuraciesCount}</div>
-          <div class="weui-stat-label">${this.t('inaccuracyLabel')}</div>
-        </div>
-        <div class="weui-stat-card">
-          <div class="weui-stat-num stat-acpl" style="font-size: 11px;">${results.acplWhite}/${results.acplBlack}</div>
-          <div class="weui-stat-label">${isZh ? '均损(白/黑)' : 'ACPL(W/B)'}</div>
-        </div>
-      </div>
-
-      <!-- Filter Controls & Re-analyze -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-        <div class="weui-segmented-bar" style="height: 26px; width: 195px;">
-          <button type="button" class="weui-segment ${filter === 'all' ? 'active' : ''}" data-review-filter="all">${isZh ? '全部' : 'All'} (${results.keyMoments.length})</button>
-          <button type="button" class="weui-segment ${filter === 'w' ? 'active' : ''}" data-review-filter="w">${isZh ? '白棋' : 'White'}</button>
-          <button type="button" class="weui-segment ${filter === 'b' ? 'active' : ''}" data-review-filter="b">${isZh ? '黑棋' : 'Black'}</button>
-        </div>
-        <button type="button" class="weui-review-cancel-btn" style="margin: 0; padding: 3px 8px; font-size: 10px;" id="btn-reanalyze-review">🔄 ${isZh ? '重新分析' : 'Re-run'}</button>
-      </div>
-
-      <!-- Blunder List -->
-      <div class="weui-moves-list" id="review-blunder-list" style="gap: 8px;">
-        ${filteredMoments.length === 0 ? `
-          <div style="padding: 20px 10px; text-align: center; color: var(--weui-FG-2); font-size: 11.5px;">
-            ${this.t('noBlundersFound')}
-          </div>
-        ` : filteredMoments.map((item, idx) => {
-          const isWhite = item.turn === 'w';
-          const movePrefix = isWhite ? `${item.moveNumber}.` : `${item.moveNumber}...`;
-          const severityIcon = item.severity === 'blunder' ? '🔴' : (item.severity === 'mistake' ? '🟠' : '🟡');
-          const severityClass = `severity-${item.severity}`;
-          const isCurrentActive = this.activeDrill && this.activeDrill.currentItem === item;
-          const activeStyle = isCurrentActive ? 'outline: 2px solid var(--weui-BRAND); background: rgba(7, 193, 96, 0.08);' : '';
-          const trapHtml = item.isHumanTrap ? `
-            <div class="weui-blunder-trap-tip">
-              💡 ${isZh ? `典型 <strong>${this.currentElo}</strong> 分段人类棋手有 <strong>${item.humanProbability}%</strong> 走出同样这步错棋（直觉盲区）` : `Typical <strong>${this.currentElo}</strong> players make this move <strong>${item.humanProbability}%</strong> of the time (Intuition Trap)`}
-            </div>
-          ` : '';
-
-          return `
-            <div class="weui-blunder-card ${severityClass}" data-moment-idx="${idx}" style="${activeStyle}">
-              <div class="weui-blunder-row-top">
-                <div class="weui-blunder-move-tag">
-                  <span>${severityIcon}</span>
-                  <span>${movePrefix} ${item.san}</span>
-                </div>
-                <div class="weui-blunder-loss-tag">${this.lang === 'zh' ? '损耗' : 'Loss'} ${item.lossPawns}</div>
-              </div>
-              <div class="weui-blunder-row-moves">
-                <span>${isZh ? '实战' : 'Played'}: <span class="move-played-bad">${item.san}</span></span>
-                <span style="color: var(--weui-FG-2);">➔</span>
-                <span>${isZh ? '最优' : 'Best'}: <span class="move-best-good">${item.bestSan}</span></span>
-              </div>
-              <div class="weui-blunder-eval-row">
-                <span>${isZh ? '局势突变' : 'Eval swing'}: ${item.evalBefore} ➔ ${item.evalAfter}</span>
-              </div>
-              <div class="weui-blunder-actions-row" style="display: flex; gap: 6px; margin-top: 6px;">
-                <button type="button" class="weui-btn-jump-action btn-jump-decision" data-moment-idx="${idx}" data-view="decision" style="flex: 1; padding: 5px 8px; font-size: 10.5px; font-weight: 500; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--weui-FG); cursor: pointer; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-                  <span>🎯</span><span>${isZh ? '走棋前决策' : 'Before move'}</span>
-                </button>
-                <button type="button" class="weui-btn-jump-action btn-jump-result" data-moment-idx="${idx}" data-view="result" style="flex: 1; padding: 5px 8px; font-size: 10.5px; font-weight: 500; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--weui-FG); cursor: pointer; text-align: center; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-                  <span>👀</span><span>${isZh ? '走棋后局面' : 'After move'}</span>
-                </button>
-              </div>
-              ${trapHtml}
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-
-    // Bind Filter clicks
-    reviewBody.querySelectorAll('[data-review-filter]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.reviewFilter = btn.dataset.reviewFilter;
-        this.renderReviewResults(results);
-      });
-    });
-
-    // Bind Re-analyze click (force fresh computation)
-    reviewBody.querySelector('#btn-reanalyze-review')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.startReview(true);
-    });
-
-    // Bind Jump-to-move clicks on action buttons
-    reviewBody.querySelectorAll('.weui-btn-jump-action').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const idx = parseInt(btn.dataset.momentIdx, 10);
-        const viewMode = btn.dataset.view || 'decision';
-        const item = filteredMoments[idx];
-        if (!item) return;
-
-        this.startBlunderDrill(results, idx, filteredMoments, viewMode);
-      });
-    });
-
-    // Bind card click default (decision point)
-    reviewBody.querySelectorAll('.weui-blunder-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.weui-btn-jump-action')) return;
-        const idx = parseInt(card.dataset.momentIdx, 10);
-        const item = filteredMoments[idx];
-        if (!item) return;
-
-        this.startBlunderDrill(results, idx, filteredMoments, 'decision');
-      });
-    });
-  }
-
-  startBlunderDrill(results, index, filteredMoments = null, viewMode = 'decision') {
-    const moments = filteredMoments || results.keyMoments;
-    const item = moments[index];
-    if (!item) return;
-
-    this.activeDrill = {
-      results,
-      index,
-      filteredMoments: moments,
-      currentItem: item,
-      viewMode
-    };
-
-    // Hide review drawer
-    const reviewDrawer = this.container.querySelector('#weui-review-overlay');
-    if (reviewDrawer) reviewDrawer.style.display = 'none';
-
-    // Show drill box
-    const drillBox = this.container.querySelector('#maia-blunder-drill-box');
-    if (drillBox) drillBox.style.display = 'block';
-
-    // Update navigation buttons
-    const prevBtn = this.container.querySelector('#drill-btn-prev');
-    const nextBtn = this.container.querySelector('#drill-btn-next');
-    const listBtn = this.container.querySelector('#drill-btn-list');
-    if (prevBtn) prevBtn.disabled = index <= 0;
-    if (nextBtn) nextBtn.disabled = index >= moments.length - 1;
-    if (listBtn) {
-      listBtn.textContent = `📋 ${this.lang === 'zh' ? '损耗榜' : 'Blunders'} (${index + 1}/${moments.length})`;
-    }
-
-    // Update perspective buttons
-    const viewDecBtn = this.container.querySelector('#drill-view-decision');
-    const viewResBtn = this.container.querySelector('#drill-view-result');
-    if (viewDecBtn) viewDecBtn.className = `weui-segment ${viewMode === 'decision' ? 'active' : ''}`;
-    if (viewResBtn) viewResBtn.className = `weui-segment ${viewMode === 'result' ? 'active' : ''}`;
-
-    // Update info card
-    const infoCard = this.container.querySelector('#drill-info-card');
-    if (infoCard) {
-      const isZh = this.lang === 'zh';
-      const isWhite = item.turn === 'w';
-      const movePrefix = isWhite ? `${item.moveNumber}.` : `${item.moveNumber}...`;
-      const severityIcon = item.severity === 'blunder' ? '🔴' : (item.severity === 'mistake' ? '🟠' : '🟡');
-      const sideText = isWhite ? (isZh ? '白棋' : 'White') : (isZh ? '黑棋' : 'Black');
-
-      const trapHtml = item.isHumanTrap ? `
-        <div class="weui-blunder-trap-tip">
-          💡 ${isZh ? `典型 <strong>${this.currentElo}</strong> 分段人类棋手有 <strong>${item.humanProbability}%</strong> 走出同样这步错棋（直觉盲区）` : `Typical <strong>${this.currentElo}</strong> players make this move <strong>${item.humanProbability}%</strong> of the time`}
-        </div>
-      ` : '';
-
-      infoCard.className = `weui-blunder-drill-card severity-${item.severity}`;
-      infoCard.innerHTML = `
-        <div class="weui-blunder-row-top">
-          <div class="weui-blunder-move-tag">
-            <span>${severityIcon}</span>
-            <span>${movePrefix} ${item.san}</span>
-            <span style="font-size: 10px; color: var(--weui-FG-HALF); font-weight: 500;">(${sideText})</span>
-          </div>
-          <div class="weui-blunder-loss-tag">${isZh ? '损耗' : 'Loss'} ${item.lossPawns}</div>
-        </div>
-        <div class="weui-blunder-row-moves">
-          <span>${isZh ? '实战' : 'Played'}: <span class="move-played-bad">${item.san}</span></span>
-          <span style="color: var(--weui-FG-2);">➔</span>
-          <span>${isZh ? '最优' : 'Best'}: <span class="move-best-good">${item.bestSan}</span></span>
-        </div>
-        <div class="weui-blunder-eval-row">
-          <span>${isZh ? '局势突变' : 'Eval swing'}: ${item.evalBefore} ➔ ${item.evalAfter}</span>
-          <span style="font-size: 9.5px; color: var(--weui-FG-HALF);">${viewMode === 'decision' ? (isZh ? '📍 走棋前决策' : '📍 Decision point') : (isZh ? '📍 走出后局面' : '📍 Resulting board')}</span>
-        </div>
-        <div class="weui-drill-legend">
-          <span class="weui-drill-legend-item"><span style="color:#ef4444; font-weight: 700;">❌ 虚线:</span> ${isZh ? '实战错手' : 'Played'}</span>
-          <span class="weui-drill-legend-item"><span style="color:#10b981; font-weight: 700;">🐟 实线:</span> ${isZh ? '推荐正着' : 'Best'}</span>
-          <span class="weui-drill-legend-item"><span style="color:#f59e0b; font-weight: 700;">🧠 实线:</span> ${isZh ? '人类直觉' : 'Intuition'}</span>
-        </div>
-        ${trapHtml}
-      `;
-    }
-
-    if (this.onSelectBlunder) {
-      this.onSelectBlunder(results, index, moments, viewMode);
-    }
-  }
 
   clearBlunderDrill() {
     this.activeDrill = null;
-    const drillBox = this.container.querySelector('#maia-blunder-drill-box');
-    if (drillBox) drillBox.style.display = 'none';
-    if (this.onClearBlunderDrill) {
-      this.onClearBlunderDrill();
-    }
   }
 
   updateEngineStatus(status) {
@@ -1327,11 +842,8 @@ export class IntuitionPanel {
     const lblArrows = this.container.querySelector('#lbl-arrows');
     if (lblArrows) lblArrows.textContent = this.t('arrows');
 
-    const lblBtnReview = this.container.querySelector('#lbl-btn-review');
-    if (lblBtnReview) lblBtnReview.textContent = this.t('btnAnalyzeGame');
-
-    const lblReviewTitle = this.container.querySelector('#lbl-review-title');
-    if (lblReviewTitle) lblReviewTitle.textContent = this.t('reviewTitle');
+    const lblBtnStandalone = this.container.querySelector('#lbl-btn-standalone');
+    if (lblBtnStandalone) lblBtnStandalone.textContent = this.t('btnStandaloneStudio');
 
     const turnPill = this.container.querySelector('#maia-turn-pill');
     if (turnPill) {
@@ -1339,20 +851,9 @@ export class IntuitionPanel {
       turnPill.textContent = isWhite ? this.t('white') : this.t('black');
     }
 
-    if (this.lastReviewResult) {
-      const reviewDrawer = this.container.querySelector('#weui-review-overlay');
-      if (reviewDrawer && reviewDrawer.style.display === 'flex') {
-        this.renderReviewResults(this.lastReviewResult);
-      }
-    }
-
     if (this.fab) {
       const fabTitle = this.fab.querySelector('.weui-float-title');
       if (fabTitle) fabTitle.textContent = this.t('floatTitle');
-    }
-
-    if (this.activeDrill) {
-      this.startBlunderDrill(this.activeDrill.results, this.activeDrill.index, this.activeDrill.filteredMoments, this.activeDrill.viewMode);
     }
   }
 
@@ -1421,6 +922,12 @@ export class IntuitionPanel {
         turnPill.className = 'weui-turn-tag';
       }
 
+      const triggerBtn = this.container.querySelector('#btn-trigger-standalone');
+      if (triggerBtn) {
+        triggerBtn.style.opacity = '0.5';
+        triggerBtn.style.pointerEvents = 'none';
+      }
+
       if (movesContainer) {
         movesContainer.innerHTML = `
           <div class="weui-fair-play-banner" style="padding: 24px 14px; text-align: center;">
@@ -1438,6 +945,11 @@ export class IntuitionPanel {
         `;
       }
     } else {
+      const triggerBtn = this.container.querySelector('#btn-trigger-standalone');
+      if (triggerBtn) {
+        triggerBtn.style.opacity = '1';
+        triggerBtn.style.pointerEvents = 'auto';
+      }
       if (movesContainer && movesContainer.querySelector('.weui-fair-play-banner')) {
         movesContainer.innerHTML = '';
       }
