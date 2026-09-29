@@ -843,52 +843,88 @@ export class GameAnalyzer {
           fenAfter: posAfter.fen,
           element: posAfter.moveEl,
           isHumanTrap: false,
-          humanProbability: null
+          humanProbability: null,
+          maiaTopSan: null,
+          maiaTopUci: null,
+          maiaTopProb: null
         });
       }
 
-      // Step 3: Rank critical moments by lossCp descending
-      const keyMoments = analyzedMoves
-        .filter(m => m.lossCp >= 40)
-        .sort((a, b) => b.lossCp - a.lossCp);
+      // Step 3: Maia intuition prediction for EVERY move (batch)
+      if (this.maiaEngine && analyzedMoves.length > 0) {
+        if (!this.maiaEngine.isReady) {
+          if (onProgress) {
+            onProgress({
+              phase: 'intuition',
+              current: 0,
+              total: analyzedMoves.length,
+              percent: 70,
+              currentMove: '等待直觉引擎就绪...'
+            });
+          }
+          try {
+            console.log('[GameAnalyzer] Awaiting Maia engine initialization before intuition analysis...');
+            await this.maiaEngine.initialize();
+          } catch (e) {
+            console.warn('[GameAnalyzer] Maia initialization error before intuition analysis:', e);
+          }
+        }
 
-      // Step 4: Check Maia human intuition trap on top 5 critical moments
-      if (this.maiaEngine && keyMoments.length > 0) {
-        const topMomentsToCheck = keyMoments.slice(0, 5);
-        for (let j = 0; j < topMomentsToCheck.length; j++) {
+        for (let j = 0; j < analyzedMoves.length; j++) {
           if (this.isCancelled) break;
-          const moment = topMomentsToCheck[j];
+          const mv = analyzedMoves[j];
 
           if (onProgress) {
             onProgress({
               phase: 'intuition',
               current: j + 1,
-              total: topMomentsToCheck.length,
-              percent: 85 + Math.round(((j + 1) / topMomentsToCheck.length) * 15),
-              currentMove: moment.san
+              total: analyzedMoves.length,
+              percent: 70 + Math.round(((j + 1) / analyzedMoves.length) * 25),
+              currentMove: mv.san
             });
           }
 
           try {
-            const pred = await this.maiaEngine.predict(moment.fenBefore, elo);
-            if (pred && pred.moves) {
-              const cleanPlayed = moment.san.replace(/[+#?!]/g, '');
+            const pred = await this.maiaEngine.predict(mv.fenBefore, elo);
+            if (pred && pred.moves && pred.moves.length > 0) {
+              const top = pred.moves[0];
+              mv.maiaTopSan = top.san || null;
+              mv.maiaTopUci = top.uci || null;
+              mv.maiaTopProb = typeof top.prob === 'number' ? top.prob : null;
+
+              const cleanPlayed = mv.san.replace(/[+#?!]/g, '');
+              const cleanBest = (mv.bestSan || '').replace(/[+#?!]/g, '');
+              const cleanMaia = (top.san || '').replace(/[+#?!]/g, '');
+
+              // Flag if intuition diverges from engine best
+              mv.isIntuitionDivergence = cleanMaia && cleanBest && cleanMaia !== cleanBest;
+
+              // Check if the actual played move matches Maia's predictions
               const matchedIdx = pred.moves.findIndex(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
               if (matchedIdx !== -1) {
                 const matched = pred.moves[matchedIdx];
                 const prob = typeof matched.prob === 'number' ? matched.prob : 0;
-                moment.humanProbability = prob;
+                mv.humanProbability = prob;
                 // Genuine Human Trap: Maia strongly favors this blunder (Rank #1 or #2, or >= 15% probability)
-                if (matchedIdx <= 1 || prob >= 15.0) {
-                  moment.isHumanTrap = true;
+                if (mv.lossCp >= 40 && (matchedIdx <= 1 || prob >= 15.0)) {
+                  mv.isHumanTrap = true;
                 }
               }
             }
           } catch (e) {
-            console.warn('[GameAnalyzer] Maia prediction error on key moment:', e);
+            console.warn('[GameAnalyzer] Maia prediction error on ply', mv.ply, ':', e);
           }
         }
       }
+
+      // Step 4: Filter & rank critical moments (combining intuition trap bonus and practical loss)
+      const keyMoments = analyzedMoves
+        .filter(m => m.lossCp >= 40)
+        .sort((a, b) => {
+          const scoreA = a.lossCp + (a.isHumanTrap ? 150 : 0);
+          const scoreB = b.lossCp + (b.isHumanTrap ? 150 : 0);
+          return scoreB - scoreA;
+        });
 
       const result = {
         totalMoves: positions.length - 1,

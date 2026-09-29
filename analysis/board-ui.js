@@ -53,10 +53,10 @@ export class BoardUI {
           <path d="M 0 1 L 10 5 L 0 9 z" fill="#07C160"/>
         </marker>
         <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#F59E0B"/>
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#e6a520"/>
         </marker>
         <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#EF4444"/>
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#c33"/>
         </marker>
         <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 1 L 10 5 L 0 9 z" fill="#3B82F6"/>
@@ -256,10 +256,10 @@ export class BoardUI {
       let strokeColor = '#07C160';
       let markerId = 'arrow-green';
       if (arrow.color === 'gold' || arrow.color === 'yellow' || arrow.color === '#F59E0B') {
-        strokeColor = '#F59E0B';
+        strokeColor = '#e6a520';
         markerId = 'arrow-gold';
       } else if (arrow.color === 'red' || arrow.color === '#EF4444') {
-        strokeColor = '#EF4444';
+        strokeColor = '#c33';
         markerId = 'arrow-red';
       } else if (arrow.color === 'blue') {
         strokeColor = '#3B82F6';

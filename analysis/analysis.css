@@ -16,8 +16,8 @@
   --brand-gold: #FA9D3B;
   --brand-red: #FA5151;
   --brand-blue: #10AEFF;
-  --board-light: #EDEED1;
-  --board-dark: #779952;
+  --board-light: #f0d9b5;
+  --board-dark: #b58863;
 }
 
 * {
@@ -224,12 +224,16 @@ body {
 .maia-square.dark { background-color: var(--board-dark); }
 
 .maia-square.selected {
-  background-color: rgba(250, 157, 59, 0.45) !important;
+  background-color: rgba(20, 85, 30, 0.5) !important;
 }
 
-.maia-square.last-move-from,
-.maia-square.last-move-to {
-  background-color: rgba(7, 193, 96, 0.35) !important;
+.maia-square.light.last-move-from,
+.maia-square.light.last-move-to {
+  background-color: #cdd26a !important;
+}
+.maia-square.dark.last-move-from,
+.maia-square.dark.last-move-to {
+  background-color: #829769 !important;
 }
 
 .maia-square.check {
@@ -467,6 +471,99 @@ body {
   color: var(--text-main);
 }
 
+/* Three-way Comparison Panel */
+.compare-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.compare-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.2s ease;
+  cursor: default;
+  min-width: 0;
+}
+
+.compare-card:hover {
+  background: var(--bg-card-hover);
+}
+
+.compare-card.card-engine {
+  border-color: rgba(7, 193, 96, 0.25);
+}
+
+.compare-card.card-intuition {
+  border-color: rgba(230, 165, 32, 0.25);
+}
+
+.compare-card.card-played {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.compare-card.card-played.is-blunder {
+  border-color: rgba(250, 81, 81, 0.35);
+  background: rgba(250, 81, 81, 0.04);
+}
+
+.compare-card-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.compare-card-label .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-engine { background: var(--brand-green); }
+.dot-intuition { background: #e6a520; }
+.dot-played { background: var(--text-muted); }
+
+.compare-card-san {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: inherit;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-card-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-match-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(7, 193, 96, 0.15);
+  color: var(--brand-green);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* Tabs: Blunder Leaderboard & Move Notation */
 .panel-tabs {
   display: flex;
@@ -516,31 +613,31 @@ body {
 .blunder-card {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px;
+  border-radius: 8px;
+  padding: 10px 14px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transition: all 0.15s ease;
+  cursor: pointer;
 }
 
 .blunder-card:hover {
   background: var(--bg-card-hover);
   border-color: rgba(255, 255, 255, 0.16);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .blunder-card.active {
   border-color: var(--brand-gold);
   background: rgba(250, 157, 59, 0.06);
-  box-shadow: 0 4px 16px rgba(250, 157, 59, 0.15);
 }
 
 .blunder-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .blunder-move-title {
@@ -576,40 +673,12 @@ body {
   color: var(--text-muted);
 }
 
-.blunder-btn-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.btn-dual-drill {
-  flex: 1;
-  padding: 7px 12px;
-  border-radius: 6px;
+.blunder-card-loss {
   font-size: 11px;
-  font-weight: 600;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.btn-dual-drill:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
-}
-
-.btn-dual-drill.active {
-  background: var(--brand-green);
-  border-color: var(--brand-green);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(7, 193, 96, 0.35);
+  font-weight: 700;
+  color: var(--brand-red);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Move Notation Table */

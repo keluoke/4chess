@@ -20,6 +20,7 @@ export class MaiaEngine {
     this.onStatusChange = onStatusChange;
     this.isReady = false;
     this.isLoading = false;
+    this.initPromise = null;
     this.backendName = '浏览器端 WebGPU / JS + WebAssembly';
     this.modelName = 'Maia-3 5M Chessformer';
     this.lruCache = new Map();
@@ -58,6 +59,7 @@ export class MaiaEngine {
   async reinitialize(overrideUrl = null) {
     this.isReady = false;
     this.isLoading = false;
+    this.initPromise = null;
     this.maiaInBrowser.reset();
     if (overrideUrl) {
       await ModelCache.clearCache('maia3-5m');
@@ -67,8 +69,13 @@ export class MaiaEngine {
 
   async initialize(overrideUrl = null) {
     if (this.isReady) return this.backendName;
-    if (this.isLoading) return this.backendName;
+    if (this.initPromise) return this.initPromise;
 
+    this.initPromise = this._doInitialize(overrideUrl);
+    return this.initPromise;
+  }
+
+  async _doInitialize(overrideUrl = null) {
     this.isLoading = true;
     this.notifyStatus();
     console.log('[Maia Engine] 🚀 正在初始化双引擎 (Cloudflare CDN + WebAssembly)...');
@@ -149,6 +156,7 @@ export class MaiaEngine {
       return this.backendName;
     } else {
       this.isLoading = false;
+      this.initPromise = null;
       this.status.maia.state = 'error';
       this.status.maia.error = lastErr?.message || '载入失败';
       this.notifyStatus();
@@ -270,7 +278,14 @@ export class MaiaEngine {
       return localResult;
     }
 
-    // 1. If Maia-3 model is not loaded yet: return Stockfish evaluation and download progress
+    // 1. If Maia-3 model is loading, await initialization promise
+    if (!this.isReady && this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch (e) {}
+    }
+
+    // If still not ready: return Stockfish evaluation and download progress
     if (!this.isReady) {
       return {
         isAvailable: false,

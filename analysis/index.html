@@ -105,12 +105,27 @@
         <!-- Rendered by EvalChart -->
       </div>
 
-      <!-- 2. Divergence Insight Box -->
+      <!-- 2. Three-Way Comparison Panel -->
       <div class="divergence-box" id="divergence-box">
         <div class="divergence-badge" id="divergence-badge">局面研判</div>
-        <div class="divergence-content" id="divergence-content">
-          点击着法或关键瞬间，查看走棋决策与人机直觉比对。
+        <div class="compare-panel" id="compare-panel">
+          <div class="compare-card card-engine" id="compare-engine">
+            <div class="compare-card-label"><span class="dot dot-engine"></span> 引擎推荐</div>
+            <div class="compare-card-san" id="compare-engine-san">—</div>
+            <div class="compare-card-meta" id="compare-engine-meta"></div>
+          </div>
+          <div class="compare-card card-intuition" id="compare-intuition">
+            <div class="compare-card-label"><span class="dot dot-intuition"></span> 直觉预判</div>
+            <div class="compare-card-san" id="compare-intuition-san">—</div>
+            <div class="compare-card-meta" id="compare-intuition-meta"></div>
+          </div>
+          <div class="compare-card card-played" id="compare-played">
+            <div class="compare-card-label"><span class="dot dot-played"></span> 实战着法</div>
+            <div class="compare-card-san" id="compare-played-san">—</div>
+            <div class="compare-card-meta" id="compare-played-meta"></div>
+          </div>
         </div>
+        <div class="divergence-content" id="divergence-content" style="display: none;"></div>
       </div>
 
       <!-- 3. Dual Tabs: Key Moments & Move Notation -->

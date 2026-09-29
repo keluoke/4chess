@@ -99,7 +99,16 @@ class AnalysisStudioApp {
       btnCancelPgn: document.getElementById('btn-cancel-pgn'),
       btnSubmitPgn: document.getElementById('btn-submit-pgn'),
       sampleFischer: document.getElementById('sample-fischer'),
-      sampleKasparov: document.getElementById('sample-kasparov')
+      sampleKasparov: document.getElementById('sample-kasparov'),
+      // Three-way comparison panel
+      comparePanel: document.getElementById('compare-panel'),
+      compareEngineSan: document.getElementById('compare-engine-san'),
+      compareEngineMeta: document.getElementById('compare-engine-meta'),
+      compareIntuitionSan: document.getElementById('compare-intuition-san'),
+      compareIntuitionMeta: document.getElementById('compare-intuition-meta'),
+      comparePlayedSan: document.getElementById('compare-played-san'),
+      comparePlayedMeta: document.getElementById('compare-played-meta'),
+      comparePlayedCard: document.getElementById('compare-played')
     };
   }
 
@@ -445,166 +454,42 @@ class AnalysisStudioApp {
       card.dataset.index = index;
 
       const isWhite = item.turn === 'w';
-      const sideText = isWhite ? '⚪ 白方' : '⚫ 黑方';
+      const sideIcon = isWhite ? '⚪' : '⚫';
 
       let sevClass = 'badge-blunder';
-      let sevText = '大漏';
+      let sevText = '??';
       if (item.severity === 'mistake') {
         sevClass = 'badge-trap';
-        sevText = '失误';
+        sevText = '?';
       } else if (item.severity === 'inaccuracy') {
         sevClass = 'badge-trap';
-        sevText = '疑问手';
+        sevText = '?!';
       }
 
-      const trapBadgeHtml = item.isHumanTrap
-        ? `<span class="badge-trap" title="人类棋手高频盲区 (直觉概率 ${item.humanProbability || 0}%)">💡 人类盲区</span>`
+      const trapHtml = item.isHumanTrap
+        ? `<span class="badge-trap" title="直觉概率 ${item.humanProbability || 0}%">💡 ${Math.round(item.humanProbability || 0)}%</span>`
         : '';
 
       card.innerHTML = `
         <div class="blunder-card-header">
           <div class="blunder-move-title">
-            <span>第 ${item.moveNumber} 步 (${sideText})</span>
+            <span>${item.moveNumber}. ${sideIcon} ${item.san}</span>
             <span class="${sevClass}">${sevText}</span>
-            ${trapBadgeHtml}
+            ${trapHtml}
           </div>
-          <span style="font-size: 11px; font-weight: 700; color: var(--brand-red);">
-            ${item.lossPawns} 兵
-          </span>
         </div>
-
-        <div class="blunder-eval-row">
-          <span>实战: <strong style="color: var(--brand-red);">${item.san}</strong></span>
-          <span>推荐: <strong style="color: var(--brand-green);">${item.bestSan}</strong></span>
-          <span>局势: ${item.evalBefore} ➔ ${item.evalAfter}</span>
-        </div>
-
-        <div class="blunder-btn-actions">
-          <button type="button" class="btn-dual-drill btn-drill-decision" data-index="${index}">
-            🎯 走棋决策
-          </button>
-          <button type="button" class="btn-dual-drill btn-drill-result" data-index="${index}">
-            👀 实战结果
-          </button>
-        </div>
+        <span class="blunder-card-loss">${item.lossPawns}</span>
       `;
 
-      // Decision button: jumps to fenBefore
-      const btnDec = card.querySelector('.btn-drill-decision');
-      btnDec.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.drillBlunder(item, 'decision');
-      });
-
-      // Result button: jumps to fenAfter
-      const btnRes = card.querySelector('.btn-drill-result');
-      btnRes.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.drillBlunder(item, 'result');
-      });
-
-      // Card click defaults to decision
       card.addEventListener('click', () => {
-        this.drillBlunder(item, 'decision');
+        // Highlight active card
+        this.el.blunderList.querySelectorAll('.blunder-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        this.goToPly(item.ply);
       });
 
       this.el.blunderList.appendChild(card);
     });
-  }
-
-  drillBlunder(item, viewMode = 'decision') {
-    this.exitBranchMode();
-
-    // Highlight card
-    const moments = this.reviewResult?.keyMoments || [];
-    const idx = moments.indexOf(item);
-    const cards = this.el.blunderList.querySelectorAll('.blunder-card');
-    cards.forEach(c => c.classList.remove('active'));
-    if (idx !== -1) {
-      const matchedCard = this.el.blunderList.querySelector(`.blunder-card[data-index="${idx}"]`);
-      if (matchedCard) matchedCard.classList.add('active');
-    }
-
-    if (viewMode === 'decision') {
-      // 1. Board setup at fenBefore
-      const prevPly = Math.max(0, item.ply - 1);
-      const prevPos = this.positions[prevPly];
-      const lastMove = prevPos ? { from: prevPos.from, to: prevPos.to } : null;
-
-      this.boardUI.setPosition(item.fenBefore, lastMove);
-      this.currentPly = prevPly;
-      this.evalChart.setCursor(item.ply);
-      this.highlightMoveRow(item.ply);
-
-      this.el.boardStatusText.textContent = `🎯 走棋决策 · 第 ${item.moveNumber} 步 (${item.turn === 'w' ? '白方' : '黑方'}思考中)`;
-
-      // Arrows: Stockfish best move (green)
-      const arrows = [];
-      if (item.bestUci && item.bestUci.length >= 4) {
-        arrows.push({
-          from: item.bestUci.slice(0, 2),
-          to: item.bestUci.slice(2, 4),
-          color: 'green',
-          label: item.bestSan || '最佳'
-        });
-      }
-
-      this.boardUI.setArrows(arrows);
-
-      // Async fetch Maia top intuition arrow for this decision
-      this.maiaEngine.predict(item.fenBefore, this.currentElo).then(pred => {
-        if (pred && pred.moves && pred.moves.length > 0) {
-          const topIntuition = pred.moves[0];
-          if (topIntuition.uci && topIntuition.uci !== item.bestUci) {
-            arrows.push({
-              from: topIntuition.uci.slice(0, 2),
-              to: topIntuition.uci.slice(2, 4),
-              color: 'gold',
-              label: `${topIntuition.san} (${topIntuition.prob}%)`
-            });
-            this.boardUI.setArrows(arrows);
-          }
-        }
-      });
-
-      // Divergence explanation
-      this.el.divergenceBadge.textContent = '🎯 走棋决策研判';
-      this.el.divergenceBadge.style.color = 'var(--brand-green)';
-      this.el.divergenceContent.innerHTML = `
-        轮到 <strong>${item.turn === 'w' ? '白方' : '黑方'}</strong> 走棋。<br/>
-        实战走出了 <strong style="color: var(--brand-red);">${item.san}</strong> (造成 <strong>${item.lossPawns}</strong> 兵局面损耗)；<br/>
-        引擎推荐最佳着法为 <strong style="color: var(--brand-green);">${item.bestSan}</strong>。
-      `;
-
-    } else {
-      // 2. Board setup at fenAfter
-      this.boardUI.setPosition(item.fenAfter, { from: item.from, to: item.to });
-      this.currentPly = item.ply;
-      this.evalChart.setCursor(item.ply);
-      this.highlightMoveRow(item.ply);
-
-      this.el.boardStatusText.textContent = `👀 实战结果 · 第 ${item.moveNumber} 步 (${item.turn === 'w' ? '白方' : '黑方'}走出了 ${item.san})`;
-
-      // Arrows: Dashed red blunder arrow
-      const arrows = [];
-      if (item.from && item.to) {
-        arrows.push({
-          from: item.from,
-          to: item.to,
-          color: 'red',
-          dashed: true,
-          label: `${item.san} (${item.lossPawns})`
-        });
-      }
-      this.boardUI.setArrows(arrows);
-
-      this.el.divergenceBadge.textContent = '👀 局面损耗变动';
-      this.el.divergenceBadge.style.color = 'var(--brand-red)';
-      this.el.divergenceContent.innerHTML = `
-        走棋完成: <strong style="color: var(--brand-red);">${item.san}</strong>。<br/>
-        局势从 <strong>${item.evalBefore}</strong> 急剧转向 <strong>${item.evalAfter}</strong> (净亏损 <strong>${item.lossPawns}</strong> 兵)。
-      `;
-    }
   }
 
   renderMoveList() {
@@ -702,9 +587,9 @@ class AnalysisStudioApp {
     if (clampedPly === 0) {
       this.el.boardStatusText.textContent = '开局局面';
       this.boardUI.clearArrows();
-      this.el.divergenceBadge.textContent = '♟️ 开局状态';
+      this.el.divergenceBadge.textContent = '♟️ 开局';
       this.el.divergenceBadge.style.color = 'var(--brand-green)';
-      this.el.divergenceContent.textContent = '对局起始状态，双方棋子全部就位。';
+      this.resetComparePanel();
     } else {
       const sideText = currentPos.turn === 'w' ? '白方' : '黑方';
       this.el.boardStatusText.textContent = `第 ${currentPos.moveNumber} 步 (${sideText} ${currentPos.san})`;
@@ -714,55 +599,133 @@ class AnalysisStudioApp {
 
   updateActivePositionAnalysis() {
     if (this.isBranching) return;
-    if (this.currentPly === 0) return;
+    if (this.currentPly === 0) {
+      this.resetComparePanel();
+      return;
+    }
 
     const currentPos = this.positions[this.currentPly];
     if (!currentPos) return;
 
-    // Check if we have reviewResult for this ply
     const moveReview = this.reviewResult?.allMoves?.find(m => m.ply === this.currentPly);
 
     if (moveReview) {
-      const sideText = moveReview.turn === 'w' ? '白方' : '黑方';
       const arrows = [];
 
-      if (moveReview.severity === 'blunder' || moveReview.severity === 'mistake') {
-        this.el.divergenceBadge.textContent = `⚠️ 人机分歧 · ${moveReview.severity === 'blunder' ? '大漏' : '失误'}`;
-        this.el.divergenceBadge.style.color = 'var(--brand-red)';
+      // --- Populate three-way comparison cards ---
 
+      // 1. Engine recommendation
+      this.el.compareEngineSan.textContent = moveReview.bestSan || '—';
+      this.el.compareEngineSan.style.color = 'var(--brand-green)';
+      this.el.compareEngineMeta.textContent = moveReview.evalBefore ? `评估 ${moveReview.evalBefore}` : '';
+
+      // 2. Maia intuition (from pre-computed data)
+      if (moveReview.maiaTopSan) {
+        this.el.compareIntuitionSan.textContent = moveReview.maiaTopSan;
+        this.el.compareIntuitionSan.style.color = '#e6a520';
+        this.el.compareIntuitionMeta.textContent = moveReview.maiaTopProb != null
+          ? `概率 ${moveReview.maiaTopProb.toFixed(1)}%`
+          : '';
+      } else {
+        this.el.compareIntuitionSan.textContent = '—';
+        this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
+        this.el.compareIntuitionMeta.textContent = '';
+      }
+
+      // 3. Played move
+      this.el.comparePlayedSan.textContent = moveReview.san;
+      this.el.comparePlayedMeta.textContent = moveReview.evalAfter ? `结果 ${moveReview.evalAfter}` : '';
+
+      // Highlight played card based on severity
+      const playedCard = this.el.comparePlayedCard;
+      playedCard.classList.remove('is-blunder');
+      if (moveReview.severity === 'blunder' || moveReview.severity === 'mistake') {
+        this.el.comparePlayedSan.style.color = 'var(--brand-red)';
+        playedCard.classList.add('is-blunder');
+      } else {
+        this.el.comparePlayedSan.style.color = 'var(--text-main)';
+      }
+
+      // Check for match badges
+      const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
+      const cleanBest = (moveReview.bestSan || '').replace(/[+#?!]/g, '');
+      const cleanMaia = (moveReview.maiaTopSan || '').replace(/[+#?!]/g, '');
+
+      // Add match indicator if played == engine best
+      if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
+        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge">= 引擎</span>`;
+      } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
+        this.el.comparePlayedSan.innerHTML = `${moveReview.san} <span class="compare-match-badge" style="background: rgba(230,165,32,0.15); color: #e6a520;">= 直觉</span>`;
+      }
+
+      // --- Badge ---
+      if (moveReview.severity === 'blunder') {
+        this.el.divergenceBadge.textContent = '⚠️ 大漏';
+        this.el.divergenceBadge.style.color = 'var(--brand-red)';
+      } else if (moveReview.severity === 'mistake') {
+        this.el.divergenceBadge.textContent = '⚠️ 失误';
+        this.el.divergenceBadge.style.color = 'var(--brand-red)';
+      } else if (moveReview.severity === 'inaccuracy') {
+        this.el.divergenceBadge.textContent = '⚡ 疑问手';
+        this.el.divergenceBadge.style.color = 'var(--brand-gold)';
+      } else {
+        this.el.divergenceBadge.textContent = '✓ 正常';
+        this.el.divergenceBadge.style.color = 'var(--brand-green)';
+      }
+
+      // --- Arrows ---
+      // Green arrow: Stockfish best (only if different from played)
+      if (moveReview.bestUci && moveReview.bestUci.length >= 4 && cleanPlayed !== cleanBest) {
+        arrows.push({
+          from: moveReview.bestUci.slice(0, 2),
+          to: moveReview.bestUci.slice(2, 4),
+          color: 'green',
+          label: moveReview.bestSan
+        });
+      }
+
+      // Gold arrow: Maia top pick (if different from both played and engine best)
+      if (moveReview.maiaTopUci && moveReview.maiaTopUci.length >= 4) {
+        const maiaFrom = moveReview.maiaTopUci.slice(0, 2);
+        const maiaTo = moveReview.maiaTopUci.slice(2, 4);
+        const isDiffFromBest = moveReview.maiaTopUci !== moveReview.bestUci;
+        const isDiffFromPlayed = cleanMaia !== cleanPlayed;
+        if (isDiffFromPlayed || isDiffFromBest) {
+          arrows.push({
+            from: maiaFrom,
+            to: maiaTo,
+            color: 'gold',
+            label: `${moveReview.maiaTopSan} ${moveReview.maiaTopProb != null ? moveReview.maiaTopProb.toFixed(0) + '%' : ''}`
+          });
+        }
+      }
+
+      // Red dashed arrow: played move (only if it's a blunder/mistake)
+      if ((moveReview.severity === 'blunder' || moveReview.severity === 'mistake') && moveReview.from && moveReview.to) {
         arrows.push({
           from: moveReview.from,
           to: moveReview.to,
           color: 'red',
           dashed: true,
-          label: `${moveReview.san} (${moveReview.lossPawns})`
+          label: moveReview.san
         });
-
-        this.el.divergenceContent.innerHTML = `
-          实战 <strong>${sideText}</strong> 走出: <strong style="color: var(--brand-red);">${moveReview.san}</strong>。<br/>
-          推荐最佳走法为 <strong style="color: var(--brand-green);">${moveReview.bestSan}</strong>。<br/>
-          局面损耗: <strong style="color: var(--brand-red);">${moveReview.lossPawns}</strong> 兵 (变动: ${moveReview.evalBefore} ➔ ${moveReview.evalAfter})
-        `;
-      } else {
-        this.el.divergenceBadge.textContent = '✓ 正常着法';
-        this.el.divergenceBadge.style.color = 'var(--brand-green)';
-
-        this.el.divergenceContent.innerHTML = `
-          第 ${moveReview.moveNumber} 步: <strong>${sideText}</strong> 走棋 <strong>${moveReview.san}</strong>。<br/>
-          当前局势评分: <strong>${moveReview.evalAfter || '0.00'}</strong>
-        `;
       }
 
       this.boardUI.setArrows(arrows);
     } else {
-      this.el.divergenceBadge.textContent = '⚡ 局面分析中';
+      // No review data yet - show loading state
+      this.el.divergenceBadge.textContent = '⚡ 分析中';
       this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-      this.el.divergenceContent.textContent = '正在计算当前局面的人类直觉与引擎评估...';
+      this.resetComparePanel();
 
-      // Realtime lightweight Maia prediction
+      // Fallback realtime Maia prediction
       this.maiaEngine.predict(currentPos.fen, this.currentElo).then(pred => {
+        if (this.currentPly !== this.positions.indexOf(currentPos)) return;
         if (pred && pred.moves && pred.moves.length > 0) {
           const top = pred.moves[0];
+          this.el.compareIntuitionSan.textContent = top.san || '—';
+          this.el.compareIntuitionSan.style.color = '#e6a520';
+          this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
           if (top.uci) {
             this.boardUI.setArrows([{
               from: top.uci.slice(0, 2),
@@ -775,6 +738,20 @@ class AnalysisStudioApp {
       });
     }
   }
+
+  resetComparePanel() {
+    this.el.compareEngineSan.textContent = '—';
+    this.el.compareEngineSan.style.color = 'var(--text-dim)';
+    this.el.compareEngineMeta.textContent = '';
+    this.el.compareIntuitionSan.textContent = '—';
+    this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
+    this.el.compareIntuitionMeta.textContent = '';
+    this.el.comparePlayedSan.textContent = '—';
+    this.el.comparePlayedSan.style.color = 'var(--text-dim)';
+    this.el.comparePlayedMeta.textContent = '';
+    this.el.comparePlayedCard.classList.remove('is-blunder');
+  }
+
 
   handleUserBoardMove(move, newFen) {
     // 1. Check if user's move matches the next mainline move
@@ -790,9 +767,11 @@ class AnalysisStudioApp {
     this.el.branchBanner.style.display = 'flex';
     this.el.boardStatusText.textContent = `🌿 分支走法: ${move.san || move.uci}`;
 
-    this.el.divergenceBadge.textContent = '🌿 自由试演分支研判';
+    this.el.divergenceBadge.textContent = '🌿 分支试演';
     this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-    this.el.divergenceContent.innerHTML = '正在测算该分支局面下的人类直觉倾向与引擎评分...';
+    this.resetComparePanel();
+    this.el.comparePlayedSan.textContent = move.san || move.uci;
+    this.el.comparePlayedSan.style.color = 'var(--text-main)';
 
     // Realtime dual-engine evaluation on branch position
     const arrows = [];
@@ -802,12 +781,15 @@ class AnalysisStudioApp {
       if (!this.isBranching || this.branchFen !== newFen) return;
       if (pred && pred.moves && pred.moves.length > 0) {
         const m = pred.moves[0];
+        this.el.compareIntuitionSan.textContent = m.san || '—';
+        this.el.compareIntuitionSan.style.color = '#e6a520';
+        this.el.compareIntuitionMeta.textContent = m.prob != null ? `概率 ${m.prob.toFixed(1)}%` : '';
         if (m.uci) {
           arrows.push({
             from: m.uci.slice(0, 2),
             to: m.uci.slice(2, 4),
             color: 'gold',
-            label: `直觉 ${m.san} (${m.prob}%)`
+            label: `${m.san} (${m.prob}%)`
           });
           this.boardUI.setArrows(arrows);
         }
@@ -819,18 +801,16 @@ class AnalysisStudioApp {
       this.stockfish.evaluate(newFen, 6, 2500, 1).then(sfRes => {
         if (!this.isBranching || this.branchFen !== newFen) return;
         if (sfRes && sfRes.bestMove) {
+          this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
+          this.el.compareEngineSan.style.color = 'var(--brand-green)';
+          this.el.compareEngineMeta.textContent = `评估 ${sfRes.score} (d${sfRes.depth})`;
           arrows.push({
             from: sfRes.bestMove.fromSq,
             to: sfRes.bestMove.toSq,
             color: 'green',
-            label: `引擎 ${sfRes.bestMove.san || ''} (${sfRes.score})`
+            label: `${sfRes.bestMove.san || ''} (${sfRes.score})`
           });
           this.boardUI.setArrows(arrows);
-
-          this.el.divergenceContent.innerHTML = `
-            分支局面评估: <strong>${sfRes.score}</strong> (深度 ${sfRes.depth})。<br/>
-            引擎最优应着: <strong style="color: var(--brand-green);">${sfRes.bestMove.san}</strong>。
-          `;
         }
       });
     }

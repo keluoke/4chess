@@ -91,9 +91,18 @@ ws.addEventListener('message', (evt) => {
   }
 });
 
-// Wait 12 seconds for the review to complete
-console.log('[E2E Test] Awaiting review execution...');
-await sleep(12000);
+console.log('[E2E Test] Awaiting review execution (polling for completion)...');
+for (let i = 0; i < 120; i++) {
+  await sleep(500);
+  const check = await send('Runtime.evaluate', {
+    expression: '!!window.__maiaStudioApp?.reviewResult',
+    returnByValue: true
+  });
+  if (check?.result?.value) {
+    console.log(`[E2E Test] Review finished after ~${(i * 0.5).toFixed(1)}s`);
+    break;
+  }
+}
 
 // Verify State & Test Interactivity
 const testResult = await send('Runtime.evaluate', {
@@ -113,28 +122,23 @@ const testResult = await send('Runtime.evaluate', {
     const plyAfterClick = app.currentPly;
     const statusTextAfterMove = document.getElementById('board-status-text')?.textContent;
 
-    // 3. Test Clicking "🎯 走棋前决策" on First Blunder Card
-    let drillBeforeFen = null;
-    let drillAfterFen = null;
-    let arrowsDecisionCount = 0;
-    let arrowsResultCount = 0;
+    // 3. Test Three-Way Comparison Panel
+    const engineSan = document.getElementById('compare-engine-san')?.textContent;
+    const intuitionSan = document.getElementById('compare-intuition-san')?.textContent;
+    const playedSan = document.getElementById('compare-played-san')?.textContent;
 
+    // 4. Test Clicking First Blunder Card (should trigger goToPly)
+    let cardClickPly = null;
+    let cardClickArrows = 0;
     const firstCard = blunderCards[0];
     if (firstCard) {
-      const decBtn = firstCard.querySelector('.btn-drill-decision');
-      if (decBtn) {
-        decBtn.click();
-        drillBeforeFen = app.boardUI.chess.getFen();
-        arrowsDecisionCount = app.boardUI.arrows.length;
-      }
-
-      const resBtn = firstCard.querySelector('.btn-drill-result');
-      if (resBtn) {
-        resBtn.click();
-        drillAfterFen = app.boardUI.chess.getFen();
-        arrowsResultCount = app.boardUI.arrows.length;
-      }
+      firstCard.click();
+      cardClickPly = app.currentPly;
+      cardClickArrows = app.boardUI.arrows.length;
     }
+
+    // 5. Check Maia data is stored per move
+    const hasMaiaData = app.reviewResult?.allMoves?.some(m => m.maiaTopSan != null);
 
     return {
       success: true,
@@ -146,11 +150,12 @@ const testResult = await send('Runtime.evaluate', {
       hasChartArea: !!chartArea,
       plyAfterClick,
       statusTextAfterMove,
-      drillBeforeFen,
-      drillAfterFen,
-      fensDifferent: drillBeforeFen !== drillAfterFen,
-      arrowsDecisionCount,
-      arrowsResultCount,
+      engineSan,
+      intuitionSan,
+      playedSan,
+      cardClickPly,
+      cardClickArrows,
+      hasMaiaData,
       stockfishReady: app.stockfish.isReady
     };
   })()`,
