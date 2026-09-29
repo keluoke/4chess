@@ -136,6 +136,59 @@ export async function initMaiaExtension() {
     },
     onClearBlunderDrill: () => {
       activeDrill = null;
+    },
+    onOpenStandaloneAnalysis: async () => {
+      if (FairPlayGuard.isLiveGameInProgress()) {
+        panel.showToast(panel.lang === 'zh'
+          ? '🛡️ 当前对局仍在进行中！根据反作弊铁律，严禁在对局中开启复盘分析。'
+          : '🛡️ Live game active! Analysis is disabled per Fair Play rules.');
+        return;
+      }
+
+      panel.showToast(panel.lang === 'zh' ? '正在提取棋谱数据...' : 'Extracting game moves...');
+      const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
+      const moves = await GameAnalyzer.extractPageMoves(platform);
+
+      if (!moves || moves.length === 0) {
+        panel.showToast(panel.lang === 'zh' ? '未能从当前页面提取到棋谱，请确认棋盘上已有完赛步数。' : 'No moves could be extracted from page.');
+        return;
+      }
+
+      let whitePlayer = '白方';
+      let blackPlayer = '黑方';
+      let gameResult = '*';
+
+      try {
+        if (platform === 'chesscom') {
+          const wEl = document.querySelector('.board-layout-player.player-white .user-username-component, .player-component.player-white .user-username-component, .user-tagline-white .user-tagline-username');
+          const bEl = document.querySelector('.board-layout-player.player-black .user-username-component, .player-component.player-black .user-username-component, .user-tagline-black .user-tagline-username');
+          if (wEl?.textContent) whitePlayer = wEl.textContent.trim();
+          if (bEl?.textContent) blackPlayer = bEl.textContent.trim();
+        } else if (platform === 'lichess') {
+          const wEl = document.querySelector('.game__meta__players .white .user-link, .ruser-top .user-link');
+          const bEl = document.querySelector('.game__meta__players .black .user-link, .ruser-bottom .user-link');
+          if (wEl?.textContent) whitePlayer = wEl.textContent.trim();
+          if (bEl?.textContent) blackPlayer = bEl.textContent.trim();
+        }
+      } catch (e) {}
+
+      const gameData = {
+        moves,
+        cachedReview: analyzer.lastReviewResult || null,
+        white: whitePlayer,
+        black: blackPlayer,
+        result: gameResult,
+        url: window.location.href
+      };
+
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'OPEN_ANALYSIS_TAB',
+          gameData
+        }, () => {
+          panel.showToast(panel.lang === 'zh' ? '🚀 独立大屏深度复盘工作台已开启！' : '🚀 Standalone Studio launched!');
+        });
+      }
     }
   });
 

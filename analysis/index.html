@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maia 3 · 独立大屏深度复盘工作台</title>
+  <link rel="stylesheet" href="analysis.css">
+</head>
+<body>
+  <!-- Header Navbar -->
+  <header class="studio-navbar">
+    <div class="studio-brand">
+      <span class="studio-logo">♟️</span>
+      <div class="studio-title">
+        Maia 3
+        <span class="studio-badge">PRO STUDIO</span>
+      </div>
+    </div>
+
+    <div class="studio-header-center">
+      <div class="game-meta-badge" id="game-meta-badge">
+        <span id="meta-white">⚪ 白方</span>
+        <span style="color: var(--text-dim);">vs</span>
+        <span id="meta-black">⚫ 黑方</span>
+        <span class="game-meta-result" id="meta-result">*</span>
+      </div>
+    </div>
+
+    <div class="studio-header-actions">
+      <!-- Target Elo selector -->
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
+        <span>直觉 ELO:</span>
+        <select id="elo-selector" class="btn-header" style="padding: 0 8px; cursor: pointer;">
+          <option value="1100">1100 (初阶)</option>
+          <option value="1500">1500 (中阶)</option>
+          <option value="1900" selected>1900 (进阶)</option>
+          <option value="2200">2200 (大师)</option>
+        </select>
+      </div>
+
+      <!-- Engine Status Badges -->
+      <div class="engine-status-pill" id="status-maia" title="Maia 3 直觉预测引擎">
+        <span class="status-dot loading" id="dot-maia"></span>
+        <span>Maia 3</span>
+      </div>
+      <div class="engine-status-pill" id="status-sf" title="Stockfish 19 WASM 评估引擎">
+        <span class="status-dot loading" id="dot-sf"></span>
+        <span>Stockfish 19</span>
+      </div>
+
+      <!-- Actions -->
+      <button type="button" class="btn-header" id="btn-import-pgn">
+        <span>📥</span> 导入 PGN
+      </button>
+      <button type="button" class="btn-header btn-primary" id="btn-reanalyze">
+        <span>⚡</span> 重新全盘分析
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace Layout -->
+  <main class="studio-layout">
+    <!-- Left: Chessboard Column -->
+    <section class="board-column">
+      <!-- Interactive SVG/DOM Chessboard -->
+      <div id="board-container" class="maia-board-wrapper"></div>
+
+      <!-- Free Branch Exploration Banner -->
+      <div id="branch-banner" class="branch-banner" style="display: none;">
+        <span>🌿 自由试演分支中 (What-if Line) · 正在计算直觉与走法</span>
+        <button type="button" class="btn-header" id="btn-exit-branch" style="height: 26px; padding: 0 10px; font-size: 11px;">返回实战棋谱</button>
+      </div>
+
+      <!-- Navigation & Playback Controls -->
+      <div class="board-controls">
+        <div class="btn-nav-group">
+          <button type="button" class="btn-nav" id="btn-first" title="开局首步 (Home)">|◀</button>
+          <button type="button" class="btn-nav" id="btn-prev" title="上一步 (Left Arrow)">◀</button>
+          <button type="button" class="btn-nav" id="btn-play" title="自动播放/暂停">▶</button>
+          <button type="button" class="btn-nav" id="btn-next" title="下一步 (Right Arrow)">▶</button>
+          <button type="button" class="btn-nav" id="btn-last" title="终局末步 (End)">▶|</button>
+          <button type="button" class="btn-nav" id="btn-flip" title="翻转棋盘视角 (F)">🔄</button>
+        </div>
+        <div id="board-status-text" style="font-size: 12px; font-weight: 600; color: var(--text-muted);">
+          开局局面
+        </div>
+      </div>
+
+      <!-- Review Progress Banner (shown during analysis) -->
+      <div id="analysis-progress-card" class="board-controls" style="display: none; flex-direction: column; gap: 8px; align-items: stretch;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px;">
+          <span id="analysis-phase-text" style="color: var(--brand-green); font-weight: 600;">正在全盘评估中...</span>
+          <span id="analysis-percent-text" style="color: var(--text-dim);">0%</span>
+        </div>
+        <div style="width: 100%; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
+          <div id="analysis-progress-bar" style="width: 0%; height: 100%; background: var(--brand-green); transition: width 0.15s ease;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Analysis & Insights Column -->
+    <section class="analysis-column">
+      <!-- 1. Advantage & Winrate Trend Curve -->
+      <div class="eval-chart-wrapper" id="eval-chart-container">
+        <!-- Rendered by EvalChart -->
+      </div>
+
+      <!-- 2. Divergence Insight Box -->
+      <div class="divergence-box" id="divergence-box">
+        <div class="divergence-badge" id="divergence-badge">⚡ 局面洞察</div>
+        <div class="divergence-content" id="divergence-content">
+          点击着法表或下方漏着卡片，即可跳转对应局面并查看人机直觉比对。
+        </div>
+      </div>
+
+      <!-- 3. Dual Tabs: Blunder Leaderboard & Move Notation -->
+      <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+        <div class="panel-tabs">
+          <button type="button" class="tab-btn active" id="tab-blunders">
+            🎯 漏着与转折榜 (<span id="blunder-count-badge">0</span>)
+          </button>
+          <button type="button" class="tab-btn" id="tab-moves">
+            📜 完整着法表 (<span id="move-count-badge">0</span>)
+          </button>
+        </div>
+
+        <div class="tab-content" id="tab-content-area">
+          <!-- Blunder Leaderboard Tab -->
+          <div id="blunder-tab-content">
+            <div class="blunder-list" id="blunder-list">
+              <div style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
+                正在加载棋局数据...
+              </div>
+            </div>
+          </div>
+
+          <!-- Move Notation Table Tab -->
+          <div id="moves-tab-content" style="display: none;">
+            <div class="move-notation-table" id="move-notation-table">
+              <!-- Dynamically populated rows -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- PGN Import Modal -->
+  <div class="modal-overlay" id="pgn-modal">
+    <div class="modal-card">
+      <h3 class="modal-title">📥 导入 / 粘贴 PGN 棋谱</h3>
+      <textarea id="pgn-input" class="pgn-textarea" placeholder="在此粘贴 PGN 文本，例如：
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 ..."></textarea>
+      <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
+        <span>示例棋谱:</span>
+        <button type="button" class="btn-header" id="sample-fischer" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
+        <button type="button" class="btn-header" id="sample-kasparov" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫不朽对局</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-header" id="btn-cancel-pgn">取消</button>
+        <button type="button" class="btn-header btn-primary" id="btn-submit-pgn">加载并复盘</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="analysis.js"></script>
+</body>
+</html>

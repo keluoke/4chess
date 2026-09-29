@@ -112,6 +112,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch(err => sendResponse({ ok: false, error: err.message }));
     return true;
   }
+
+  if (msg.type === 'OPEN_ANALYSIS_TAB') {
+    const gameData = msg.gameData || {};
+    chrome.storage.local.set({ active_analysis_game: gameData }, () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('analysis/index.html') }, (tab) => {
+        sendResponse({ ok: true, tabId: tab?.id });
+      });
+    });
+    return true;
+  }
 });
 
 async function handleFetchChesscomGame(gameId, usernames = [], gameType = 'live') {

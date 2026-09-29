@@ -55,6 +55,7 @@ const I18N = {
     deltaLoss: '直觉损耗',
     floatTitle: 'Maia 3',
     btnAnalyzeGame: '📊 全局棋局复盘 (损耗榜)',
+    btnStandaloneStudio: '🚀 独立大屏深度复盘',
     reviewTitle: '📊 全局复盘 · 关键局面损耗榜',
     reviewRunning: '正在复盘全盘对局...',
     btnCancelReview: '取消复盘',
@@ -125,6 +126,7 @@ const I18N = {
     deltaLoss: 'Intuition Loss',
     floatTitle: 'Maia 3',
     btnAnalyzeGame: '📊 Game Review (Blunder List)',
+    btnStandaloneStudio: '🚀 Standalone Studio Review',
     reviewTitle: '📊 Game Review · Top Loss Moves',
     reviewRunning: 'Analyzing entire game...',
     btnCancelReview: 'Cancel Review',
@@ -152,7 +154,7 @@ const I18N = {
 };
 
 export class IntuitionPanel {
-  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove, onSelectBlunder, onClearBlunderDrill }) {
+  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove, onSelectBlunder, onClearBlunderDrill, onOpenStandaloneAnalysis }) {
     this.onEloChange = onEloChange;
     this.onToggleChange = onToggleChange;
     this.onMoveHover = onMoveHover;
@@ -163,6 +165,7 @@ export class IntuitionPanel {
     this.onJumpToMove = onJumpToMove;
     this.onSelectBlunder = onSelectBlunder;
     this.onClearBlunderDrill = onClearBlunderDrill;
+    this.onOpenStandaloneAnalysis = onOpenStandaloneAnalysis;
     this.activeDrill = null;
 
     this.container = null;
@@ -372,7 +375,12 @@ export class IntuitionPanel {
             <span>📊</span>
             <span id="lbl-review-title">${this.t('reviewTitle')}</span>
           </div>
-          <button type="button" class="weui-review-close" id="btn-close-review" title="Close">✕</button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="weui-btn-review" id="btn-review-open-studio" style="font-size: 11px; padding: 2px 8px; height: 26px; border-radius: 4px; background: rgba(7, 193, 96, 0.15); border: 0.5px solid rgba(7, 193, 96, 0.4); color: var(--weui-BRAND); cursor: pointer;" title="在独立大屏工作台深度复盘">
+              🚀 独立大屏
+            </button>
+            <button type="button" class="weui-review-close" id="btn-close-review" title="Close">✕</button>
+          </div>
         </div>
         <div class="weui-review-body" id="weui-review-body">
           <!-- Dynamic Content -->
@@ -429,11 +437,15 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- Game Review Entry Button -->
-        <div class="weui-review-entry">
-          <button type="button" id="btn-trigger-review" class="weui-btn-review">
+        <!-- Game Review Entry Buttons -->
+        <div class="weui-review-entry" style="display: flex; gap: 6px;">
+          <button type="button" id="btn-trigger-review" class="weui-btn-review" style="flex: 1;">
             <span>📊</span>
             <span id="lbl-btn-review">${this.t('btnAnalyzeGame')}</span>
+          </button>
+          <button type="button" id="btn-trigger-standalone" class="weui-btn-review" style="flex: 1; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); color: var(--weui-BRAND);" title="${this.lang === 'zh' ? '提取棋谱并在独立全屏工作台中复盘' : 'Open in Standalone Analysis Studio'}">
+            <span>🚀</span>
+            <span id="lbl-btn-standalone">${this.t('btnStandaloneStudio')}</span>
           </button>
         </div>
 
@@ -733,9 +745,21 @@ export class IntuitionPanel {
 
     // 6. Game Review Trigger, Back & Close Buttons
     const triggerReviewBtn = this.container.querySelector('#btn-trigger-review');
+    const triggerStandaloneBtn = this.container.querySelector('#btn-trigger-standalone');
+    const reviewOpenStudioBtn = this.container.querySelector('#btn-review-open-studio');
     const reviewDrawer = this.container.querySelector('#weui-review-overlay');
     const reviewCloseBtn = this.container.querySelector('#btn-close-review');
     const backReviewBtn = this.container.querySelector('#weui-btn-back-review');
+
+    const handleOpenStudio = (e) => {
+      e.stopPropagation();
+      if (this.onOpenStandaloneAnalysis) {
+        this.onOpenStandaloneAnalysis();
+      }
+    };
+
+    if (triggerStandaloneBtn) triggerStandaloneBtn.addEventListener('click', handleOpenStudio);
+    if (reviewOpenStudioBtn) reviewOpenStudioBtn.addEventListener('click', handleOpenStudio);
 
     if (triggerReviewBtn && reviewDrawer) {
       triggerReviewBtn.addEventListener('click', (e) => {

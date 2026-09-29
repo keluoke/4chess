@@ -58,7 +58,8 @@
         "engine/*",
         "models/*",
         "lib/*",
-        "icons/*"
+        "icons/*",
+        "analysis/*"
       ],
       "matches": [
         "https://lichess.org/*",
