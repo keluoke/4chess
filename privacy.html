@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>歧路 Diverge · 隐私权政策 (Privacy Policy)</title>
+  <meta name="description" content="歧路 Diverge 扩展与工作台隐私权政策：披露本地棋局推理、数据处理原则、边缘代理机制与用户权利。">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+  <link rel="icon" type="image/png" sizes="48x48" href="/icons/icon48.png?v=2">
+  <style>
+    :root {
+      --bg-main: #0B0F19;
+      --bg-card: #141C2C;
+      --bg-card-hover: #1A2438;
+      --bg-subtle: rgba(255, 255, 255, 0.03);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(7, 193, 96, 0.4);
+      --text-main: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --text-dim: #6B7280;
+      --brand-green: #07C160;
+      --brand-green-subtle: rgba(7, 193, 96, 0.12);
+      --brand-green-border: rgba(7, 193, 96, 0.3);
+      --brand-gold: #FA9D3B;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.75;
+      overflow-x: hidden;
+    }
+
+    /* Top Navigation */
+    .navbar {
+      height: 60px;
+      background: rgba(20, 28, 44, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      color: var(--brand-green);
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .lang-switcher {
+      display: flex;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+
+    .lang-btn.active {
+      background: var(--brand-green);
+      color: #FFFFFF;
+      font-weight: 600;
+    }
+
+    .btn-studio {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--brand-green);
+      background: var(--brand-green-subtle);
+      border: 1px solid var(--brand-green-border);
+      padding: 6px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn-studio:hover {
+      background: rgba(7, 193, 96, 0.22);
+      transform: translateY(-1px);
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+      flex: 1;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #FFFFFF;
+      margin-bottom: 8px;
+    }
+
+    .page-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .page-meta a {
+      color: var(--brand-green);
+      text-decoration: none;
+    }
+
+    /* Quick Highlight Cards */
+    .highlights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-bottom: 36px;
+    }
+
+    .highlight-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .highlight-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .highlight-text h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+    }
+
+    .highlight-text p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Policy Content */
+    .policy-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 36px 32px;
+    }
+
+    .policy-section {
+      margin-bottom: 36px;
+    }
+
+    .policy-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .policy-section h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-left: 3px solid var(--brand-green);
+      padding-left: 10px;
+    }
+
+    .policy-section h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #E5E7EB;
+      margin: 18px 0 8px;
+    }
+
+    .policy-section p {
+      font-size: 14px;
+      color: #D1D5DB;
+      margin-bottom: 12px;
+    }
+
+    .policy-section ul, .policy-section ol {
+      padding-left: 22px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      color: #D1D5DB;
+    }
+
+    .policy-section li {
+      margin-bottom: 6px;
+    }
+
+    .policy-section strong {
+      color: #FFFFFF;
+    }
+
+    .policy-section code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      color: #E5E7EB;
+    }
+
+    .callout {
+      background: var(--brand-green-subtle);
+      border: 1px solid var(--brand-green-border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      color: #D1D5DB;
+    }
+
+    .callout strong {
+      color: var(--brand-green);
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 30px 20px;
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--text-dim);
+      background: var(--bg-main);
+    }
+
+    footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin: 0 8px;
+    }
+
+    footer a:hover {
+      color: var(--brand-green);
+    }
+
+    @media (max-width: 640px) {
+      .navbar {
+        padding: 0 16px;
+      }
+      .brand-title {
+        font-size: 14px;
+      }
+      .container {
+        padding: 24px 14px 60px;
+      }
+      .policy-content {
+        padding: 24px 18px;
+      }
+      .page-title {
+        font-size: 22px;
+      }
+      .btn-studio span {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <a href="/analysis/" class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21v-8"></path>
+        <path d="M12 13c0-4.5-6-4.5-6-9"></path>
+        <path d="M12 13c0-4.5 6-4.5 6-9"></path>
+        <polyline points="3 7 6 4 9 7"></polyline>
+        <polyline points="15 7 18 4 21 7"></polyline>
+      </svg>
+      <span class="brand-title">歧路 Diverge</span>
+    </a>
+
+    <div class="nav-actions">
+      <div class="lang-switcher">
+        <button type="button" class="lang-btn active" id="btn-lang-zh" onclick="setLang('zh')">中文</button>
+        <button type="button" class="lang-btn" id="btn-lang-en" onclick="setLang('en')">English</button>
+      </div>
+      <a href="/analysis/" class="btn-studio">
+        <span>♟️ 打开全盘分析</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- Chinese Section -->
+    <div id="content-zh">
+      <div class="page-header">
+        <h1 class="page-title">隐私权政策</h1>
+        <div class="page-meta">
+          <span>生效日期：<strong>2026年9月30日</strong></span>
+          <span>开发者：<strong>keluoke / 歧路 Diverge 团队</strong></span>
+          <span>联系方式：<a href="mailto:contact@4chess.cc">contact@4chess.cc</a></span>
+          <span>官网：<a href="https://4chess.cc">4chess.cc</a></span>
+        </div>
+      </div>
+
+      <!-- Quick Highlights -->
+      <div class="highlights-grid">
+        <div class="highlight-card">
+          <div class="highlight-icon">🛡️</div>
+          <div class="highlight-text">
+            <h3>100% 浏览器本地推理</h3>
+            <p>对局 FEN、走法与神经网络推理全程在您的设备内存中完成，绝不上传到开发者数据库。</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-icon">⚡</div>
+          <div class="highlight-text">
+            <h3>无状态只读边缘代理</h3>
+            <p>导入公开对局时仅向边缘转发公开数字 ID，不携带也不记录任何 Cookie 或个人凭据。</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-icon">🚫</div>
+          <div class="highlight-text">
+            <h3>零广告 · 零数据出售</h3>
+            <p>不含任何第三方追踪 SDK，绝不出售或出租任何用户数据，恪守有限用途原则。</p>
+          </div>
+        </div>
+      </div>
+
+      <article class="policy-content">
+        <section class="policy-section">
+          <h2>1. 核心原则：本地优先与有限使用</h2>
+          <p>「歧路 Diverge」（以下简称“本服务”或“我们”）是一款面向广大棋手的双引擎复盘与人类直觉分析工具。我们的核心设计哲学是<strong>纯浏览器端本地处理（100% In-Browser Local Processing）</strong>：</p>
+          <ul>
+            <li><strong>无自建用户数据库</strong>：我们不设立收集用户个人资料或对局档案的私有数据库，无需注册账号即可完整使用。</li>
+            <li><strong>纯本地计算</strong>：Stockfish 19（WebAssembly）与 Maia-3 深度神经网络的计算推理均直接在您的设备硬件（CPU/GPU 内存）中独立完成。</li>
+            <li><strong>有限使用承诺</strong>：我们承诺绝不出售、出租任何用户数据，绝不将数据用于个性化广告、再营销或信用评估。</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>2. 本地处理的数据披露（依照 Chrome 商店规范）</h2>
+          <p>根据 Chrome 应用商店开发者计划政策与《用户数据常见问题（User Data FAQ）》，即便数据仅在您的客户端设备本地处理、未传输至开发者服务器，我们亦必须如实向您披露其范围与目的：</p>
+          
+          <h3>(1) 网页内容与棋盘局面数据 (Website Content & Chess Data)</h3>
+          <ul>
+            <li><strong>处理范围</strong>：当您在受支持的国际象棋平台（<code>lichess.org</code> 与 <code>chess.com</code>）浏览分析板、学习研究室、战术习题或已完赛对局页面时，本扩展的内容脚本会在当前页面内存中读取：
+              <ol>
+                <li>当前棋盘的 FEN 局面字符串与走法坐标；</li>
+                <li>历史记谱（SAN / UCI / PGN 走法记录）；</li>
+                <li>双方棋手的公开对局昵称（Usernames）与公开段位等级分（Ratings）；</li>
+                <li>对局状态证据（时钟运行状态、投降/认输按钮状态、终局裁判结果）。</li>
+              </ol>
+            </li>
+            <li><strong>处理目的</strong>：用于在本地驱动 Maia-3 预测走法注意力热力图、计算人类直觉走法概率、调用 Stockfish 19 进行胜率与损耗评估，并在复盘工作台顶部展示对局双方信息。同时，<code>FairPlayGuard</code> 守卫依靠时钟与终局状态检测实时比赛，并在对局中强制切断所有引擎计算以恪守反作弊守则。</li>
+            <li><strong>生命周期</strong>：以上数据仅临时存在于当前标签页的运行时内存中，随着标签页关闭或切局即刻释放，绝不留存或持久化上传。</li>
+          </ul>
+
+          <h3>(2) 本地持久化偏好设置 (User Preferences via <code>chrome.storage.local</code>)</h3>
+          <ul>
+            <li><strong>存储内容</strong>：
+              <ol>
+                <li>用户选定的目标直觉等级分（Elo: 1100、1500、1900、2200）；</li>
+                <li>界面显示语言（简体中文 / English）；</li>
+                <li>棋盘视觉开关（意图热力图开关、走法建议箭头开关）；</li>
+                <li>悬浮面板收起状态与悬浮球停靠坐标。</li>
+              </ol>
+            </li>
+            <li><strong>隐私界限</strong>：这些配置仅保存在您本地浏览器的扩展专有沙箱中，我们无法远程读取或同步，您可随时在浏览器中卸载扩展或清除数据进行彻底清除。</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>3. 网络请求与数据代理机制核对</h2>
+          <p>为了保证纯静态 Web 环境下的对局导入功能与神经网络权重下载，本扩展涉及以下透明、安全的网络交互：</p>
+
+          <h3>(1) 棋局公开导出与边缘代理请求 (Game Data & Edge Proxy)</h3>
+          <p>当您在全盘分析页导入已完赛对局时：</p>
+          <ul>
+            <li><strong>Lichess 平台</strong>：扩展直接向 Lichess 官方公开 API（<code>https://lichess.org/game/export/{gameId}</code>）发起单向只读 GET 请求，拉取公开棋谱。</li>
+            <li><strong>Chess.com 平台</strong>：由于第三方平台直接发起的跨域限制（CORS）与安全策略，扩展会请求位于 <code>https://4chess.cc/api/chesscom?id={gameId}</code> 的 Cloudflare Pages 边缘代理端点。</li>
+          </ul>
+          <div class="callout">
+            <strong>代理端点安全与数据透明度承诺：</strong><br>
+            • 该代理端点代码开源可查（位于本仓库 <code>functions/api/chesscom.js</code>）；<br>
+            • <strong>仅传输纯数字公开对局 ID</strong>（8–16 位合法数字），用于向 Chess.com 官方开放 callback 接口拉取公开对局记谱；<br>
+            • <strong>完全无状态（Stateless）</strong>：边缘节点<strong>绝不收集、记录、分析或存储</strong>任何用户的身份凭证、Cookies、Session、IP 地址或浏览习惯，不设任何用户数据归档日志；<br>
+            • 数据流向为单向只读，获取公开走法后即时直传回客户端，绝无数据截留。
+          </div>
+
+          <h3>(2) 神经网络模型权重下载 (Model Weights CDN)</h3>
+          <ul>
+            <li><strong>请求内容</strong>：首次运行或切换模型规格时，扩展从高速静态 CDN（<code>https://weights.4chess.cc/...</code>）下载 Maia-3 开源神经网络模型二进制权重（5M 规格约 28MB，23M 规格约 104MB）。</li>
+            <li><strong>下载存储</strong>：下载后的权重直接写入您设备本地浏览器的 IndexedDB 存储（<code>ModelCache</code>），实现后续使用瞬间秒开与离线复用。</li>
+            <li><strong>无回传追踪</strong>：此过程为标准的大文件静态 CDN 下载，不携带也不回传任何用户行为、身份或对局数据。</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>4. 第三方服务与数据共享</h2>
+          <p>我们<strong>不与任何第三方数据经纪商、广告商或统计分析机构共享任何数据</strong>：</p>
+          <ul>
+            <li>本服务不包含任何第三方跟踪 SDK、广告脚本、数据埋点或行为统计分析代码（Google Analytics、Facebook Pixel 等均未引入）。</li>
+            <li>扩展与工作台的所有网络通信仅限于上述公开棋谱获取与静态模型权重拉取。</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>5. 儿童隐私保护</h2>
+          <p>本服务为通用的国际象棋分析工具，不面向 13 岁以下儿童单独收集任何个人身份信息。由于本服务不在远端服务器收集或存储任何用户数据，所有年龄段棋手均在完全相同的本地安全沙箱环境下使用。</p>
+        </section>
+
+        <section class="policy-section">
+          <h2>6. 您的权利与数据清除</h2>
+          <p>因为我们不在服务器端保存任何关于您的账户、身份或对局数据，所以不存在远端个人档案需要申请删除或注销：</p>
+          <ul>
+            <li><strong>清除本地数据</strong>：您只需在 Chrome 浏览器中访问 <code>chrome://extensions</code>，点击本扩展的「详情」→「清除扩展数据」，或直接「移除扩展」，即可秒级彻底抹除本机保存的全部偏好配置与 IndexedDB 模型缓存。</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>7. 政策更新与联系方式</h2>
+          <p>若本扩展引入重大架构调整或新增涉及用户数据的特性，我们将在更新说明与本页面同步更新生效日期。</p>
+          <p>如果您对本隐私政策或本地数据处理有任何疑问，请随时联系开发者：</p>
+          <ul>
+            <li><strong>联系邮箱：</strong> <a href="mailto:contact@4chess.cc" style="color: var(--brand-green);">contact@4chess.cc</a></li>
+            <li><strong>开源项目主页与工单：</strong> <a href="https://github.com/keluoke/4chess" target="_blank" rel="noopener noreferrer" style="color: var(--brand-green);">https://github.com/keluoke/4chess</a></li>
+          </ul>
+        </section>
+      </article>
+    </div>
+
+    <!-- English Section -->
+    <div id="content-en" style="display: none;">
+      <div class="page-header">
+        <h1 class="page-title">Privacy Policy</h1>
+        <div class="page-meta">
+          <span>Effective Date: <strong>September 30, 2026</strong></span>
+          <span>Developer: <strong>keluoke / Diverge Chess Team</strong></span>
+          <span>Contact: <a href="mailto:contact@4chess.cc">contact@4chess.cc</a></span>
+          <span>Website: <a href="https://4chess.cc">4chess.cc</a></span>
+        </div>
+      </div>
+
+      <!-- Quick Highlights -->
+      <div class="highlights-grid">
+        <div class="highlight-card">
+          <div class="highlight-icon">🛡️</div>
+          <div class="highlight-text">
+            <h3>100% Client-Side Inferences</h3>
+            <p>Game FEN, moves, and neural network calculations run purely inside your device's memory; never sent to a database.</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-icon">⚡</div>
+          <div class="highlight-text">
+            <h3>Stateless Edge Proxy</h3>
+            <p>Importing public games queries only public numeric IDs. Zero cookies, credentials, or personal sessions are logged.</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-icon">🚫</div>
+          <div class="highlight-text">
+            <h3>Zero Ads · No Data Sales</h3>
+            <p>No third-party analytics SDKs. We never monetize, sell, or rent your data, strictly adhering to Limited Use rules.</p>
+          </div>
+        </div>
+      </div>
+
+      <article class="policy-content">
+        <section class="policy-section">
+          <h2>1. Core Principles: Local-First & Limited Use</h2>
+          <p><strong>Diverge (歧路)</strong> ("we", "us", or "our") is a dual-engine chess review and human intuition analysis workbench. Our foundational architectural principle is <strong>100% In-Browser Local Processing</strong>:</p>
+          <ul>
+            <li><strong>Zero Remote User Databases</strong>: We maintain no remote databases that collect, track, or monitor your personal profile or chess match records. No account registration is ever required.</li>
+            <li><strong>Client-Side Inferences</strong>: Both Stockfish 19 (WebAssembly) and Maia-3 deep neural networks run directly inside your client device's browser memory (CPU/GPU).</li>
+            <li><strong>Strict Limited Use</strong>: We commit never to sell, license, or monetize your data, and never to use your data for advertising, remarketing, or credit/lending scoring.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>2. Disclosure of Locally Processed Data (Chrome Store Requirement)</h2>
+          <p>Per Google Chrome Web Store Developer Program Policies and the <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq" target="_blank" rel="noopener noreferrer" style="color: var(--brand-green);">User Data FAQ</a>, <strong>even when user data is processed solely on the client machine and never sent to a remote server, developers must disclose its scope, purpose, and handling</strong>:</p>
+          
+          <h3>(1) Webpage Content & Chess Board Data</h3>
+          <ul>
+            <li><strong>Scope</strong>: When you navigate analysis boards, studies, puzzles, or concluded match archives on supported platforms (<code>lichess.org</code> and <code>chess.com</code>), the extension's content scripts read directly from the active tab's runtime memory:
+              <ol>
+                <li>Board position strings (FEN) and legal move coordinates;</li>
+                <li>Notation records (SAN / UCI / PGN move lists);</li>
+                <li>Public player usernames and platform ratings;</li>
+                <li>Match termination evidence (active clock countdown, resignation buttons, game-over banners).</li>
+              </ol>
+            </li>
+            <li><strong>Purpose</strong>: Exclusively to drive client-side Maia-3 attention heatmap rendering, compute human intuition probabilities, execute Stockfish 19 centipawn evaluations, and display player labels on the review studio. Furthermore, our <code>FairPlayGuard</code> uses clock and result states to guarantee complete engine lockout during live matches in accordance with fair-play rules.</li>
+            <li><strong>Retention</strong>: This information is processed strictly in temporary tab memory and is instantaneously discarded upon tab closure or position change. It is never logged or uploaded to any remote server.</li>
+          </ul>
+
+          <h3>(2) Local Client Storage (<code>chrome.storage.local</code>)</h3>
+          <ul>
+            <li><strong>Stored Items</strong>:
+              <ol>
+                <li>Default target intuition Elo rating (1100, 1500, 1900, 2200);</li>
+                <li>Interface language preference (<code>zh-CN</code> / <code>en</code>);</li>
+                <li>Visual overlay toggles (heatmap toggle, candidate arrows toggle);</li>
+                <li>Floating panel minimized state and floating ball dock coordinates.</li>
+              </ol>
+            </li>
+            <li><strong>Privacy Boundary</strong>: These values remain entirely within your local Chrome profile sandbox. We have zero remote access to them, and they are never synced to our servers.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>3. Network Requests & Edge Proxy Audit</h2>
+          <p>To enable PGN imports and neural network weight loading in a secure web environment, the extension engages in the following transparent network calls:</p>
+
+          <h3>(1) Public Game Imports & Edge Proxy Requests</h3>
+          <p>When you import a finished match in the Full Game Analysis studio:</p>
+          <ul>
+            <li><strong>Lichess</strong>: The extension sends a direct, unauthenticated GET request to Lichess's public API (<code>https://lichess.org/game/export/{gameId}</code>) to retrieve public PGNs.</li>
+            <li><strong>Chess.com</strong>: Due to CORS and browser-side CSP restrictions, the extension queries a dedicated Cloudflare Pages edge proxy endpoint: <code>https://4chess.cc/api/chesscom?id={gameId}</code>.</li>
+          </ul>
+          <div class="callout">
+            <strong>Edge Proxy Safety & Transparency:</strong><br>
+            • The proxy code is fully open-source (located in <code>functions/api/chesscom.js</code>);<br>
+            • <strong>Only public numeric Game IDs (8–16 digits) are transmitted</strong> to fetch public match callbacks from Chess.com;<br>
+            • <strong>Stateless Operation</strong>: The edge endpoint <strong>never logs, collects, inspects, or stores</strong> personal credentials, cookies, session identifiers, user IP addresses, or browsing history;<br>
+            • The communication is strictly one-way and read-only. Data is passed directly to the client browser without remote retention.
+          </div>
+
+          <h3>(2) Neural Network Model Weights Delivery</h3>
+          <ul>
+            <li><strong>Operation</strong>: Upon initial use or model switching, the extension downloads Maia-3 open-source neural network weights (5M model ~28MB, 23M model ~104MB) from our high-speed static CDN (<code>https://weights.4chess.cc/...</code>).</li>
+            <li><strong>Client Cache</strong>: The binary weights are saved directly to your browser's local IndexedDB (<code>ModelCache</code>) for instant subsequent launches and offline review capability.</li>
+            <li><strong>No Telemetry</strong>: This is a purely static GET file transfer without telemetry, analytics, or user fingerprinting.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>4. Third-Party Sharing</h2>
+          <p>We <strong>do not share, sell, or transfer any user data to third parties, data brokers, or advertising networks</strong>:</p>
+          <ul>
+            <li>The extension contains zero tracking SDKs, zero advertising modules, and zero third-party telemetry libraries (such as Google Analytics).</li>
+            <li>All network communication is restricted exclusively to public chess exports and static model delivery as detailed above.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>5. Children's Privacy</h2>
+          <p>Diverge is a general-purpose chess review utility and does not knowingly collect personal information from children under 13. Because our architecture handles data locally without server-side user profiles, all users operate within the identical private, local sandbox.</p>
+        </section>
+
+        <section class="policy-section">
+          <h2>6. Your Rights & Data Deletion</h2>
+          <p>Because no personal information or chess games are stored on our servers, there is no remote account or database record to request deletion for:</p>
+          <ul>
+            <li><strong>Wiping Local Data</strong>: You can permanently erase all local preferences, cached boards, and IndexedDB model weights at any moment by navigating to <code>chrome://extensions</code>, clicking <strong>Details</strong> on Diverge, and selecting <strong>Clear data</strong>, or by simply uninstalling the extension.</li>
+          </ul>
+        </section>
+
+        <section class="policy-section">
+          <h2>7. Contact Us</h2>
+          <p>If you have any questions or feedback regarding this Privacy Policy or our local data practices, please contact:</p>
+          <ul>
+            <li><strong>Email:</strong> <a href="mailto:contact@4chess.cc" style="color: var(--brand-green);">contact@4chess.cc</a></li>
+            <li><strong>GitHub Repository & Issues:</strong> <a href="https://github.com/keluoke/4chess" target="_blank" rel="noopener noreferrer" style="color: var(--brand-green);">https://github.com/keluoke/4chess</a></li>
+          </ul>
+        </section>
+      </article>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <p>© 2026 歧路 Diverge · <a href="/analysis/">全盘分析工作台</a> · <a href="https://github.com/keluoke/4chess" target="_blank" rel="noopener noreferrer">GitHub</a> · <a href="mailto:contact@4chess.cc">contact@4chess.cc</a></p>
+  </footer>
+
+  <script>
+    function setLang(lang) {
+      const zh = document.getElementById('content-zh');
+      const en = document.getElementById('content-en');
+      const btnZh = document.getElementById('btn-lang-zh');
+      const btnEn = document.getElementById('btn-lang-en');
+
+      if (lang === 'en') {
+        zh.style.display = 'none';
+        en.style.display = 'block';
+        btnZh.classList.remove('active');
+        btnEn.classList.add('active');
+        document.documentElement.lang = 'en';
+        document.title = 'Diverge · Privacy Policy';
+        try { history.replaceState(null, '', '#en'); } catch(e) {}
+      } else {
+        en.style.display = 'none';
+        zh.style.display = 'block';
+        btnEn.classList.remove('active');
+        btnZh.classList.add('active');
+        document.documentElement.lang = 'zh-CN';
+        document.title = '歧路 Diverge · 隐私权政策 (Privacy Policy)';
+        try { history.replaceState(null, '', '#zh'); } catch(e) {}
+      }
+    }
+
+    // Auto-detect language preference on load
+    (function() {
+      const hash = window.location.hash.toLowerCase();
+      const params = new URLSearchParams(window.location.search);
+      const urlLang = params.get('lang') || '';
+
+      if (hash === '#en' || urlLang.startsWith('en')) {
+        setLang('en');
+      } else if (hash === '#zh' || urlLang.startsWith('zh')) {
+        setLang('zh');
+      } else {
+        // Detect browser language
+        const userLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
+        if (userLang.startsWith('zh')) {
+          setLang('zh');
+        } else {
+          setLang('en');
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

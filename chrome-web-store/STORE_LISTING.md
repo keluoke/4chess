@@ -1,6 +1,6 @@
-# Maia 3 · 商店上架文案（Chrome Web Store Listing Copy）
+# 歧路 Diverge · 商店上架文案（Chrome Web Store Listing Copy）
 
-> 本文档为「Maia 3 · 人类直觉热力图与预测器」Chrome 扩展的商店上架文案，**中英双语**，可直接复制粘贴到 [Chrome 开发者控制台](https://chrome.google.com/webstore/devconsole/) 的「商品详情（Store Listing）」页。
+> 本文档为「歧路 Diverge · 人类直觉与双引擎国际象棋复盘」Chrome 扩展的商店上架文案，**中英双语**，可直接复制粘贴到 [Chrome 开发者控制台](https://chrome.google.com/webstore/devconsole/) 的「商品详情（Store Listing）」页。
 > 文案未修改任何源代码；仅为上架准备。
 
 ---
@@ -10,21 +10,21 @@
 | Dashboard 字段 | 填写值 |
 |---|---|
 | 语言（主要 listing 语言） | 简体中文（zh-CN） |
-| 名称（Title） | `Maia 3 · 人类直觉热力图与预测器` |
+| 名称（Title） | `歧路 Diverge · 人类直觉与双引擎研判` |
 | 简介（摘要 / Short description，≤ 80 字符） | 见下方「简介」 |
 | 详细说明（Detailed description） | 见下方「详细说明」 |
-| 类别（Category） | **Sports（体育）**；备选：Fun / Education |
+| 类别（Category） | **Sports（体育）**；备选：Productivity / Education |
 | 语言（支持的语言） | 简体中文、English |
 | 地区（Distribution） | 全球（所有国家/地区） |
 | 可见性（Visibility） | Public（公开）；如需先小范围测试可选 Unlisted |
-| 隐私政策网址（Privacy policy） | 托管后填写，见 `PRIVACY_POLICY.md` |
+| 隐私政策网址（Privacy policy） | 托管后填写，见 `PRIVACY_POLICY.md`（推荐：`https://4chess.cc/privacy`） |
 
 ---
 
 ## 二、名称（Title）
 
-**简体中文：** `Maia 3 · 人类直觉热力图与预测器`
-**English：** `Maia 3 · Human Intuition Heatmap & Predictor`
+**简体中文：** `歧路 Diverge · 人类直觉与双引擎研判`  
+**English：** `Diverge · Chess Intuition & Dual-Engine Review`
 
 > 标题长度远低于 75 字符上限，且未堆砌关键词，符合商店命名规范。
 
@@ -159,6 +159,20 @@ Make review a window into the game — not a cheating tool.
 
 ---
 
-## 八、本地化说明
+## 八、用户数据处理披露速填（User Data Disclosures，控制台必填）
+
+> ⚠️ **Chrome 商店审核核心合规要求**：根据 [Chrome 商店用户数据政策 FAQ](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)，**即使数据仅在客户端浏览器本地处理、未传输至服务器，也必须如实勾选并披露！切勿勾选“未处理任何用户数据”。**
+
+在开发者控制台「隐私权与数据安全」→「用户数据」页面按如下填写：
+
+| 控制台选项 | 选择与填写值 |
+|---|---|
+| **数据使用分类（Data Usage）** | 勾选 **Website Content（网页内容）** |
+| **数据收集理由（Justification）** | *The extension reads chess board positions (FEN), move notations (SAN/PGN), and public player usernames solely on Lichess.org and Chess.com to provide real-time intuition predictions, blunders detection, and post-game review. All data is processed 100% locally in the user's browser memory via WebAssembly and Float32 neural network inference. No personal data, browsing history, or game information is ever transmitted to, stored on, or shared with any developer-owned or external servers.* |
+| **数据合规认证（Certification）** | 勾选全部 3 项承诺：<br>1. 不将数据出售给第三方<br>2. 不将数据用于个性化广告或借贷征信<br>3. 不将数据用于核心功能以外的任何目的 |
+
+---
+
+## 九、本地化说明
 
 商品详情建议至少提供「简体中文」与「English」两个语言版本（在控制台「语言」中添加）。文案已在上文给出双语，可分别粘贴。若仅上线中文，English 版本可留空或复用中文版摘要。
