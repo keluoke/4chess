@@ -539,7 +539,7 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 4;
+  static SCHEMA_VERSION = 5;
   static memoryCache = new Map();
 
   static hashString(str) {
@@ -570,31 +570,31 @@ export class GameAnalyzer {
       // Lichess game ID: 8 characters (e.g. lichess.org/38uTqNdksSRF -> lichess_38uTqNdk)
       if (href.includes('lichess.org')) {
         const m = window.location.pathname.match(/^\/([a-zA-Z0-9]{8})/);
-        if (m && m[1]) return `v4_lichess_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v5_lichess_${m[1]}_${hash.slice(0, 10)}`;
       }
       // Chess.com game ID (e.g. /game/live/184446398482 or /analysis/game/live/184446398482)
       if (href.includes('chess.com')) {
         const m = window.location.pathname.match(/\b(\d{8,15})\b/);
-        if (m && m[1]) return `v4_chesscom_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v5_chesscom_${m[1]}_${hash.slice(0, 10)}`;
       }
     }
 
     // Universal fallback: deterministic 64-bit hash over moves sequence & params
     if (moves && moves.length > 0) {
-      return `v4_game_${moves.length}_${hash.slice(0, 12)}`;
+      return `v5_game_${moves.length}_${hash.slice(0, 12)}`;
     }
 
     return null;
   }
 
   /**
-   * Validates whether a cached review has complete schema and dual metrics
+   * Validates whether a cached review has complete schema and core metrics
    */
   static isValidReviewCache(res) {
     if (!res || typeof res !== 'object') return false;
     if ((res.schemaVersion || 0) < GameAnalyzer.SCHEMA_VERSION) return false;
     if (res.accuracyWhite === undefined || res.accuracyBlack === undefined) return false;
-    if (res.humanScoreWhite === undefined || res.humanScoreBlack === undefined) return false;
+    if (res.beyondIntuitionCount === undefined || res.intuitionTrapsCount === undefined) return false;
     const hasMaia = res.allMoves && res.allMoves.some(m => m.maiaTopSan != null);
     if (!hasMaia && res.allMoves && res.allMoves.length > 0) return false;
     return true;
@@ -687,7 +687,10 @@ export class GameAnalyzer {
         inaccuraciesCount: result.inaccuraciesCount,
         beyondIntuitionCount: result.beyondIntuitionCount || 0,
         intuitionTrapsCount: result.intuitionTrapsCount || 0,
-        styleDivergenceCount: result.styleDivergenceCount || 0,
+        beyondWhiteCount: result.beyondWhiteCount || 0,
+        beyondBlackCount: result.beyondBlackCount || 0,
+        trapWhiteCount: result.trapWhiteCount || 0,
+        trapBlackCount: result.trapBlackCount || 0,
         bookMovesCount: result.bookMovesCount || 0,
         accuracyWhite: result.accuracyWhite,
         accuracyBlack: result.accuracyBlack,
@@ -695,14 +698,6 @@ export class GameAnalyzer {
         coverageRateBlack: result.coverageRateBlack,
         postBookAccuracyWhite: result.postBookAccuracyWhite,
         postBookAccuracyBlack: result.postBookAccuracyBlack,
-        humanScoreWhite: result.humanScoreWhite,
-        humanScoreBlack: result.humanScoreBlack,
-        humanReasonWhite: result.humanReasonWhite,
-        humanReasonBlack: result.humanReasonBlack,
-        styleDistributionWhite: result.styleDistributionWhite,
-        styleDistributionBlack: result.styleDistributionBlack,
-        intuitionConsistencyWhite: result.intuitionConsistencyWhite,
-        intuitionConsistencyBlack: result.intuitionConsistencyBlack,
         maxLossWhite: result.maxLossWhite,
         maxLossBlack: result.maxLossBlack,
         acplWhite: result.acplWhite,
@@ -986,15 +981,11 @@ export class GameAnalyzer {
           element: posAfter.moveEl,
           isHumanTrap: false,
           isBeyondIntuition: false,
-          isStyleDivergence: false,
-          divergenceType: null, // 'beyond_intuition' | 'intuition_trap' | 'style_divergence' | null
+          divergenceType: null, // 'beyond_intuition' | 'intuition_trap' | null
           divergenceStatus: null, // 'confirmed' | 'unconfirmed' | 'downgraded'
           divergenceNote: '',
           humanProbability: null,
           humanRawProbability: null,
-          relativeIntuition: null,
-          goodMovesProb: null,
-          matrixTag: null,
           maiaTopSan: null,
           maiaTopUci: null,
           maiaTopProb: null,
@@ -1044,15 +1035,22 @@ export class GameAnalyzer {
             const pred = await this.maiaEngine.predict(mv.fenBefore, elo);
             if (pred && pred.moves && pred.moves.length > 0) {
               mv._predMoves = pred.moves;
-              const top = pred.moves[0];
-              mv.maiaTopSan = top.san || null;
-              mv.maiaTopUci = top.uci || null;
-              mv.maiaTopProb = typeof top.prob === 'number' ? top.prob : null;
-              mv.maiaTopRawProb = typeof top.rawProb === 'number' ? top.rawProb : (top.prob ? top.prob / 100 : 0.01);
+              const top1 = pred.moves[0];
+              const top2 = pred.moves.length > 1 ? pred.moves[1] : null;
+
+              mv.maiaTopSan = top1.san || null;
+              mv.maiaTopUci = top1.uci || null;
+              mv.maiaTopProb = typeof top1.prob === 'number' ? top1.prob : null;
+              mv.maiaTopRawProb = typeof top1.rawProb === 'number' ? top1.rawProb : (top1.prob ? top1.prob / 100 : 0.01);
+
+              mv.maiaTop2San = top2?.san || null;
+              mv.maiaTop2Uci = top2?.uci || null;
+              mv.maiaTop2Prob = typeof top2?.prob === 'number' ? top2.prob : null;
 
               const cleanPlayed = mv.san.replace(/[+#?!]/g, '');
               const cleanBest = (mv.bestSan || '').replace(/[+#?!]/g, '');
-              const cleanMaia = (top.san || '').replace(/[+#?!]/g, '');
+              const cleanMaia = (top1.san || '').replace(/[+#?!]/g, '');
+              const cleanMaia2 = top2 ? (top2.san || '').replace(/[+#?!]/g, '') : null;
 
               // Check if actual played move matches Maia predictions
               const matchedIdx = pred.moves.findIndex(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
@@ -1063,62 +1061,32 @@ export class GameAnalyzer {
               mv.humanProbability = matchedProb;
               mv.humanRawProbability = matchedRawProb;
 
-              // Relative Intuition r_i = p(played) / max_a p(a)
-              const topRaw = Math.max(0.0001, mv.maiaTopRawProb);
-              const r_i = Math.min(1.0, Math.max(0.0, matchedRawProb / topRaw));
-              mv.relativeIntuition = Math.min(100, Math.max(0, Math.round(r_i * 1000) / 10));
-
-              // Two-Axis Matrix classification (Engine Accuracy vs. Relative Intuition)
-              if (mv.accuracy !== null && mv.relativeIntuition !== null) {
-                if (mv.accuracy >= 80 && mv.relativeIntuition >= 50) {
-                  mv.matrixTag = 'natural_good'; // 自然好棋
-                } else if (mv.accuracy >= 80 && mv.relativeIntuition < 50) {
-                  mv.matrixTag = 'original_good'; // 独到好棋 (突破直觉)
-                } else if (mv.accuracy < 80 && mv.relativeIntuition >= 50) {
-                  mv.matrixTag = 'intuition_trap'; // 直觉陷阱
-                } else {
-                  mv.matrixTag = 'off_track'; // 偏离常规
-                }
-              } else {
-                mv.matrixTag = null;
-              }
+              const isMaiaTop1 = (cleanPlayed === cleanMaia || matchedIdx === 0);
+              const isMaiaTop2 = (!isMaiaTop1 && (cleanPlayed === cleanMaia2 || matchedIdx === 1));
+              const isMaiaTop1Or2 = isMaiaTop1 || isMaiaTop2;
 
               // Flag if intuition diverges from engine best
               mv.isIntuitionDivergence = !!(cleanMaia && cleanBest && cleanMaia !== cleanBest);
 
               // --- Candidate Archetype Filtering ---
 
-              // Candidate 1: Potential 妙手 (实战高胜率, 罕见, 非谱招, 非唯一着)
-              const isEngineBestOrClose = cleanBest && (cleanPlayed === cleanBest || (typeof mv.lossCp === 'number' && mv.lossCp <= 15));
+              // Candidate 1: 妙手候选 (实战是引擎一选或接近一选，且优于 Maia 一选)
+              const isEngineBestOrClose = cleanBest && (cleanPlayed === cleanBest || (typeof mv.lossCp === 'number' && mv.lossCp <= 10));
               if (isEngineBestOrClose && !mv.isBookMove && !mv.isOnlyLegalMove && mv.ply >= 3) {
-                // Must not be the dominant Maia choice
-                if (cleanMaia && cleanMaia !== cleanPlayed && matchedRawProb <= 0.20) {
+                if (cleanMaia && cleanMaia !== cleanPlayed) {
                   mv.isBeyondIntuitionCandidate = true;
                   mv._candidateMaiaSan = cleanMaia;
-                  mv._candidateTopTxt = `${Math.round(mv.maiaTopProb || 0)}%`;
-                  mv._candidateProbTxt = matchedProb > 0 ? `${Math.round(matchedProb)}% 棋手走出` : '人类惯性极罕见';
+                  mv._candidateMaiaUci = top1.uci || null;
+                  mv._candidateTopTxt = top1.prob ? `${Math.round(top1.prob)}%` : '';
+                  mv._candidateProbTxt = matchedProb > 0 ? `${Math.round(matchedProb)}%` : '罕见走法';
                 }
               }
 
-              // Candidate 2: Potential 俗手 (实战概率高 >= 15% 且初筛损失明显 >= 60cp)
-              const isIntuitionPopular = matchedRawProb >= 0.15 || (cleanPlayed === cleanMaia && (mv.maiaTopProb || 0) >= 15);
-              if (isIntuitionPopular && mv.lossCp >= 60 && !mv.isOnlyLegalMove) {
+              // Candidate 2: 俗手候选 (实战是 Maia 一选或二选，或开局直觉陷阱，初筛有明显损失)
+              if ((isMaiaTop1Or2 || mv.isOpeningTrap) && (mv.lossCp >= 40 || mv.isOpeningTrap) && !mv.isOnlyLegalMove) {
                 mv.isHumanTrapCandidate = true;
-                mv._candidateRankTxt = (cleanPlayed === cleanMaia || matchedIdx === 0) ? '直觉一选' : `常见走法第 ${matchedIdx + 1} 选`;
-                mv._candidateProbTxt = `直觉概率 ${Math.round(matchedProb)}%`;
-              }
-
-              // Candidate 3: Potential 风格分歧 (直觉与引擎不一致，但双方走法质量均较高)
-              const isStyleDivergenceCandidate = cleanMaia && cleanBest && cleanMaia !== cleanBest && mv.lossCp <= 25 && !mv.isOnlyLegalMove;
-              if (isStyleDivergenceCandidate) {
-                mv.isStyleDivergenceCandidate = true;
-              }
-
-              // Candidate 4: Potential 开局直觉陷阱
-              if (mv.isOpeningTrap && mv.lossCp >= 60) {
-                mv.isHumanTrapCandidate = true;
-                mv._candidateRankTxt = '开局常见谱招';
-                mv._candidateProbTxt = mv.bookFrequency ? `谱招频率 ${Math.round(mv.bookFrequency * 100)}%` : '';
+                mv._candidateRankTxt = isMaiaTop1 ? '直觉一选' : (isMaiaTop2 ? '直觉二选' : '开局谱招');
+                mv._candidateProbTxt = matchedProb > 0 ? `直觉概率 ${Math.round(matchedProb)}%` : '';
               }
             }
           } catch (e) {
@@ -1128,13 +1096,10 @@ export class GameAnalyzer {
       }
 
       // Step 4: Secondary Deep Verification Pass (二次加深复核 - d12 with multipv 4)
-      // For all candidate moments, perform deeper Stockfish evaluation with multi-pv
-      // to calculate quality gap L(a) and verify good moves sum probability P_好棋
-      const candidateList = analyzedMoves.filter(m => 
-        m.isBeyondIntuitionCandidate || 
-        m.isHumanTrapCandidate || 
-        m.isStyleDivergenceCandidate
-      );
+      // 实打实比较三种走法：搜索引擎一选、实战走法、Maia一选
+      const candidateList = analyzedMoves
+        .filter(m => m.isBeyondIntuitionCandidate || m.isHumanTrapCandidate)
+        .sort((a, b) => a.ply - b.ply);
 
       for (const cm of candidateList) {
         if (this.isCancelled || this._currentRunId !== runId) break;
@@ -1191,7 +1156,7 @@ export class GameAnalyzer {
               return null;
             };
 
-            // 1. Ensure played move is evaluated
+            // 1. 实打实确保实战走法已评估
             if (!deepLossMap.has(cm.uci)) {
               if (cm.fenAfter) {
                 const playedEval = await this.stockfish.evaluate(cm.fenAfter, 10, 2500, 1);
@@ -1206,7 +1171,7 @@ export class GameAnalyzer {
             }
             const deepLossCp = deepLossMap.has(cm.uci) ? deepLossMap.get(cm.uci) : (cm.lossCp || 0);
 
-            // 2. Ensure Maia's top choice is evaluated
+            // 2. 实打实确保 Maia 一选已评估
             if (cm.maiaTopUci && !deepLossMap.has(cm.maiaTopUci)) {
               await evaluateMoveTargeted(cm.maiaTopUci, cleanMaia);
             }
@@ -1214,92 +1179,46 @@ export class GameAnalyzer {
               ? deepLossMap.get(cm.maiaTopUci)
               : null;
 
-            // 3. For any other high-probability Maia candidate (rawProb >= 0.10), targeted evaluate if absent
-            if (cm._predMoves && cm._predMoves.length > 0) {
-              for (const pm of cm._predMoves) {
-                const rawP = typeof pm.rawProb === 'number' ? pm.rawProb : (pm.prob ? pm.prob / 100 : 0);
-                if (rawP >= 0.10 && pm.uci && !deepLossMap.has(pm.uci)) {
-                  await evaluateMoveTargeted(pm.uci, (pm.san || '').replace(/[+#?!]/g, ''));
-                }
-              }
-            }
-
-            // 4. Calculate good moves probability bounds (P_好棋 confirmed and P_好棋 max)
-            let evaluatedProb = 0;
-            let goodMovesConfirmedProb = 0;
-            if (cm._predMoves && cm._predMoves.length > 0) {
-              for (const pm of cm._predMoves) {
-                const rawP = typeof pm.rawProb === 'number' ? pm.rawProb : (pm.prob ? pm.prob / 100 : 0);
-                if (pm.uci && deepLossMap.has(pm.uci)) {
-                  evaluatedProb += rawP;
-                  if (deepLossMap.get(pm.uci) <= 25) {
-                    goodMovesConfirmedProb += rawP;
-                  }
-                } else if (pm.san && pm.san.replace(/[+#?!]/g, '') === deepBestSan) {
-                  evaluatedProb += rawP;
-                  goodMovesConfirmedProb += rawP;
-                }
-              }
-            }
-            const unevaluatedProb = Math.max(0, 1.0 - evaluatedProb);
-            const goodMovesMaxProb = Math.min(1.0, goodMovesConfirmedProb + unevaluatedProb);
-
-            cm.goodMovesProb = Math.round(goodMovesConfirmedProb * 1000) / 10; // in %
-            cm.goodMovesProbMax = Math.round(goodMovesMaxProb * 1000) / 10; // in %
-
-            // 5. Verify 妙手 (突破直觉)
-            // Conditions:
-            // - Played move deep loss <= 20cp
-            // - Confirmed good moves probability <= 15% AND max possible good moves prob <= 20%
-            // - Maia's top natural candidate verified loss >= 60cp (natural choices clearly suffer)
-            // - Not an opening book theory move, not only legal move
+            // 3. 复核判定 妙手 (实战＝Stockfish一选，且优于Maia一选 >= 30cp)
+            const isStillDeepBest = (deepBestSan === cleanPlayed || deepBestUci === cm.uci || deepLossCp === 0);
             if (cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
-              if (deepLossCp <= 20 && goodMovesConfirmedProb <= 0.15 && goodMovesMaxProb <= 0.20 && maiaLossCp !== null && maiaLossCp >= 60) {
+              if (isStillDeepBest && maiaLossCp !== null && maiaLossCp >= 30) {
+                // 连续组合去重：检查同方上一有效决策步是否已是妙手
+                const prevSameSideMove = analyzedMoves
+                  .slice(0, cm.ply - 1)
+                  .reverse()
+                  .find(m => m.turn === cm.turn && !m.isBookMove && !m.isOnlyLegalMove);
+                const isCombo = prevSameSideMove && prevSameSideMove.isBeyondIntuition && (cm.ply - prevSameSideMove.ply <= 2);
+
                 cm.isBeyondIntuition = true;
+                cm.isCombinationFollowup = !!isCombo;
                 cm.divergenceType = 'beyond_intuition';
                 cm.divergenceStatus = 'confirmed';
-                cm.divergenceNote = `走出深度引擎一选 ${cleanPlayed} (深搜损耗 0 兵)，真正突破人类直觉惯性：局面下所有优质走法的人类总概率仅约 ${Math.round(goodMovesConfirmedProb * 100)}% (上限 ≤${Math.round(goodMovesMaxProb * 100)}%)，而直觉首选 ${cm._candidateMaiaSan} (概率 ${cm._candidateTopTxt}) 经加深复核损耗高达 -${(maiaLossCp / 100).toFixed(2)} 兵。`;
+                if (isCombo) {
+                  cm.divergenceNote = `✨ 妙手组合延续：走出引擎首选 ${cleanPlayed}。相比人类直觉的自然走法 ${cleanMaia} (损耗 -${(maiaLossCp / 100).toFixed(2)} 兵)，这步稳固并兑现了突破直觉的战术优势。`;
+                } else {
+                  cm.divergenceNote = `✨ 妙手：你走出了引擎首选 ${cleanPlayed}。相比人类直觉的自然走法 ${cleanMaia} (损耗 -${(maiaLossCp / 100).toFixed(2)} 兵)，这步保留了更多优势。`;
+                }
               } else {
-                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 候选妙手未通过加深复核 (优质走法概率: ${Math.round(goodMovesConfirmedProb * 100)}% ~ ${Math.round(goodMovesMaxProb * 100)}%, Maia首选损耗: ${maiaLossCp ?? '未测'}cp, 实战损耗: ${deepLossCp}cp)，已降级消除误报`);
+                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp < 30cp)，已取消`);
                 cm.divergenceStatus = 'downgraded';
               }
             }
 
-            // 6. Verify 风格分歧 (同样好但风格不同)
-            // Conditions:
-            // - Maia top choice and Engine best differ
-            // - Maia top choice has verified deep loss <= 25cp (it's also a high quality move!)
-            // - Played move has deep loss <= 25cp (player played a high quality move!)
-            if (!cm.isBeyondIntuition && (cm.isStyleDivergenceCandidate || (cleanMaia && cleanMaia !== deepBestSan))) {
-              if (cleanMaia !== deepBestSan && maiaLossCp !== null && maiaLossCp <= 25 && deepLossCp <= 25) {
-                cm.isStyleDivergence = true;
-                cm.divergenceType = 'style_divergence';
-                cm.divergenceStatus = 'confirmed';
-                cm.divergenceNote = `人机风格分歧：实战着法与直觉首选 ${cm.maiaTopSan} (概率 ${Math.round(cm.maiaTopProb || 0)}%) 及引擎首选 ${deepBestSan} 均为优质走法（质量差距极小 ≤0.25 兵），呈现出不同局面取向与战术风格。`;
-              }
-            }
-
-            // 7. Verify 俗手 (直觉陷阱)
-            // Conditions:
-            // - Played move has substantial human probability >= 15% (or Maia #1)
-            // - Deep verified loss >= 60cp
-            // - Deep best is not played move
-            // - Not the only legal move
-            if (!cm.isBeyondIntuition && !cm.isStyleDivergence && cm.isHumanTrapCandidate && !cm.isOnlyLegalMove) {
-              if (deepBestSan !== cleanPlayed && deepLossCp >= 60) {
+            // 4. 复核判定 俗手 (实战＝Maia一选或二选，且相对Stockfish一选明显吃亏 >= 50cp)
+            if (!cm.isBeyondIntuition && cm.isHumanTrapCandidate && !cm.isOnlyLegalMove) {
+              if (!isStillDeepBest && deepLossCp >= 50) {
                 cm.isHumanTrap = true;
                 cm.divergenceType = 'intuition_trap';
                 cm.divergenceStatus = 'confirmed';
-                cm.divergenceNote = `落入直觉陷阱 (实战下出${cm._candidateRankTxt}${cm._candidateProbTxt ? ' ' + cm._candidateProbTxt : ''})，经加深复核(d12)确认导致局面严重受损 (-${(deepLossCp / 100).toFixed(2)} 兵)，最佳应走 ${deepBestSan}。`;
+                cm.divergenceNote = `💡 俗手：这步属于人类直觉的优先选择 (${cm._candidateRankTxt || '自然走法'})，看起来很自然，但经深度复核会明显损失优势 (-${(deepLossCp / 100).toFixed(2)} 兵)，最佳应走 ${deepBestSan}。`;
               } else {
-                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 候选俗手经复核损耗仅 ${deepLossCp}cp，未达显著失误门槛，已降级`);
+                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 俗手经复核损耗仅 ${deepLossCp}cp < 50cp，未达显著吃亏门槛，已降级`);
                 cm.divergenceStatus = 'downgraded';
               }
             }
           } else {
-            // FIX: If deep search timed out or returned empty, do NOT confirm strong labels!
-            // Insufficient evidence must not retain conclusions.
-            console.warn(`[GameAnalyzer] Ply ${cm.ply} 深搜复核无响应或超时，证据不足，标记为待确认而不授予强标签`);
+            console.warn(`[GameAnalyzer] Ply ${cm.ply} 深搜复核无响应或超时，证据不足，标记为待确认`);
             cm.divergenceStatus = 'unconfirmed';
             cm.divergenceNote = '深搜复核超时，证据不足未予确认';
           }
@@ -1309,7 +1228,7 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 5: Dual Score Calculation & Aggregation
+      // Step 5: Score Calculation & Aggregation
       // 1. Engine Accuracy Scores (Overall & Post-Book)
       const whiteDecisionMoves = analyzedMoves.filter(m => m.turn === 'w' && !m.isOnlyLegalMove);
       const blackDecisionMoves = analyzedMoves.filter(m => m.turn === 'b' && !m.isOnlyLegalMove);
@@ -1344,74 +1263,17 @@ export class GameAnalyzer {
         ? Math.round((validPostBlack.reduce((acc, m) => acc + m.accuracy, 0) / validPostBlack.length) * 10) / 10
         : null;
 
-      // 2. Human Score ("人味指数" - Maia 1900 Intuition Consistency Score)
-      // Uses raw probabilities directly without integer rounding loss:
-      // H = 100 * exp( (1/N) * sum( ln( max(eps, p(played) / p(top)) ) ) )
-      // Excludes opening book moves and forced only-legal moves
-      const computeHumanScore = (decisionMoves) => {
-        const valid = decisionMoves.filter(m => 
-          !m.isBookMove && 
-          !m.isOnlyLegalMove && 
-          typeof m.maiaTopRawProb === 'number' && 
-          typeof m.humanRawProbability === 'number'
-        );
-        const totalEligible = decisionMoves.filter(m => !m.isBookMove && !m.isOnlyLegalMove).length;
-
-        if (valid.length === 0 && totalEligible > 0) {
-          return { score: null, reason: 'model_failed', reasonText: '直觉模型预测失败', validCount: 0, totalCount: totalEligible };
-        }
-        if (valid.length < 5) {
-          return { score: null, reason: 'insufficient_decisions', reasonText: `有效决策不足 (${valid.length}/5步)`, validCount: valid.length, totalCount: totalEligible };
-        }
-
-        const eps = 0.01;
-        const sumLogR = valid.reduce((sum, m) => {
-          const topP = Math.max(eps, m.maiaTopRawProb);
-          const playedP = Math.max(0, m.humanRawProbability);
-          const r = Math.min(1.0, Math.max(eps, playedP / topP));
-          return sum + Math.log(r);
-        }, 0);
-        const meanLogR = sumLogR / valid.length;
-        const score = Math.min(100, Math.max(0, Math.round(100 * Math.exp(meanLogR) * 10) / 10));
-        return { score, reason: 'ok', reasonText: null, validCount: valid.length, totalCount: totalEligible };
-      };
-
-      const resHumanWhite = computeHumanScore(whiteDecisionMoves);
-      const resHumanBlack = computeHumanScore(blackDecisionMoves);
-
-      const humanScoreWhite = resHumanWhite.score;
-      const humanScoreBlack = resHumanBlack.score;
-      const humanReasonWhite = resHumanWhite.reasonText;
-      const humanReasonBlack = resHumanBlack.reasonText;
-
-      // 3. Style Matrix Distribution Breakdown
-      const computeStyleDistribution = (moves) => {
-        const dist = { naturalGood: 0, originalGood: 0, intuitionTrap: 0, offTrack: 0 };
-        for (const m of moves) {
-          if (m.matrixTag === 'natural_good') dist.naturalGood++;
-          else if (m.matrixTag === 'original_good') dist.originalGood++;
-          else if (m.matrixTag === 'intuition_trap') dist.intuitionTrap++;
-          else if (m.matrixTag === 'off_track') dist.offTrack++;
-        }
-        return dist;
-      };
-
-      const styleDistributionWhite = computeStyleDistribution(whiteDecisionMoves);
-      const styleDistributionBlack = computeStyleDistribution(blackDecisionMoves);
-
-      // 4. Confirmed Key Moments for Leaderboard
-      // Retains confirmed 妙手, confirmed 俗手, confirmed 风格分歧
+      // 2. Confirmed Key Moments (✨ 妙手 & 💡 俗手)
       const keyMoments = analyzedMoves
-        .filter(m => 
-          m.divergenceType === 'beyond_intuition' || 
-          m.divergenceType === 'intuition_trap' ||
-          m.divergenceType === 'style_divergence'
-        )
+        .filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap')
         .sort((a, b) => a.ply - b.ply);
 
-      const beyondIntuitionCount = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition').length;
+      const beyondIntuitionCount = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition' && !m.isCombinationFollowup).length;
       const intuitionTrapsCount = analyzedMoves.filter(m => m.divergenceType === 'intuition_trap').length;
-      const styleDivergenceCount = analyzedMoves.filter(m => m.divergenceType === 'style_divergence').length;
+      const beyondWhiteCount = analyzedMoves.filter(m => m.turn === 'w' && m.divergenceType === 'beyond_intuition' && !m.isCombinationFollowup).length;
+      const beyondBlackCount = analyzedMoves.filter(m => m.turn === 'b' && m.divergenceType === 'beyond_intuition' && !m.isCombinationFollowup).length;
+      const trapWhiteCount = analyzedMoves.filter(m => m.turn === 'w' && m.divergenceType === 'intuition_trap').length;
+      const trapBlackCount = analyzedMoves.filter(m => m.turn === 'b' && m.divergenceType === 'intuition_trap').length;
       const bookMovesCount = analyzedMoves.filter(m => m.isBookMove).length;
 
       if (this.isCancelled || this._currentRunId !== runId) {
@@ -1435,7 +1297,10 @@ export class GameAnalyzer {
         inaccuraciesCount,
         beyondIntuitionCount,
         intuitionTrapsCount,
-        styleDivergenceCount,
+        beyondWhiteCount,
+        beyondBlackCount,
+        trapWhiteCount,
+        trapBlackCount,
         bookMovesCount,
         accuracyWhite,
         accuracyBlack,
@@ -1443,14 +1308,6 @@ export class GameAnalyzer {
         coverageRateBlack,
         postBookAccuracyWhite,
         postBookAccuracyBlack,
-        humanScoreWhite,
-        humanScoreBlack,
-        humanReasonWhite,
-        humanReasonBlack,
-        styleDistributionWhite,
-        styleDistributionBlack,
-        intuitionConsistencyWhite: humanScoreWhite,
-        intuitionConsistencyBlack: humanScoreBlack,
         maxLossWhite: (maxLossWhite / 100).toFixed(2),
         maxLossBlack: (maxLossBlack / 100).toFixed(2),
         acplWhite: countWhite > 0 ? Math.round(totalLossWhite / countWhite) : 0,

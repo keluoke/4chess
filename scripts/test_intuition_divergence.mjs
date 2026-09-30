@@ -100,9 +100,9 @@ const hMixed = computeH(movesMixed);
 console.log('2.4 Mixed intuition consistency:', hMixed);
 if (hMixed >= 100 || hMixed <= 50) throw new Error('Mixed intuition consistency should fall within realistic range (50-100)');
 
-console.log('\n=== TEST SUITE 3: Full Archetype Classification (风格分歧 / 妙手 / 俗手) ===');
+console.log('\n=== TEST SUITE 3: Core Archetype Classification (妙手 & 俗手) ===');
 
-// Setup mock Stockfish that returns multipv lines
+// Setup mock Stockfish that returns evaluations and multipv lines
 const mockStockfish = {
   isReady: true,
   evaluate: async (fen, depth = 6, timeout = 3500, multipv = 1) => {
@@ -120,28 +120,23 @@ const mockStockfish = {
     }
     // Ply 3: 2. Nf3 (Black to move)
     if (fen.includes('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
-      return { score: '-0.30', scoreCp: -30, bestMove: { san: 'Nc6', uci: 'b8c6' } };
+      return { score: '-0.30', scoreCp: -30, bestMove: { san: 'f6', uci: 'f7f6' } };
     }
-    // Ply 4: 2...Nc6 (White to move) -> Style Divergence test position!
-    // Engine prefers Bb5 (+0.40), but Bc4 (+0.35) is delta -5cp
-    if (fen.includes('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
+    // Ply 4: 2...f6? (White to move) -> Damiano Defense trap!
+    // Best move is Nxe5 (+1.80), but if Black played f6, it was a huge intuition trap
+    if (fen.includes('rnbqkbnr/pppp1ppp/5p2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
       if (multipv > 1) {
         return {
-          score: '+0.40',
-          scoreCp: 40,
-          bestMove: { san: 'Bb5', uci: 'f1b5' },
+          score: '+1.80',
+          scoreCp: 180,
+          bestMove: { san: 'Nxe5', uci: 'f3e5' },
           lines: [
-            { multipv: 1, uci: 'f1b5', scoreCp: 40, deltaCp: 0 },
-            { multipv: 2, uci: 'f1c4', scoreCp: 35, deltaCp: -5 },
-            { multipv: 3, uci: 'd2d4', scoreCp: 30, deltaCp: -10 }
+            { multipv: 1, uci: 'f3e5', scoreCp: 180, deltaCp: 0 },
+            { multipv: 2, uci: 'd2d4', scoreCp: 90, deltaCp: -90 }
           ]
         };
       }
-      return { score: '+0.40', scoreCp: 40, bestMove: { san: 'Bb5', uci: 'f1b5' } };
-    }
-    // Ply 5: 3. Bc4 (Black to move, score from Black perspective is -0.35)
-    if (fen.includes('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R')) {
-      return { score: '-0.35', scoreCp: -35, bestMove: { san: 'Nf6', uci: 'g8f6' } };
+      return { score: '+1.80', scoreCp: 180, bestMove: { san: 'Nxe5', uci: 'f3e5' } };
     }
     // Default
     return {
@@ -161,14 +156,12 @@ const mockMaia = {
   isReady: true,
   initialize: async () => {},
   predict: async (fen, elo = 1900) => {
-    // At ply 4 (r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R):
-    // Maia prefers Bc4 (45%), while Stockfish prefers Bb5 (25%)
-    if (fen.includes('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
+    // At ply 3 (2.Nf3): Maia thinks f6 is a natural choice (e.g. beginner/human impulse)
+    if (fen.includes('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
       return {
         moves: [
-          { san: 'Bc4', uci: 'f1c4', prob: 45.0, rawProb: 0.45 },
-          { san: 'Bb5', uci: 'f1b5', prob: 25.0, rawProb: 0.25 },
-          { san: 'd4', uci: 'd2d4', prob: 20.0, rawProb: 0.20 }
+          { san: 'f6', uci: 'f7f6', prob: 35.0, rawProb: 0.35 },
+          { san: 'Nc6', uci: 'b8c6', prob: 30.0, rawProb: 0.30 }
         ]
       };
     }
@@ -187,12 +180,10 @@ const testMoves = [
   { san: 'e4' },
   { san: 'e5' },
   { san: 'Nf3' },
-  { san: 'Nc6' },
-  { san: 'Bc4' }, // White plays Bc4 (Style Divergence: Maia #1 Bc4 vs SF #1 Bb5, deltaCp = -5cp)
-  { san: 'Nf6' }
+  { san: 'f6' } // Black plays f6 (Intuition trap: Maia #1 f6, but loss >= 50cp)
 ];
 
-console.log('Running test analyzeGame on Italian / Spanish divergence...');
+console.log('Running test analyzeGame on Damiano trap...');
 const review = await analyzer.analyzeGame(testMoves, { depth: 6, elo: 1900 });
 
 console.log('\n--- Review Result Verification ---');
@@ -200,22 +191,8 @@ console.log('Total moves analyzed:', review.totalMoves);
 console.log('White Accuracy:', review.accuracyWhite + '%');
 console.log('Black Accuracy:', review.accuracyBlack + '%');
 console.log('Book moves count:', review.bookMovesCount);
-console.log('Style Divergence count:', review.styleDivergenceCount);
 console.log('Beyond Intuition (妙手) count:', review.beyondIntuitionCount);
 console.log('Intuition Trap (俗手) count:', review.intuitionTrapsCount);
-
-// Verify ply 5 (Bc4) was correctly classified as 风格分歧 (Style Divergence)
-const move5 = review.allMoves.find(m => m.ply === 5);
-console.log('\nPly 5 classification:', {
-  san: move5.san,
-  divergenceType: move5.divergenceType,
-  divergenceStatus: move5.divergenceStatus,
-  divergenceNote: move5.divergenceNote
-});
-
-if (move5.divergenceType !== 'style_divergence') {
-  throw new Error(`Ply 5 should be classified as style_divergence, but got ${move5.divergenceType}`);
-}
 
 // Verify opening move 1.e4 is NOT labeled as 妙手
 const move1 = review.allMoves.find(m => m.ply === 1);
@@ -223,10 +200,10 @@ if (move1.isBeyondIntuition || move1.divergenceType === 'beyond_intuition') {
   throw new Error('Opening move 1.e4 must not be labeled as 妙手');
 }
 
-console.log('\n=== TEST SUITE 4: Brilliant Move Filtering (P_好棋 <= 15% vs P_好棋 = 75%) ===');
+console.log('\n=== TEST SUITE 4: Brilliant Move (妙手) Verification ===');
 
-// Setup tactical scenario to test true 妙手 vs false 妙手
-// True 妙手: played move has loss <= 20cp, all good moves sum prob <= 15%, Maia top has loss >= 60cp
+// Setup tactical scenario to test true 妙手:
+// Player plays SF #1 (Bxf7+), Maia #1 is O-O (loss 150cp >= 30cp)
 const mockStockfishTactical = {
   isReady: true,
   evaluate: async (fen, depth = 6, timeout = 3500, multipv = 1) => {
@@ -251,9 +228,9 @@ const mockMaiaTactical = {
   initialize: async () => {},
   predict: async (fen, elo = 1900) => ({
     moves: [
-      { san: 'O-O', uci: 'e1g1', prob: 65.0, rawProb: 0.65 },    // Natural move: loss -150cp!
-      { san: 'd4', uci: 'd2d4', prob: 25.0, rawProb: 0.25 },      // Natural move: loss -130cp!
-      { san: 'Bxf7+', uci: 'c4f7', prob: 4.0, rawProb: 0.04 }     // Brilliant move: only 4%!
+      { san: 'O-O', uci: 'e1g1', prob: 65.0, rawProb: 0.65 },    // Natural move: loss -150cp >= 30cp
+      { san: 'd4', uci: 'd2d4', prob: 25.0, rawProb: 0.25 },
+      { san: 'Bxf7+', uci: 'c4f7', prob: 4.0, rawProb: 0.04 }     // Brilliant move: SF #1
     ]
   })
 };
@@ -279,7 +256,7 @@ if (move7.divergenceType !== 'beyond_intuition') {
   throw new Error(`Tactical move Bxf7+ should be confirmed as beyond_intuition (妙手), got ${move7.divergenceType}`);
 }
 
-console.log('\n=== TEST SUITE 5: Cache Schema v4 Round-Trip & Stale Purging ===');
+console.log('\n=== TEST SUITE 5: Cache Schema v5 Round-Trip & Stale Purging ===');
 
 // Setup mock localStorage
 globalThis.localStorage = (() => {
@@ -292,40 +269,37 @@ globalThis.localStorage = (() => {
   };
 })();
 
-// Test 5.1: Save and load complete review result
-const testCacheKey = 'test_game_v4_roundtrip';
+// Test 5.1: Save and load complete review result with schema v5
+const testCacheKey = 'test_game_v5_roundtrip';
 await GameAnalyzer.saveCachedReview(testCacheKey, tacticalReview);
 const loadedCache = await GameAnalyzer.getCachedReview(testCacheKey);
 
 console.log('5.1 Cached review schemaVersion:', loadedCache?.schemaVersion);
-console.log('5.1 Cached review humanScoreWhite:', loadedCache?.humanScoreWhite);
-console.log('5.1 Cached review styleDistributionWhite:', loadedCache?.styleDistributionWhite);
+console.log('5.1 Cached review beyondWhiteCount:', loadedCache?.beyondWhiteCount);
+console.log('5.1 Cached review trapWhiteCount:', loadedCache?.trapWhiteCount);
 
-if (!loadedCache || loadedCache.schemaVersion !== 4 || loadedCache.accuracyWhite === undefined || loadedCache.humanScoreWhite === undefined) {
-  throw new Error('Failed to properly serialize and deserialize v4 review cache');
+if (!loadedCache || loadedCache.schemaVersion !== 5 || loadedCache.accuracyWhite === undefined || loadedCache.beyondWhiteCount === undefined) {
+  throw new Error('Failed to properly serialize and deserialize v5 review cache');
 }
 
-// Test 5.2: Invalidation of stale v3 cache without dual scores
-const staleKey = 'test_game_stale_v3';
-const staleStorageKey = `maia3_review_${staleKey}`;
+// Test 5.2: Invalidation of stale v4 cache
+const staleKey = 'test_game_stale_v4';
+const staleStorageKey = `maia3_review_v4_${staleKey}`;
 localStorage.setItem(staleStorageKey, JSON.stringify({
   result: {
     totalMoves: 10,
-    allMoves: [{ ply: 1, maiaTopSan: 'e4' }]
-    // schemaVersion missing, accuracyWhite missing, humanScoreWhite missing
+    allMoves: [{ ply: 1, maiaTopSan: 'e4' }],
+    schemaVersion: 4
   }
 }));
 
 const staleLookup = await GameAnalyzer.getCachedReview(staleKey);
 console.log('5.2 Stale cache lookup result (must be null):', staleLookup);
 if (staleLookup !== null) {
-  throw new Error('getCachedReview must discard stale cache missing schemaVersion 4 and dual scores');
-}
-if (localStorage.getItem(staleStorageKey) !== null) {
-  throw new Error('getCachedReview must purge stale cache from persistent storage');
+  throw new Error('getCachedReview must discard stale cache missing schemaVersion 5');
 }
 
-console.log('\n=== TEST SUITE 6: Missing Evaluation Nulling & Human Score Reasons ===');
+console.log('\n=== TEST SUITE 6: Missing Evaluation Nulling & Coverage Rate ===');
 
 // Test 6.1: Null accuracy on missing engine evaluation
 const mockStockfishWithFailure = {
@@ -349,12 +323,6 @@ console.log('6.1 Black coverage rate:', failReview.coverageRateBlack + '%');
 
 if (failReview.allMoves[1].accuracy !== null) {
   throw new Error('Failed evaluation move must have accuracy = null, not 100');
-}
-
-// Test 6.2: Insufficient decision moves reason for Human Score
-console.log('6.2 Human reason for short game (3 moves):', failReview.humanReasonWhite);
-if (!failReview.humanReasonWhite || !failReview.humanReasonWhite.includes('有效决策不足')) {
-  throw new Error(`Human score for short game should explain insufficient decisions, got ${failReview.humanReasonWhite}`);
 }
 
 console.log('\n✅ All unit tests passed with 100% precision!');

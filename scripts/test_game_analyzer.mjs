@@ -68,7 +68,6 @@ console.log('  Total Moves Analyzed:', result.totalMoves);
 console.log('  Blunders:', result.blundersCount);
 console.log('  Mistakes:', result.mistakesCount);
 console.log('  Inaccuracies:', result.inaccuraciesCount);
-console.log('  Style Divergence:', result.styleDivergenceCount);
 console.log('  Beyond Intuition (妙手):', result.beyondIntuitionCount);
 console.log('  Intuition Traps (俗手):', result.intuitionTrapsCount);
 console.log('  White Accuracy:', result.accuracyWhite + '%');

@@ -241,26 +241,6 @@ class AnalysisStudioApp {
       });
     });
 
-    // Style Matrix Filter Pills
-    const stylePills = document.querySelectorAll('.style-matrix-pills .style-pill');
-    stylePills.forEach(pill => {
-      pill.addEventListener('click', () => {
-        const wasActive = pill.classList.contains('active');
-        stylePills.forEach(p => p.classList.remove('active'));
-        if (wasActive) return;
-
-        pill.classList.add('active');
-        const color = pill.dataset.color;
-        const tag = pill.dataset.tag;
-        const matchingMoves = (this.reviewResult?.allMoves || []).filter(
-          m => m.turn === color && m.matrixTag === tag
-        );
-        if (matchingMoves.length > 0) {
-          this.switchTab('moves');
-          this.goToPly(matchingMoves[0].ply);
-        }
-      });
-    });
 
     // PGN Import Modal
     this.el.btnImportPgn.addEventListener('click', () => {
@@ -1027,20 +1007,20 @@ class AnalysisStudioApp {
   applyReviewResult(result) {
     this.reviewResult = result;
 
-    // 0. Update Dual Metrics Summary Card
+    // 0. Update Dual Metrics Summary Card (Engine Accuracy & Key Moves)
     const metricsCard = document.getElementById('review-metrics-card');
     if (metricsCard) {
       const elAccW = document.getElementById('val-accuracy-white');
       const elPostW = document.getElementById('val-postbook-white');
-      const elIntW = document.getElementById('val-intuition-white');
-      const elMetaW = document.getElementById('val-human-meta-white');
+      const elBeyondW = document.getElementById('val-beyond-white');
+      const elTrapW = document.getElementById('val-trap-white');
 
       const elAccB = document.getElementById('val-accuracy-black');
       const elPostB = document.getElementById('val-postbook-black');
-      const elIntB = document.getElementById('val-intuition-black');
-      const elMetaB = document.getElementById('val-human-meta-black');
+      const elBeyondB = document.getElementById('val-beyond-black');
+      const elTrapB = document.getElementById('val-trap-black');
 
-      // White Accuracy
+      // White Accuracy & Key Moves
       if (elAccW) {
         elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
         if (result.coverageRateWhite != null && result.coverageRateWhite < 100) {
@@ -1048,44 +1028,16 @@ class AnalysisStudioApp {
         }
       }
       if (elPostW) elPostW.textContent = result.postBookAccuracyWhite != null ? `(离谱后 ${result.postBookAccuracyWhite}%)` : '';
-
-      // White Human Score ("人味指数")
-      const humanScoreW = result.humanScoreWhite ?? result.intuitionConsistencyWhite;
-      if (elIntW) {
-        if (humanScoreW != null) {
-          elIntW.textContent = `${Math.round(humanScoreW)} / 100`;
-          elIntW.style.fontSize = '';
-          const decisionCount = result.allMoves ? result.allMoves.filter(m => m.turn === 'w' && !m.isBookMove && !m.isOnlyLegalMove).length : 0;
-          if (elMetaW) elMetaW.textContent = `参考水平: 1900 · 已分析 ${decisionCount} 步`;
-        } else {
-          elIntW.textContent = result.humanReasonWhite || '样本不足';
-          elIntW.style.fontSize = '12px';
-          if (elMetaW) elMetaW.textContent = '参考水平: 1900';
-        }
+      if (elBeyondW) {
+        const count = result.beyondWhiteCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'w' && (m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition)).length : 0);
+        elBeyondW.textContent = String(count);
+      }
+      if (elTrapW) {
+        const count = result.trapWhiteCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'w' && (m.divergenceType === 'intuition_trap' || m.isHumanTrap)).length : 0);
+        elTrapW.textContent = String(count);
       }
 
-      // White Style Matrix Breakdown Pills
-      const pillsW = document.getElementById('style-pills-white');
-      const distW = result.styleDistributionWhite || (result.allMoves ? {
-        naturalGood: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'natural_good').length,
-        originalGood: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'original_good').length,
-        intuitionTrap: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'intuition_trap').length,
-        offTrack: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'off_track').length
-      } : null);
-
-      if (pillsW && distW) {
-        const elNat = document.getElementById('count-natural-white');
-        const elOrig = document.getElementById('count-original-white');
-        const elTrap = document.getElementById('count-trap-white');
-        const elOff = document.getElementById('count-offtrack-white');
-        if (elNat) elNat.textContent = String(distW.naturalGood);
-        if (elOrig) elOrig.textContent = String(distW.originalGood);
-        if (elTrap) elTrap.textContent = String(distW.intuitionTrap);
-        if (elOff) elOff.textContent = String(distW.offTrack);
-        pillsW.style.display = 'flex';
-      }
-
-      // Black Accuracy
+      // Black Accuracy & Key Moves
       if (elAccB) {
         elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
         if (result.coverageRateBlack != null && result.coverageRateBlack < 100) {
@@ -1093,41 +1045,13 @@ class AnalysisStudioApp {
         }
       }
       if (elPostB) elPostB.textContent = result.postBookAccuracyBlack != null ? `(离谱后 ${result.postBookAccuracyBlack}%)` : '';
-
-      // Black Human Score ("人味指数")
-      const humanScoreB = result.humanScoreBlack ?? result.intuitionConsistencyBlack;
-      if (elIntB) {
-        if (humanScoreB != null) {
-          elIntB.textContent = `${Math.round(humanScoreB)} / 100`;
-          elIntB.style.fontSize = '';
-          const decisionCount = result.allMoves ? result.allMoves.filter(m => m.turn === 'b' && !m.isBookMove && !m.isOnlyLegalMove).length : 0;
-          if (elMetaB) elMetaB.textContent = `参考水平: 1900 · 已分析 ${decisionCount} 步`;
-        } else {
-          elIntB.textContent = result.humanReasonBlack || '样本不足';
-          elIntB.style.fontSize = '12px';
-          if (elMetaB) elMetaB.textContent = '参考水平: 1900';
-        }
+      if (elBeyondB) {
+        const count = result.beyondBlackCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'b' && (m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition)).length : 0);
+        elBeyondB.textContent = String(count);
       }
-
-      // Black Style Matrix Breakdown Pills
-      const pillsB = document.getElementById('style-pills-black');
-      const distB = result.styleDistributionBlack || (result.allMoves ? {
-        naturalGood: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'natural_good').length,
-        originalGood: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'original_good').length,
-        intuitionTrap: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'intuition_trap').length,
-        offTrack: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'off_track').length
-      } : null);
-
-      if (pillsB && distB) {
-        const elNat = document.getElementById('count-natural-black');
-        const elOrig = document.getElementById('count-original-black');
-        const elTrap = document.getElementById('count-trap-black');
-        const elOff = document.getElementById('count-offtrack-black');
-        if (elNat) elNat.textContent = String(distB.naturalGood);
-        if (elOrig) elOrig.textContent = String(distB.originalGood);
-        if (elTrap) elTrap.textContent = String(distB.intuitionTrap);
-        if (elOff) elOff.textContent = String(distB.offTrack);
-        pillsB.style.display = 'flex';
+      if (elTrapB) {
+        const count = result.trapBlackCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'b' && (m.divergenceType === 'intuition_trap' || m.isHumanTrap)).length : 0);
+        elTrapB.textContent = String(count);
       }
 
       metricsCard.style.display = 'flex';
@@ -1156,16 +1080,13 @@ class AnalysisStudioApp {
     const totalAll = list.length;
     const countBeyond = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition).length;
     const countTrap = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap).length;
-    const countStyle = list.filter(m => m.divergenceType === 'style_divergence' || m.isStyleDivergence).length;
 
     const elCountAll = document.getElementById('filter-count-all');
     const elCountBeyond = document.getElementById('filter-count-beyond');
     const elCountTrap = document.getElementById('filter-count-trap');
-    const elCountStyle = document.getElementById('filter-count-style');
     if (elCountAll) elCountAll.textContent = String(totalAll);
     if (elCountBeyond) elCountBeyond.textContent = String(countBeyond);
     if (elCountTrap) elCountTrap.textContent = String(countTrap);
-    if (elCountStyle) elCountStyle.textContent = String(countStyle);
 
     // 2. Filter moments based on active category pill
     let filteredMoments = list;
@@ -1173,20 +1094,16 @@ class AnalysisStudioApp {
       filteredMoments = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition);
     } else if (this.currentDivergenceFilter === 'trap') {
       filteredMoments = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap);
-    } else if (this.currentDivergenceFilter === 'style') {
-      filteredMoments = list.filter(m => m.divergenceType === 'style_divergence' || m.isStyleDivergence);
     }
 
     this.el.blunderList.replaceChildren();
 
     if (!filteredMoments || filteredMoments.length === 0) {
       const emptyMsg = this.currentDivergenceFilter === 'beyond'
-        ? '本盘未检测到实战真正突破人类直觉的妙手'
+        ? '本盘未检测到实战走出更优选择的妙手'
         : (this.currentDivergenceFilter === 'trap'
-          ? '本盘未检测到落入直觉惯性的俗手'
-          : (this.currentDivergenceFilter === 'style'
-            ? '本盘未检测到双方走法质量相当的风格分歧瞬间'
-            : '👏 本盘棋未检测到显著的妙手、俗手或风格分歧瞬间。'));
+          ? '本盘未检测到实战采用自然但明显吃亏选择的俗手'
+          : '👏 本盘棋未检测到显著的妙手或俗手瞬间。');
       const emptyBox = document.createElement('div');
       emptyBox.style.cssText = 'padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;';
       emptyBox.textContent = emptyMsg;
@@ -1198,12 +1115,10 @@ class AnalysisStudioApp {
       const card = document.createElement('div');
       const isBeyond = item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition;
       const isTrap = item.divergenceType === 'intuition_trap' || item.isHumanTrap;
-      const isStyle = item.divergenceType === 'style_divergence' || item.isStyleDivergence;
 
       let cardClass = 'blunder-card';
       if (isBeyond) cardClass += ' card-beyond-intuition';
       else if (isTrap) cardClass += ' card-intuition-trap';
-      else if (isStyle) cardClass += ' card-style-divergence';
 
       card.className = cardClass;
       card.dataset.index = index;
@@ -1254,17 +1169,17 @@ class AnalysisStudioApp {
 
       if (isBeyond) {
         typeTag.classList.add('tag-beyond');
-        typeTag.title = '真正突破直觉：实战走法优质，全盘好棋总概率极低(≤15%)且人类自然走法受损显著';
+        typeTag.title = '✨ 妙手：你走出了引擎首选。相比人类直觉的自然走法，这步保留了更多优势。';
         typeTag.textContent = '✨ 妙手';
         rightTag.classList.add('tag-gain');
-        rightTag.title = '走出突破人类直觉的深度优质着法';
-        rightTag.textContent = '突破直觉';
+        rightTag.title = '走出优于自然直觉的引擎首选';
+        rightTag.textContent = item.isCombinationFollowup ? '组合延续' : '突破直觉';
 
         const subProb = document.createElement('span');
         subProb.className = 'sub-trap-prob';
         subProb.style.color = 'var(--text-dim)';
         if (item.maiaTopSan) {
-          subProb.appendChild(document.createTextNode('直觉首选: '));
+          subProb.appendChild(document.createTextNode('自然直觉首选: '));
           const topStrong = document.createElement('strong');
           topStrong.style.color = '#e6a520';
           topStrong.textContent = item.maiaTopSan;
@@ -1272,45 +1187,16 @@ class AnalysisStudioApp {
           if (item.maiaTopProb) {
             subProb.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
           }
-          if (item.goodMovesProb != null) {
-            subProb.appendChild(document.createTextNode(` · 优质走法总概率约 ${Math.round(item.goodMovesProb)}%`));
+          if (item.maiaLossCp != null && item.maiaLossCp > 0) {
+            subProb.appendChild(document.createTextNode(` · 优于直觉 +${(item.maiaLossCp / 100).toFixed(1)} 兵`));
           }
         } else {
-          subProb.textContent = '突破常规人类直觉惯性';
+          subProb.textContent = '实战走出引擎首选，优于自然直觉';
         }
         cardSub.appendChild(subProb);
-      } else if (isStyle) {
-        typeTag.classList.add('tag-style');
-        typeTag.title = '同样好但风格不同：实战与直觉、引擎走法均为高质量选择，体现不同局面风格偏好';
-        typeTag.textContent = '⚖️ 风格分歧';
-        rightTag.classList.add('tag-style-loss');
-        rightTag.title = '走法质量相近，体现风格取向不同';
-        rightTag.textContent = '质量相近';
-
-        const subStyle = document.createElement('span');
-        subStyle.className = 'sub-trap-prob';
-        subStyle.style.color = 'var(--text-dim)';
-        if (item.maiaTopSan) {
-          subStyle.appendChild(document.createTextNode('直觉偏好: '));
-          const topStrong = document.createElement('strong');
-          topStrong.style.color = '#a78bfa';
-          topStrong.textContent = item.maiaTopSan;
-          subStyle.appendChild(topStrong);
-          if (item.maiaTopProb) {
-            subStyle.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
-          }
-        }
-        if (bestMoveText) {
-          subStyle.appendChild(document.createTextNode(' · 引擎首选: '));
-          const bStrong = document.createElement('strong');
-          bStrong.style.color = 'var(--brand-green)';
-          bStrong.textContent = bestMoveText;
-          subStyle.appendChild(bStrong);
-        }
-        cardSub.appendChild(subStyle);
       } else if (isTrap) {
         typeTag.classList.add('tag-trap');
-        typeTag.title = '直觉陷阱：实战走法属于高概率人类自然走法(≥15%)，但经深度复核有明显损失';
+        typeTag.title = '💡 俗手：这步人类直觉的优先选择，看起来很自然，但会明显损失优势。';
         typeTag.textContent = '💡 俗手';
         rightTag.title = '相比最佳着法的损耗';
         rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
@@ -1328,7 +1214,13 @@ class AnalysisStudioApp {
 
         const subTrap = document.createElement('span');
         subTrap.className = 'sub-trap-prob';
-        subTrap.textContent = item.humanProbability ? `约 ${Math.round(item.humanProbability)}% 棋手易犯同类错` : '易受人类直觉惯性诱导';
+        const cleanPlayed = item.san ? item.san.replace(/[+#?!]/g, '') : '';
+        const cleanTop1 = item.maiaTopSan ? item.maiaTopSan.replace(/[+#?!]/g, '') : '';
+        if (cleanPlayed === cleanTop1) {
+          subTrap.textContent = item.maiaTopProb ? `直觉一选 (${Math.round(item.maiaTopProb)}% 倾向)` : '人类直觉一选';
+        } else {
+          subTrap.textContent = item.humanProbability ? `人类自然走法 (${Math.round(item.humanProbability)}% 倾向)` : '易受人类直觉惯性诱导';
+        }
         cardSub.appendChild(subTrap);
       } else {
         if (item.severity === 'mistake') {
@@ -1483,7 +1375,16 @@ class AnalysisStudioApp {
       const badge = document.getElementById(`badge-ply-${m.ply}`);
       if (!badge) return;
 
-      if (m.severity === 'blunder') {
+      if (m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition) {
+        badge.textContent = '✨';
+        badge.className = 'annotation-badge annotation-beyond';
+        badge.title = m.isCombinationFollowup ? '✨ 妙手组合延续' : '✨ 妙手：走出优于直觉的引擎首选';
+      } else if (m.divergenceType === 'intuition_trap' || m.isHumanTrap) {
+        badge.textContent = '💡';
+        badge.className = 'annotation-badge annotation-trap';
+        const lossTxt = m.lossPawns || (m.lossCp ? (Math.abs(m.lossCp) / 100).toFixed(1) : '0');
+        badge.title = `💡 俗手：直觉陷阱 (-${lossTxt} 兵)`;
+      } else if (m.severity === 'blunder') {
         badge.textContent = '??';
         badge.className = 'annotation-badge annotation-blunder';
         badge.title = `大漏 (${m.lossPawns} 兵)`;
@@ -1656,18 +1557,15 @@ class AnalysisStudioApp {
       const cleanMaia = (moveReview.maiaTopSan || '').replace(/[+#?!]/g, '');
 
       const isBeyond = moveReview.divergenceType === 'beyond_intuition' || moveReview.isBeyondIntuition;
-      const isStyle = moveReview.divergenceType === 'style_divergence' || moveReview.isStyleDivergence;
       const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
 
       // Add match indicator on played card
       if (isBeyond) {
         this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
-      } else if (isStyle) {
-        this.setComparePlayedSan(moveReview.san, '⚖️ 风格分歧', 'rgba(167, 139, 250, 0.18)', '#a78bfa');
-      } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
-        this.setComparePlayedSan(moveReview.san, '= 引擎');
       } else if (isTrap) {
         this.setComparePlayedSan(moveReview.san, '= 直觉陷阱 💡', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
+      } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
+        this.setComparePlayedSan(moveReview.san, '= 引擎');
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
         this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
       } else if (moveReview.isBookMove) {
@@ -1678,15 +1576,11 @@ class AnalysisStudioApp {
 
       // --- Badge ---
       if (isBeyond) {
-        this.el.divergenceBadge.textContent = '✨ 突破直觉 · 走出引擎一选';
+        this.el.divergenceBadge.textContent = '✨ 妙手 · 优于人类直觉走法';
         this.el.divergenceBadge.style.color = '#00d2ff';
         this.el.divergenceBadge.style.background = 'rgba(0, 210, 255, 0.12)';
-      } else if (isStyle) {
-        this.el.divergenceBadge.textContent = '⚖️ 风格分歧 · 同样好但取向不同';
-        this.el.divergenceBadge.style.color = '#a78bfa';
-        this.el.divergenceBadge.style.background = 'rgba(167, 139, 250, 0.12)';
       } else if (isTrap) {
-        this.el.divergenceBadge.textContent = '💡 直觉陷阱 · 惯性失误';
+        this.el.divergenceBadge.textContent = '💡 俗手 · 自然但吃亏的选择';
         this.el.divergenceBadge.style.color = '#f59e0b';
         this.el.divergenceBadge.style.background = 'rgba(245, 158, 11, 0.12)';
       } else if (moveReview.isBookMove) {
@@ -1730,17 +1624,17 @@ class AnalysisStudioApp {
         });
       }
 
-      // Gold/Purple arrow: Maia top pick (if different from both played and engine best, or in style divergence)
+      // Gold arrow: Maia top pick (if different from both played and engine best)
       if (moveReview.maiaTopUci && moveReview.maiaTopUci.length >= 4) {
         const maiaFrom = moveReview.maiaTopUci.slice(0, 2);
         const maiaTo = moveReview.maiaTopUci.slice(2, 4);
         const isDiffFromBest = moveReview.maiaTopUci !== moveReview.bestUci;
         const isDiffFromPlayed = cleanMaia !== cleanPlayed;
-        if (isDiffFromPlayed || isDiffFromBest || isStyle) {
+        if (isDiffFromPlayed || isDiffFromBest) {
           arrows.push({
             from: maiaFrom,
             to: maiaTo,
-            color: isStyle ? 'purple' : 'gold',
+            color: 'gold',
             label: `${moveReview.maiaTopSan} ${moveReview.maiaTopProb != null ? moveReview.maiaTopProb.toFixed(0) + '%' : ''}`
           });
         }
