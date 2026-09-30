@@ -705,6 +705,12 @@ body {
   color: #f59e0b;
 }
 
+.filter-pill.pill-style.active {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: #a78bfa;
+  color: #a78bfa;
+}
+
 .blunder-list {
   display: flex;
   flex-direction: column;
@@ -765,6 +771,97 @@ body {
   border-color: #f59e0b;
   background: rgba(245, 158, 11, 0.12);
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.18);
+}
+
+/* Style Divergence Card Variation */
+.blunder-card.card-style-divergence {
+  border-color: rgba(167, 139, 250, 0.25);
+  background: rgba(167, 139, 250, 0.03);
+}
+
+.blunder-card.card-style-divergence:hover {
+  background: rgba(167, 139, 250, 0.06);
+  border-color: rgba(167, 139, 250, 0.45);
+}
+
+.blunder-card.card-style-divergence.active {
+  border-color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.18);
+}
+
+/* Dual Review Metrics Summary Banner */
+.review-metrics-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 11px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.metric-player-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.metric-side-label {
+  min-width: 62px;
+}
+
+.side-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.side-badge.side-white {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.side-badge.side-black {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #cbd5e1;
+}
+
+.metric-group {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+}
+
+.metric-title {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.metric-value {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.metric-sub {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.metric-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  width: 100%;
 }
 
 .blunder-card-main {
@@ -849,6 +946,12 @@ body {
   border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
+.tag-style {
+  background: rgba(167, 139, 250, 0.18);
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+}
+
 .blunder-loss-tag {
   font-size: 11px;
   font-weight: 700;
@@ -863,6 +966,11 @@ body {
 .blunder-loss-tag.tag-gain {
   color: #00d2ff;
   background: rgba(0, 210, 255, 0.1);
+}
+
+.blunder-loss-tag.tag-style-loss {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
 }
 
 .blunder-card-sub {

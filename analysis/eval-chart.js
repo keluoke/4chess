@@ -142,7 +142,13 @@ export class EvalChart {
         const badge = document.createElement('span');
         badge.style.color = '#00d2ff';
         badge.style.fontWeight = '700';
-        badge.textContent = ' · ✨ 超越直觉 (走出引擎一选)';
+        badge.textContent = ' · ✨ 突破直觉 (走出引擎一选)';
+        topRow.appendChild(badge);
+      } else if (item.divergenceType === 'style_divergence' || item.isStyleDivergence) {
+        const badge = document.createElement('span');
+        badge.style.color = '#a78bfa';
+        badge.style.fontWeight = '700';
+        badge.textContent = ' · ⚖️ 风格分歧 (同样好但取向不同)';
         topRow.appendChild(badge);
       } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
         const badge = document.createElement('span');
@@ -343,11 +349,12 @@ export class EvalChart {
     this.dotsGroup.innerHTML = '';
     points.forEach(p => {
       const isBeyond = p.d.divergenceType === 'beyond_intuition' || p.d.isBeyondIntuition;
+      const isStyle = p.d.divergenceType === 'style_divergence' || p.d.isStyleDivergence;
       const isTrap = p.d.divergenceType === 'intuition_trap' || p.d.isHumanTrap;
       const isBlunder = p.d.severity === 'blunder';
       const isMistake = p.d.severity === 'mistake';
 
-      if (isBeyond || isTrap || isBlunder || isMistake) {
+      if (isBeyond || isStyle || isTrap || isBlunder || isMistake) {
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('cx', p.x);
         circle.setAttribute('cy', p.y);
@@ -357,6 +364,9 @@ export class EvalChart {
         if (isBeyond) {
           color = '#00d2ff';
           radius = '5.5';
+        } else if (isStyle) {
+          color = '#a78bfa';
+          radius = '4.8';
         } else if (isTrap) {
           color = '#f59e0b';
           radius = '5';

@@ -40,8 +40,19 @@ const mockStockfish = {
   }
 };
 
-const maia = new MaiaEngine();
-const analyzer = new GameAnalyzer(mockStockfish, maia);
+const mockMaia = {
+  isReady: true,
+  initialize: async () => {},
+  predict: async (fen, elo = 1500) => ({
+    moves: [
+      { san: 'Nf3', uci: 'g1f3', prob: 40.0, rawProb: 0.40 },
+      { san: 'e4', uci: 'e2e4', prob: 30.0, rawProb: 0.30 },
+      { san: 'd4', uci: 'd2d4', prob: 20.0, rawProb: 0.20 }
+    ]
+  })
+};
+
+const analyzer = new GameAnalyzer(mockStockfish, mockMaia);
 
 console.log('\nRunning analyzer.analyzeGame()...');
 const result = await analyzer.analyzeGame(sampleMoves, {
@@ -57,6 +68,11 @@ console.log('  Total Moves Analyzed:', result.totalMoves);
 console.log('  Blunders:', result.blundersCount);
 console.log('  Mistakes:', result.mistakesCount);
 console.log('  Inaccuracies:', result.inaccuraciesCount);
+console.log('  Style Divergence:', result.styleDivergenceCount);
+console.log('  Beyond Intuition (妙手):', result.beyondIntuitionCount);
+console.log('  Intuition Traps (俗手):', result.intuitionTrapsCount);
+console.log('  White Accuracy:', result.accuracyWhite + '%');
+console.log('  Black Accuracy:', result.accuracyBlack + '%');
 console.log('  ACPL White:', result.acplWhite, '| ACPL Black:', result.acplBlack);
 console.log('  Key Moments (Ranked by loss):');
 result.keyMoments.forEach((km, i) => {

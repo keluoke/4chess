@@ -1006,6 +1006,27 @@ class AnalysisStudioApp {
   applyReviewResult(result) {
     this.reviewResult = result;
 
+    // 0. Update Dual Metrics Summary Card
+    const metricsCard = document.getElementById('review-metrics-card');
+    if (metricsCard) {
+      const elAccW = document.getElementById('val-accuracy-white');
+      const elPostW = document.getElementById('val-postbook-white');
+      const elIntW = document.getElementById('val-intuition-white');
+      const elAccB = document.getElementById('val-accuracy-black');
+      const elPostB = document.getElementById('val-postbook-black');
+      const elIntB = document.getElementById('val-intuition-black');
+
+      if (elAccW) elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
+      if (elPostW) elPostW.textContent = result.postBookAccuracyWhite != null ? `(离谱后 ${result.postBookAccuracyWhite}%)` : '';
+      if (elIntW) elIntW.textContent = result.intuitionConsistencyWhite != null ? `${result.intuitionConsistencyWhite}%` : '样本不足';
+
+      if (elAccB) elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
+      if (elPostB) elPostB.textContent = result.postBookAccuracyBlack != null ? `(离谱后 ${result.postBookAccuracyBlack}%)` : '';
+      if (elIntB) elIntB.textContent = result.intuitionConsistencyBlack != null ? `${result.intuitionConsistencyBlack}%` : '样本不足';
+
+      metricsCard.style.display = 'flex';
+    }
+
     // 1. Update Chart
     this.evalChart.setData(result.allMoves);
     this.evalChart.setCursor(this.currentPly);
@@ -1029,13 +1050,16 @@ class AnalysisStudioApp {
     const totalAll = list.length;
     const countBeyond = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition).length;
     const countTrap = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap).length;
+    const countStyle = list.filter(m => m.divergenceType === 'style_divergence' || m.isStyleDivergence).length;
 
     const elCountAll = document.getElementById('filter-count-all');
     const elCountBeyond = document.getElementById('filter-count-beyond');
     const elCountTrap = document.getElementById('filter-count-trap');
+    const elCountStyle = document.getElementById('filter-count-style');
     if (elCountAll) elCountAll.textContent = String(totalAll);
     if (elCountBeyond) elCountBeyond.textContent = String(countBeyond);
     if (elCountTrap) elCountTrap.textContent = String(countTrap);
+    if (elCountStyle) elCountStyle.textContent = String(countStyle);
 
     // 2. Filter moments based on active category pill
     let filteredMoments = list;
@@ -1043,16 +1067,20 @@ class AnalysisStudioApp {
       filteredMoments = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition);
     } else if (this.currentDivergenceFilter === 'trap') {
       filteredMoments = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap);
+    } else if (this.currentDivergenceFilter === 'style') {
+      filteredMoments = list.filter(m => m.divergenceType === 'style_divergence' || m.isStyleDivergence);
     }
 
     this.el.blunderList.replaceChildren();
 
     if (!filteredMoments || filteredMoments.length === 0) {
       const emptyMsg = this.currentDivergenceFilter === 'beyond'
-        ? '本盘未检测到实战超越人类直觉的妙手'
+        ? '本盘未检测到实战真正突破人类直觉的妙手'
         : (this.currentDivergenceFilter === 'trap'
           ? '本盘未检测到落入直觉惯性的俗手'
-          : '👏 本盘棋未检测到显著的妙手或俗手分歧瞬间。');
+          : (this.currentDivergenceFilter === 'style'
+            ? '本盘未检测到双方走法质量相当的风格分歧瞬间'
+            : '👏 本盘棋未检测到显著的妙手、俗手或风格分歧瞬间。'));
       const emptyBox = document.createElement('div');
       emptyBox.style.cssText = 'padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;';
       emptyBox.textContent = emptyMsg;
@@ -1064,10 +1092,12 @@ class AnalysisStudioApp {
       const card = document.createElement('div');
       const isBeyond = item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition;
       const isTrap = item.divergenceType === 'intuition_trap' || item.isHumanTrap;
+      const isStyle = item.divergenceType === 'style_divergence' || item.isStyleDivergence;
 
       let cardClass = 'blunder-card';
       if (isBeyond) cardClass += ' card-beyond-intuition';
       else if (isTrap) cardClass += ' card-intuition-trap';
+      else if (isStyle) cardClass += ' card-style-divergence';
 
       card.className = cardClass;
       card.dataset.index = index;
@@ -1118,17 +1148,17 @@ class AnalysisStudioApp {
 
       if (isBeyond) {
         typeTag.classList.add('tag-beyond');
-        typeTag.title = '实战下出 Stockfish 引擎一选，评估收益超越 Maia 直觉一选';
+        typeTag.title = '真正突破直觉：实战走法优质，全盘好棋总概率极低(≤15%)且人类自然走法受损显著';
         typeTag.textContent = '✨ 妙手';
         rightTag.classList.add('tag-gain');
-        rightTag.title = '走出引擎一选';
-        rightTag.textContent = '走出引擎一选';
+        rightTag.title = '走出突破人类直觉的深度优质着法';
+        rightTag.textContent = '突破直觉';
 
         const subProb = document.createElement('span');
         subProb.className = 'sub-trap-prob';
         subProb.style.color = 'var(--text-dim)';
         if (item.maiaTopSan) {
-          subProb.appendChild(document.createTextNode('人类惯性倾向: '));
+          subProb.appendChild(document.createTextNode('直觉首选: '));
           const topStrong = document.createElement('strong');
           topStrong.style.color = '#e6a520';
           topStrong.textContent = item.maiaTopSan;
@@ -1136,13 +1166,45 @@ class AnalysisStudioApp {
           if (item.maiaTopProb) {
             subProb.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
           }
+          if (item.goodMovesProb != null) {
+            subProb.appendChild(document.createTextNode(` · 优质走法总概率约 ${Math.round(item.goodMovesProb)}%`));
+          }
         } else {
           subProb.textContent = '突破常规人类直觉惯性';
         }
         cardSub.appendChild(subProb);
+      } else if (isStyle) {
+        typeTag.classList.add('tag-style');
+        typeTag.title = '同样好但风格不同：实战与直觉、引擎走法均为高质量选择，体现不同局面风格偏好';
+        typeTag.textContent = '⚖️ 风格分歧';
+        rightTag.classList.add('tag-style-loss');
+        rightTag.title = '走法质量相近，体现风格取向不同';
+        rightTag.textContent = '质量相近';
+
+        const subStyle = document.createElement('span');
+        subStyle.className = 'sub-trap-prob';
+        subStyle.style.color = 'var(--text-dim)';
+        if (item.maiaTopSan) {
+          subStyle.appendChild(document.createTextNode('直觉偏好: '));
+          const topStrong = document.createElement('strong');
+          topStrong.style.color = '#a78bfa';
+          topStrong.textContent = item.maiaTopSan;
+          subStyle.appendChild(topStrong);
+          if (item.maiaTopProb) {
+            subStyle.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
+          }
+        }
+        if (bestMoveText) {
+          subStyle.appendChild(document.createTextNode(' · 引擎首选: '));
+          const bStrong = document.createElement('strong');
+          bStrong.style.color = 'var(--brand-green)';
+          bStrong.textContent = bestMoveText;
+          subStyle.appendChild(bStrong);
+        }
+        cardSub.appendChild(subStyle);
       } else if (isTrap) {
         typeTag.classList.add('tag-trap');
-        typeTag.title = '实战下出 Maia 直觉一/二选，但导致局面评估大幅下降';
+        typeTag.title = '直觉陷阱：实战走法属于高概率人类自然走法(≥15%)，但经深度复核有明显损失';
         typeTag.textContent = '💡 俗手';
         rightTag.title = '相比最佳着法的损耗';
         rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
@@ -1160,7 +1222,7 @@ class AnalysisStudioApp {
 
         const subTrap = document.createElement('span');
         subTrap.className = 'sub-trap-prob';
-        subTrap.textContent = item.humanProbability ? `约 ${Math.round(item.humanProbability)}% 棋手易犯同类错` : '易受人类惯性诱导';
+        subTrap.textContent = item.humanProbability ? `约 ${Math.round(item.humanProbability)}% 棋手易犯同类错` : '易受人类直觉惯性诱导';
         cardSub.appendChild(subTrap);
       } else {
         if (item.severity === 'mistake') {
@@ -1488,30 +1550,43 @@ class AnalysisStudioApp {
       const cleanMaia = (moveReview.maiaTopSan || '').replace(/[+#?!]/g, '');
 
       const isBeyond = moveReview.divergenceType === 'beyond_intuition' || moveReview.isBeyondIntuition;
+      const isStyle = moveReview.divergenceType === 'style_divergence' || moveReview.isStyleDivergence;
       const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
 
       // Add match indicator on played card
       if (isBeyond) {
         this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
+      } else if (isStyle) {
+        this.setComparePlayedSan(moveReview.san, '⚖️ 风格分歧', 'rgba(167, 139, 250, 0.18)', '#a78bfa');
       } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
         this.setComparePlayedSan(moveReview.san, '= 引擎');
       } else if (isTrap) {
         this.setComparePlayedSan(moveReview.san, '= 直觉陷阱 💡', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
         this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
+      } else if (moveReview.isBookMove) {
+        this.setComparePlayedSan(moveReview.san, '📖 理论着法', 'rgba(56, 189, 248, 0.15)', '#38bdf8');
       } else {
         this.setComparePlayedSan(moveReview.san);
       }
 
       // --- Badge ---
       if (isBeyond) {
-        this.el.divergenceBadge.textContent = '✨ 超越直觉 · 走出引擎一选';
+        this.el.divergenceBadge.textContent = '✨ 突破直觉 · 走出引擎一选';
         this.el.divergenceBadge.style.color = '#00d2ff';
         this.el.divergenceBadge.style.background = 'rgba(0, 210, 255, 0.12)';
+      } else if (isStyle) {
+        this.el.divergenceBadge.textContent = '⚖️ 风格分歧 · 同样好但取向不同';
+        this.el.divergenceBadge.style.color = '#a78bfa';
+        this.el.divergenceBadge.style.background = 'rgba(167, 139, 250, 0.12)';
       } else if (isTrap) {
         this.el.divergenceBadge.textContent = '💡 直觉陷阱 · 惯性失误';
         this.el.divergenceBadge.style.color = '#f59e0b';
         this.el.divergenceBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+      } else if (moveReview.isBookMove) {
+        this.el.divergenceBadge.textContent = `📖 开局理论着法${moveReview.openingName ? ' · ' + moveReview.openingName : ''}`;
+        this.el.divergenceBadge.style.color = '#38bdf8';
+        this.el.divergenceBadge.style.background = 'rgba(56, 189, 248, 0.12)';
       } else if (moveReview.severity === 'blunder') {
         this.el.divergenceBadge.textContent = '⚠️ 大漏';
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
@@ -1530,6 +1605,14 @@ class AnalysisStudioApp {
         this.el.divergenceBadge.style.background = 'rgba(7, 193, 96, 0.12)';
       }
 
+      // Display detailed divergence note if present
+      if (moveReview.divergenceNote) {
+        this.el.divergenceContent.textContent = moveReview.divergenceNote;
+        this.el.divergenceContent.style.display = 'block';
+      } else {
+        this.el.divergenceContent.style.display = 'none';
+      }
+
       // --- Arrows ---
       // Green arrow: Stockfish best (only if different from played)
       if (moveReview.bestUci && moveReview.bestUci.length >= 4 && cleanPlayed !== cleanBest) {
@@ -1541,17 +1624,17 @@ class AnalysisStudioApp {
         });
       }
 
-      // Gold arrow: Maia top pick (if different from both played and engine best)
+      // Gold/Purple arrow: Maia top pick (if different from both played and engine best, or in style divergence)
       if (moveReview.maiaTopUci && moveReview.maiaTopUci.length >= 4) {
         const maiaFrom = moveReview.maiaTopUci.slice(0, 2);
         const maiaTo = moveReview.maiaTopUci.slice(2, 4);
         const isDiffFromBest = moveReview.maiaTopUci !== moveReview.bestUci;
         const isDiffFromPlayed = cleanMaia !== cleanPlayed;
-        if (isDiffFromPlayed || isDiffFromBest) {
+        if (isDiffFromPlayed || isDiffFromBest || isStyle) {
           arrows.push({
             from: maiaFrom,
             to: maiaTo,
-            color: 'gold',
+            color: isStyle ? 'purple' : 'gold',
             label: `${moveReview.maiaTopSan} ${moveReview.maiaTopProb != null ? moveReview.maiaTopProb.toFixed(0) + '%' : ''}`
           });
         }

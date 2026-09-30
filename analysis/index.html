@@ -125,6 +125,35 @@
         <!-- Rendered by EvalChart -->
       </div>
 
+      <!-- Dual Metrics Summary Card (Engine Accuracy & Maia Intuition Consistency) -->
+      <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
+        <div class="metric-player-row">
+          <div class="metric-side-label"><span class="side-badge side-white">⚪ 白方</span></div>
+          <div class="metric-group">
+            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+            <span class="metric-value" id="val-accuracy-white">—</span>
+            <span class="metric-sub" id="val-postbook-white" title="脱离开局库后的实战中盘精度"></span>
+          </div>
+          <div class="metric-group">
+            <span class="metric-title" title="衡量走法与 Maia 1900 预测模型偏好的一致性：相对概率几何对数均值 H = 100 * exp(Σ ln(r_i) / N)。不衡量棋力高低">Maia 1900 直觉一致度</span>
+            <span class="metric-value" id="val-intuition-white">—</span>
+          </div>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-player-row">
+          <div class="metric-side-label"><span class="side-badge side-black">⚫ 黑方</span></div>
+          <div class="metric-group">
+            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+            <span class="metric-value" id="val-accuracy-black">—</span>
+            <span class="metric-sub" id="val-postbook-black" title="脱离开局库后的实战中盘精度"></span>
+          </div>
+          <div class="metric-group">
+            <span class="metric-title" title="衡量走法与 Maia 1900 预测模型偏好的一致性：相对概率几何对数均值 H = 100 * exp(Σ ln(r_i) / N)。不衡量棋力高低">Maia 1900 直觉一致度</span>
+            <span class="metric-value" id="val-intuition-black">—</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 2. Three-Way Comparison Panel -->
       <div class="divergence-box" id="divergence-box">
         <div class="divergence-badge" id="divergence-badge">局面研判</div>
@@ -166,6 +195,7 @@
               <button type="button" class="filter-pill active" data-filter="all">全部 (<span id="filter-count-all">0</span>)</button>
               <button type="button" class="filter-pill pill-beyond" data-filter="beyond">✨ 妙手 (<span id="filter-count-beyond">0</span>)</button>
               <button type="button" class="filter-pill pill-trap" data-filter="trap">💡 俗手 (<span id="filter-count-trap">0</span>)</button>
+              <button type="button" class="filter-pill pill-style" data-filter="style">⚖️ 风格分歧 (<span id="filter-count-style">0</span>)</button>
             </div>
             <div class="blunder-list" id="blunder-list">
               <div style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">

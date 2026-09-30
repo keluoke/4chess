@@ -687,7 +687,8 @@ export class MaiaInBrowserEngine {
       const p = probs[i];
       scored.push({
         ...m,
-        prob: Math.round(p * 10000) / 100
+        prob: Math.round(p * 10000) / 100,
+        rawProb: p
       });
       squareWeights[m.to] += p;
     }
