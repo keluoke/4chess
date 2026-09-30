@@ -191,6 +191,7 @@ export async function initMaiaExtension() {
       }));
 
       const cleanReview = analyzer.lastReviewResult ? {
+        schemaVersion: analyzer.lastReviewResult.schemaVersion || 4,
         totalMoves: analyzer.lastReviewResult.totalMoves,
         blundersCount: analyzer.lastReviewResult.blundersCount,
         mistakesCount: analyzer.lastReviewResult.mistakesCount,
@@ -201,8 +202,16 @@ export async function initMaiaExtension() {
         bookMovesCount: analyzer.lastReviewResult.bookMovesCount,
         accuracyWhite: analyzer.lastReviewResult.accuracyWhite,
         accuracyBlack: analyzer.lastReviewResult.accuracyBlack,
+        coverageRateWhite: analyzer.lastReviewResult.coverageRateWhite,
+        coverageRateBlack: analyzer.lastReviewResult.coverageRateBlack,
         postBookAccuracyWhite: analyzer.lastReviewResult.postBookAccuracyWhite,
         postBookAccuracyBlack: analyzer.lastReviewResult.postBookAccuracyBlack,
+        humanScoreWhite: analyzer.lastReviewResult.humanScoreWhite,
+        humanScoreBlack: analyzer.lastReviewResult.humanScoreBlack,
+        humanReasonWhite: analyzer.lastReviewResult.humanReasonWhite,
+        humanReasonBlack: analyzer.lastReviewResult.humanReasonBlack,
+        styleDistributionWhite: analyzer.lastReviewResult.styleDistributionWhite,
+        styleDistributionBlack: analyzer.lastReviewResult.styleDistributionBlack,
         intuitionConsistencyWhite: analyzer.lastReviewResult.intuitionConsistencyWhite,
         intuitionConsistencyBlack: analyzer.lastReviewResult.intuitionConsistencyBlack,
         maxLossWhite: analyzer.lastReviewResult.maxLossWhite,

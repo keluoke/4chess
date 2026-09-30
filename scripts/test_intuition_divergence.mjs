@@ -279,4 +279,82 @@ if (move7.divergenceType !== 'beyond_intuition') {
   throw new Error(`Tactical move Bxf7+ should be confirmed as beyond_intuition (妙手), got ${move7.divergenceType}`);
 }
 
+console.log('\n=== TEST SUITE 5: Cache Schema v4 Round-Trip & Stale Purging ===');
+
+// Setup mock localStorage
+globalThis.localStorage = (() => {
+  let store = {};
+  return {
+    getItem: (key) => store[key] || null,
+    setItem: (key, val) => { store[key] = String(val); },
+    removeItem: (key) => { delete store[key]; },
+    clear: () => { store = {}; }
+  };
+})();
+
+// Test 5.1: Save and load complete review result
+const testCacheKey = 'test_game_v4_roundtrip';
+await GameAnalyzer.saveCachedReview(testCacheKey, tacticalReview);
+const loadedCache = await GameAnalyzer.getCachedReview(testCacheKey);
+
+console.log('5.1 Cached review schemaVersion:', loadedCache?.schemaVersion);
+console.log('5.1 Cached review humanScoreWhite:', loadedCache?.humanScoreWhite);
+console.log('5.1 Cached review styleDistributionWhite:', loadedCache?.styleDistributionWhite);
+
+if (!loadedCache || loadedCache.schemaVersion !== 4 || loadedCache.accuracyWhite === undefined || loadedCache.humanScoreWhite === undefined) {
+  throw new Error('Failed to properly serialize and deserialize v4 review cache');
+}
+
+// Test 5.2: Invalidation of stale v3 cache without dual scores
+const staleKey = 'test_game_stale_v3';
+const staleStorageKey = `maia3_review_${staleKey}`;
+localStorage.setItem(staleStorageKey, JSON.stringify({
+  result: {
+    totalMoves: 10,
+    allMoves: [{ ply: 1, maiaTopSan: 'e4' }]
+    // schemaVersion missing, accuracyWhite missing, humanScoreWhite missing
+  }
+}));
+
+const staleLookup = await GameAnalyzer.getCachedReview(staleKey);
+console.log('5.2 Stale cache lookup result (must be null):', staleLookup);
+if (staleLookup !== null) {
+  throw new Error('getCachedReview must discard stale cache missing schemaVersion 4 and dual scores');
+}
+if (localStorage.getItem(staleStorageKey) !== null) {
+  throw new Error('getCachedReview must purge stale cache from persistent storage');
+}
+
+console.log('\n=== TEST SUITE 6: Missing Evaluation Nulling & Human Score Reasons ===');
+
+// Test 6.1: Null accuracy on missing engine evaluation
+const mockStockfishWithFailure = {
+  isReady: true,
+  evaluate: async (fen) => {
+    // Fails on ply 2
+    if (fen.includes('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR')) {
+      return null;
+    }
+    return { score: '+0.20', scoreCp: 20, bestMove: { san: 'e4', uci: 'e2e4' } };
+  }
+};
+const failureAnalyzer = new GameAnalyzer(mockStockfishWithFailure, mockMaia);
+const failMoves = [{ san: 'e4' }, { san: 'e5' }, { san: 'Nf3' }];
+const failReview = await failureAnalyzer.analyzeGame(failMoves, { depth: 6, elo: 1900, forceRefresh: true });
+
+console.log('6.1 Move 1 accuracy:', failReview.allMoves[0].accuracy);
+console.log('6.1 Move 2 accuracy (failed eval):', failReview.allMoves[1].accuracy);
+console.log('6.1 White coverage rate:', failReview.coverageRateWhite + '%');
+console.log('6.1 Black coverage rate:', failReview.coverageRateBlack + '%');
+
+if (failReview.allMoves[1].accuracy !== null) {
+  throw new Error('Failed evaluation move must have accuracy = null, not 100');
+}
+
+// Test 6.2: Insufficient decision moves reason for Human Score
+console.log('6.2 Human reason for short game (3 moves):', failReview.humanReasonWhite);
+if (!failReview.humanReasonWhite || !failReview.humanReasonWhite.includes('有效决策不足')) {
+  throw new Error(`Human score for short game should explain insufficient decisions, got ${failReview.humanReasonWhite}`);
+}
+
 console.log('\n✅ All unit tests passed with 100% precision!');

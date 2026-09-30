@@ -125,31 +125,63 @@
         <!-- Rendered by EvalChart -->
       </div>
 
-      <!-- Dual Metrics Summary Card (Engine Accuracy & Maia Intuition Consistency) -->
+      <!-- Dual Metrics Summary Card (Engine Accuracy & Human Score) -->
       <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
-        <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-white">⚪ 白方</span></div>
-          <div class="metric-group">
-            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
-            <span class="metric-value" id="val-accuracy-white">—</span>
-            <span class="metric-sub" id="val-postbook-white" title="脱离开局库后的实战中盘精度"></span>
+        <!-- White Player Card -->
+        <div class="metric-player-card" id="metric-card-white">
+          <div class="metric-player-header">
+            <div class="metric-side-label"><span class="side-badge side-white">⚪ 白方</span></div>
+            <div class="metric-main-stats">
+              <div class="metric-group metric-accuracy-group">
+                <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+                <span class="metric-value" id="val-accuracy-white">—</span>
+                <span class="metric-sub" id="val-postbook-white" title="脱离开局库后的实战中盘精度"></span>
+              </div>
+              <div class="metric-group metric-human-group">
+                <span class="metric-title" title="走法有多贴近人类直觉（参考水平：Maia 1900）。相对概率几何对数均值，不衡量棋力高低">人味指数</span>
+                <div class="metric-human-content">
+                  <span class="metric-value metric-human-val" id="val-intuition-white">—</span>
+                  <span class="metric-human-meta" id="val-human-meta-white">参考水平: 1900</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="metric-group">
-            <span class="metric-title" title="衡量走法与 Maia 1900 预测模型偏好的一致性：相对概率几何对数均值 H = 100 * exp(Σ ln(r_i) / N)。不衡量棋力高低">Maia 1900 直觉一致度</span>
-            <span class="metric-value" id="val-intuition-white">—</span>
+          <!-- White Style Matrix Breakdown Pills -->
+          <div class="style-matrix-pills" id="style-pills-white" style="display: none;">
+            <button type="button" class="style-pill style-natural" data-color="w" data-tag="natural_good" title="点击查看自然好棋">自然好棋 <span class="style-count" id="count-natural-white">0</span></button>
+            <button type="button" class="style-pill style-original" data-color="w" data-tag="original_good" title="点击查看独到好棋 (突破直觉)">独到好棋 <span class="style-count" id="count-original-white">0</span></button>
+            <button type="button" class="style-pill style-trap" data-color="w" data-tag="intuition_trap" title="点击查看直觉陷阱">直觉陷阱 <span class="style-count" id="count-trap-white">0</span></button>
+            <button type="button" class="style-pill style-offtrack" data-color="w" data-tag="off_track" title="点击查看偏离常规">偏离常规 <span class="style-count" id="count-offtrack-white">0</span></button>
           </div>
         </div>
+
         <div class="metric-divider"></div>
-        <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-black">⚫ 黑方</span></div>
-          <div class="metric-group">
-            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
-            <span class="metric-value" id="val-accuracy-black">—</span>
-            <span class="metric-sub" id="val-postbook-black" title="脱离开局库后的实战中盘精度"></span>
+
+        <!-- Black Player Card -->
+        <div class="metric-player-card" id="metric-card-black">
+          <div class="metric-player-header">
+            <div class="metric-side-label"><span class="side-badge side-black">⚫ 黑方</span></div>
+            <div class="metric-main-stats">
+              <div class="metric-group metric-accuracy-group">
+                <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+                <span class="metric-value" id="val-accuracy-black">—</span>
+                <span class="metric-sub" id="val-postbook-black" title="脱离开局库后的实战中盘精度"></span>
+              </div>
+              <div class="metric-group metric-human-group">
+                <span class="metric-title" title="走法有多贴近人类直觉（参考水平：Maia 1900）。相对概率几何对数均值，不衡量棋力高低">人味指数</span>
+                <div class="metric-human-content">
+                  <span class="metric-value metric-human-val" id="val-intuition-black">—</span>
+                  <span class="metric-human-meta" id="val-human-meta-black">参考水平: 1900</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="metric-group">
-            <span class="metric-title" title="衡量走法与 Maia 1900 预测模型偏好的一致性：相对概率几何对数均值 H = 100 * exp(Σ ln(r_i) / N)。不衡量棋力高低">Maia 1900 直觉一致度</span>
-            <span class="metric-value" id="val-intuition-black">—</span>
+          <!-- Black Style Matrix Breakdown Pills -->
+          <div class="style-matrix-pills" id="style-pills-black" style="display: none;">
+            <button type="button" class="style-pill style-natural" data-color="b" data-tag="natural_good" title="点击查看自然好棋">自然好棋 <span class="style-count" id="count-natural-black">0</span></button>
+            <button type="button" class="style-pill style-original" data-color="b" data-tag="original_good" title="点击查看独到好棋 (突破直觉)">独到好棋 <span class="style-count" id="count-original-black">0</span></button>
+            <button type="button" class="style-pill style-trap" data-color="b" data-tag="intuition_trap" title="点击查看直觉陷阱">直觉陷阱 <span class="style-count" id="count-trap-black">0</span></button>
+            <button type="button" class="style-pill style-offtrack" data-color="b" data-tag="off_track" title="点击查看偏离常规">偏离常规 <span class="style-count" id="count-offtrack-black">0</span></button>
           </div>
         </div>
       </div>

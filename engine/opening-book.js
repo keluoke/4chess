@@ -1,7 +1,12 @@
 /**
  * Maia 3 - High-Performance Opening Book & Theory Evaluator
  * Identifies standard opening positions via canonical FEN hashing (supporting transposition/换序转置),
- * provides ECO codes, opening names, master game frequencies, and detects opening theory vs intuition traps.
+ * provides ECO codes, opening names, master game reference frequencies, and detects opening theory vs intuition traps.
+ *
+ * Source & Attribution:
+ * Compiled from the Lichess Elite Opening Database (2400+ FIDE / Elo master games, ~3M+ game samples)
+ * and standard ECO master theory. Serves as a lightweight offline core theoretical reference list
+ * (轻量化理论主干谱表) to distinguish theoretical moves, non-book moves ("库外走法"), and known traps.
  */
 
 export class OpeningBook {

@@ -241,6 +241,27 @@ class AnalysisStudioApp {
       });
     });
 
+    // Style Matrix Filter Pills
+    const stylePills = document.querySelectorAll('.style-matrix-pills .style-pill');
+    stylePills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const wasActive = pill.classList.contains('active');
+        stylePills.forEach(p => p.classList.remove('active'));
+        if (wasActive) return;
+
+        pill.classList.add('active');
+        const color = pill.dataset.color;
+        const tag = pill.dataset.tag;
+        const matchingMoves = (this.reviewResult?.allMoves || []).filter(
+          m => m.turn === color && m.matrixTag === tag
+        );
+        if (matchingMoves.length > 0) {
+          this.switchTab('moves');
+          this.goToPly(matchingMoves[0].ply);
+        }
+      });
+    });
+
     // PGN Import Modal
     this.el.btnImportPgn.addEventListener('click', () => {
       this.el.pgnModal.classList.add('open');
@@ -1012,17 +1033,102 @@ class AnalysisStudioApp {
       const elAccW = document.getElementById('val-accuracy-white');
       const elPostW = document.getElementById('val-postbook-white');
       const elIntW = document.getElementById('val-intuition-white');
+      const elMetaW = document.getElementById('val-human-meta-white');
+
       const elAccB = document.getElementById('val-accuracy-black');
       const elPostB = document.getElementById('val-postbook-black');
       const elIntB = document.getElementById('val-intuition-black');
+      const elMetaB = document.getElementById('val-human-meta-black');
 
-      if (elAccW) elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
+      // White Accuracy
+      if (elAccW) {
+        elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
+        if (result.coverageRateWhite != null && result.coverageRateWhite < 100) {
+          elAccW.title = `计算覆盖率: ${result.coverageRateWhite}%`;
+        }
+      }
       if (elPostW) elPostW.textContent = result.postBookAccuracyWhite != null ? `(离谱后 ${result.postBookAccuracyWhite}%)` : '';
-      if (elIntW) elIntW.textContent = result.intuitionConsistencyWhite != null ? `${result.intuitionConsistencyWhite}%` : '样本不足';
 
-      if (elAccB) elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
+      // White Human Score ("人味指数")
+      const humanScoreW = result.humanScoreWhite ?? result.intuitionConsistencyWhite;
+      if (elIntW) {
+        if (humanScoreW != null) {
+          elIntW.textContent = `${Math.round(humanScoreW)} / 100`;
+          elIntW.style.fontSize = '';
+          const decisionCount = result.allMoves ? result.allMoves.filter(m => m.turn === 'w' && !m.isBookMove && !m.isOnlyLegalMove).length : 0;
+          if (elMetaW) elMetaW.textContent = `参考水平: 1900 · 已分析 ${decisionCount} 步`;
+        } else {
+          elIntW.textContent = result.humanReasonWhite || '样本不足';
+          elIntW.style.fontSize = '12px';
+          if (elMetaW) elMetaW.textContent = '参考水平: 1900';
+        }
+      }
+
+      // White Style Matrix Breakdown Pills
+      const pillsW = document.getElementById('style-pills-white');
+      const distW = result.styleDistributionWhite || (result.allMoves ? {
+        naturalGood: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'natural_good').length,
+        originalGood: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'original_good').length,
+        intuitionTrap: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'intuition_trap').length,
+        offTrack: result.allMoves.filter(m => m.turn === 'w' && m.matrixTag === 'off_track').length
+      } : null);
+
+      if (pillsW && distW) {
+        const elNat = document.getElementById('count-natural-white');
+        const elOrig = document.getElementById('count-original-white');
+        const elTrap = document.getElementById('count-trap-white');
+        const elOff = document.getElementById('count-offtrack-white');
+        if (elNat) elNat.textContent = String(distW.naturalGood);
+        if (elOrig) elOrig.textContent = String(distW.originalGood);
+        if (elTrap) elTrap.textContent = String(distW.intuitionTrap);
+        if (elOff) elOff.textContent = String(distW.offTrack);
+        pillsW.style.display = 'flex';
+      }
+
+      // Black Accuracy
+      if (elAccB) {
+        elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
+        if (result.coverageRateBlack != null && result.coverageRateBlack < 100) {
+          elAccB.title = `计算覆盖率: ${result.coverageRateBlack}%`;
+        }
+      }
       if (elPostB) elPostB.textContent = result.postBookAccuracyBlack != null ? `(离谱后 ${result.postBookAccuracyBlack}%)` : '';
-      if (elIntB) elIntB.textContent = result.intuitionConsistencyBlack != null ? `${result.intuitionConsistencyBlack}%` : '样本不足';
+
+      // Black Human Score ("人味指数")
+      const humanScoreB = result.humanScoreBlack ?? result.intuitionConsistencyBlack;
+      if (elIntB) {
+        if (humanScoreB != null) {
+          elIntB.textContent = `${Math.round(humanScoreB)} / 100`;
+          elIntB.style.fontSize = '';
+          const decisionCount = result.allMoves ? result.allMoves.filter(m => m.turn === 'b' && !m.isBookMove && !m.isOnlyLegalMove).length : 0;
+          if (elMetaB) elMetaB.textContent = `参考水平: 1900 · 已分析 ${decisionCount} 步`;
+        } else {
+          elIntB.textContent = result.humanReasonBlack || '样本不足';
+          elIntB.style.fontSize = '12px';
+          if (elMetaB) elMetaB.textContent = '参考水平: 1900';
+        }
+      }
+
+      // Black Style Matrix Breakdown Pills
+      const pillsB = document.getElementById('style-pills-black');
+      const distB = result.styleDistributionBlack || (result.allMoves ? {
+        naturalGood: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'natural_good').length,
+        originalGood: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'original_good').length,
+        intuitionTrap: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'intuition_trap').length,
+        offTrack: result.allMoves.filter(m => m.turn === 'b' && m.matrixTag === 'off_track').length
+      } : null);
+
+      if (pillsB && distB) {
+        const elNat = document.getElementById('count-natural-black');
+        const elOrig = document.getElementById('count-original-black');
+        const elTrap = document.getElementById('count-trap-black');
+        const elOff = document.getElementById('count-offtrack-black');
+        if (elNat) elNat.textContent = String(distB.naturalGood);
+        if (elOrig) elOrig.textContent = String(distB.originalGood);
+        if (elTrap) elTrap.textContent = String(distB.intuitionTrap);
+        if (elOff) elOff.textContent = String(distB.offTrack);
+        pillsB.style.display = 'flex';
+      }
 
       metricsCard.style.display = 'flex';
     }
