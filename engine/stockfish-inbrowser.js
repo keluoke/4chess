@@ -261,11 +261,13 @@ export class StockfishInBrowser {
     if (!frame) {
       frame = document.createElement('iframe');
       frame.id = 'maia3-stockfish-frame';
-      frame.style.position = 'absolute';
-      frame.style.width = '0px';
-      frame.style.height = '0px';
+      frame.style.position = 'fixed';
+      frame.style.left = '-9999px';
+      frame.style.top = '-9999px';
+      frame.style.width = '1px';
+      frame.style.height = '1px';
+      frame.style.opacity = '0.01';
       frame.style.border = 'none';
-      frame.style.visibility = 'hidden';
       frame.style.pointerEvents = 'none';
 
       const url = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
@@ -364,6 +366,13 @@ export class StockfishInBrowser {
       };
       window.addEventListener('message', onWindowMsg);
 
+      // If iframe was already mounted and loaded in DOM, trigger sendPort immediately!
+      try {
+        if (this.iframe && this.iframe.contentWindow) {
+          setTimeout(sendPort, 30);
+        }
+      } catch (e) {}
+
       this.iframe.addEventListener('load', () => {
         setTimeout(sendPort, 40);
       }, { once: true });
@@ -390,10 +399,6 @@ export class StockfishInBrowser {
       }
       if (!this.isReady) {
         console.warn('[Stockfish In-Browser] ⚠️ 引擎初始化就绪等待超时 (Stockfish init timeout)');
-        if (this.iframe && this.iframe.parentNode) {
-          try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
-        }
-        this.iframe = null;
         this.initPromise = null;
         if (this._readyResolve) {
           const r = this._readyResolve;

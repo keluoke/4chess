@@ -79,23 +79,105 @@ export async function initMaiaExtension() {
         return;
       }
 
-      let whitePlayer = '白方';
-      let blackPlayer = '黑方';
-      let gameResult = '*';
+      let whitePlayer = moves.white || '白方';
+      let blackPlayer = moves.black || '黑方';
+      let gameResult = moves.result || '*';
 
       try {
-        if (platform === 'chesscom') {
-          const wEl = document.querySelector('.board-layout-player.player-white .user-username-component, .player-component.player-white .user-username-component, .user-tagline-white .user-tagline-username');
-          const bEl = document.querySelector('.board-layout-player.player-black .user-username-component, .player-component.player-black .user-username-component, .user-tagline-black .user-tagline-username');
+        if (platform === 'chesscom' && (whitePlayer === '白方' || blackPlayer === '黑方')) {
+          const extractName = (container) => {
+            if (!container) return null;
+            const el = container.querySelector(
+              '[data-test-element="user-tagline-username"], ' +
+              '[data-cy="user-tagline-username"], ' +
+              '.user-username-component, ' +
+              '.user-tagline-username, ' +
+              'a.user-username-link, ' +
+              'a[data-test="player-avatar-username"], ' +
+              '.user-tagline-rating + a, ' +
+              'a[href*="/member/"], ' +
+              '.player-name, .user-name'
+            );
+            let name = el?.textContent?.trim() || null;
+            if (name) {
+              name = name.replace(/^(GM|WGM|IM|WIM|FM|WFM|CM|WCM|NM|WNM)\s+/i, '').trim();
+            }
+            return name;
+          };
+
+          // 1. Direct explicit white / black player container
+          const wContainer = document.querySelector(
+            '.board-layout-player.player-white, .player-component.player-white, [data-player-color="white"], .user-tagline-white, .game-over-player-white'
+          );
+          const bContainer = document.querySelector(
+            '.board-layout-player.player-black, .player-component.player-black, [data-player-color="black"], .user-tagline-black, .game-over-player-black'
+          );
+          let wName = extractName(wContainer);
+          let bName = extractName(bContainer);
+
+          // 2. Spatial layout detection: top vs bottom container + flipped state
+          if (!wName || !bName) {
+            const topContainer = document.querySelector(
+              '#board-layout-player-top, .board-layout-player.player-top, .board-layout-top, [data-cy="player-top"]'
+            );
+            const bottomContainer = document.querySelector(
+              '#board-layout-player-bottom, .board-layout-player.player-bottom, .board-layout-bottom, [data-cy="player-bottom"]'
+            );
+            const boardEl = document.querySelector('wc-chess-board, chess-board, .board');
+            const isFlipped = boardEl?.classList?.contains('flipped') ||
+                              boardEl?.getAttribute('flipped') === 'true' ||
+                              boardEl?.getAttribute('flipped') === '' ||
+                              !!document.querySelector('wc-chess-board.flipped, chess-board.flipped, .board.flipped');
+
+            const topName = extractName(topContainer);
+            const bottomName = extractName(bottomContainer);
+
+            if (isFlipped) {
+              wName = wName || topName;
+              bName = bName || bottomName;
+            } else {
+              wName = wName || bottomName;
+              bName = bName || topName;
+            }
+          }
+
+          // 3. Game over modal player elements
+          if (!wName || !bName) {
+            const modalPlayers = document.querySelectorAll(
+              '.game-over-player-component, [class*="game-over-player"], .game-result-component'
+            );
+            if (modalPlayers.length >= 2) {
+              const p1 = extractName(modalPlayers[0]);
+              const p2 = extractName(modalPlayers[1]);
+              wName = wName || p1;
+              bName = bName || p2;
+            }
+          }
+
+          if (wName) whitePlayer = wName;
+          if (bName) blackPlayer = bName;
+        } else if (platform === 'lichess' && (whitePlayer === '白方' || blackPlayer === '黑方')) {
+          const wEl = document.querySelector('.game__meta__players .white .user-link, .game__meta__players .white, .ruser-top.white .user-link, .ruser-bottom.white .user-link');
+          const bEl = document.querySelector('.game__meta__players .black .user-link, .game__meta__players .black, .ruser-top.black .user-link, .ruser-bottom.black .user-link');
           if (wEl?.textContent) whitePlayer = wEl.textContent.trim();
           if (bEl?.textContent) blackPlayer = bEl.textContent.trim();
-        } else if (platform === 'lichess') {
-          const wEl = document.querySelector('.game__meta__players .white .user-link, .ruser-top .user-link');
-          const bEl = document.querySelector('.game__meta__players .black .user-link, .ruser-bottom .user-link');
-          if (wEl?.textContent) whitePlayer = wEl.textContent.trim();
-          if (bEl?.textContent) blackPlayer = bEl.textContent.trim();
+
+          if (whitePlayer === '白方' || blackPlayer === '黑方') {
+            const topEl = document.querySelector('.ruser-top .user-link, .ruser-top');
+            const botEl = document.querySelector('.ruser-bottom .user-link, .ruser-bottom');
+            const isFlipped = !!document.querySelector('.cg-wrap.orientation-black, .main-board.orientation-black');
+            if (isFlipped) {
+              if (whitePlayer === '白方' && topEl?.textContent) whitePlayer = topEl.textContent.trim();
+              if (blackPlayer === '黑方' && botEl?.textContent) blackPlayer = botEl.textContent.trim();
+            } else {
+              if (whitePlayer === '白方' && botEl?.textContent) whitePlayer = botEl.textContent.trim();
+              if (blackPlayer === '黑方' && topEl?.textContent) blackPlayer = topEl.textContent.trim();
+            }
+          }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[Maia-3] Error extracting players:', e);
+      }
 
       const sanitizedMoves = (moves || []).map(m => ({
         ply: m.ply,
@@ -125,6 +207,7 @@ export async function initMaiaExtension() {
         white: whitePlayer,
         black: blackPlayer,
         result: gameResult,
+        pgn: moves.rawPgn || null,
         url: window.location.href
       };
 
@@ -240,6 +323,7 @@ export async function initMaiaExtension() {
   // When Stockfish is ready, immediately compute best move if a position is on board
   engine.stockfishInBrowser.onReadyCallback = () => {
     engine.status.stockfish.state = 'ready';
+    engine.status.stockfish.error = null;
     engine.notifyStatus();
     if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
       runPrediction(currentFen);
@@ -263,6 +347,7 @@ export async function initMaiaExtension() {
       }
     }).catch(err => {
       console.warn('[Maia-3] Engine initialization notice:', err?.message || err);
+      engineInitStarted = false;
     });
   };
 

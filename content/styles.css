@@ -453,6 +453,11 @@
   flex-shrink: 0;
 }
 
+.status-idle {
+  background-color: var(--weui-FG-2);
+  box-shadow: none;
+}
+
 .status-ready {
   background-color: var(--weui-BRAND);
   box-shadow: 0 0 6px var(--weui-BRAND);

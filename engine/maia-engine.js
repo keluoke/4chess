@@ -38,16 +38,16 @@ export class MaiaEngine {
     // Independent status tracking for both engines
     this.status = {
       maia: {
-        state: 'loading', // 'cached' | 'downloading' | 'ready' | 'error'
+        state: 'uninitialized', // 'uninitialized' | 'loading' | 'cached' | 'downloading' | 'ready' | 'error'
         percent: 0,
         speed: '',
         loadedMB: '0',
         totalMB: '28.0',
-        source: '检测缓存中...',
+        source: '未启动',
         error: null
       },
       stockfish: {
-        state: this.stockfishInBrowser.isReady ? 'ready' : 'initializing',
+        state: this.stockfishInBrowser.isReady ? 'ready' : 'uninitialized',
         error: null
       }
     };
@@ -149,23 +149,33 @@ export class MaiaEngine {
 
   async _doInitialize(overrideUrl = null) {
     this.isLoading = true;
+    this.status.maia.state = 'loading';
+    this.status.maia.source = '检测缓存中...';
+    if (!this.stockfishInBrowser.isReady) {
+      this.status.stockfish.state = 'initializing';
+    }
     this.notifyStatus();
     console.log('[Maia Engine] 🚀 正在初始化双引擎 (Cloudflare CDN + WebAssembly)...');
 
     // 1. Initialize Stockfish WebAssembly in parallel
     this.stockfishInBrowser.initialize().then((isReady) => {
-      if (isReady && this.stockfishInBrowser.isReady) {
+      if (isReady || this.stockfishInBrowser.isReady) {
         this.status.stockfish.state = 'ready';
+        this.status.stockfish.error = null;
       } else {
-        this.status.stockfish.state = 'error';
-        this.status.stockfish.error = 'WebAssembly 初始化超时';
+        if (!this.stockfishInBrowser.isReady) {
+          this.status.stockfish.state = 'error';
+          this.status.stockfish.error = 'WebAssembly 初始化超时';
+        }
       }
       this.notifyStatus();
     }).catch(err => {
-      console.warn('[Maia Engine] Stockfish 初始化提示:', err);
-      this.status.stockfish.state = 'error';
-      this.status.stockfish.error = err?.message || String(err);
-      this.notifyStatus();
+      if (!this.stockfishInBrowser.isReady) {
+        console.warn('[Maia Engine] Stockfish 初始化提示:', err);
+        this.status.stockfish.state = 'error';
+        this.status.stockfish.error = err?.message || String(err);
+        this.notifyStatus();
+      }
     });
 
     // 2. Resolve Model Source: Dedicated Cloudflare CDN / R2 Bucket (with browser IndexedDB persistent cache)

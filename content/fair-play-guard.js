@@ -174,39 +174,58 @@ export class FairPlayGuard {
       );
       const isGameOverVisible = FairPlayGuard.isVisibleAndActive(gameOverEl);
 
-      // 2. Move list termination result node (e.g. 1-0, 0-1, 1/2-1/2)
+      // 2. Move list termination result node (e.g. 1-0, 0-1, 1/2-1/2, ½-½)
       const moveListResult = document.querySelector(
         '.move-list-result, [class*="move-list-result"], ' +
-        '.vertical-move-list-result, [class*="vertical-move-list"] [class*="result"]'
+        '.vertical-move-list-result, [class*="vertical-move-list"] [class*="result"], ' +
+        '.game-result, [class*="game-result"]'
       );
       const isMoveListConcluded = moveListResult && FairPlayGuard.isVisibleAndActive(moveListResult) &&
-        /1-0|0-1|1\/2/i.test(moveListResult.textContent || '');
+        /1-0|0-1|1\/2|½-½/i.test(moveListResult.textContent || '');
 
-      // 3. Status text conclusion check
+      // 3. Post-game action controls (Game Review, Rematch, Play Again - present only after match concludes)
+      const postGameActionBtn = document.querySelector(
+        '[data-cy="game-review-button"], button.game-review-buttons-review, ' +
+        'button.game-review-button-component, [class*="game-review-button"], ' +
+        'button[aria-label*="Game Review" i], button[aria-label*="对局复盘" i], button[aria-label*="复盘" i], ' +
+        '[data-cy="new-game-button"], button.new-game-button-component, ' +
+        '[data-cy="rematch-button"], button[aria-label*="Rematch" i], ' +
+        'button[aria-label*="再来一局" i], button[aria-label*="新对局" i], ' +
+        '.game-over-buttons-component, [class*="game-over-buttons"], ' +
+        'a[href*="/analysis/game/live/"], a[href*="/analysis/game/daily/"]'
+      );
+      const hasPostGameAction = FairPlayGuard.isVisibleAndActive(postGameActionBtn);
+
+      // 4. Status text conclusion check
       const statusText = ((isGameOverVisible ? gameOverEl?.textContent : '') + ' ' + (moveListResult?.textContent || '')).trim();
-      const isStatusConcluded = /checkmate|resignation|resigned|time out|timeout|drawn|stalemate|agreed|abandoned|insufficient material|won by|won on|drawn by|game over|获胜|胜出|认输|超时|和棋|绝杀|对局结束/i.test(statusText);
+      const isStatusConcluded = /checkmate|resignation|resigned|time out|timeout|drawn|stalemate|agreed|abandoned|insufficient material|won by|won on|drawn by|game over|winner|victory|defeat|获胜|胜出|认输|超时|和棋|绝杀|对局结束/i.test(statusText);
 
-      // On live arenas (/play, /live), only unlock if there is an active, visible game-over modal with confirmed status
-      const isPlayArena = path.startsWith('/play') || path.startsWith('/live');
-      if (isPlayArena) {
-        if (isGameOverVisible && (isStatusConcluded || isMoveListConcluded)) {
-          return false;
-        }
-        // In live play arena without confirmed visible conclusion: strict lock (covers delay loading and modal dismissal)
-        return true;
+      // Immediate Unlock for legitimately concluded matches:
+      // Works whether modal is open, dismissed by user clicking X, or after page refresh!
+      if (isGameOverVisible && (isStatusConcluded || isMoveListConcluded)) {
+        return false;
+      }
+      if (isMoveListConcluded) {
+        return false;
+      }
+      if (hasPostGameAction && (isStatusConcluded || isMoveListConcluded || isMetaConcluded)) {
+        return false;
+      }
+      if (isMetaConcluded) {
+        return false;
       }
 
       // On game archive or daily game paths:
       const isGamePath = path.startsWith('/game/live/') || path.startsWith('/game/daily/');
       if (isGamePath) {
-        if ((isGameOverVisible && isStatusConcluded) || isMoveListConcluded || isMetaConcluded) {
-          return false;
-        }
         return true;
       }
 
-      if ((isGameOverVisible && isStatusConcluded) || isMoveListConcluded || isMetaConcluded) {
-        return false;
+      // In live arena (/play, /live) without confirmed conclusion evidence:
+      // Fail-safe locked (matchmaking, pre-game, or waiting for opponent)
+      const isPlayArena = path.startsWith('/play') || path.startsWith('/live');
+      if (isPlayArena) {
+        return true;
       }
     }
 

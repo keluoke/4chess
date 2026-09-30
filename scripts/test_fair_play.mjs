@@ -134,6 +134,27 @@ async function runAll() {
     expectedLocked: false
   })) passed++;
 
+  // Scenario 3b: Chess.com /play/online with Modal Dismissed (Move list 1-0 and Review Button) -> MUST UNLOCK!
+  total++;
+  if (await testScenario('Chess.com /play/online with Modal Dismissed (Move list 1-0)', {
+    url: 'https://www.chess.com/play/online',
+    elements: {
+      '.move-list-result': { textContent: '1-0' },
+      '[data-cy="game-review-button"]': {}
+    },
+    expectedLocked: false
+  })) passed++;
+
+  // Scenario 3c: Chess.com /play/online Refreshed Concluded Game (Move list 0-1, clock stopped) -> MUST UNLOCK!
+  total++;
+  if (await testScenario('Chess.com /play/online Refreshed Concluded Game (Move list 0-1)', {
+    url: 'https://www.chess.com/play/online',
+    elements: {
+      '.move-list-result': { textContent: '0-1' }
+    },
+    expectedLocked: false
+  })) passed++;
+
   // Scenario 4: Chess.com Generic Board Dialog (e.g. promo or settings dialog) -> MUST REMAIN LOCKED
   total++;
   if (await testScenario('Chess.com Generic Board Dialog (must remain locked)', {

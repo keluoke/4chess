@@ -1,0 +1,24 @@
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#141c2c"/>
+      <stop offset="100%" stop-color="#090d15"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded rect -->
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" stroke="rgba(255,255,255,0.09)" stroke-width="1.5"/>
+
+  <!-- Fork stem -->
+  <path d="M32 52V34" stroke="#07C160" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Left Branch: curved to top-left -->
+  <path d="M32 34C32 23 20 23 15 15" stroke="#07C160" stroke-width="5" stroke-linecap="round"/>
+  <!-- Left Arrow Head (Pointing Top-Left) -->
+  <polyline points="25 15 15 15 15 25" stroke="#07C160" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Right Branch: curved to top-right -->
+  <path d="M32 34C32 23 44 23 49 15" stroke="#07C160" stroke-width="5" stroke-linecap="round"/>
+  <!-- Right Arrow Head (Pointing Top-Right) -->
+  <polyline points="39 15 49 15 49 25" stroke="#07C160" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -41,6 +41,13 @@ export class GameAnalyzer {
       startFen = fenMatch[1].trim();
     }
 
+    // Extract metadata headers before stripping
+    const whiteMatch = pgnText.match(/\[White\s+"([^"]+)"\]/i);
+    const blackMatch = pgnText.match(/\[Black\s+"([^"]+)"\]/i);
+    const whiteEloMatch = pgnText.match(/\[WhiteElo\s+"([^"]+)"\]/i);
+    const blackEloMatch = pgnText.match(/\[BlackElo\s+"([^"]+)"\]/i);
+    const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
+
     // Strip comments {...}
     let clean = pgnText.replace(/\{[^}]*\}/g, '');
     // Strip metadata headers [...]
@@ -76,6 +83,12 @@ export class GameAnalyzer {
     if (startFen) {
       moves.startFen = startFen;
     }
+    if (whiteMatch) moves.white = whiteMatch[1].trim();
+    if (blackMatch) moves.black = blackMatch[1].trim();
+    if (whiteEloMatch) moves.whiteElo = whiteEloMatch[1].trim();
+    if (blackEloMatch) moves.blackElo = blackEloMatch[1].trim();
+    if (resultMatch) moves.result = resultMatch[1].trim();
+    moves.rawPgn = pgnText;
 
     return moves;
   }
@@ -280,26 +293,23 @@ export class GameAnalyzer {
       try {
         const mainData = await GameAnalyzer.fetchMainWorldGameData();
         if (mainData) {
-          if (mainData.moveList) {
-            const moves = GameAnalyzer.tcnToSanMoves(mainData.moveList);
-            if (moves.length > 0) {
-              console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from Main World moveList!`);
-              return moves;
-            }
-          }
+          let moves = [];
           if (mainData.pgn) {
-            const moves = GameAnalyzer.parsePgn(mainData.pgn);
-            if (moves.length > 0) {
-              console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from Main World PGN!`);
-              return moves;
-            }
+            moves = GameAnalyzer.parsePgn(mainData.pgn);
           }
-          if (mainData.movesAttr) {
-            const moves = GameAnalyzer.uciMovesToSanMoves(mainData.movesAttr);
-            if (moves.length > 0) {
-              console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from Main World moves attribute!`);
-              return moves;
-            }
+          if ((!moves || moves.length === 0) && mainData.moveList) {
+            moves = GameAnalyzer.tcnToSanMoves(mainData.moveList);
+          }
+          if ((!moves || moves.length === 0) && mainData.movesAttr) {
+            moves = GameAnalyzer.uciMovesToSanMoves(mainData.movesAttr);
+          }
+          if (moves && moves.length > 0) {
+            if (mainData.white) moves.white = mainData.white;
+            if (mainData.black) moves.black = mainData.black;
+            if (mainData.result) moves.result = mainData.result;
+            if (mainData.pgn) moves.rawPgn = mainData.pgn;
+            console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from Main World Bridge (White: ${moves.white || '?'}, Black: ${moves.black || '?'})!`);
+            return moves;
           }
         }
       } catch (e) {
@@ -340,16 +350,23 @@ export class GameAnalyzer {
           });
           if (cbRes.ok) {
             const cbData = await cbRes.json();
-            if (cbData.game?.moveList) {
-              const moves = GameAnalyzer.tcnToSanMoves(cbData.game.moveList);
+            if (cbData.game?.pgn) {
+              const moves = GameAnalyzer.parsePgn(cbData.game.pgn);
               if (moves.length > 0) {
-                console.log(`[GameAnalyzer] ✅ Decoded ${moves.length} moves from ${t} callback!`);
+                console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from ${t} callback PGN!`);
                 return moves;
               }
             }
-            if (cbData.game?.pgn) {
-              const moves = GameAnalyzer.parsePgn(cbData.game.pgn);
-              if (moves.length > 0) return moves;
+            if (cbData.game?.moveList) {
+              const moves = GameAnalyzer.tcnToSanMoves(cbData.game.moveList);
+              if (moves.length > 0) {
+                const cbWhite = cbData.players?.bottom?.color === 'white' ? cbData.players?.bottom?.username : cbData.players?.top?.username || cbData.game?.whiteUser || cbData.game?.pgnHeaders?.White;
+                const cbBlack = cbData.players?.bottom?.color === 'black' ? cbData.players?.bottom?.username : cbData.players?.top?.username || cbData.game?.blackUser || cbData.game?.pgnHeaders?.Black;
+                if (cbWhite) moves.white = cbWhite;
+                if (cbBlack) moves.black = cbBlack;
+                console.log(`[GameAnalyzer] ✅ Decoded ${moves.length} moves from ${t} callback!`);
+                return moves;
+              }
             }
           }
         } catch (cbErr) {}

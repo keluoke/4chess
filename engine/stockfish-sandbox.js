@@ -246,33 +246,36 @@
 
   let stopWatchdog = null;
   function triggerStop() {
-    if (isSearching || isStopping) {
-      isStopping = true;
+    if (!isSearching) {
+      isStopping = false;
       activeRequest = null;
-      try { worker.postMessage('stop'); } catch (e) {}
-      clearTimeout(stopWatchdog);
-      stopWatchdog = setTimeout(() => {
-        if (isStopping) {
-          console.warn('[Stockfish Sandbox] Worker failed to stop within 1000ms, terminating hung worker and restarting...');
-          try { worker.terminate(); } catch (e) {}
-          isStopping = false;
-          isSearching = false;
-          activeRequest = null;
-          multiPvMap.clear();
-          lastInfo = null;
-          if (readyTimer) {
-            clearTimeout(readyTimer);
-            readyTimer = null;
-          }
-          initWorker();
-          if (queuedRequest) {
-            const next = queuedRequest;
-            queuedRequest = null;
-            setTimeout(() => executeSearch(next), 60);
-          }
-        }
-      }, 1000);
+      return;
     }
+    isStopping = true;
+    activeRequest = null;
+    try { worker.postMessage('stop'); } catch (e) {}
+    clearTimeout(stopWatchdog);
+    stopWatchdog = setTimeout(() => {
+      if (isStopping && isSearching) {
+        console.warn('[Stockfish Sandbox] Worker failed to stop within 2500ms, terminating hung worker and restarting...');
+        try { worker.terminate(); } catch (e) {}
+        isStopping = false;
+        isSearching = false;
+        activeRequest = null;
+        multiPvMap.clear();
+        lastInfo = null;
+        if (readyTimer) {
+          clearTimeout(readyTimer);
+          readyTimer = null;
+        }
+        initWorker();
+        if (queuedRequest) {
+          const next = queuedRequest;
+          queuedRequest = null;
+          setTimeout(() => executeSearch(next), 60);
+        }
+      }
+    }, 2500);
   }
 
   // Secure Handshake: ONLY accept INIT_AUTH_PORT from window message with single-use token
@@ -285,10 +288,16 @@
     const token = data.token;
 
     function activatePort() {
+      if (authenticatedPort && authenticatedPort !== candidatePort) {
+        try { authenticatedPort.close(); } catch (e) {}
+      }
       authenticatedPort = candidatePort;
       isPortAuthenticated = true;
       setupPortListener(authenticatedPort);
       flushPendingOutbox();
+      if (initialized) {
+        sendToParent({ type: 'STOCKFISH_READY', engineName });
+      }
     }
 
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {

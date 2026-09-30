@@ -99,34 +99,76 @@ chrome.runtime.onInstalled.addListener(() => {
 
 const sandboxTokens = new Map();
 
-function cleanExpiredTokens() {
+async function cleanExpiredTokens() {
   const now = Date.now();
   for (const [token, exp] of sandboxTokens.entries()) {
     if (exp <= now) sandboxTokens.delete(token);
+  }
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    try {
+      const stored = await chrome.storage.session.get(['active_tokens']);
+      if (stored?.active_tokens) {
+        const cleaned = {};
+        for (const [k, v] of Object.entries(stored.active_tokens)) {
+          if (v > now) {
+            cleaned[k] = v;
+            sandboxTokens.set(k, v);
+          }
+        }
+        await chrome.storage.session.set({ active_tokens: cleaned });
+      }
+    } catch (e) {}
   }
 }
 
 // Handle background requests (bypasses webpage CSP & forbidden headers)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'ACQUIRE_SANDBOX_TOKEN') {
-    cleanExpiredTokens();
-    const token = (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : ('sb_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
-    sandboxTokens.set(token, Date.now() + 30000);
-    sendResponse({ ok: true, token });
+    (async () => {
+      await cleanExpiredTokens();
+      const token = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : ('sb_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+      const exp = Date.now() + 120000;
+      sandboxTokens.set(token, exp);
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        try {
+          const stored = await chrome.storage.session.get(['active_tokens']);
+          const tokens = stored?.active_tokens || {};
+          tokens[token] = exp;
+          await chrome.storage.session.set({ active_tokens: tokens });
+        } catch (e) {}
+      }
+      sendResponse({ ok: true, token });
+    })();
     return true;
   }
 
   if (msg.type === 'VERIFY_SANDBOX_TOKEN') {
-    cleanExpiredTokens();
-    const token = msg.token;
-    if (token && sandboxTokens.has(token) && sandboxTokens.get(token) > Date.now()) {
-      sandboxTokens.delete(token);
-      sendResponse({ ok: true });
-    } else {
-      sendResponse({ ok: false, error: 'Invalid or expired sandbox token' });
-    }
+    (async () => {
+      await cleanExpiredTokens();
+      const token = msg.token;
+      let valid = false;
+      if (token && sandboxTokens.has(token) && sandboxTokens.get(token) > Date.now()) {
+        sandboxTokens.delete(token);
+        valid = true;
+      }
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        try {
+          const stored = await chrome.storage.session.get(['active_tokens']);
+          if (stored?.active_tokens && stored.active_tokens[token] > Date.now()) {
+            valid = true;
+            delete stored.active_tokens[token];
+            await chrome.storage.session.set({ active_tokens: stored.active_tokens });
+          }
+        } catch (e) {}
+      }
+      if (valid) {
+        sendResponse({ ok: true });
+      } else {
+        sendResponse({ ok: false, error: 'Invalid or expired sandbox token' });
+      }
+    })();
     return true;
   }
 
@@ -150,8 +192,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Ensure PGN text is generated if moves are present
     if (!gameData.pgn && gameData.moves && gameData.moves.length > 0) {
       gameData.pgn = movesToPgn(gameData.moves, {
-        White: gameData.white || 'White',
-        Black: gameData.black || 'Black',
+        White: (gameData.white && gameData.white !== '白方') ? gameData.white : (gameData.white || 'White'),
+        Black: (gameData.black && gameData.black !== '黑方') ? gameData.black : (gameData.black || 'Black'),
         Result: gameData.result || '*'
       });
     }
@@ -169,7 +211,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           const pgnParam = encodeURIComponent(gameData.pgn);
           const elo = settings?.defaultElo || 1900;
-          targetUrl = `${base}/#pgn=${pgnParam}&elo=${elo}`;
+          let extra = '';
+          if (gameData.white && gameData.white !== '白方') extra += `&white=${encodeURIComponent(gameData.white)}`;
+          if (gameData.black && gameData.black !== '黑方') extra += `&black=${encodeURIComponent(gameData.black)}`;
+          if (gameData.result && gameData.result !== '*') extra += `&result=${encodeURIComponent(gameData.result)}`;
+          targetUrl = `${base}/#pgn=${pgnParam}&elo=${elo}${extra}`;
         }
 
         chrome.tabs.create({ url: targetUrl }, (tab) => {

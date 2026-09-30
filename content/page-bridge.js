@@ -54,7 +54,51 @@
                 (g && g.getOptions && g.getOptions().pgn ? g.getOptions().pgn : '') || '';
       var moveList = (g && g.moveList) || (g && g.getOptions && g.getOptions().moveList) || '';
       var movesAttr = (b && typeof b.getAttribute === 'function' ? b.getAttribute('moves') : '') || '';
-      return { pgn: pgn, moveList: moveList, movesAttr: movesAttr };
+
+      var white = null;
+      var black = null;
+      var result = null;
+
+      if (pgn) {
+        var wm = pgn.match(/\[White\s+"([^"]+)"\]/i);
+        var bm = pgn.match(/\[Black\s+"([^"]+)"\]/i);
+        var rm = pgn.match(/\[Result\s+"([^"]+)"\]/i);
+        if (wm) white = wm[1].trim();
+        if (bm) black = bm[1].trim();
+        if (rm) result = rm[1].trim();
+      }
+
+      if (!white || !black) {
+        try {
+          if (g) {
+            if (typeof g.getPlayers === 'function') {
+              var pls = g.getPlayers();
+              if (pls) {
+                if (pls.white?.username) white = pls.white.username;
+                if (pls.black?.username) black = pls.black.username;
+                if (!white && pls.top && pls.bottom) {
+                  white = pls.top.color === 'white' ? pls.top.username : pls.bottom.username;
+                  black = pls.top.color === 'black' ? pls.top.username : pls.bottom.username;
+                }
+              }
+            }
+            if ((!white || !black) && typeof g.getOptions === 'function') {
+              var opts = g.getOptions();
+              if (opts) {
+                white = white || opts.white?.username || opts.headers?.White;
+                black = black || opts.black?.username || opts.headers?.Black;
+                result = result || opts.headers?.Result || opts.result;
+              }
+            }
+            if ((!white || !black) && g.players) {
+              white = white || g.players.white?.username || g.players.white?.name;
+              black = black || g.players.black?.username || g.players.black?.name;
+            }
+          }
+        } catch (e) {}
+      }
+
+      return { pgn: pgn, moveList: moveList, movesAttr: movesAttr, white: white, black: black, result: result };
     } catch (e) {
       return null;
     }

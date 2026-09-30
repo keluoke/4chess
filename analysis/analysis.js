@@ -561,6 +561,10 @@ class AnalysisStudioApp {
       const urlParam = hashParams.get('url') || searchParams.get('url') || (textParam && textParam.startsWith('http') ? textParam : null);
       const eloParam = hashParams.get('elo') || searchParams.get('elo');
 
+      const whiteParam = hashParams.get('white') || searchParams.get('white');
+      const blackParam = hashParams.get('black') || searchParams.get('black');
+      const resultParam = hashParams.get('result') || searchParams.get('result');
+
       if (eloParam) {
         const parsedElo = parseInt(eloParam, 10);
         if ([1100, 1500, 1900, 2200].includes(parsedElo)) {
@@ -582,7 +586,13 @@ class AnalysisStudioApp {
           if (!v.ok && v.isLive) {
             this.showToast(`🔒 公平竞技保护：${v.reason}`, 7000);
           } else {
-            this.startNewSession({ pgn: cleanPgn, autoReview: true });
+            this.startNewSession({
+              pgn: cleanPgn,
+              white: whiteParam,
+              black: blackParam,
+              result: resultParam,
+              autoReview: true
+            });
             loaded = true;
             return;
           }
@@ -833,6 +843,15 @@ class AnalysisStudioApp {
     // Update metadata headers
     if (pgn) {
       this.parsePgnHeaders(pgn);
+      if (white && (this.el.metaWhite.textContent.includes('白方') || this.el.metaWhite.textContent.includes('White') || this.el.metaWhite.textContent === '⚪ ')) {
+        this.el.metaWhite.textContent = `⚪ ${white}`;
+      }
+      if (black && (this.el.metaBlack.textContent.includes('黑方') || this.el.metaBlack.textContent.includes('Black') || this.el.metaBlack.textContent === '⚫ ')) {
+        this.el.metaBlack.textContent = `⚫ ${black}`;
+      }
+      if (result && (!this.el.metaResult.textContent || this.el.metaResult.textContent === '*')) {
+        this.el.metaResult.textContent = result;
+      }
     } else {
       if (white) this.el.metaWhite.textContent = `⚪ ${white}`;
       if (black) this.el.metaBlack.textContent = `⚫ ${black}`;

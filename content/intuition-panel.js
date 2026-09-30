@@ -15,16 +15,14 @@ const I18N = {
     black: '⚫ 黑方',
     whiteThinking: '⚪ 白方 · 研判中',
     blackThinking: '⚫ 黑方 · 研判中',
-    btnMore: '设置 (语言/模型/CDN)',
+    btnMore: '设置 (语言/模型/视觉)',
     btnClose: '收起为微信浮窗',
     drawerTitle: '⚙️ 设置 / Settings',
     lblLang: '🌐 界面语言 / Language:',
     lblModelSpec: '⚡ 快速切换模型规格:',
-    lblCdnUrl: '🔗 自定义 CDN 加速节点:',
-    btnSave: '保存',
-    btnSaved: '已保存',
-    maiaEngine: 'Maia 3 直觉',
-    sfEngine: 'Stockfish 引擎',
+    maiaEngine: 'Maia 3',
+    sfEngine: 'Stockfish 19',
+    notStarted: '未启动',
     connecting: '正在连接...',
     starting: '启动中...',
     readyWasm: '就绪 (WASM)',
@@ -70,12 +68,10 @@ const I18N = {
     btnClose: 'Minimize to Floating Ball',
     drawerTitle: '⚙️ Settings',
     lblLang: 'Language:',
-    lblModelSpec: 'Model Weights:',
-    lblCdnUrl: 'Custom Weights URL:',
-    btnSave: 'Save',
-    btnSaved: 'Saved',
-    maiaEngine: 'Maia 3 Intuition',
-    sfEngine: 'Stockfish Engine',
+    lblModelSpec: 'Model Weights (Auto Switch):',
+    maiaEngine: 'Maia 3',
+    sfEngine: 'Stockfish 19',
+    notStarted: 'Not Started',
     connecting: 'Connecting...',
     starting: 'Starting...',
     readyWasm: 'Ready (WASM)',
@@ -416,23 +412,14 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <!-- 4. Model Spec -->
+        <!-- 4. Model Spec (5M & 23M, background auto-switch) -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
-          <div style="display: flex; gap: 5px;">
-            <button type="button" class="weui-preset-btn active" data-url="https://weights.4chess.cc/maia3_model.bin">5M (28M)</button>
-            <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin">23M (104M)</button>
-            <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_79m_fp16.bin">79M (159M)</button>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="weui-preset-btn active" data-url="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; padding: 7px 0; text-align: center; border-radius: 6px; font-size: 11.5px; font-weight: 600;">5M (28M)</button>
+            <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; padding: 7px 0; text-align: center; border-radius: 6px; font-size: 11.5px; font-weight: 600;">23M (104M)</button>
           </div>
-        </div>
-
-        <!-- 5. Custom CDN URL -->
-        <div class="weui-drawer-item">
-          <div class="weui-drawer-label" id="lbl-cdn-url">${this.t('lbl-cdn-url') || this.t('lblCdnUrl')}</div>
-          <div style="display: flex; gap: 6px;">
-            <input type="text" id="cdn-url-input" placeholder="https://weights.4chess.cc/maia3_model.bin" value="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; background: var(--weui-BG-3); border: 0.5px solid var(--weui-BORDER); color: #FFF; padding: 4px 8px; border-radius: 6px; font-size: 10.5px; font-family: monospace;">
-            <button type="button" id="cdn-save-btn" class="weui-btn-primary" style="padding: 4px 10px; font-size: 11px;">${this.t('btnSave')}</button>
-          </div>
+          <div id="model-switch-hint" style="font-size: 10px; color: var(--weui-FG-2); margin-top: 5px; text-align: center;">${this.lang === 'zh' ? '✓ 点击在后台自动切换模型' : '✓ Click to switch model in background'}</div>
         </div>
       </div>
 
@@ -442,17 +429,17 @@ export class IntuitionPanel {
         <div class="weui-cells">
           <div class="weui-cell">
             <div class="weui-cell__bd">
-              <span class="weui-status-dot status-loading" id="dot-maia"></span>
+              <span class="weui-status-dot status-idle" id="dot-maia"></span>
               <span id="lbl-engine-maia">${this.t('maiaEngine')}</span>
             </div>
-            <span id="label-maia-status" class="weui-cell__ft">${this.t('connecting')}</span>
+            <span id="label-maia-status" class="weui-cell__ft">${this.t('notStarted')}</span>
           </div>
           <div class="weui-cell">
             <div class="weui-cell__bd">
-              <span class="weui-status-dot status-loading" id="dot-sf"></span>
+              <span class="weui-status-dot status-idle" id="dot-sf"></span>
               <span id="lbl-engine-sf">${this.t('sfEngine')}</span>
             </div>
-            <span id="label-sf-status" class="weui-cell__ft">${this.t('starting')}</span>
+            <span id="label-sf-status" class="weui-cell__ft">${this.t('notStarted')}</span>
           </div>
         </div>
 
@@ -720,54 +707,39 @@ export class IntuitionPanel {
     if (chkArrows) chkArrows.addEventListener('change', updateToggles);
 
     // 5. CDN Drawer & Config
-    const cdnInput = this.container.querySelector('#cdn-url-input');
-    const cdnSaveBtn = this.container.querySelector('#cdn-save-btn');
-
-    if (typeof chrome !== 'undefined' && chrome.storage?.local && cdnInput) {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       chrome.storage.local.get(['cloudflareCdnUrl'], (res) => {
         const url = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
-        cdnInput.value = url;
         this.container.querySelectorAll('.weui-preset-btn').forEach(btn => {
-          if (btn.getAttribute('data-url') === url) {
-            btn.classList.add('active');
-          } else {
-            btn.classList.remove('active');
-          }
+          btn.classList.toggle('active', btn.getAttribute('data-url') === url);
         });
       });
     }
 
-    // Preset buttons
+    // Preset buttons: auto switch in background on click
     this.container.querySelectorAll('.weui-preset-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         this.container.querySelectorAll('.weui-preset-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        if (cdnInput) {
-          cdnInput.value = btn.getAttribute('data-url');
-          if (cdnSaveBtn) cdnSaveBtn.click();
+        const url = btn.getAttribute('data-url');
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          await chrome.storage.local.set({ cloudflareCdnUrl: url });
+        }
+        const hintEl = this.container.querySelector('#model-switch-hint');
+        if (hintEl) {
+          const originalText = hintEl.textContent;
+          hintEl.textContent = this.lang === 'zh' ? '✓ 模型已在后台切换' : '✓ Model switched in background';
+          hintEl.style.color = 'var(--weui-BRAND)';
+          setTimeout(() => {
+            hintEl.textContent = originalText;
+            hintEl.style.color = 'var(--weui-FG-2)';
+          }, 1500);
+        }
+        if (this.onCdnSave) {
+          this.onCdnSave(url);
         }
       });
     });
-
-    if (cdnSaveBtn && cdnInput) {
-      cdnSaveBtn.addEventListener('click', async () => {
-        const val = cdnInput.value.trim();
-        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-          await chrome.storage.local.set({ cloudflareCdnUrl: val });
-        }
-        const originalText = cdnSaveBtn.textContent;
-        cdnSaveBtn.textContent = '已保存';
-        cdnSaveBtn.style.opacity = '0.8';
-        setTimeout(() => {
-          cdnSaveBtn.textContent = originalText;
-          cdnSaveBtn.style.opacity = '1';
-        }, 1200);
-
-        if (this.onCdnSave) {
-          this.onCdnSave(val);
-        }
-      });
-    }
 
     // 6. Standalone Game Review Button
     const triggerStandaloneBtn = this.container.querySelector('#btn-trigger-standalone');
@@ -801,7 +773,14 @@ export class IntuitionPanel {
 
     if (status.maia) {
       const { state, percent, speed, loadedMB, totalMB, source } = status.maia;
-      if (state === 'ready') {
+      if (state === 'uninitialized') {
+        if (dotMaia) dotMaia.className = 'weui-status-dot status-idle';
+        if (labelMaia) {
+          labelMaia.textContent = this.t('notStarted');
+          labelMaia.className = 'weui-cell__ft';
+        }
+        if (cdnCard) cdnCard.style.display = 'none';
+      } else if (state === 'ready') {
         if (dotMaia) dotMaia.className = 'weui-status-dot status-ready';
         if (labelMaia) {
           labelMaia.textContent = this.lang === 'zh' ? `就绪 (${source || '本地'})` : `Ready (${source || 'Local'})`;
@@ -843,7 +822,13 @@ export class IntuitionPanel {
     const labelSf = this.container.querySelector('#label-sf-status');
     if (status.stockfish) {
       const { state } = status.stockfish;
-      if (state === 'ready') {
+      if (state === 'uninitialized') {
+        if (dotSf) dotSf.className = 'weui-status-dot status-idle';
+        if (labelSf) {
+          labelSf.textContent = this.t('notStarted');
+          labelSf.className = 'weui-cell__ft';
+        }
+      } else if (state === 'ready') {
         if (dotSf) dotSf.className = 'weui-status-dot status-ready';
         if (labelSf) {
           labelSf.textContent = this.t('readyWasm');
@@ -921,14 +906,6 @@ export class IntuitionPanel {
 
     const lblModelSpec = this.container.querySelector('#lbl-model-spec');
     if (lblModelSpec) lblModelSpec.textContent = this.t('lblModelSpec');
-
-    const lblCdnUrl = this.container.querySelector('#lbl-cdn-url');
-    if (lblCdnUrl) lblCdnUrl.textContent = this.t('lblCdnUrl');
-
-    const cdnSaveBtn = this.container.querySelector('#cdn-save-btn');
-    if (cdnSaveBtn && cdnSaveBtn.textContent !== '已保存' && cdnSaveBtn.textContent !== 'Saved') {
-      cdnSaveBtn.textContent = this.t('btnSave');
-    }
 
     const lblEngineMaia = this.container.querySelector('#lbl-engine-maia');
     if (lblEngineMaia) lblEngineMaia.textContent = this.t('maiaEngine');
