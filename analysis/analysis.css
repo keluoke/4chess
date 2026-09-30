@@ -790,26 +790,29 @@ body {
   box-shadow: 0 0 12px rgba(167, 139, 250, 0.18);
 }
 
-/* Review Metrics Summary Banner */
+/* Review Metrics Summary Banner (Engine Accuracy) */
 .review-metrics-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  gap: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .metric-player-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .metric-side-label {
-  min-width: 62px;
+  display: flex;
+  align-items: center;
 }
 
 .side-badge {
@@ -833,15 +836,7 @@ body {
 .metric-group {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  flex: 1;
-}
-
-.metric-counts-group {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+  gap: 6px;
 }
 
 .metric-title {
@@ -859,43 +854,10 @@ body {
   white-space: nowrap;
 }
 
-.metric-sub {
-  font-size: 10.5px;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-
-.metric-tag-pill {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.metric-tag-pill b {
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.metric-tag-pill.tag-beyond {
-  background: rgba(56, 189, 248, 0.12);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-}
-
-.metric-tag-pill.tag-trap {
-  background: rgba(248, 113, 113, 0.12);
-  color: #f87171;
-  border: 1px solid rgba(248, 113, 113, 0.3);
-}
-
 .metric-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.06);
-  width: 100%;
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .blunder-card-main {

@@ -1179,10 +1179,10 @@ export class GameAnalyzer {
               ? deepLossMap.get(cm.maiaTopUci)
               : null;
 
-            // 3. 复核判定 妙手 (实战＝Stockfish一选，且优于Maia一选 >= 30cp)
+            // 3. 复核判定 妙手 (实战＝Stockfish一选，且优于Maia一选 >= 10cp)
             const isStillDeepBest = (deepBestSan === cleanPlayed || deepBestUci === cm.uci || deepLossCp === 0);
             if (cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
-              if (isStillDeepBest && maiaLossCp !== null && maiaLossCp >= 30) {
+              if (isStillDeepBest && maiaLossCp !== null && maiaLossCp >= 10) {
                 // 连续组合去重：检查同方上一有效决策步是否已是妙手
                 const prevSameSideMove = analyzedMoves
                   .slice(0, cm.ply - 1)
@@ -1200,7 +1200,7 @@ export class GameAnalyzer {
                   cm.divergenceNote = `✨ 妙手：你走出了引擎首选 ${cleanPlayed}。相比人类直觉的自然走法 ${cleanMaia} (损耗 -${(maiaLossCp / 100).toFixed(2)} 兵)，这步保留了更多优势。`;
                 }
               } else {
-                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp < 30cp)，已取消`);
+                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp < 10cp)，已取消`);
                 cm.divergenceStatus = 'downgraded';
               }
             }
@@ -1211,7 +1211,7 @@ export class GameAnalyzer {
                 cm.isHumanTrap = true;
                 cm.divergenceType = 'intuition_trap';
                 cm.divergenceStatus = 'confirmed';
-                cm.divergenceNote = `💡 俗手：这步属于人类直觉的优先选择 (${cm._candidateRankTxt || '自然走法'})，看起来很自然，但经深度复核会明显损失优势 (-${(deepLossCp / 100).toFixed(2)} 兵)，最佳应走 ${deepBestSan}。`;
+                cm.divergenceNote = `🫤 俗手：这步属于人类直觉的优先选择 (${cm._candidateRankTxt || '自然走法'})，看起来很自然，但经深度复核会明显损失优势 (-${(deepLossCp / 100).toFixed(2)} 兵)，最佳应走 ${deepBestSan}。`;
               } else {
                 console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 俗手经复核损耗仅 ${deepLossCp}cp < 50cp，未达显著吃亏门槛，已降级`);
                 cm.divergenceStatus = 'downgraded';
@@ -1263,7 +1263,7 @@ export class GameAnalyzer {
         ? Math.round((validPostBlack.reduce((acc, m) => acc + m.accuracy, 0) / validPostBlack.length) * 10) / 10
         : null;
 
-      // 2. Confirmed Key Moments (✨ 妙手 & 💡 俗手)
+      // 2. Confirmed Key Moments (✨ 妙手 & 🫤 俗手)
       const keyMoments = analyzedMoves
         .filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap')
         .sort((a, b) => a.ply - b.ply);

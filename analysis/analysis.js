@@ -1007,51 +1007,26 @@ class AnalysisStudioApp {
   applyReviewResult(result) {
     this.reviewResult = result;
 
-    // 0. Update Dual Metrics Summary Card (Engine Accuracy & Key Moves)
+    // 0. Update Metrics Summary Card (Engine Accuracy)
     const metricsCard = document.getElementById('review-metrics-card');
     if (metricsCard) {
       const elAccW = document.getElementById('val-accuracy-white');
-      const elPostW = document.getElementById('val-postbook-white');
-      const elBeyondW = document.getElementById('val-beyond-white');
-      const elTrapW = document.getElementById('val-trap-white');
-
       const elAccB = document.getElementById('val-accuracy-black');
-      const elPostB = document.getElementById('val-postbook-black');
-      const elBeyondB = document.getElementById('val-beyond-black');
-      const elTrapB = document.getElementById('val-trap-black');
 
-      // White Accuracy & Key Moves
+      // White Accuracy
       if (elAccW) {
         elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
         if (result.coverageRateWhite != null && result.coverageRateWhite < 100) {
           elAccW.title = `计算覆盖率: ${result.coverageRateWhite}%`;
         }
       }
-      if (elPostW) elPostW.textContent = result.postBookAccuracyWhite != null ? `(离谱后 ${result.postBookAccuracyWhite}%)` : '';
-      if (elBeyondW) {
-        const count = result.beyondWhiteCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'w' && (m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition)).length : 0);
-        elBeyondW.textContent = String(count);
-      }
-      if (elTrapW) {
-        const count = result.trapWhiteCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'w' && (m.divergenceType === 'intuition_trap' || m.isHumanTrap)).length : 0);
-        elTrapW.textContent = String(count);
-      }
 
-      // Black Accuracy & Key Moves
+      // Black Accuracy
       if (elAccB) {
         elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
         if (result.coverageRateBlack != null && result.coverageRateBlack < 100) {
           elAccB.title = `计算覆盖率: ${result.coverageRateBlack}%`;
         }
-      }
-      if (elPostB) elPostB.textContent = result.postBookAccuracyBlack != null ? `(离谱后 ${result.postBookAccuracyBlack}%)` : '';
-      if (elBeyondB) {
-        const count = result.beyondBlackCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'b' && (m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition)).length : 0);
-        elBeyondB.textContent = String(count);
-      }
-      if (elTrapB) {
-        const count = result.trapBlackCount ?? (result.allMoves ? result.allMoves.filter(m => m.turn === 'b' && (m.divergenceType === 'intuition_trap' || m.isHumanTrap)).length : 0);
-        elTrapB.textContent = String(count);
       }
 
       metricsCard.style.display = 'flex';
@@ -1196,8 +1171,8 @@ class AnalysisStudioApp {
         cardSub.appendChild(subProb);
       } else if (isTrap) {
         typeTag.classList.add('tag-trap');
-        typeTag.title = '💡 俗手：这步人类直觉的优先选择，看起来很自然，但会明显损失优势。';
-        typeTag.textContent = '💡 俗手';
+        typeTag.title = '🫤 俗手：这步人类直觉的优先选择，看起来很自然，但会明显损失优势。';
+        typeTag.textContent = '🫤 俗手';
         rightTag.title = '相比最佳着法的损耗';
         rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
 
@@ -1380,10 +1355,10 @@ class AnalysisStudioApp {
         badge.className = 'annotation-badge annotation-beyond';
         badge.title = m.isCombinationFollowup ? '✨ 妙手组合延续' : '✨ 妙手：走出优于直觉的引擎首选';
       } else if (m.divergenceType === 'intuition_trap' || m.isHumanTrap) {
-        badge.textContent = '💡';
+        badge.textContent = '🫤';
         badge.className = 'annotation-badge annotation-trap';
         const lossTxt = m.lossPawns || (m.lossCp ? (Math.abs(m.lossCp) / 100).toFixed(1) : '0');
-        badge.title = `💡 俗手：直觉陷阱 (-${lossTxt} 兵)`;
+        badge.title = `🫤 俗手：直觉陷阱 (-${lossTxt} 兵)`;
       } else if (m.severity === 'blunder') {
         badge.textContent = '??';
         badge.className = 'annotation-badge annotation-blunder';
@@ -1514,7 +1489,7 @@ class AnalysisStudioApp {
             if (isBeyond) {
               this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
             } else if (isTrap) {
-              this.setComparePlayedSan(moveReview.san, '= 直觉陷阱 💡', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
+              this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
             } else if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
               this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
             } else {
@@ -1563,7 +1538,7 @@ class AnalysisStudioApp {
       if (isBeyond) {
         this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
       } else if (isTrap) {
-        this.setComparePlayedSan(moveReview.san, '= 直觉陷阱 💡', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
+        this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
       } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
         this.setComparePlayedSan(moveReview.san, '= 引擎');
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
@@ -1580,7 +1555,7 @@ class AnalysisStudioApp {
         this.el.divergenceBadge.style.color = '#00d2ff';
         this.el.divergenceBadge.style.background = 'rgba(0, 210, 255, 0.12)';
       } else if (isTrap) {
-        this.el.divergenceBadge.textContent = '💡 俗手 · 自然但吃亏的选择';
+        this.el.divergenceBadge.textContent = '🫤 俗手 · 自然但吃亏的选择';
         this.el.divergenceBadge.style.color = '#f59e0b';
         this.el.divergenceBadge.style.background = 'rgba(245, 158, 11, 0.12)';
       } else if (moveReview.isBookMove) {

@@ -203,7 +203,7 @@ if (move1.isBeyondIntuition || move1.divergenceType === 'beyond_intuition') {
 console.log('\n=== TEST SUITE 4: Brilliant Move (妙手) Verification ===');
 
 // Setup tactical scenario to test true 妙手:
-// Player plays SF #1 (Bxf7+), Maia #1 is O-O (loss 150cp >= 30cp)
+// Player plays SF #1 (Bxf7+), Maia #1 is O-O (loss 150cp >= 10cp)
 const mockStockfishTactical = {
   isReady: true,
   evaluate: async (fen, depth = 6, timeout = 3500, multipv = 1) => {
@@ -228,7 +228,7 @@ const mockMaiaTactical = {
   initialize: async () => {},
   predict: async (fen, elo = 1900) => ({
     moves: [
-      { san: 'O-O', uci: 'e1g1', prob: 65.0, rawProb: 0.65 },    // Natural move: loss -150cp >= 30cp
+      { san: 'O-O', uci: 'e1g1', prob: 65.0, rawProb: 0.65 },    // Natural move: loss -150cp >= 10cp
       { san: 'd4', uci: 'd2d4', prob: 25.0, rawProb: 0.25 },
       { san: 'Bxf7+', uci: 'c4f7', prob: 4.0, rawProb: 0.04 }     // Brilliant move: SF #1
     ]

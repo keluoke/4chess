@@ -22,8 +22,8 @@ export class EvalChart {
           <span id="eval-chart-cursor-badge" class="eval-chart-badge">0.00</span>
         </div>
         <div class="eval-chart-legend">
-          <span class="legend-item"><span class="dot-cyan"></span> ✨ 超越直觉</span>
-          <span class="legend-item"><span class="dot-gold"></span> 💡 直觉陷阱</span>
+          <span class="legend-item"><span class="dot-cyan"></span> ✨ 妙手</span>
+          <span class="legend-item"><span class="dot-gold"></span> 🫤 俗手</span>
           <span class="legend-item"><span class="dot-red"></span> 大漏</span>
         </div>
       </div>
@@ -148,7 +148,7 @@ export class EvalChart {
         const badge = document.createElement('span');
         badge.style.color = '#f59e0b';
         badge.style.fontWeight = '700';
-        badge.textContent = ` · 💡 俗手 (直觉陷阱 -${item.lossPawns})`;
+        badge.textContent = ` · 🫤 俗手 (直觉陷阱 -${item.lossPawns})`;
         topRow.appendChild(badge);
       } else if (item.severity === 'blunder') {
         const badge = document.createElement('span');
