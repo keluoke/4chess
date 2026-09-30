@@ -269,8 +269,8 @@ globalThis.localStorage = (() => {
   };
 })();
 
-// Test 5.1: Save and load complete review result with schema v5
-const testCacheKey = 'test_game_v5_roundtrip';
+// Test 5.1: Save and load complete review result with schema v6
+const testCacheKey = 'test_game_v6_roundtrip';
 await GameAnalyzer.saveCachedReview(testCacheKey, tacticalReview);
 const loadedCache = await GameAnalyzer.getCachedReview(testCacheKey);
 
@@ -278,25 +278,25 @@ console.log('5.1 Cached review schemaVersion:', loadedCache?.schemaVersion);
 console.log('5.1 Cached review beyondWhiteCount:', loadedCache?.beyondWhiteCount);
 console.log('5.1 Cached review trapWhiteCount:', loadedCache?.trapWhiteCount);
 
-if (!loadedCache || loadedCache.schemaVersion !== 5 || loadedCache.accuracyWhite === undefined || loadedCache.beyondWhiteCount === undefined) {
-  throw new Error('Failed to properly serialize and deserialize v5 review cache');
+if (!loadedCache || loadedCache.schemaVersion !== 6 || loadedCache.accuracyWhite === undefined || loadedCache.beyondWhiteCount === undefined) {
+  throw new Error('Failed to properly serialize and deserialize v6 review cache');
 }
 
-// Test 5.2: Invalidation of stale v4 cache
-const staleKey = 'test_game_stale_v4';
-const staleStorageKey = `maia3_review_v4_${staleKey}`;
+// Test 5.2: Invalidation of stale v5 cache
+const staleKey = 'test_game_stale_v5';
+const staleStorageKey = `maia3_review_v6_${staleKey}`;
 localStorage.setItem(staleStorageKey, JSON.stringify({
   result: {
     totalMoves: 10,
     allMoves: [{ ply: 1, maiaTopSan: 'e4' }],
-    schemaVersion: 4
+    schemaVersion: 5
   }
 }));
 
 const staleLookup = await GameAnalyzer.getCachedReview(staleKey);
 console.log('5.2 Stale cache lookup result (must be null):', staleLookup);
 if (staleLookup !== null) {
-  throw new Error('getCachedReview must discard stale cache missing schemaVersion 5');
+  throw new Error('getCachedReview must discard stale cache missing schemaVersion 6');
 }
 
 console.log('\n=== TEST SUITE 6: Missing Evaluation Nulling & Coverage Rate ===');

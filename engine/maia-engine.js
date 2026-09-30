@@ -433,8 +433,8 @@ export class MaiaEngine {
     if (!sfRes || !sfRes.bestMove) {
       return {
         agreed: true,
-        badge: '💡 人类直觉首选',
-        badgeEn: '💡 Human Intuition',
+        badge: '🫤 人类直觉首选',
+        badgeEn: '🫤 Human Intuition',
         summary: `典型 ${elo} 分段人类首选 <strong>${topMove.san}</strong> (${topMove.prob}%)。`,
         summaryEn: `Typical ${elo} players favor <strong>${topMove.san}</strong> (${topMove.prob}%).`,
         delta: 0,

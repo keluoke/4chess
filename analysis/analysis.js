@@ -237,7 +237,11 @@ class AnalysisStudioApp {
         filterPills.forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
         this.currentDivergenceFilter = pill.dataset.filter || 'all';
-        this.renderBlunderCards(this.reviewResult?.keyMoments || []);
+        const rawMoments = (this.reviewResult?.keyMoments || this.reviewResult?.allMoves || []);
+        const validMoments = rawMoments.filter(
+          m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+        ).sort((a, b) => a.ply - b.ply);
+        this.renderBlunderCards(validMoments);
       });
     });
 
@@ -1036,8 +1040,11 @@ class AnalysisStudioApp {
     this.evalChart.setData(result.allMoves);
     this.evalChart.setCursor(this.currentPly);
 
-    // 2. Update Blunder list
-    const moments = result.keyMoments || [];
+    // 2. Update Blunder list (Strictly 妙手 & 俗手 only)
+    const rawMoments = (result.keyMoments || result.allMoves || []);
+    const moments = rawMoments.filter(
+      m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+    ).sort((a, b) => a.ply - b.ply);
     this.el.blunderCountBadge.textContent = String(moments.length);
     this.renderBlunderCards(moments);
 
@@ -1049,12 +1056,15 @@ class AnalysisStudioApp {
   }
 
   renderBlunderCards(moments) {
-    const list = moments || [];
+    // Strictly filter to valid types only (妙手 and 俗手)
+    const list = (moments || []).filter(
+      m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+    );
 
     // 1. Update filter pill counters
-    const totalAll = list.length;
     const countBeyond = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition).length;
     const countTrap = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap).length;
+    const totalAll = countBeyond + countTrap;
 
     const elCountAll = document.getElementById('filter-count-all');
     const elCountBeyond = document.getElementById('filter-count-beyond');

@@ -539,7 +539,7 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 5;
+  static SCHEMA_VERSION = 6;
   static memoryCache = new Map();
 
   static hashString(str) {
@@ -570,18 +570,18 @@ export class GameAnalyzer {
       // Lichess game ID: 8 characters (e.g. lichess.org/38uTqNdksSRF -> lichess_38uTqNdk)
       if (href.includes('lichess.org')) {
         const m = window.location.pathname.match(/^\/([a-zA-Z0-9]{8})/);
-        if (m && m[1]) return `v5_lichess_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v6_lichess_${m[1]}_${hash.slice(0, 10)}`;
       }
       // Chess.com game ID (e.g. /game/live/184446398482 or /analysis/game/live/184446398482)
       if (href.includes('chess.com')) {
         const m = window.location.pathname.match(/\b(\d{8,15})\b/);
-        if (m && m[1]) return `v5_chesscom_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v6_chesscom_${m[1]}_${hash.slice(0, 10)}`;
       }
     }
 
     // Universal fallback: deterministic 64-bit hash over moves sequence & params
     if (moves && moves.length > 0) {
-      return `v5_game_${moves.length}_${hash.slice(0, 12)}`;
+      return `v6_game_${moves.length}_${hash.slice(0, 12)}`;
     }
 
     return null;
@@ -1070,9 +1070,9 @@ export class GameAnalyzer {
 
               // --- Candidate Archetype Filtering ---
 
-              // Candidate 1: 妙手候选 (实战是引擎一选或接近一选，且优于 Maia 一选)
-              const isEngineBestOrClose = cleanBest && (cleanPlayed === cleanBest || (typeof mv.lossCp === 'number' && mv.lossCp <= 10));
-              if (isEngineBestOrClose && !mv.isBookMove && !mv.isOnlyLegalMove && mv.ply >= 3) {
+              // Candidate 1: 妙手候选 (实战是引擎一选，且与 Maia 一选不同)
+              const isEngineBest = cleanBest && (cleanPlayed === cleanBest || (typeof mv.lossCp === 'number' && mv.lossCp <= 5));
+              if (isEngineBest && !mv.isBookMove && !mv.isOnlyLegalMove) {
                 if (cleanMaia && cleanMaia !== cleanPlayed) {
                   mv.isBeyondIntuitionCandidate = true;
                   mv._candidateMaiaSan = cleanMaia;
@@ -1179,10 +1179,10 @@ export class GameAnalyzer {
               ? deepLossMap.get(cm.maiaTopUci)
               : null;
 
-            // 3. 复核判定 妙手 (实战＝Stockfish一选，且优于Maia一选 >= 10cp)
+            // 3. 复核判定 妙手 (实战＝Stockfish一选，且Stockfish评估收益超过Maia一选: maiaLossCp > 0)
             const isStillDeepBest = (deepBestSan === cleanPlayed || deepBestUci === cm.uci || deepLossCp === 0);
             if (cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
-              if (isStillDeepBest && maiaLossCp !== null && maiaLossCp >= 10) {
+              if (isStillDeepBest && maiaLossCp !== null && maiaLossCp > 0) {
                 // 连续组合去重：检查同方上一有效决策步是否已是妙手
                 const prevSameSideMove = analyzedMoves
                   .slice(0, cm.ply - 1)
@@ -1200,7 +1200,7 @@ export class GameAnalyzer {
                   cm.divergenceNote = `✨ 妙手：你走出了引擎首选 ${cleanPlayed}。相比人类直觉的自然走法 ${cleanMaia} (损耗 -${(maiaLossCp / 100).toFixed(2)} 兵)，这步保留了更多优势。`;
                 }
               } else {
-                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp < 10cp)，已取消`);
+                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp <= 0)，已取消`);
                 cm.divergenceStatus = 'downgraded';
               }
             }
