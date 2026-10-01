@@ -1,10 +1,27 @@
-Diverge License Architecture
-============================
+Diverge License Architecture & Distribution Notice
+===================================================
 
-This repository comprises multiple components with distinct open-source licenses:
+This repository and the distributed extension/PWA bundles incorporate and build upon
+several open-source components with copyleft licenses (GPLv3 and AGPLv3).
 
-1. Diverge Extension Core & UI (MIT License)
---------------------------------------------
+1. Combined Work & Distribution License (GNU AGPLv3 / GPLv3)
+------------------------------------------------------------
+When packaged, built, or distributed as a whole (including the Chrome Web Store extension,
+the standalone PWA, and Cloudflare Pages deployment), the entire combined work is licensed
+under the GNU Affero General Public License version 3 (AGPLv3) and GNU General Public License
+version 3 (GPLv3).
+
+Full texts of these licenses are provided in this repository:
+- GNU Affero General Public License v3.0: LICENSES/AGPL-3.0.txt
+- GNU General Public License v3.0:        LICENSES/GPL-3.0.txt
+
+2. Subcomponent Licenses
+------------------------
+
+A. Original Extension UI & Scaffolding (MIT License)
+The newly authored UI components, DOM bridge, CSS stylesheets, icons, and non-derivative
+glue code created specifically for Diverge are authored under the permissive MIT License:
+
 Copyright (c) 2026 Diverge Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,19 +42,30 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-2. Maia-3 Components & Derivatives (GNU AGPLv3)
------------------------------------------------
-The Maia-3 neural network architecture and derived Float32 weight exports originate
-from the Maia Chess / CSSLab Maia-3 project (University of Toronto & Carnegie Mellon University).
-Upstream repository: https://github.com/CSSLab/maia3
-Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-See THIRD_PARTY_NOTICES.md for complete details, upstream commit references,
-conversion script instructions, and corresponding source access.
+B. Maia-3 Components & In-Browser Inference Engine (GNU AGPLv3)
+The Maia-3 neural network architecture, in-browser forward execution engine
+(engine/maia-inbrowser.js, engine/maia-engine.js, engine/maia-worker.js), and weight export
+scripts (scripts/export_weights.py) are direct derivations and JavaScript implementations
+of the Maia-3 project developed by the Computational Social Science Lab (CSSLab) at the
+University of Toronto and Carnegie Mellon University.
+- Upstream: https://github.com/CSSLab/maia3 (Commit: 1e13597c42d4858b7cfd7cfdae01e297263364b2)
+- Checkpoint: Hugging Face UofTCSSLab/Maia3-5M (Revision: b6559de2398d7140b985f28fd2c19fb5e47ddabe)
+- License: GNU Affero General Public License v3.0 (AGPL-3.0)
+- Full License Text: LICENSES/AGPL-3.0.txt
 
-3. Stockfish WebAssembly Engine (GNU GPLv3)
--------------------------------------------
-Stockfish is an open-source UCI chess engine developed by the Stockfish developers.
-The WebAssembly compilation and wrapper files (lib/stockfish-19.js, lib/stockfish.wasm)
-are licensed under the GNU General Public License v3.0 (GPL-3.0).
-Upstream repository: https://github.com/official-stockfish/Stockfish
-See THIRD_PARTY_NOTICES.md for details and source code acquisition instructions.
+C. Stockfish WebAssembly Engine & Wrapper (GNU GPLv3)
+The WebAssembly compilation and JavaScript glue wrapper (lib/stockfish.wasm, lib/stockfish-19.js)
+originate from the Stockfish.js project by Nathan Rugg and Chess.com, LLC, based on the
+official Stockfish chess engine.
+- Upstream Stockfish.js: https://github.com/nmrugg/stockfish.js (Tag: v19.0.0, Commit: 9cb3e5066d48f1a35d792afeda36eff37ae60570)
+- Upstream Stockfish C++: https://github.com/official-stockfish/Stockfish (Stockfish 19 release)
+- License: GNU General Public License v3.0 (GPL-3.0)
+- Full License Text: LICENSES/GPL-3.0.txt
+
+3. Corresponding Source Code & Reproducibility
+----------------------------------------------
+In accordance with GPLv3 Section 6 and AGPLv3 Section 6:
+- The complete source code of this extension and PWA is publicly hosted at:
+  https://github.com/keluoke/4chess
+- Complete provenance, build instructions, fixed commit hashes, checksums, and modification
+  records for all third-party binaries and models are documented in THIRD_PARTY_NOTICES.md.

@@ -1114,7 +1114,11 @@ class AnalysisStudioApp {
     this.annotateMoveList(result.allMoves);
 
     // 4. Update current position insight
-    this.updateActivePositionAnalysis();
+    try {
+      this.updateActivePositionAnalysis();
+    } catch (err) {
+      console.warn('[Analysis Studio] Failed to update active position analysis on review completion:', err);
+    }
   }
 
   renderBlunderCards(moments) {
@@ -1537,6 +1541,7 @@ class AnalysisStudioApp {
 
         const targetGameEpoch = this.gameEpoch;
         const targetPly = this.currentPly;
+        const targetElo = this.currentElo;
         const historyFens = this.positions?.slice(Math.max(0, targetPly - 8), Math.max(0, targetPly - 1)).map(p => p.fen) || [];
         this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, targetElo, null, null, historyFens).then(pred => {
           if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly || this.currentElo !== targetElo) return;
@@ -1581,6 +1586,11 @@ class AnalysisStudioApp {
             this.el.compareIntuitionSan.textContent = '—';
             this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
           }
+        }).catch(err => {
+          console.warn('[Analysis Studio] Fallback Maia prediction error:', err);
+          if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly) return;
+          this.el.compareIntuitionSan.textContent = '—';
+          this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
         });
       }
 
@@ -1720,11 +1730,13 @@ class AnalysisStudioApp {
       const prevPos = this.positions[this.currentPly - 1];
       const evalFen = prevPos ? prevPos.fen : currentPos.fen;
       const targetPly = this.currentPly;
+      const targetGameEpoch = this.gameEpoch;
+      const targetElo = this.currentElo;
       const arrows = [];
 
       // Fallback realtime Maia prediction
-      this.maiaEngine.predict(evalFen, this.currentElo).then(pred => {
-        if (this.currentPly !== targetPly) return;
+      this.maiaEngine.predict(evalFen, targetElo).then(pred => {
+        if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly || this.currentElo !== targetElo) return;
         if (pred && pred.moves && pred.moves.length > 0) {
           const top = pred.moves[0];
           this.el.compareIntuitionSan.textContent = top.san || '—';
@@ -1743,6 +1755,8 @@ class AnalysisStudioApp {
           this.el.compareIntuitionSan.textContent = '—';
           this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
         }
+      }).catch(err => {
+        console.warn('[Analysis Studio] Preview Maia prediction error:', err);
       });
 
       // Fallback realtime Stockfish evaluation

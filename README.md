@@ -135,7 +135,9 @@ diverge-extension/
 
 ## 📄 开源许可证与协议说明 (Open Source Licenses)
 
-本项目包含不同开源许可证的独立及衍生组件，详见 [LICENSE](LICENSE) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)：
-- **Diverge UI & Extension Core**: 遵循 **MIT License**。
-- **Maia 3 神经网络架构与权重**: 衍生自卡内基梅隆大学与多伦多大学 CSSLab Maia-3 项目，遵循 **GNU Affero General Public License v3.0 (AGPL-3.0)**。权重转换脚本及在端侧的推理实现全部公开。
-- **Stockfish 19 WebAssembly & Chess Core Engine**: 遵循 **GNU General Public License v3.0 (GPLv3)**。
+本项目包含不同开源许可证的独立及衍生组件，随仓库完整附带所有许可证全文，详见 [LICENSE](LICENSE)、[LICENSES/](LICENSES/) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)：
+- **联合分发许可 (Combined Work)**：扩展与 PWA 整体分发包因包含并直接链接 Stockfish (GPL-3.0) 且衍生自 Maia-3 (AGPL-3.0)，整体受 **GNU AGPLv3 / GPLv3** 保护，向所有使用者提供完备的开源自由与对应源码保障。
+- **Diverge UI & Extension Core**: 独立前端界面、DOM 桥接与样式遵循宽松的 **MIT License**。
+- **Maia 3 神经网络架构与权重**: 衍生自多伦多大学与 CMU CSSLab Maia-3 项目，遵循 **GNU Affero General Public License v3.0 (AGPL-3.0)**（全文见 [LICENSES/AGPL-3.0.txt](LICENSES/AGPL-3.0.txt)）。权重转换工具及端侧推理实现全部开源。
+- **Stockfish 19 WebAssembly & Stockfish.js**: 基于 Stockfish.js (Nathan Rugg / Chess.com) 与官方 Stockfish 19，遵循 **GNU General Public License v3.0 (GPLv3)**（全文见 [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt)）。
+

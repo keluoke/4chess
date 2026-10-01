@@ -5,6 +5,7 @@
  */
 
 import { ModelCache } from './model-cache.js';
+import { ChessBoard } from './chess-core.js';
 
 function getModelCacheKey(url) {
   let hash = 0;
