@@ -165,6 +165,37 @@ export class GameAnalyzer {
   }
 
   /**
+   * Reconstructs standard PGN text from array of move objects and headers
+   */
+  static movesToPgn(moves, headers = {}) {
+    if (!moves || moves.length === 0) return '';
+    let pgn = '';
+    const defHeaders = {
+      Event: 'Live Chess',
+      Site: 'Chess.com',
+      Date: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
+      White: 'White',
+      Black: 'Black',
+      Result: '*',
+      ...headers
+    };
+    for (const [k, v] of Object.entries(defHeaders)) {
+      if (v !== undefined && v !== null) {
+        pgn += `[${k} "${v}"]\n`;
+      }
+    }
+    pgn += '\n';
+    for (let i = 0; i < moves.length; i++) {
+      if (i % 2 === 0) {
+        pgn += `${Math.floor(i / 2) + 1}. `;
+      }
+      pgn += `${moves[i].san} `;
+    }
+    pgn += defHeaders.Result || '*';
+    return pgn.trim();
+  }
+
+  /**
    * Multi-tiered move extraction from Lichess / Chess.com:
    * Tier 1: Chess.com Callback API & TCN Decoder (Instant & 100% reliable for /game/live/:id, /game/daily/:id)
    * Tier 2: Board Web Component & in-page PGN textarea
@@ -1032,7 +1063,8 @@ export class GameAnalyzer {
           }
 
           try {
-            const pred = await this.maiaEngine.predict(mv.fenBefore, elo);
+            const historyFens = positions.slice(Math.max(0, j - 7), j).map(p => p.fen);
+            const pred = await this.maiaEngine.predict(mv.fenBefore, elo, null, null, historyFens);
             if (pred && pred.moves && pred.moves.length > 0) {
               mv._predMoves = pred.moves;
               const top1 = pred.moves[0];

@@ -39,7 +39,7 @@ self.onmessage = async (e) => {
 
     case 'predict': {
       activeRequestId = id;
-      const { fen, elo } = data || {};
+      const { fen, elo, history } = data || {};
 
       try {
         const chess = new ChessBoard(fen);
@@ -54,7 +54,7 @@ self.onmessage = async (e) => {
         }
 
         const abortCheck = () => id !== activeRequestId;
-        const res = await engine.predict(chess, elo, abortCheck);
+        const res = await engine.predict(chess, elo, abortCheck, history);
 
         if (id !== activeRequestId) {
           // Newer request superseded this one; discard silently

@@ -248,20 +248,19 @@ class AnalysisStudioApp {
 
     // PGN Import Modal
     this.el.btnImportPgn.addEventListener('click', () => {
-      this.el.pgnModal.classList.add('open');
-      this.el.pgnInput.focus();
+      this.openPgnModal();
     });
     this.el.btnCancelPgn.addEventListener('click', () => {
-      this.el.pgnModal.classList.remove('open');
+      this.closePgnModal();
     });
     this.el.pgnModal.addEventListener('click', (e) => {
-      if (e.target === this.el.pgnModal) this.el.pgnModal.classList.remove('open');
+      if (e.target === this.el.pgnModal) this.closePgnModal();
     });
 
     this.el.btnSubmitPgn.addEventListener('click', async () => {
       const input = this.el.pgnInput.value.trim();
       if (!input) return;
-      this.el.pgnModal.classList.remove('open');
+      this.closePgnModal();
       await this.smartLoadInput(input);
     });
 
@@ -419,6 +418,19 @@ class AnalysisStudioApp {
     reader.readAsText(file);
   }
 
+  openPgnModal() {
+    if (this.el.pgnModal) {
+      this.el.pgnModal.classList.add('open');
+      this.el.pgnInput?.focus();
+    }
+  }
+
+  closePgnModal() {
+    if (this.el.pgnModal) {
+      this.el.pgnModal.classList.remove('open');
+    }
+  }
+
   async smartLoadInput(input, sourceName = '') {
     if (!input || typeof input !== 'string') return false;
     const text = input.trim();
@@ -456,62 +468,112 @@ class AnalysisStudioApp {
       return false;
     }
 
-    // 2. Detect Chess.com Game URL
-    // e.g. https://www.chess.com/game/live/12345678 or chess.com/game/daily/12345678
-    const chesscomMatch = text.match(/(?:https?:\/\/)?(?:www\.)?chess\.com\/game\/(live|daily)\/([0-9]+)/i);
-    if (chesscomMatch) {
-      const type = chesscomMatch[1];
-      const gameId = chesscomMatch[2];
+    // 2. Detect Chess.com Game URL or Game ID
+    // Supports:
+    // - https://www.chess.com/analysis/game/live/184602606266/review?flip=false
+    // - https://www.chess.com/analysis/game/live/184602606266
+    // - https://www.chess.com/analysis/game/daily/184602606266
+    // - https://www.chess.com/game/live/184602606266
+    // - https://www.chess.com/game/daily/184602606266
+    // - https://www.chess.com/play/online/game/184602606266
+    // - Bare Chess.com ID: 184602606266
+    let chesscomGameId = null;
+    let chesscomType = 'live';
+
+    if (text.includes('chess.com') || /^\d{8,16}$/.test(text)) {
+      const idMatch = text.match(/(\d{8,16})/);
+      if (idMatch) {
+        chesscomGameId = idMatch[1];
+        chesscomType = text.toLowerCase().includes('daily') ? 'daily' : 'live';
+      }
+    }
+
+    if (chesscomGameId) {
+      const type = chesscomType;
+      const gameId = chesscomGameId;
       this.showToast(`🔍 正在从 Chess.com 获取对局 (${gameId})...`, 5000);
 
-      // Try via Cloudflare Pages Function proxy (/api/chesscom?id=...&type=...)
-      try {
-        const proxyUrl = `/api/chesscom?id=${gameId}&type=${type}`;
-        const resp = await fetch(proxyUrl);
-        if (resp.ok) {
-          const data = await resp.json();
-          const gameObj = data.game || data;
-          // Boundary Fair Play Verification: strictly refuse active matches!
-          const v = FairPlayGuard.verifyConcludedGame(gameObj);
-          if (!v.ok) {
-            this.analyzer.cancel();
-            this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
-            return false;
-          }
-          const pgn = gameObj.pgn || data.pgn;
-          if (pgn) {
-            this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
-            this.startNewSession({ pgn, autoReview: true });
-            return true;
-          }
-        }
-      } catch (err) {
-        console.warn('[Analysis Studio] Chess.com proxy error:', err);
-      }
+      let fetchedData = null;
 
-      // If running inside Chrome extension, fallback to background script
+      // Strategy A: Chrome extension background service worker (direct fetch with extension permissions)
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         try {
           const res = await new Promise(resolve => {
             chrome.runtime.sendMessage({ type: 'FETCH_CHESSCOM_GAME_PGN', gameId, gameType: type }, resolve);
           });
           if (res?.ok) {
-            const v = FairPlayGuard.verifyConcludedGame(res);
-            if (!v.ok) {
-              this.analyzer.cancel();
-              this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
-              return false;
-            }
-            if (res.pgn) {
-              this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
-              this.startNewSession({ pgn: res.pgn, autoReview: true });
-              return true;
-            }
+            fetchedData = res;
           }
         } catch (e) {}
       }
 
-      this.showToast(`⚠️ Chess.com 对局接口受限，建议在对局完赛后直接在对局页点击扩展或复制 PGN`);
+      // Strategy B: Cloudflare edge proxy (relative /api/chesscom or absolute 4chess.cc edge)
+      if (!fetchedData) {
+        const candidateProxies = [
+          `/api/chesscom?id=${gameId}&type=${type}`,
+          `https://4chess.cc/api/chesscom?id=${gameId}&type=${type}`
+        ];
+        for (const proxyUrl of candidateProxies) {
+          try {
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && (data.game || data.moveList || data.pgn)) {
+                fetchedData = data;
+                break;
+              }
+            }
+          } catch (err) {}
+        }
+      }
+
+      if (fetchedData) {
+        const gameObj = fetchedData.game || fetchedData;
+        const v = FairPlayGuard.verifyConcludedGame(gameObj);
+        if (!v.ok) {
+          this.analyzer.cancel();
+          this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+          return false;
+        }
+
+        // 1. Direct PGN string
+        let pgn = gameObj.pgn || fetchedData.pgn;
+        if (pgn && typeof pgn === 'string' && pgn.includes('1.')) {
+          this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
+          this.startNewSession({ pgn, autoReview: true });
+          return true;
+        }
+
+        // 2. Decode TCN moveList
+        const moveList = gameObj.moveList || fetchedData.moveList;
+        if (moveList) {
+          const moves = GameAnalyzer.tcnToSanMoves(moveList);
+          if (moves && moves.length > 0) {
+            const headers = gameObj.pgnHeaders || fetchedData.pgnHeaders || {};
+            const white = headers.White || fetchedData.players?.bottom?.username || gameObj.whiteUser || 'White';
+            const black = headers.Black || fetchedData.players?.top?.username || gameObj.blackUser || 'Black';
+            const result = headers.Result || (gameObj.colorOfWinner === 'white' ? '1-0' : (gameObj.colorOfWinner === 'black' ? '0-1' : '1/2-1/2'));
+            const generatedPgn = GameAnalyzer.movesToPgn(moves, {
+              ...headers,
+              White: white,
+              Black: black,
+              Result: result
+            });
+            this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
+            this.startNewSession({
+              pgn: generatedPgn,
+              moves,
+              white,
+              black,
+              result,
+              autoReview: true
+            });
+            return true;
+          }
+        }
+      }
+
+      this.showToast(`⚠️ 未能从 Chess.com 获取该对局，建议在完赛后直接在对局页点击扩展或复制 PGN`);
       return false;
     }
 
@@ -1475,9 +1537,8 @@ class AnalysisStudioApp {
 
         const targetGameEpoch = this.gameEpoch;
         const targetPly = this.currentPly;
-        const targetElo = this.currentElo;
-
-        this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, targetElo).then(pred => {
+        const historyFens = this.positions?.slice(Math.max(0, targetPly - 8), Math.max(0, targetPly - 1)).map(p => p.fen) || [];
+        this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, targetElo, null, null, historyFens).then(pred => {
           if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly || this.currentElo !== targetElo) return;
           if (pred && pred.moves && pred.moves.length > 0) {
             const top = pred.moves[0];

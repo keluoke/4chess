@@ -74,13 +74,33 @@ if (lichessTest3.match(lichessRegex)?.[1].slice(0, 8) !== 'sFnZDTa1') throw new 
 console.log('✅ Lichess URL regex handles standard, side-specific, and move-anchored URLs');
 
 // Test Chess.com patterns
+function parseChesscomUrl(text) {
+  if (!text.includes('chess.com') && !/^\d{8,16}$/.test(text)) return null;
+  const idMatch = text.match(/(\d{8,16})/);
+  if (!idMatch) return null;
+  const gameId = idMatch[1];
+  const type = text.toLowerCase().includes('daily') ? 'daily' : 'live';
+  return { type, gameId };
+}
+
 const ccTest1 = 'https://www.chess.com/game/live/123456789';
 const ccTest2 = 'https://chess.com/game/daily/987654321';
-const match1 = ccTest1.match(chesscomRegex);
-const match2 = ccTest2.match(chesscomRegex);
-if (!match1 || match1[1] !== 'live' || match1[2] !== '123456789') throw new Error('Failed Chess.com regex test 1');
-if (!match2 || match2[1] !== 'daily' || match2[2] !== '987654321') throw new Error('Failed Chess.com regex test 2');
-console.log('✅ Chess.com URL regex handles live and daily games');
+const ccTest3 = 'https://www.chess.com/analysis/game/live/184602606266/review?flip=false';
+const ccTest4 = 'https://www.chess.com/play/online/game/184602606266';
+const ccTest5 = '184602606266';
+
+const match1 = parseChesscomUrl(ccTest1);
+const match2 = parseChesscomUrl(ccTest2);
+const match3 = parseChesscomUrl(ccTest3);
+const match4 = parseChesscomUrl(ccTest4);
+const match5 = parseChesscomUrl(ccTest5);
+
+if (!match1 || match1.type !== 'live' || match1.gameId !== '123456789') throw new Error('Failed Chess.com regex test 1');
+if (!match2 || match2.type !== 'daily' || match2.gameId !== '987654321') throw new Error('Failed Chess.com regex test 2');
+if (!match3 || match3.type !== 'live' || match3.gameId !== '184602606266') throw new Error('Failed Chess.com review URL test 3');
+if (!match4 || match4.type !== 'live' || match4.gameId !== '184602606266') throw new Error('Failed Chess.com play URL test 4');
+if (!match5 || match5.type !== 'live' || match5.gameId !== '184602606266') throw new Error('Failed Chess.com bare ID test 5');
+console.log('✅ Chess.com URL matcher handles live, daily, analysis/review, and bare IDs');
 
 console.log('\n--- 3. Testing URL Hash Parsing ---');
 const samplePgn = '[White "Test White"]\n[Black "Test Black"]\n1. e4 e5 2. Nf3 Nc6';

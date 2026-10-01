@@ -153,7 +153,7 @@ Make review a window into the game — not a cheating tool.
 | `storage` | 本地保存用户偏好：默认直觉等级分、界面语言、面板开关、模型 CDN 节点、面板/浮窗位置。仅存于本机，不上传。 |
 | `activeTab` | 当用户点击激活 Lichess / Chess.com 标签页时，读取当前棋盘局面（FEN）并注入分析面板与覆盖层。 |
 | `host_permissions: lichess.org / *.lichess.org / chess.com / *.chess.com` | 在上述域名注入内容脚本以读取棋盘与对局数据，并在本地完成分析展示。不向这些站点回传任何用户数据。 |
-| `host_permissions: weights.4chess.cc / maia3-cdn.pages.dev` | 仅用于**下载** Maia 3 神经网络模型权重到本地缓存。属于资源获取，不涉及用户数据上传。 |
+| `host_permissions: weights.4chess.cc` | 仅用于**下载** Maia 3 神经网络模型权重到本地 IndexedDB 缓存。属于静态资源获取，不涉及用户数据上传。 |
 
 > 扩展不含任何远程代码执行（无 `eval`/外部脚本注入），所有推理均在本地 WASM / JS 完成，符合 MV3 安全规范。
 

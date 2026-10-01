@@ -25,8 +25,7 @@
     "https://*.lichess.org/*",
     "https://chess.com/*",
     "https://*.chess.com/*",
-    "https://weights.4chess.cc/*",
-    "https://maia3-cdn.pages.dev/*"
+    "https://weights.4chess.cc/*"
   ],
   "content_scripts": [
     {

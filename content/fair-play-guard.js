@@ -19,13 +19,19 @@ export class FairPlayGuard {
     if (!el) return false;
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
     if (el.closest('[hidden], [aria-hidden="true"], .hidden')) return false;
-    if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
     try {
       const style = window.getComputedStyle(el);
       if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || '1') < 0.1) {
         return false;
       }
-    } catch (e) {}
+      // Check physical layout only if layout engine is active (avoids false-negatives on JSDOM and position:fixed modals)
+      const hasLayout = typeof document !== 'undefined' && ((document.body?.offsetWidth || 0) > 0 || (document.documentElement?.clientWidth || 0) > 0);
+      if (hasLayout && style.position !== 'fixed' && el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) {
+        return false;
+      }
+    } catch (e) {
+      if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+    }
     return true;
   }
 

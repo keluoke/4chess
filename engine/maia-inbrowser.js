@@ -277,9 +277,39 @@ export class MaiaInBrowserEngine {
   }
 
   /**
-   * Forward pass: computes move distribution and attention heatmap
+   * Tokenizes a board into 64x12 Float32Array (mirrored if Black to move)
+   * Piece map: P:1, N:2, B:3, R:4, Q:5, K:6, Black pieces +6
    */
-  async predict(chessBoard, targetElo = 1900, abortCheck = null) {
+  static tokenizeBoard(chessBoard) {
+    const isBlack = chessBoard.turn === 'b';
+    const pieceMap = { p: 1, n: 2, b: 3, r: 4, q: 5, k: 6 };
+    const boardTokens = new Float32Array(64 * 12);
+
+    for (let r = 0; r < 8; r++) {
+      for (let f = 0; f < 8; f++) {
+        const actualSq = isBlack ? (7 - r) * 8 + f : r * 8 + f;
+        const normSq = r * 8 + f;
+        const piece = chessBoard.board[actualSq];
+        if (piece) {
+          let mapped = pieceMap[piece.type];
+          let color = piece.color;
+          if (isBlack) {
+            color = color === 'w' ? 'b' : 'w'; // swap colors
+          }
+          if (color === 'b') mapped += 6;
+          boardTokens[normSq * 12 + (mapped - 1)] = 1.0;
+        }
+      }
+    }
+    return boardTokens;
+  }
+
+  /**
+   * Forward pass: computes move distribution and attention heatmap
+   * Supports both FEN-only mode (current board repeated 8 times) and
+   * real move history (up to 8 half-moves reconstructed from chronological sequence).
+   */
+  async predict(chessBoard, targetElo = 1900, abortCheck = null, history = null) {
     if (!this.isReady) {
       throw new Error('Maia-3 In-Browser model is not loaded');
     }
@@ -304,38 +334,54 @@ export class MaiaInBrowserEngine {
     const selfEloEmb = this.interpolateElo(targetElo);
     const oppoEloEmb = this.interpolateElo(targetElo);
 
-    // 2. Tokenize board (mirrored if Black to move)
-    // Piece map: P:1, N:2, B:3, R:4, Q:5, K:6, Black pieces +6
-    const pieceMap = { p: 1, n: 2, b: 3, r: 4, q: 5, k: 6 };
-    const boardTokens = new Float32Array(64 * 12);
+    // 2. Tokenize board history (up to 8 positions: oldest to newest)
+    const currentTokens = MaiaInBrowserEngine.tokenizeBoard(chessBoard);
+    const planes = [];
 
-    for (let r = 0; r < 8; r++) {
-      for (let f = 0; f < 8; f++) {
-        // Mirrored square if black
-        const actualSq = isBlack ? (7 - r) * 8 + f : r * 8 + f;
-        const normSq = r * 8 + f;
-        const piece = chessBoard.board[actualSq];
-        if (piece) {
-          let mapped = pieceMap[piece.type];
-          let color = piece.color;
-          if (isBlack) {
-            color = color === 'w' ? 'b' : 'w'; // swap colors
-          }
-          if (color === 'b') mapped += 6;
-          boardTokens[normSq * 12 + (mapped - 1)] = 1.0;
+    if (history && Array.isArray(history) && history.length > 0) {
+      const historyBoards = [];
+      for (const item of history) {
+        if (item instanceof ChessBoard) {
+          historyBoards.push(item);
+        } else if (typeof item === 'string') {
+          const b = new ChessBoard(item);
+          if (b.isValid) historyBoards.push(b);
+        } else if (item && item.fen) {
+          const b = new ChessBoard(item.fen);
+          if (b.isValid) historyBoards.push(b);
         }
+      }
+      historyBoards.push(chessBoard);
+
+      const recent = historyBoards.slice(-8);
+      const tokenized = recent.map(b => (b === chessBoard ? currentTokens : MaiaInBrowserEngine.tokenizeBoard(b)));
+
+      // Pad with earliest position if < 8 (matching official Maia3 get_historical_tokens)
+      const padCount = 8 - tokenized.length;
+      for (let i = 0; i < padCount; i++) {
+        planes.push(tokenized[0]);
+      }
+      for (const t of tokenized) {
+        planes.push(t);
+      }
+    } else {
+      // FEN-only mode: Replicate current board 8 times (official Maia3 UCI default when --use_uci_history is False)
+      for (let h = 0; h < 8; h++) {
+        planes.push(currentTokens);
       }
     }
 
-    // Concatenate history 8 times (64, 96) + 256 elo -> inputDim = 352
+    // Concatenate 8 history planes (64, 96) + 256 elo -> inputDim = 352
     const inputDim = 12 * 8 + 256; // 352
     const tokens = new Float32Array(64 * inputDim);
     for (let sq = 0; sq < 64; sq++) {
       const sqOffset = sq * inputDim;
-      // Replicate 12 planes 8 times
       for (let h = 0; h < 8; h++) {
+        const planeTokens = planes[h];
+        const planeSqOffset = sq * 12;
+        const targetOffset = sqOffset + h * 12;
         for (let p = 0; p < 12; p++) {
-          tokens[sqOffset + h * 12 + p] = boardTokens[sq * 12 + p];
+          tokens[targetOffset + p] = planeTokens[planeSqOffset + p];
         }
       }
       // Self Elo (128)

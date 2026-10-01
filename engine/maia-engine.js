@@ -191,11 +191,8 @@ export class MaiaEngine {
     if (customCdn) {
       candidates.push(customCdn);
     }
-    // 1. Primary Default: User's dedicated Cloudflare CDN bucket
+    // 1. Primary Default: Dedicated Cloudflare CDN bucket
     candidates.push('https://weights.4chess.cc/maia3_model.bin');
-
-    // 2. High-speed mirror fallback
-    candidates.push('https://maia3-cdn.pages.dev/models/maia3_model.bin');
 
     let loaded = false;
     let lastErr = null;
@@ -280,9 +277,23 @@ export class MaiaEngine {
 
   /**
    * Evaluates position using both Maia 3 and Stockfish
+   * Supports both FEN-only and real history sequence modes.
    */
-  async predict(fen, elo = this.targetElo, sfRes = null, abortCheck = null) {
-    const cacheKey = `${fen}_${elo}`;
+  async predict(fen, elo = this.targetElo, sfRes = null, abortCheck = null, history = null) {
+    let histKey = 'nohist';
+    if (history && Array.isArray(history) && history.length > 0) {
+      histKey = history.map(h => {
+        if (typeof h === 'string') return h.split(' ')[0];
+        if (h && typeof h.fen === 'string') return h.fen.split(' ')[0];
+        return String(h);
+      }).join(';');
+    } else if (typeof history === 'string' && history.length > 0) {
+      histKey = history;
+    }
+    const encVer = 'v2h';
+    const modelTag = this.modelName || 'maia3';
+    const cacheKey = `${fen}_${elo}_${modelTag}_${encVer}_${histKey}`;
+
     if (this.lruCache.has(cacheKey)) {
       const cached = this.lruCache.get(cacheKey);
       if (sfRes) {
@@ -364,7 +375,7 @@ export class MaiaEngine {
         this.worker.postMessage({
           type: 'predict',
           id: reqId,
-          data: { fen, elo }
+          data: { fen, elo, history }
         });
       });
 
@@ -386,7 +397,7 @@ export class MaiaEngine {
         maiaRes = await p;
       }
     } else {
-      maiaRes = await this.maiaInBrowser.predict(chess, elo, abortCheck);
+      maiaRes = await this.maiaInBrowser.predict(chess, elo, abortCheck, history);
     }
     if (!maiaRes) return null; // Aborted by user moving again
 

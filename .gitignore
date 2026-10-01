@@ -17,6 +17,7 @@ _headers
 _redirects
 
 # Local tooling & OS
+node_modules/
 .DS_Store
 .wrangler/
 .workbuddy/

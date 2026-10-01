@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/prepare_cloudflare.mjs",
-    "test": "node scripts/test_fair_play.mjs && node scripts/test_security_audit.mjs"
+    "test": "node scripts/test_fair_play.mjs && node scripts/test_dom_fixtures.mjs && node scripts/test_security_audit.mjs",
+    "test:baseline": "python3 scripts/verify_official_baseline.py"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
 }
