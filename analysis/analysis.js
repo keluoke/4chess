@@ -11,6 +11,7 @@ import { BoardUI } from './board-ui.js';
 import { EvalChart } from './eval-chart.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { ModelCache } from '../engine/model-cache.js';
+import { soundEffects } from './sound-effects.js';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -84,6 +85,9 @@ class AnalysisStudioApp {
       btnNext: document.getElementById('btn-next'),
       btnLast: document.getElementById('btn-last'),
       btnFlip: document.getElementById('btn-flip'),
+      btnSound: document.getElementById('btn-sound'),
+      iconSoundOn: document.getElementById('icon-sound-on'),
+      iconSoundOff: document.getElementById('icon-sound-off'),
       boardStatusText: document.getElementById('board-status-text'),
       progressCard: document.getElementById('analysis-progress-card'),
       phaseText: document.getElementById('analysis-phase-text'),
@@ -181,6 +185,19 @@ class AnalysisStudioApp {
     this.evalChart = new EvalChart(this.el.evalChartContainer, (selectedPly) => {
       this.goToPly(selectedPly);
     });
+
+    // 3. Initialize Sound Toggle state
+    this.updateSoundToggleUI();
+  }
+
+  updateSoundToggleUI() {
+    const isEnabled = soundEffects.enabled;
+    if (this.el.iconSoundOn) this.el.iconSoundOn.style.display = isEnabled ? 'inline-block' : 'none';
+    if (this.el.iconSoundOff) this.el.iconSoundOff.style.display = isEnabled ? 'none' : 'inline-block';
+    if (this.el.btnSound) {
+      this.el.btnSound.title = isEnabled ? '行棋音效：开启 (点击静音，快捷键: M)' : '行棋音效：静音 (点击开启，快捷键: M)';
+      this.el.btnSound.classList.toggle('muted', !isEnabled);
+    }
   }
 
   setComparePlayedSan(san, badgeText = null, badgeBg = null, badgeColor = null) {
@@ -223,6 +240,18 @@ class AnalysisStudioApp {
     this.el.btnNext.addEventListener('click', () => this.goToPly(this.currentPly + 1));
     this.el.btnLast.addEventListener('click', () => this.goToPly(this.positions.length - 1));
     this.el.btnFlip.addEventListener('click', () => this.boardUI.flip());
+    if (this.el.btnSound) {
+      this.el.btnSound.addEventListener('click', () => {
+        const enabled = soundEffects.toggle();
+        this.updateSoundToggleUI();
+        if (enabled) {
+          soundEffects.playMove();
+          this.showToast('🔊 行棋音效已开启');
+        } else {
+          this.showToast('🔇 行棋音效已静音');
+        }
+      });
+    }
     this.el.btnPlay.addEventListener('click', () => this.toggleAutoPlay());
     this.el.btnExitBranch.addEventListener('click', () => this.exitBranchMode());
 
@@ -362,6 +391,9 @@ class AnalysisStudioApp {
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         this.boardUI.flip();
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        if (this.el.btnSound) this.el.btnSound.click();
       }
     });
   }
@@ -880,7 +912,7 @@ class AnalysisStudioApp {
       this.el.metaResult.textContent = result || '*';
       this.el.moveCountBadge.textContent = '0';
       this.renderMoveList();
-      this.goToPly(0);
+      this.goToPly(0, { silent: true });
       if (autoReview) {
         this.runFullReview(false);
       }
@@ -953,7 +985,7 @@ class AnalysisStudioApp {
       : String(this.moves.length);
 
     this.renderMoveList();
-    this.goToPly(0);
+    this.goToPly(0, { silent: true });
 
     if (cachedReview) {
       this.applyReviewResult(cachedReview);
@@ -1489,11 +1521,12 @@ class AnalysisStudioApp {
     }
   }
 
-  goToPly(ply) {
+  goToPly(ply, options = {}) {
     this.exitBranchMode();
 
     if (this.positions.length === 0) return;
     const clampedPly = Math.max(0, Math.min(this.positions.length - 1, ply));
+    const prevPly = this.currentPly;
     this.currentPly = clampedPly;
 
     const currentPos = this.positions[clampedPly];
@@ -1502,6 +1535,19 @@ class AnalysisStudioApp {
     this.boardUI.setPosition(currentPos.fen, lastMove);
     this.evalChart.setCursor(clampedPly);
     this.highlightMoveRow(clampedPly);
+
+    // Audio feedback on move navigation
+    if (!options.silent && clampedPly !== prevPly) {
+      if (clampedPly > 0 && currentPos) {
+        if (clampedPly > prevPly) {
+          soundEffects.playSoundForMove(currentPos.san);
+        } else {
+          soundEffects.playMove(0.4);
+        }
+      } else if (clampedPly === 0 && prevPly > 0) {
+        soundEffects.playMove(0.3);
+      }
+    }
 
     // Sync active blunder card if present
     const blunderCards = this.el.blunderList.querySelectorAll('.blunder-card');
@@ -1835,6 +1881,7 @@ class AnalysisStudioApp {
 
     // 2. User branched away from the mainline!
     this.isBranching = true;
+    soundEffects.playSoundForMove(move.san || move.uci);
     this.branchFen = newFen;
     this.el.branchBanner.style.display = 'flex';
     this.el.boardStatusText.textContent = `🌿 分支走法: ${move.san || move.uci}`;

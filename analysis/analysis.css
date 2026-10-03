@@ -383,6 +383,10 @@ body {
   transform: translateY(-1px);
 }
 
+.btn-nav.muted {
+  opacity: 0.55;
+}
+
 .branch-banner {
   width: 100%;
   max-width: 600px;

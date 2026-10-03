@@ -14,6 +14,7 @@ const STATIC_ASSETS = [
   '../ui/theme.css',
   '../ui/theme.js',
   './board-ui.js',
+  './sound-effects.js',
   './chess-pieces.js',
   './eval-chart.js',
   './manifest.webmanifest',
