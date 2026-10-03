@@ -16,3 +16,5 @@ if (existsSync(resolve(rootDir, 'cloudflare/redirects'))) {
   copyFileSync(resolve(rootDir, 'cloudflare/redirects'), resolve(rootDir, '_redirects'));
   console.log('✅ Generated _redirects from cloudflare/redirects');
 }
+
+console.log('ℹ️ Note: If loading as unpacked Chrome extension locally, run "npm run clean" to remove _headers/_redirects.');

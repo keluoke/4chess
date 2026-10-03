@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/prepare_cloudflare.mjs",
+    "clean": "node scripts/clean_cloudflare.mjs",
+    "package": "zip -r -X diverge-extension-v1.0.2.zip manifest.json background.js index.html favicon.svg _locales analysis content engine lib popup icons ui -x \"*.DS_Store\" \"*__MACOSX*\"",
     "test": "node scripts/test_fair_play.mjs && node scripts/test_dom_fixtures.mjs && node scripts/test_security_audit.mjs",
     "test:baseline": "python3 scripts/verify_official_baseline.py"
   },
