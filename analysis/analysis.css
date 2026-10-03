@@ -1,23 +1,23 @@
 /**
- * Modern Dark-Themed Styling for Maia-3 Analysis Studio
- * Professional Chess Workstation Aesthetic (Slate Graphite + WeChat Brand Green)
+ * Diverge Chess Study · shared paper and forest design
+ * Core board and review components; visual composition below
  */
 
-:root {
-  --bg-main: #111111;
-  --bg-card: #191919;
-  --bg-card-hover: #232323;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(7, 193, 96, 0.4);
-  --text-main: #F3F4F6;
-  --text-muted: #9CA3AF;
-  --text-dim: #6B7280;
-  --brand-green: #07C160;
-  --brand-gold: #FA9D3B;
-  --brand-red: #FA5151;
-  --brand-blue: #10AEFF;
-  --board-light: #f0d9b5;
-  --board-dark: #b58863;
+body.diverge-ui {
+  --bg-main: var(--dg-paper);
+  --bg-card: var(--dg-surface);
+  --bg-card-hover: var(--dg-green-soft);
+  --border-color: var(--dg-line);
+  --border-focus: var(--dg-green);
+  --text-main: var(--dg-ink);
+  --text-muted: var(--dg-muted);
+  --text-dim: var(--dg-muted);
+  --brand-green: var(--dg-green);
+  --brand-gold: var(--dg-gold);
+  --brand-red: var(--dg-red);
+  --brand-blue: var(--dg-blue);
+  --board-light: var(--dg-board-light);
+  --board-dark: var(--dg-board-dark);
 }
 
 * {
@@ -457,10 +457,10 @@ body {
   gap: 4px;
 }
 
-.dot-cyan { width: 7px; height: 7px; border-radius: 50%; background: #00d2ff; box-shadow: 0 0 5px rgba(0, 210, 255, 0.6); }
-.dot-red { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; }
-.dot-orange { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
-.dot-gold { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
+.dot-cyan { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-blue); box-shadow: 0 0 5px rgba(0, 210, 255, 0.6); }
+.dot-red { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-red); }
+.dot-orange { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-gold); }
+.dot-gold { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-gold); }
 
 .eval-chart-body {
   width: 100%;
@@ -695,20 +695,20 @@ body {
 
 .filter-pill.pill-beyond.active {
   background: rgba(0, 210, 255, 0.15);
-  border-color: #00d2ff;
-  color: #00d2ff;
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
 }
 
 .filter-pill.pill-trap.active {
   background: rgba(245, 158, 11, 0.15);
-  border-color: #f59e0b;
-  color: #f59e0b;
+  border-color: var(--brand-gold);
+  color: var(--brand-gold);
 }
 
 .filter-pill.pill-style.active {
   background: rgba(167, 139, 250, 0.15);
-  border-color: #a78bfa;
-  color: #a78bfa;
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
 }
 
 .blunder-list {
@@ -751,7 +751,7 @@ body {
 }
 
 .blunder-card.card-beyond-intuition.active {
-  border-color: #00d2ff;
+  border-color: var(--brand-blue);
   background: rgba(0, 210, 255, 0.12);
   box-shadow: 0 0 12px rgba(0, 210, 255, 0.18);
 }
@@ -768,7 +768,7 @@ body {
 }
 
 .blunder-card.card-intuition-trap.active {
-  border-color: #f59e0b;
+  border-color: var(--brand-gold);
   background: rgba(245, 158, 11, 0.12);
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.18);
 }
@@ -785,7 +785,7 @@ body {
 }
 
 .blunder-card.card-style-divergence.active {
-  border-color: #a78bfa;
+  border-color: var(--brand-blue);
   background: rgba(167, 139, 250, 0.12);
   box-shadow: 0 0 12px rgba(167, 139, 250, 0.18);
 }
@@ -849,7 +849,7 @@ body {
 .metric-value {
   font-size: 14px;
   font-weight: 800;
-  color: #4ade80;
+  color: var(--brand-green);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -914,44 +914,44 @@ body {
 
 .tag-beyond {
   background: rgba(0, 210, 255, 0.16);
-  color: #00d2ff;
+  color: var(--brand-blue);
   border: 1px solid rgba(0, 210, 255, 0.35);
 }
 
 .tag-trap {
   background: rgba(245, 158, 11, 0.16);
-  color: #f59e0b;
+  color: var(--brand-gold);
   border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .tag-blunder {
   background: rgba(239, 68, 68, 0.18);
-  color: #ef4444;
+  color: var(--brand-red);
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .tag-mistake {
   background: rgba(245, 158, 11, 0.18);
-  color: #f59e0b;
+  color: var(--brand-gold);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .tag-inaccuracy {
   background: rgba(245, 158, 11, 0.12);
-  color: #eab308;
+  color: var(--brand-gold);
   border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
 .tag-style {
   background: rgba(167, 139, 250, 0.18);
-  color: #a78bfa;
+  color: var(--brand-blue);
   border: 1px solid rgba(167, 139, 250, 0.35);
 }
 
 .blunder-loss-tag {
   font-size: 11px;
   font-weight: 700;
-  color: #ef4444;
+  color: var(--brand-red);
   white-space: nowrap;
   margin-left: auto;
   background: rgba(239, 68, 68, 0.08);
@@ -960,12 +960,12 @@ body {
 }
 
 .blunder-loss-tag.tag-gain {
-  color: #00d2ff;
+  color: var(--brand-blue);
   background: rgba(0, 210, 255, 0.1);
 }
 
 .blunder-loss-tag.tag-style-loss {
-  color: #a78bfa;
+  color: var(--brand-blue);
   background: rgba(167, 139, 250, 0.1);
 }
 
@@ -1039,8 +1039,8 @@ body {
 }
 .annotation-blunder { color: var(--brand-red); }
 .annotation-mistake { color: var(--brand-gold); }
-.annotation-beyond { color: #00d2ff; }
-.annotation-trap { color: #f59e0b; }
+.annotation-beyond { color: var(--brand-blue); }
+.annotation-trap { color: var(--brand-gold); }
 
 /* PGN Import Modal */
 .modal-overlay {
@@ -1387,3 +1387,26 @@ body {
 }
 
 
+
+/* Chess Study composition: board → alternatives → key moves. */
+body{font-size:14px;user-select:auto}
+.studio-navbar{height:auto;min-height:74px;gap:20px;padding:18px 30px;background:var(--bg-card)}
+.studio-logo{width:34px;height:34px;background:var(--brand-green);border-radius:9px}.studio-fork-icon{color:var(--dg-on-green)}
+.studio-title{font-size:16px;letter-spacing:-.3px;gap:10px}.studio-badge{background:var(--dg-green-soft);border:0;border-radius:5px;font-size:10px;padding:4px 7px}
+.game-meta-badge{font-size:12px;font-weight:500;flex-wrap:wrap;justify-content:center}.game-meta-result{background:var(--dg-gold-soft);font:12px var(--dg-mono);padding:4px 7px}
+.studio-header-actions{gap:8px}.btn-header{background:var(--dg-raised);height:36px;border-radius:7px;padding:0 13px}.btn-header:hover{background:var(--dg-green-soft);border-color:var(--border-color)}.btn-primary,.btn-home-primary{background:var(--brand-green);color:var(--dg-on-green);border-color:var(--brand-green)}.btn-primary:hover,.btn-home-primary:hover{background:var(--brand-green);filter:brightness(.95)}.btn-theme{font-size:11px;color:var(--text-muted)}
+.studio-layout{grid-template-columns:minmax(330px,1.25fr) minmax(270px,.9fr) minmax(265px,.82fr);gap:24px;padding:28px 30px;max-width:1560px;align-items:start}
+.board-column{gap:13px;min-width:0;align-items:stretch}.workspace-section-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;font-weight:650;min-height:22px;margin-bottom:3px}.workspace-section-heading small{font-size:10px;color:var(--text-muted);font-weight:400}
+.maia-board-wrapper{max-width:none;border-radius:5px;background:var(--dg-board-light);box-shadow:0 5px 20px #243a3212}.coord{color:#284634!important;font-size:10px}
+.board-controls{max-width:none;border:0;border-bottom:1px solid var(--border-color);border-radius:0;box-shadow:none;background:transparent;padding:0 0 12px;gap:10px;flex-wrap:wrap}.btn-nav-group{gap:5px}.btn-nav{border:0;width:32px;height:32px;background:transparent;border-radius:6px;font-size:13px}.btn-nav:hover{background:var(--dg-green-soft);transform:none}.branch-banner{max-width:none;background:var(--dg-gold-soft);border:0}.eval-chart-wrapper{padding:15px 0;border:0;border-radius:0;box-shadow:none;background:transparent;width:100%}.eval-chart-header{gap:8px;flex-wrap:wrap}.eval-chart-legend{font-size:10px;gap:8px}.eval-chart-body{height:105px}.eval-chart-tooltip{background:var(--dg-raised);color:var(--text-main);border-color:var(--border-color);box-shadow:var(--dg-shadow);max-width:90%;white-space:normal}.eval-chart-badge{background:var(--dg-green-soft);font-family:var(--dg-mono)}.dot-cyan{box-shadow:none}.status-dot.ready{box-shadow:none}
+.analysis-column{gap:18px}.studio-insight-heading{padding:1px 0 3px}.studio-eyebrow{font-size:9px;letter-spacing:1.8px;color:var(--text-muted);display:block;margin-bottom:12px}.studio-insight-heading h1{font:27px/1.5 Georgia,"Songti SC",serif;letter-spacing:-.5px}.studio-insight-heading p{font-size:12px;line-height:1.9;color:var(--text-muted);margin-top:10px}
+.divergence-box{border:0;border-radius:0;padding:0;background:transparent;box-shadow:none;gap:15px}.divergence-badge{background:var(--dg-gold-soft);color:var(--brand-gold);font-size:11px;padding:5px 9px}.compare-panel{grid-template-columns:1fr;gap:10px;margin-top:0}.compare-card{background:var(--dg-raised);padding:15px 16px;gap:7px;border:1px solid var(--border-color)!important;position:relative}.compare-card.card-engine{border-left:3px solid var(--brand-blue)!important}.compare-card.card-intuition{border-left:3px solid var(--brand-gold)!important}.compare-card.card-played{border-left:3px solid var(--text-muted)!important}.compare-card.card-played.is-blunder{background:var(--dg-red-soft)}.compare-card-label{color:var(--text-muted);font-weight:500;letter-spacing:0;font-size:11px}.compare-card-san{font:25px/1.4 var(--dg-mono);color:var(--text-main)}.compare-card-meta{white-space:normal;font-size:11px;line-height:1.8}.dot-engine{background:var(--brand-blue)}.dot-intuition{background:var(--brand-gold)}.divergence-content{padding:15px;background:var(--dg-gold-soft);border-radius:8px;font-size:12px;line-height:1.9;overflow-wrap:anywhere}.compare-match-badge{background:var(--dg-green-soft)}
+.studio-engine-tools{border-top:1px solid var(--border-color);padding-top:14px;font-size:11px;color:var(--text-muted)}.studio-engine-tools summary{cursor:pointer;margin-bottom:10px}.studio-engine-tools>div{margin:8px 0}.engine-status-pill{padding:4px 0;background:transparent;border:0;border-radius:0;font-size:10px}.studio-engine-tools .btn-header{height:30px;font-size:11px}
+.review-column{display:flex;flex-direction:column;gap:16px;min-width:0}.review-column>.workspace-section-heading{margin-bottom:0}.review-metrics-card{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:18px;border-radius:9px;box-shadow:none;background:var(--dg-surface)}.metric-player-row{flex-direction:column;align-items:flex-start;gap:11px}.metric-divider{display:none}.metric-group{display:flex;flex-direction:column;gap:7px}.metric-value{font:27px var(--dg-mono);color:var(--text-main)}.side-badge.side-white,.side-badge.side-black{background:var(--dg-paper);border:1px solid var(--border-color);color:var(--text-main);font-size:10px;padding:3px 6px}
+.panel-tabs{border-radius:9px 9px 0 0;background:var(--dg-surface)}.tab-btn{font-size:12px;padding:13px 8px;font-weight:500}.tab-btn.active{background:var(--dg-green-soft)}.tab-content{padding:12px;max-height:550px;background:var(--dg-surface)}.divergence-filters{gap:5px;flex-wrap:wrap;overflow:visible}.filter-pill{font-size:10px;padding:5px 8px;border-radius:5px;background:transparent}.filter-pill.active{background:var(--brand-green);color:var(--dg-on-green);border-color:var(--brand-green)}.filter-pill.pill-beyond.active{background:var(--dg-blue-soft);color:var(--brand-blue);border-color:var(--brand-blue)}.filter-pill.pill-trap.active{background:var(--dg-gold-soft);color:var(--brand-gold);border-color:var(--brand-gold)}
+.blunder-card{background:var(--dg-raised);padding:12px;border-color:var(--border-color)}.blunder-card:hover{border-color:var(--brand-green)}.blunder-card-title{font-size:12px;flex-wrap:wrap}.blunder-card-top{flex-wrap:wrap;gap:6px}.blunder-card.card-beyond-intuition,.blunder-card.card-beyond-intuition:hover{background:var(--dg-blue-soft);border-color:var(--border-color)}.blunder-card.card-beyond-intuition.active{background:var(--dg-blue-soft);border-color:var(--brand-blue);box-shadow:none}.blunder-card.card-intuition-trap,.blunder-card.card-intuition-trap:hover{background:var(--dg-gold-soft);border-color:var(--border-color)}.blunder-card.card-intuition-trap.active{background:var(--dg-gold-soft);border-color:var(--brand-gold);box-shadow:none}.tag-beyond,.blunder-loss-tag.tag-gain{background:var(--dg-blue-soft);color:var(--brand-blue);border-color:var(--brand-blue)}.tag-trap,.tag-mistake,.tag-inaccuracy{background:var(--dg-gold-soft);color:var(--brand-gold);border-color:var(--brand-gold)}.tag-blunder,.blunder-loss-tag{background:var(--dg-red-soft);color:var(--brand-red);border-color:var(--brand-red)}.notation-row:hover,.notation-move:hover{background:var(--dg-green-soft)}.notation-move.active{background:var(--brand-green);color:var(--dg-on-green)}.notation-move{font:12px var(--dg-mono)}
+.modal-card{padding:27px;max-width:560px;gap:14px;box-shadow:var(--dg-shadow);max-height:calc(100dvh - 40px);overflow:auto}.modal-title{font:26px Georgia,"Songti SC",serif}.modal-description{font-size:12px;color:var(--text-muted);line-height:1.8}.pgn-textarea{background:var(--dg-paper);padding:14px;border-radius:8px;line-height:1.8}.modal-card .studio-eyebrow{margin-bottom:0}.drag-drop-card{background:var(--dg-surface);box-shadow:var(--dg-shadow)}.studio-toast{background:var(--dg-ink);color:var(--dg-surface);border:0;box-shadow:var(--dg-shadow);max-width:90vw;font-size:12px}
+.studio-home-hero{padding:22px 12px;background:var(--dg-paper);border:0;gap:18px;margin:0}.studio-home-hero:hover{background:var(--dg-paper)}.home-hero-icon{background:var(--dg-green-soft);border:0}.home-hero-title{font:21px/1.55 Georgia,"Songti SC",serif;color:var(--text-main)}.home-hero-subtitle{color:var(--text-muted);font-size:11px;line-height:1.9}.btn-home-primary{padding:12px 9px;font-size:11px}.btn-sample-chip{background:var(--dg-surface);border-color:var(--border-color);color:var(--text-main);font-size:10px;white-space:normal}.home-tip-item{font-size:10px;color:var(--text-muted)}
+@media(max-width:1180px){.studio-navbar{flex-wrap:wrap;padding:16px 24px;gap:12px}.studio-header-center{order:3;flex-basis:100%;justify-content:center}.studio-layout{grid-template-columns:minmax(320px,1.15fr) minmax(285px,1fr);gap:25px;padding:24px}.review-column{grid-column:1/-1}.review-column .tab-content{max-height:370px}.review-column .review-metrics-card{max-width:400px}.blunder-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.review-metrics-card .metric-player-row{flex-direction:row;align-items:center}}
+@media(max-width:720px){.studio-navbar{padding:14px 16px}.studio-title{font-size:14px}.studio-badge{display:none}.studio-brand{gap:8px}.studio-header-actions{gap:5px}.btn-header{font-size:11px;padding:0 9px;height:33px}.studio-layout{display:flex;flex-direction:column;padding:19px 16px;gap:25px}.board-column,.analysis-column,.review-column{width:100%}.workspace-section-heading small{font-size:9px}.compare-panel{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.compare-card{padding:10px 8px}.compare-card-label{font-size:10px;gap:4px}.compare-card-san{font-size:19px}.compare-card-meta{font-size:10px}.compare-card-label .dot{width:5px;height:5px}.studio-insight-heading h1{font-size:24px}.blunder-list{display:flex;flex-direction:column}.review-column .review-metrics-card{max-width:none}.modal-card{padding:20px;width:calc(100% - 28px)}.modal-card>div[style]{flex-wrap:wrap;gap:12px}.home-hero-title{font-size:23px}.home-hero-subtitle{max-width:320px}.btn-home-primary{font-size:12px}}
+.modal-overlay{visibility:hidden}.modal-overlay.open{visibility:visible}.btn-header:disabled{opacity:.45;cursor:not-allowed}.btn-header:disabled:hover{background:var(--dg-raised);filter:none}.btn-primary:disabled:hover{background:var(--brand-green)}

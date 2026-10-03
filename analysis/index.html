@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>歧路 Diverge · 全盘分析</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#121826">
+  <meta name="theme-color" content="#f3f2ec">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
+  <link rel="stylesheet" href="../ui/theme.css">
   <link rel="stylesheet" href="analysis.css">
 </head>
-<body>
+<body class="diverge-ui">
   <!-- Header Navbar -->
   <header class="studio-navbar">
     <div class="studio-brand">
@@ -28,7 +29,7 @@
       </span>
       <div class="studio-title">
         歧路 Diverge
-        <span class="studio-badge">全盘分析</span>
+        <span class="studio-badge">棋谱研究室</span>
       </div>
     </div>
 
@@ -42,32 +43,12 @@
     </div>
 
     <div class="studio-header-actions">
-      <!-- Target Elo selector -->
-      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
-        <span>直觉 ELO:</span>
-        <select id="elo-selector" class="btn-header" style="padding: 0 8px; cursor: pointer;">
-          <option value="1100">1100 (初学)</option>
-          <option value="1500">1500 (进阶)</option>
-          <option value="1900" selected>1900 (俱乐部)</option>
-          <option value="2200">2200 (大师)</option>
-        </select>
-      </div>
-
-      <!-- Engine Status Badges -->
-      <div class="engine-status-pill" id="status-maia" title="Maia 3 直觉预测引擎">
-        <span class="status-dot loading" id="dot-maia"></span>
-        <span>Maia 3</span>
-      </div>
-      <div class="engine-status-pill" id="status-sf" title="Stockfish 19 WASM 评估引擎">
-        <span class="status-dot loading" id="dot-sf"></span>
-        <span>Stockfish 19</span>
-      </div>
-
       <!-- Actions -->
+      <button type="button" class="btn-header btn-theme" data-theme-toggle>深色</button>
       <button type="button" class="btn-header" id="btn-import-pgn">
         导入 PGN
       </button>
-      <button type="button" class="btn-header btn-primary" id="btn-reanalyze">
+      <button type="button" class="btn-header btn-primary" id="btn-reanalyze" disabled>
         重新分析
       </button>
     </div>
@@ -76,7 +57,8 @@
   <!-- Main Workspace Layout -->
   <main class="studio-layout">
     <!-- Left: Chessboard Column -->
-    <section class="board-column">
+    <section class="board-column" aria-label="棋盘与局面走势">
+      <div class="workspace-section-heading"><span>棋盘</span><small>点击或拖动棋子，试演其他可能</small></div>
       <!-- Interactive SVG/DOM Chessboard -->
       <div id="board-container" class="maia-board-wrapper"></div>
 
@@ -116,34 +98,16 @@
           <div id="analysis-progress-bar" style="width: 0%; height: 100%; background: var(--brand-green); transition: width 0.15s ease;"></div>
         </div>
       </div>
-    </section>
-
-    <!-- Right: Analysis & Insights Column -->
-    <section class="analysis-column">
       <!-- 1. Advantage & Winrate Trend Curve -->
       <div class="eval-chart-wrapper" id="eval-chart-container">
         <!-- Rendered by EvalChart -->
       </div>
 
-      <!-- Engine Accuracy Summary Card -->
-      <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
-        <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-white">⚪ 白方</span></div>
-          <div class="metric-group metric-accuracy-group">
-            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
-            <span class="metric-value" id="val-accuracy-white">—</span>
-          </div>
-        </div>
-        <div class="metric-divider"></div>
-        <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-black">⚫ 黑方</span></div>
-          <div class="metric-group metric-accuracy-group">
-            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
-            <span class="metric-value" id="val-accuracy-black">—</span>
-          </div>
-        </div>
-      </div>
+    </section>
 
+    <!-- Right: Analysis & Insights Column -->
+    <section class="analysis-column" aria-label="当前局面分析">
+      <div class="studio-insight-heading"><span class="studio-eyebrow">A DIFFERENT PERSPECTIVE</span><h1>比较三种选择</h1><p>实战、人类直觉与引擎推荐，在这里相遇。</p></div>
       <!-- 2. Three-Way Comparison Panel -->
       <div class="divergence-box" id="divergence-box">
         <div class="divergence-badge" id="divergence-badge">局面研判</div>
@@ -167,14 +131,59 @@
         <div class="divergence-content" id="divergence-content" style="display: none;"></div>
       </div>
 
+      <details class="studio-engine-tools"><summary>直觉等级与引擎状态</summary>
+      <!-- Target Elo selector -->
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
+        <span>直觉 ELO:</span>
+        <select id="elo-selector" class="btn-header" style="padding: 0 8px; cursor: pointer;">
+          <option value="1100">1100 (初学)</option>
+          <option value="1500">1500 (进阶)</option>
+          <option value="1900" selected>1900 (俱乐部)</option>
+          <option value="2200">2200 (大师)</option>
+        </select>
+      </div>
+
+      <!-- Engine Status Badges -->
+      <div class="engine-status-pill" id="status-maia" title="Maia 3 直觉预测引擎">
+        <span class="status-dot loading" id="dot-maia"></span>
+        <span>Maia 3</span>
+      </div>
+      <div class="engine-status-pill" id="status-sf" title="Stockfish 19 WASM 评估引擎">
+        <span class="status-dot loading" id="dot-sf"></span>
+        <span>Stockfish 19</span>
+      </div>
+
+      </details>
+    </section>
+    <section class="review-column" aria-label="关键步与完整记谱">
+      <div class="workspace-section-heading"><span>回看关键选择</span></div>
+      <!-- Engine Accuracy Summary Card -->
+      <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
+        <div class="metric-player-row">
+          <div class="metric-side-label"><span class="side-badge side-white">⚪ 白方</span></div>
+          <div class="metric-group metric-accuracy-group">
+            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+            <span class="metric-value" id="val-accuracy-white">—</span>
+          </div>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-player-row">
+          <div class="metric-side-label"><span class="side-badge side-black">⚫ 黑方</span></div>
+          <div class="metric-group metric-accuracy-group">
+            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+            <span class="metric-value" id="val-accuracy-black">—</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 3. Dual Tabs: Human-Machine Divergence Moments & Move Notation -->
       <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="panel-tabs">
           <button type="button" class="tab-btn active" id="tab-blunders">
-            人机分歧 (<span id="blunder-count-badge">0</span>)
+            关键步 (<span id="blunder-count-badge">0</span>)
           </button>
           <button type="button" class="tab-btn" id="tab-moves">
-            完整记谱 (<span id="move-count-badge">0</span>)
+            记谱 (<span id="move-count-badge">0</span>)
           </button>
         </div>
 
@@ -208,15 +217,17 @@
   <div class="drag-drop-overlay" id="drag-drop-overlay" style="display: none;">
     <div class="drag-drop-card">
       <span style="font-size: 38px;">♟️</span>
-      <div style="font-size: 16px; font-weight: 700; color: #fff; margin-top: 6px;">释放以载入 PGN 棋谱</div>
+      <div style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-top: 6px;">释放以载入 PGN 棋谱</div>
       <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">支持 .pgn 棋谱文件与文本拖拽</div>
     </div>
   </div>
 
   <!-- PGN Import Modal -->
-  <div class="modal-overlay" id="pgn-modal">
+  <div class="modal-overlay" id="pgn-modal" inert aria-hidden="true" role="dialog" aria-modal="true" aria-label="导入已完赛对局">
     <div class="modal-card">
-      <h3 class="modal-title">导入棋谱与对局</h3>
+      <div class="studio-eyebrow">A NEW PERSPECTIVE</div>
+      <h3 class="modal-title">从一盘棋开始</h3>
+      <p class="modal-description">导入已完赛对局，回看直觉之外的选择。</p>
       <textarea id="pgn-input" class="pgn-textarea" placeholder="在此粘贴：
 1. PGN 棋谱文本 或 FEN 局面
 2. Lichess 对局网址 (如 https://lichess.org/aBcDeFgH)
@@ -240,6 +251,7 @@
     </div>
   </div>
 
+  <script type="module" src="../ui/theme.js"></script>
   <script type="module" src="analysis.js"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {

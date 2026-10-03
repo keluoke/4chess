@@ -1,0 +1,118 @@
+{
+  "extensionName": {
+    "message": "歧路 Diverge · 人类直觉与双引擎国际象棋复盘",
+    "description": "扩展标题"
+  },
+  "extensionDescription": {
+    "message": "纯本地双引擎国际象棋赛后复盘：人类直觉 (Maia) vs 算力最优 (Stockfish)，走法热力图与分歧研判，零数据上传。",
+    "description": "扩展描述"
+  },
+  "actionTitle": {
+    "message": "歧路 Diverge 设置",
+    "description": "扩展图标悬停提示"
+  },
+  "popupSubtitle": {
+    "message": "人类直觉 · 引擎洞察",
+    "description": "弹窗副标题"
+  },
+  "statusReady": {
+    "message": "🟢 JS Float32 + SF19 就绪",
+    "description": "引擎就绪状态"
+  },
+  "floatingPanelTitle": {
+    "message": "棋盘悬浮窗",
+    "description": "悬浮面板开关标题"
+  },
+  "floatingPanelDesc": {
+    "message": "分析时随手查看当前局面",
+    "description": "悬浮面板开关描述"
+  },
+  "btnReviewStudio": {
+    "message": "进入全盘分析",
+    "description": "打开工作台按钮"
+  },
+  "btnLichess": {
+    "message": "Lichess 分析板",
+    "description": "打开 Lichess 分析板按钮"
+  },
+  "btnChesscom": {
+    "message": "Chess.com 分析板",
+    "description": "打开 Chess.com 分析板按钮"
+  },
+  "sectionEnginePrefs": {
+    "message": "模型与下载设置",
+    "description": "引擎设置分组标题"
+  },
+  "defaultEloLabel": {
+    "message": "人类直觉等级",
+    "description": "默认等级分标签"
+  },
+  "eloBeginner": {
+    "message": "1100 (初阶)",
+    "description": "1100 等级分"
+  },
+  "eloIntermediate": {
+    "message": "1500 (中阶)",
+    "description": "1500 等级分"
+  },
+  "eloClub": {
+    "message": "1900 (进阶)",
+    "description": "1900 等级分"
+  },
+  "eloMaster": {
+    "message": "2200 (大师)",
+    "description": "2200 等级分"
+  },
+  "dualEngineArchLabel": {
+    "message": "双引擎架构",
+    "description": "双引擎架构标签"
+  },
+  "modelSpecLabel": {
+    "message": "模型规格",
+    "description": "模型规格标签"
+  },
+  "modelCustomOption": {
+    "message": "自定义 CDN 地址",
+    "description": "自定义选项"
+  },
+  "sectionFeatures": {
+    "message": "核心体验特性",
+    "description": "核心特性分组标题"
+  },
+  "featureChessformer": {
+    "message": "64 方格独立注意力变换器",
+    "description": "Chessformer 特性"
+  },
+  "featureSliced": {
+    "message": "毫秒级分片释放，棋盘走子 60FPS 丝滑不卡顿",
+    "description": "切片计算特性"
+  },
+  "featureLru": {
+    "message": "上一步/下一步回看 0ms 秒开",
+    "description": "LRU 缓存特性"
+  },
+  "reviewOnly": {
+    "message": "仅供复盘"
+  },
+  "popupHeadline": {
+    "message": "每一步，都有另一种可能。"
+  },
+  "popupIntro": {
+    "message": "回看你的选择，发现直觉之外的好棋。"
+  },
+  "eloHelp": {
+    "message": "用于 Maia 候选着法预测"
+  },
+  "modelStandard": {
+    "message": "标准 · 28 MB"
+  },
+  "modelLarge": {
+    "message": "大规格 · 104 MB"
+  },
+  "modelCacheHelp": {
+    "message": "首次使用下载模型，完成后缓存在浏览器中。"
+  },
+  "fairPlayNote": {
+    "message": "对局进行中自动锁定，结束后立即解锁复盘。"
+  }
+}

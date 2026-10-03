@@ -8,6 +8,8 @@
  * 5. High Information Density & Zero Lag Experience
  */
 
+let appearanceListenerInstalled = false;
+
 const I18N = {
   zh: {
     panelTitle: '歧路 Diverge',
@@ -16,10 +18,10 @@ const I18N = {
     whiteThinking: '⚪ 白方 · 研判中',
     blackThinking: '⚫ 黑方 · 研判中',
     btnMore: '设置 (语言/模型/视觉)',
-    btnClose: '收起为微信浮窗',
-    drawerTitle: '⚙️ 设置 / Settings',
-    lblLang: '🌐 界面语言 / Language:',
-    lblModelSpec: '⚡ 快速切换模型规格:',
+    btnClose: '收起悬浮窗',
+    drawerTitle: '复盘偏好',
+    lblLang: '界面语言',
+    lblModelSpec: '模型与下载',
     maiaEngine: 'Maia 3',
     sfEngine: 'Stockfish 19',
     notStarted: '未启动',
@@ -28,14 +30,14 @@ const I18N = {
     readyWasm: '就绪 (WASM)',
     readyLocal: '就绪 (本地GPU)',
     initError: '启动异常',
-    eloTitle: '直觉等级分 (ELO)',
+    eloTitle: '人类直觉等级',
     eloDesc: {
       1100: '1100 · 初学棋手直觉',
       1500: '1500 · 进阶棋手直觉',
       1900: '1900 · 俱乐部高手直觉',
       2200: '2200 · 大师段位直觉'
     },
-    boardVisuals: '视觉辅助',
+    boardVisuals: '棋盘显示',
     heatmap: '意图热力图',
     arrows: '直觉走法建议',
     candidates: '人类直觉候选着法',
@@ -300,6 +302,21 @@ export class IntuitionPanel {
     }
 
     this.renderSkeleton();
+    if (globalThis.chrome?.storage?.local) {
+      const applyAppearance = (theme) => {
+        document.querySelectorAll('#maia3-intuition-panel, #maia-wechat-float').forEach(element => {
+          if (theme === 'light' || theme === 'dark') element.dataset.theme = theme;
+          else delete element.dataset.theme;
+        });
+      };
+      chrome.storage.local.get('diverge_ui_theme', result => applyAppearance(result.diverge_ui_theme));
+      if (!appearanceListenerInstalled && chrome.storage.onChanged?.addListener) {
+        chrome.storage.onChanged.addListener((changes, area) => {
+          if (area === 'local' && changes.diverge_ui_theme) applyAppearance(changes.diverge_ui_theme.newValue);
+        });
+        appearanceListenerInstalled = true;
+      }
+    }
 
     // 7. Mount both to DOM inside document.body
     const mount = () => {
@@ -352,11 +369,11 @@ export class IntuitionPanel {
         </div>
         <!-- Iconic WeChat Mini-Program Capsule (小程序双键胶囊) -->
         <div class="weui-capsule">
-          <button type="button" id="weui-btn-more" class="weui-capsule-btn" title="${this.t('btnMore')}">
-            <span class="weui-capsule-dots">•••</span>
+          <button type="button" id="weui-btn-more" class="weui-capsule-btn" title="${this.t('btnMore')}" aria-label="${this.t('btnMore')}">
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--weui-BG-1)"/><circle cx="15" cy="17" r="3" fill="var(--weui-BG-1)"/></svg>
           </button>
           <div class="weui-capsule-divider"></div>
-          <button type="button" id="weui-btn-close" class="weui-capsule-btn" title="${this.t('btnClose')}">
+          <button type="button" id="weui-btn-close" class="weui-capsule-btn" title="${this.t('btnClose')}" aria-label="${this.t('btnClose')}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none"/>
               <circle cx="12" cy="12" r="3.5" fill="currentColor"/>
@@ -426,7 +443,7 @@ export class IntuitionPanel {
       <!-- WeChat Mini-Program Page Body -->
       <div class="weui-page__bd" id="maia-panel-body">
         <!-- Dual Engine Status Group -->
-        <div class="weui-cells">
+        <div class="weui-cells diverge-engine-status">
           <div class="weui-cell">
             <div class="weui-cell__bd">
               <span class="weui-status-dot status-idle" id="dot-maia"></span>
@@ -444,7 +461,7 @@ export class IntuitionPanel {
         </div>
 
         <!-- Cloudflare CDN Progress Card (if downloading) -->
-        <div id="maia-cdn-progress-card" class="weui-cells" style="display: none; padding: 10px 12px;">
+        <div id="maia-cdn-progress-card" class="weui-cells diverge-download" style="display: none; padding: 10px 12px;">
           <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
             <span id="cdn-status-label" style="color: var(--weui-BRAND); font-weight: 600;">⚡ CDN 传输中...</span>
             <span id="cdn-speed-label" style="color: var(--weui-FG-HALF);">-- MB/s</span>
@@ -454,12 +471,12 @@ export class IntuitionPanel {
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--weui-FG-2);">
             <span id="cdn-bytes-label">0 / 28.0 MB</span>
-            <span id="lbl-cdn-cache-tag">${this.lang === 'zh' ? '永久本地缓存 (0ms)' : 'Local Cache (0ms)'}</span>
+            <span id="lbl-cdn-cache-tag">${this.lang === 'zh' ? '完成后缓存在浏览器' : 'Cached after download'}</span>
           </div>
         </div>
 
         <!-- Candidate Moves List Group -->
-        <div>
+        <div class="diverge-candidates">
           <div class="weui-cells__title" style="display: flex; justify-content: space-between; align-items: center;">
             <span id="maia-moves-header-text">${this.t('candidates')}</span>
             <span id="maia-inference-time" style="font-size: 10px; color: var(--weui-FG-2);">0 ms</span>
@@ -803,7 +820,7 @@ export class IntuitionPanel {
       } else if (state === 'error') {
         if (dotMaia) dotMaia.className = 'weui-status-dot status-error';
         if (labelMaia) {
-          labelMaia.textContent = this.lang === 'zh' ? '加载失败 (点•••配置)' : 'Load Failed (Click •••)';
+          labelMaia.textContent = this.lang === 'zh' ? '加载失败 · 查看设置' : 'Load failed · Settings';
           labelMaia.className = 'weui-cell__ft';
         }
         if (cdnCard) cdnCard.style.display = 'none';
@@ -893,10 +910,10 @@ export class IntuitionPanel {
     if (txtPanelTitle) txtPanelTitle.textContent = this.t('panelTitle');
 
     const btnMore = this.container.querySelector('#weui-btn-more');
-    if (btnMore) btnMore.title = this.t('btnMore');
+    if (btnMore) { btnMore.title = this.t('btnMore'); btnMore.setAttribute('aria-label', this.t('btnMore')); }
 
     const btnClose = this.container.querySelector('#weui-btn-close');
-    if (btnClose) btnClose.title = this.t('btnClose');
+    if (btnClose) { btnClose.title = this.t('btnClose'); btnClose.setAttribute('aria-label', this.t('btnClose')); }
 
     const txtDrawerTitle = this.container.querySelector('#txt-drawer-title');
     if (txtDrawerTitle) txtDrawerTitle.textContent = this.t('drawerTitle');
@@ -914,7 +931,7 @@ export class IntuitionPanel {
     if (lblEngineSf) lblEngineSf.textContent = this.t('sfEngine');
 
     const lblCdnCacheTag = this.container.querySelector('#lbl-cdn-cache-tag');
-    if (lblCdnCacheTag) lblCdnCacheTag.textContent = this.lang === 'zh' ? '永久本地缓存 (0ms)' : 'Local Cache (0ms)';
+    if (lblCdnCacheTag) lblCdnCacheTag.textContent = this.lang === 'zh' ? '完成后缓存在浏览器' : 'Cached after download';
 
     const lblEloTitle = this.container.querySelector('#lbl-elo-title');
     if (lblEloTitle) lblEloTitle.textContent = this.t('eloTitle');
@@ -1001,6 +1018,7 @@ export class IntuitionPanel {
   setFairPlayLocked(isLocked) {
     if (this.isFairPlayLocked === isLocked) return;
     this.isFairPlayLocked = isLocked;
+    if (this.container) this.container.dataset.fairPlayLocked = String(isLocked);
 
     if (!this.container) return;
 
@@ -1034,6 +1052,7 @@ export class IntuitionPanel {
 
       const triggerBtn = this.container.querySelector('#btn-trigger-standalone');
       if (triggerBtn) {
+        triggerBtn.disabled = true;
         triggerBtn.style.opacity = '0.5';
         triggerBtn.style.pointerEvents = 'none';
       }
@@ -1050,7 +1069,7 @@ export class IntuitionPanel {
                 </svg>
               </div>
             </div>
-            <div style="font-size: 13.5px; font-weight: 700; color: #FFF; margin-bottom: 6px;">
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--weui-FG-0); margin-bottom: 6px;">
               ${this.t('fairPlayTitle')}
             </div>
             <div style="font-size: 11px; color: var(--weui-FG-HALF); line-height: 1.5; margin-bottom: 12px;">
@@ -1065,6 +1084,7 @@ export class IntuitionPanel {
     } else {
       const triggerBtn = this.container.querySelector('#btn-trigger-standalone');
       if (triggerBtn) {
+        triggerBtn.disabled = false;
         triggerBtn.style.opacity = '1';
         triggerBtn.style.pointerEvents = 'auto';
       }
@@ -1230,11 +1250,11 @@ export class IntuitionPanel {
           movesContainer.innerHTML = `
             <div style="padding: 16px 12px; text-align: center;">
               <div style="font-size: 20px; margin-bottom: 4px;">${isError ? '⚠️' : '🧠'}</div>
-              <div style="font-weight: 600; color: #FFF; margin-bottom: 4px;">
+              <div style="font-weight: 600; color: var(--weui-FG-0); margin-bottom: 4px;">
                 ${isError ? (this.lang === 'zh' ? 'Maia-3 模型未就绪' : 'Maia-3 Not Ready') : (this.lang === 'zh' ? '正在载入神经网络' : 'Loading Neural Network')}
               </div>
               <div style="font-size: 11px; color: var(--weui-FG-1); line-height: 1.4; margin-bottom: 8px;">
-                ${isError ? (this.lang === 'zh' ? '无法载入模型，请点击右上角 ••• 切换节点。' : 'Failed to load model. Click ••• to switch CDN.') : (maiaState?.status || (this.lang === 'zh' ? '正在传输模型至本地...' : 'Streaming model to local...'))}
+                ${isError ? (this.lang === 'zh' ? '无法载入模型，请打开右上角设置后重试。' : 'Failed to load model. Open Settings and retry.') : (maiaState?.status || (this.lang === 'zh' ? '正在传输模型至本地...' : 'Streaming model to local...'))}
               </div>
               <button id="maia-retry-btn" class="weui-btn-primary" style="font-size: 11px; padding: 4px 12px;">${this.lang === 'zh' ? '重试初始化' : 'Retry'}</button>
             </div>
@@ -1259,7 +1279,7 @@ export class IntuitionPanel {
     }
 
     if (timeEl) {
-      const backendText = predictionData.backend?.includes('本地') ? 'GPU 8ms' : (this.lang === 'zh' ? '浏览器' : 'Browser');
+      const backendText = predictionData.backend?.includes('本地') ? (this.lang === 'zh' ? '本地 GPU' : 'Local GPU') : (this.lang === 'zh' ? '浏览器' : 'Browser');
       timeEl.textContent = `${latencyMs.toFixed(0)} ms (${backendText})`;
     }
 
@@ -1336,7 +1356,7 @@ export class IntuitionPanel {
       row.dataset.uci = move.uci;
 
       const isSfMatch = predictionData.stockfish?.bestMove?.uci === move.uci || move.isBest;
-      const barColor = isSfMatch ? 'var(--weui-BRAND)' : (idx === 0 ? 'var(--weui-BRAND)' : 'rgba(255, 255, 255, 0.35)');
+      const barColor = isSfMatch ? 'var(--dg-blue)' : 'var(--dg-gold)';
 
       const mainDiv = document.createElement('div');
       mainDiv.className = 'weui-move-main';

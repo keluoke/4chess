@@ -2,100 +2,46 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>歧路 Diverge · 人类直觉与双引擎研判</title>
+  <title>歧路 Diverge · 复盘与设置</title>
+  <link rel="stylesheet" href="../ui/theme.css">
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
-  <div class="weui-page">
-    <!-- WeChat Top Header -->
-    <div class="weui-header">
-      <div class="weui-header__left">
-        <span class="weui-header__icon" style="color: var(--brand-green, #07c160); display: flex; align-items: center;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 21v-8"></path>
-            <path d="M12 13c0-4.5-6-4.5-6-9"></path>
-            <path d="M12 13c0-4.5 6-4.5 6-9"></path>
-            <polyline points="3 7 6 4 9 7"></polyline>
-            <polyline points="15 7 18 4 21 7"></polyline>
-          </svg>
-        </span>
-        <div>
-          <h1 class="weui-header__title">歧路 Diverge</h1>
-          <p class="weui-header__desc">微信小程序规范 · 双引擎研判</p>
-        </div>
+<body class="diverge-ui">
+  <main class="popup-page">
+    <header class="popup-header">
+      <div class="popup-brand">
+        <span class="popup-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8c0-4.5-6-4.5-6-9m6 9c0-4.5 6-4.5 6-9"/><path d="m3 7 3-3 3 3m6 0 3-3 3 3"/></svg></span>
+        <div><h1>歧路 Diverge</h1><p data-i18n="popupSubtitle">人类直觉 · 引擎洞察</p></div>
       </div>
-      <div id="status-pill" class="weui-tag-status">就绪</div>
-    </div>
-
-    <!-- WeChat Switch Group (棋盘悬浮面板) -->
-    <div class="weui-cells">
-      <div class="weui-cell">
-        <div class="weui-cell__bd">
-          <div style="font-weight: 600; font-size: 13px;">棋盘悬浮面板</div>
-          <div style="font-size: 10.5px; color: var(--weui-FG-1); margin-top: 1px;">在分析/对局页面显示直觉面板</div>
-        </div>
-        <input type="checkbox" id="toggle-panel-switch" class="weui-switch" checked />
+      <span id="status-pill" class="status-pill" data-i18n="reviewOnly">仅供复盘</span>
+    </header>
+    <section class="popup-hero">
+      <div class="eyebrow">ANOTHER WAY TO SEE YOUR GAME</div>
+      <h2 data-i18n="popupHeadline">每一步，都有<br>另一种可能。</h2>
+      <p data-i18n="popupIntro">回看你的选择，发现直觉之外的好棋。</p>
+    </section>
+    <nav class="popup-actions" aria-label="分析页面">
+      <a href="https://4chess.cc" target="_blank" rel="noopener" class="action-primary"><span data-i18n="btnReviewStudio">进入全盘分析</span><span aria-hidden="true">↗</span></a>
+      <div class="platform-actions">
+        <a href="https://lichess.org/analysis" target="_blank" rel="noopener" data-i18n="btnLichess">Lichess 分析板</a>
+        <a href="https://www.chess.com/analysis" target="_blank" rel="noopener" data-i18n="btnChesscom">Chess.com 分析板</a>
       </div>
-    </div>
-
-    <!-- Quick Launch Buttons -->
-    <div class="weui-quick-actions">
-      <a href="https://4chess.cc" target="_blank" class="weui-btn-action" style="background: rgba(7, 193, 96, 0.12); color: var(--brand-green, #07c160); font-weight: 700;">
-        🌿 歧路 Diverge · 全盘分析工作台
-      </a>
-      <a href="https://lichess.org/analysis" target="_blank" class="weui-btn-action">
-        ♟️ 打开 Lichess 分析板
-      </a>
-      <a href="https://www.chess.com/analysis" target="_blank" class="weui-btn-action">
-        ♟️ 打开 Chess.com 分析板
-      </a>
-    </div>
-
-    <!-- Settings Group -->
-    <div class="weui-cells__title">引擎与模型偏好</div>
-    <div class="weui-cells">
-      <div class="weui-cell">
-        <div class="weui-cell__bd">默认等级分</div>
-        <select id="default-elo" class="weui-select">
-          <option value="1100">1100 (初阶)</option>
-          <option value="1500">1500 (中阶)</option>
-          <option value="1900" selected>1900 (进阶)</option>
-          <option value="2200">2200 (大师)</option>
-        </select>
-      </div>
-
-      <div class="weui-cell">
-        <div class="weui-cell__bd">双引擎架构</div>
-        <div style="font-size: 11px; color: var(--weui-FG-HALF);">JS Float32 + SF19 WASM</div>
-      </div>
-
-      <div class="weui-cell" style="flex-direction: column; align-items: stretch; gap: 6px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>模型规格</span>
-          <select id="model-preset-select" class="weui-select" style="max-width: 170px;">
-            <option value="https://weights.4chess.cc/maia3_model.bin" selected>5M (~7.33M 神经参数 · 28MB)</option>
-            <option value="https://weights.4chess.cc/maia3_23m.bin">23M (高精 · 104MB)</option>
-            <option value="custom">自定义 URL...</option>
-          </select>
-        </div>
-        <input type="text" id="cdn-url" class="weui-input" style="display: none;" placeholder="https://weights.4chess.cc/maia3_model.bin">
-      </div>
-    </div>
-
-    <!-- Features Group -->
-    <div class="weui-cells__title">核心体验特性</div>
-    <div class="weui-cells" style="padding: 10px 12px; font-size: 11px; color: var(--weui-FG-HALF); line-height: 1.6;">
-      <div>✨ <strong>Chessformer</strong>: 64 方格独立注意力变换器</div>
-      <div>⚡ <strong>切片非阻塞运算</strong>: 毫秒级分片释放，棋盘走子 60FPS 丝滑不卡顿</div>
-      <div>🚀 <strong>LRU 双向记忆缓存</strong>: 上一步/下一步回看 0ms 秒开</div>
-      <div>🟢 <strong>微信小程序设计规范</strong>: 经典胶囊与悬浮小球</div>
-    </div>
-
-    <div class="weui-footer">
-      <span>歧路 Diverge · WeUI Standard</span>
-    </div>
-  </div>
-
+    </nav>
+    <section class="popup-preferences" aria-label="复盘偏好">
+      <label class="setting-row" for="toggle-panel-switch"><span><strong data-i18n="floatingPanelTitle">棋盘悬浮窗</strong><small data-i18n="floatingPanelDesc">分析时随手查看当前局面</small></span><input type="checkbox" id="toggle-panel-switch" class="weui-switch" checked></label>
+      <label class="setting-row" for="default-elo"><span><strong data-i18n="defaultEloLabel">人类直觉等级</strong><small data-i18n="eloHelp">用于 Maia 候选着法预测</small></span><select id="default-elo"><option value="1100" data-i18n="eloBeginner">1100 · 初阶</option><option value="1500" data-i18n="eloIntermediate">1500 · 中阶</option><option value="1900" selected data-i18n="eloClub">1900 · 进阶</option><option value="2200" data-i18n="eloMaster">2200 · 大师</option></select></label>
+    </section>
+    <details class="advanced-settings">
+      <summary data-i18n="sectionEnginePrefs">模型与下载设置</summary>
+      <label for="model-preset-select" data-i18n="modelSpecLabel">模型规格</label>
+      <select id="model-preset-select"><option value="https://weights.4chess.cc/maia3_model.bin" selected data-i18n="modelStandard">标准 · 28 MB</option><option value="https://weights.4chess.cc/maia3_23m.bin" data-i18n="modelLarge">大规格 · 104 MB</option><option value="custom" data-i18n="modelCustomOption">自定义 CDN 地址</option></select>
+      <input type="url" id="cdn-url" style="display:none" aria-label="模型 CDN URL" placeholder="https://weights.4chess.cc/maia3_model.bin">
+      <p data-i18n="modelCacheHelp">首次使用下载模型，完成后缓存在浏览器中。</p>
+    </details>
+    <aside class="fair-play-note"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m12 3 8 3v6c0 5-8 9-8 9S4 17 4 12V6z"/><path d="m8 12 3 3 5-6"/></svg><p data-i18n="fairPlayNote">对局进行中自动锁定，结束后立即解锁复盘。</p></aside>
+    <footer class="popup-footer"><span>MAIA × STOCKFISH</span><button type="button" data-theme-toggle>深色</button></footer>
+  </main>
   <script src="popup.js"></script>
+  <script type="module" src="../ui/theme.js"></script>
 </body>
 </html>

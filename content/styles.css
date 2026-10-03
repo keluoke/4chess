@@ -9,37 +9,28 @@
    - Clean, text-overflow-proof Segmented Tabs & Move Lists
    ========================================================================== */
 
-:root {
-  /* WeChat Dark Mode Color Tokens */
-  --weui-BG-0: #111111;
-  --weui-BG-1: #191919;
-  --weui-BG-2: #232323;
-  --weui-BG-3: #2c2c2c;
-  --weui-BG-4: #383838;
-
-  /* WeChat Signature Brand Green */
-  --weui-BRAND: #07C160;
-  --weui-BRAND-LIGHT: rgba(7, 193, 96, 0.16);
-  --weui-BRAND-BORDER: rgba(7, 193, 96, 0.35);
-
-  /* WeChat Status Colors */
-  --weui-RED: #FA5151;
-  --weui-RED-LIGHT: rgba(250, 81, 81, 0.16);
-  --weui-ORANGE: #FA9D3B;
-  --weui-ORANGE-LIGHT: rgba(250, 157, 59, 0.16);
-  --weui-BLUE: #576B95;
-  --weui-BLUE-LIGHT: rgba(87, 107, 149, 0.16);
-
-  /* Typography Colors */
-  --weui-FG-0: rgba(255, 255, 255, 0.9);
-  --weui-FG-HALF: rgba(255, 255, 255, 0.6);
-  --weui-FG-1: rgba(255, 255, 255, 0.5);
-  --weui-FG-2: rgba(255, 255, 255, 0.3);
-  --weui-FG-3: rgba(255, 255, 255, 0.15);
-
-  /* Borders & Dividers */
-  --weui-BORDER: rgba(255, 255, 255, 0.08);
-  --weui-BORDER-LIGHT: rgba(255, 255, 255, 0.04);
+#maia3-intuition-panel, #maia-wechat-float {
+  --weui-BG-0: var(--dg-paper);
+  --weui-BG-1: var(--dg-surface);
+  --weui-BG-2: var(--dg-raised);
+  --weui-BG-3: var(--dg-paper);
+  --weui-BG-4: var(--dg-line);
+  --weui-BRAND: var(--dg-green);
+  --weui-BRAND-LIGHT: var(--dg-green-soft);
+  --weui-BRAND-BORDER: var(--dg-line);
+  --weui-RED: var(--dg-red);
+  --weui-RED-LIGHT: var(--dg-red-soft);
+  --weui-ORANGE: var(--dg-gold);
+  --weui-ORANGE-LIGHT: var(--dg-gold-soft);
+  --weui-BLUE: var(--dg-blue);
+  --weui-BLUE-LIGHT: var(--dg-blue-soft);
+  --weui-FG-0: var(--dg-ink);
+  --weui-FG-HALF: var(--dg-muted);
+  --weui-FG-1: var(--dg-muted);
+  --weui-FG-2: var(--dg-muted);
+  --weui-FG-3: var(--dg-muted);
+  --weui-BORDER: var(--dg-line);
+  --weui-BORDER-LIGHT: var(--dg-line);
 }
 
 /* Universal CSS Box-Sizing & Reset Isolation */
@@ -1294,3 +1285,60 @@
 }
 
 
+
+/* Diverge floating study: scoped overrides, no host-page styling. */
+#maia3-intuition-panel{width:342px;max-width:calc(100vw - 24px);border-radius:12px;box-shadow:var(--dg-shadow);border:1px solid var(--dg-line);font-size:13px;line-height:1.6}
+#maia3-intuition-panel .weui-navbar{height:53px;min-height:53px;padding:0 14px;border-bottom:1px solid var(--dg-line)}
+#maia3-intuition-panel .weui-navbar__left{gap:8px}
+#maia3-intuition-panel .weui-navbar__icon{width:25px;height:25px;background:var(--dg-green);border-radius:7px;flex-shrink:0}
+#maia3-intuition-panel .weui-fork-icon{color:var(--dg-on-green)}
+#maia3-intuition-panel .weui-navbar__title{font-size:13px;letter-spacing:-.3px}
+#maia3-intuition-panel .weui-capsule{border:0;background:transparent;width:61px;border-radius:0;gap:4px;padding:0}
+#maia3-intuition-panel .weui-capsule-btn{border-radius:5px;display:grid;place-items:center;color:var(--dg-muted)}
+#maia3-intuition-panel .weui-capsule-btn:hover{background:var(--dg-green-soft);color:var(--dg-green)}
+#maia3-intuition-panel .weui-capsule-divider{display:none}
+#maia3-intuition-panel .weui-turn-tag{font-size:9px;padding:3px 5px;background:var(--dg-paper);color:var(--dg-muted);margin-left:auto}
+#maia3-intuition-panel .weui-page__bd{padding:17px;gap:16px;max-height:calc(100dvh - 125px);scrollbar-color:var(--dg-line) transparent}
+#maia3-intuition-panel .weui-cells{border:1px solid var(--dg-line);border-radius:8px;background:var(--dg-raised)}
+#maia3-intuition-panel .weui-cell{padding:9px 11px;font-size:11px}
+#maia3-intuition-panel .weui-cell__ft{font-size:10px;white-space:normal;text-align:right}
+#maia3-intuition-panel .diverge-engine-status{order:4;border:0;border-top:1px solid var(--dg-line);border-radius:0;background:transparent;padding-top:8px}
+#maia3-intuition-panel .diverge-engine-status .weui-cell{padding:4px 0;border:0}
+#maia3-intuition-panel .weui-status-dot{width:5px;height:5px;box-shadow:none}
+#maia3-intuition-panel .diverge-download{order:0;background:var(--dg-paper);border:0}
+#maia3-intuition-panel .weui-insight-box{order:1;background:var(--dg-green-soft);border:0;border-radius:8px;padding:15px;font-size:12px;line-height:1.9}
+#maia3-intuition-panel .weui-insight-box.alert-trap{background:var(--dg-gold-soft);border:0;color:var(--dg-ink)}
+#maia3-intuition-panel .weui-insight-badge{background:transparent;color:var(--dg-green);padding:0;font-size:11px}
+#maia3-intuition-panel .weui-insight-badge.badge-trap{background:transparent;color:var(--dg-gold)}
+#maia3-intuition-panel .diverge-candidates{order:2}
+#maia3-intuition-panel .weui-cells__title{font-size:11px;color:var(--dg-muted);padding:0;margin-bottom:9px}
+#maia3-intuition-panel .weui-move-item{padding:12px;border-color:var(--dg-line)}
+#maia3-intuition-panel .weui-move-item.top-pick{background:var(--dg-paper)}
+#maia3-intuition-panel .weui-move-san{font:16px var(--dg-mono);color:var(--dg-ink)}
+#maia3-intuition-panel .weui-move-prob{font:11px var(--dg-mono);color:var(--dg-muted)}
+#maia3-intuition-panel .weui-rank-tag{background:transparent;color:var(--dg-muted);font:10px var(--dg-mono);border-radius:0}
+#maia3-intuition-panel .weui-rank-tag.rank-1{background:transparent;color:var(--dg-green)}
+#maia3-intuition-panel .weui-progress-track{height:3px;background:var(--dg-paper)}
+#maia3-intuition-panel .weui-delta-tag{border:0;font-size:9px}
+#maia3-intuition-panel .weui-delta-tag.tag-best{background:var(--dg-green-soft);color:var(--dg-green)}
+#maia3-intuition-panel .weui-delta-tag.tag-slight{background:var(--dg-gold-soft);color:var(--dg-gold)}
+#maia3-intuition-panel .weui-delta-tag.tag-blunder{background:var(--dg-red-soft);color:var(--dg-red)}
+#maia3-intuition-panel .weui-review-entry{order:3;margin:0!important}
+#maia3-intuition-panel .weui-btn-review{height:40px!important;background:var(--dg-green)!important;color:var(--dg-on-green)!important;border:1px solid var(--dg-green)!important;border-radius:7px!important;font-size:12px!important;box-shadow:none;transform:none}
+#maia3-intuition-panel .weui-btn-review:disabled{cursor:not-allowed}
+#maia3-intuition-panel .weui-drawer-overlay{top:53px;background:var(--dg-surface);border-color:var(--dg-line);max-height:calc(100dvh - 150px)!important;box-shadow:var(--dg-shadow)}
+#maia3-intuition-panel .weui-drawer-header{padding:16px;border-bottom:1px solid var(--dg-line);background:var(--dg-surface)}
+#maia3-intuition-panel .weui-drawer-title{font-size:15px;letter-spacing:-.4px}
+#maia3-intuition-panel .weui-drawer-item{padding:13px 16px}
+#maia3-intuition-panel .weui-segmented-bar{background:var(--dg-paper);border:1px solid var(--dg-line)}
+#maia3-intuition-panel .weui-segment.active{background:var(--dg-green);color:var(--dg-on-green)}
+#maia3-intuition-panel .weui-preset-btn.active{background:var(--dg-green-soft);color:var(--dg-green)}
+#maia3-intuition-panel .weui-fair-play-banner{padding:29px 10px!important;line-height:1.8}
+#maia3-intuition-panel[data-fair-play-locked=true] .diverge-candidates>.weui-cells{border:0;background:var(--dg-paper)}
+#maia3-intuition-panel[data-fair-play-locked=true] .weui-turn-tag{background:var(--dg-paper);color:var(--dg-muted)}
+#maia3-intuition-panel .weui-review-overlay{top:53px}
+#maia-wechat-float{background:var(--dg-surface);border:1px solid var(--dg-line);border-radius:10px;box-shadow:var(--dg-shadow);height:43px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:var(--dg-ink)}
+#maia-wechat-float:hover{background:var(--dg-green-soft);border-color:var(--dg-green);box-shadow:var(--dg-shadow);transform:none}
+#maia-wechat-float .weui-float-dot{box-shadow:none;width:5px;height:5px}
+#maia-wechat-float .weui-float-badge{background:var(--dg-paper);color:var(--dg-muted);font:10px var(--dg-mono);border-radius:5px}
+#maia-wechat-float .weui-float-title{font-size:12px}

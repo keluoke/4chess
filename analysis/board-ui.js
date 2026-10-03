@@ -50,16 +50,16 @@ export class BoardUI {
     this.svgOverlay.innerHTML = `
       <defs>
         <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#07C160"/>
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-green)"/>
         </marker>
         <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#e6a520"/>
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-gold)"/>
         </marker>
         <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#c33"/>
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-red)"/>
         </marker>
         <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="#3B82F6"/>
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-blue)"/>
         </marker>
       </defs>
       <g id="maia-svg-arrows-group"></g>
@@ -253,16 +253,16 @@ export class BoardUI {
       const endX = p2.x - (dx / len) * shorten;
       const endY = p2.y - (dy / len) * shorten;
 
-      let strokeColor = '#07C160';
+      let strokeColor = 'var(--brand-green)';
       let markerId = 'arrow-green';
       if (arrow.color === 'gold' || arrow.color === 'yellow' || arrow.color === '#F59E0B') {
-        strokeColor = '#e6a520';
+        strokeColor = 'var(--brand-gold)';
         markerId = 'arrow-gold';
       } else if (arrow.color === 'red' || arrow.color === '#EF4444') {
-        strokeColor = '#c33';
+        strokeColor = 'var(--brand-red)';
         markerId = 'arrow-red';
       } else if (arrow.color === 'blue') {
-        strokeColor = '#3B82F6';
+        strokeColor = 'var(--brand-blue)';
         markerId = 'arrow-blue';
       }
 
@@ -299,13 +299,13 @@ export class BoardUI {
       const count = targetArrows.length;
 
       targetArrows.forEach((arrow, idx) => {
-        let labelColor = '#07C160';
+        let labelColor = 'var(--brand-green)';
         if (arrow.color === 'gold' || arrow.color === 'yellow' || arrow.color === '#F59E0B') {
-          labelColor = '#f59e0b';
+          labelColor = 'var(--brand-gold)';
         } else if (arrow.color === 'red' || arrow.color === '#EF4444') {
-          labelColor = '#ef4444';
+          labelColor = 'var(--brand-red)';
         } else if (arrow.color === 'blue') {
-          labelColor = '#3B82F6';
+          labelColor = 'var(--brand-blue)';
         }
 
         // Stagger vertical offset so multiple labels landing on the same square stay perfectly legible
@@ -325,7 +325,7 @@ export class BoardUI {
         text.setAttribute('text-anchor', 'middle');
         text.setAttribute('dominant-baseline', 'central');
         text.setAttribute('paint-order', 'stroke');
-        text.setAttribute('stroke', '#0f172a');
+        text.setAttribute('stroke', 'var(--dg-surface)');
         text.setAttribute('stroke-width', '3.5px');
         text.textContent = arrow.label;
         group.appendChild(text);

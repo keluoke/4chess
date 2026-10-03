@@ -1,0 +1,79 @@
+/* Shared, scoped design tokens. Never set host chess websites' root variables. */
+:where(.diverge-ui, #maia3-intuition-panel, #maia-wechat-float) {
+  color-scheme: light;
+  --dg-paper: #f3f2ec;
+  --dg-surface: #fcfcf9;
+  --dg-raised: #ffffff;
+  --dg-ink: #243a32;
+  --dg-muted: #65716a;
+  --dg-line: #dce1d8;
+  --dg-green: #285a46;
+  --dg-green-soft: #e7efe6;
+  --dg-on-green: #ffffff;
+  --dg-gold: #98611e;
+  --dg-gold-soft: #f5eddb;
+  --dg-blue: #376281;
+  --dg-blue-soft: #e9eff4;
+  --dg-red: #ac4b41;
+  --dg-red-soft: #f6e7e3;
+  --dg-board-light: #e9eadc;
+  --dg-board-dark: #8eaa8d;
+  --dg-shadow: 0 12px 40px #253c3214;
+  --dg-mono: "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :where(.diverge-ui, #maia3-intuition-panel, #maia-wechat-float):not([data-theme="light"]) {
+    color-scheme: dark;
+    --dg-paper: #141c18;
+    --dg-surface: #1c2721;
+    --dg-raised: #233028;
+    --dg-ink: #ecf0e6;
+    --dg-muted: #a5b3a9;
+    --dg-line: #37483d;
+    --dg-green: #a2c5a8;
+    --dg-green-soft: #2a3d2d;
+    --dg-on-green: #17231b;
+    --dg-gold: #dfb772;
+    --dg-gold-soft: #3d3322;
+    --dg-blue: #9fbed4;
+    --dg-blue-soft: #273843;
+    --dg-red: #e6a397;
+    --dg-red-soft: #3e2925;
+    --dg-board-light: #c6cfb9;
+    --dg-board-dark: #728c73;
+    --dg-shadow: 0 12px 40px #0003;
+  }
+}
+:where(.diverge-ui, #maia3-intuition-panel, #maia-wechat-float)[data-theme="dark"] {
+  color-scheme: dark;
+  --dg-paper: #141c18;
+  --dg-surface: #1c2721;
+  --dg-raised: #233028;
+  --dg-ink: #ecf0e6;
+  --dg-muted: #a5b3a9;
+  --dg-line: #37483d;
+  --dg-green: #a2c5a8;
+  --dg-green-soft: #2a3d2d;
+  --dg-on-green: #17231b;
+  --dg-gold: #dfb772;
+  --dg-gold-soft: #3d3322;
+  --dg-blue: #9fbed4;
+  --dg-blue-soft: #273843;
+  --dg-red: #e6a397;
+  --dg-red-soft: #3e2925;
+  --dg-board-light: #c6cfb9;
+  --dg-board-dark: #728c73;
+  --dg-shadow: 0 12px 40px #0003;
+}
+.diverge-ui :is(button, a, input, select, textarea, summary):focus-visible,
+:is(#maia3-intuition-panel, #maia-wechat-float) :is(button, input, select, summary):focus-visible,
+#maia-wechat-float:focus-visible {
+  outline: 3px solid var(--dg-blue);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .diverge-ui *, #maia3-intuition-panel *, #maia-wechat-float {
+    transition: none !important;
+    animation: none !important;
+  }
+}

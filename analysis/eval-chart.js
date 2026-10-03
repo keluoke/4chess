@@ -33,37 +33,37 @@ export class EvalChart {
           <defs>
             <!-- White advantage fill (upward from center) -->
             <linearGradient id="grad-white-adv" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
-              <stop offset="60%" stop-color="#ffffff" stop-opacity="0.08"/>
-              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0"/>
+              <stop offset="0%" stop-color="var(--brand-green)" stop-opacity="0.25"/>
+              <stop offset="60%" stop-color="var(--brand-green)" stop-opacity="0.08"/>
+              <stop offset="100%" stop-color="var(--brand-green)" stop-opacity="0.0"/>
             </linearGradient>
             <!-- Black advantage fill (downward from center) -->
             <linearGradient id="grad-black-adv" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#ef4444" stop-opacity="0.0"/>
-              <stop offset="40%" stop-color="#ef4444" stop-opacity="0.06"/>
-              <stop offset="100%" stop-color="#ef4444" stop-opacity="0.28"/>
+              <stop offset="0%" stop-color="var(--brand-red)" stop-opacity="0.0"/>
+              <stop offset="40%" stop-color="var(--brand-red)" stop-opacity="0.06"/>
+              <stop offset="100%" stop-color="var(--brand-red)" stop-opacity="0.28"/>
             </linearGradient>
             <!-- Subtle stroke gradient -->
             <linearGradient id="grad-stroke-line" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#94a3b8"/>
-              <stop offset="50%" stop-color="#f8fafc"/>
-              <stop offset="100%" stop-color="#cbd5e1"/>
+              <stop offset="0%" stop-color="var(--brand-green)"/>
+              <stop offset="50%" stop-color="var(--brand-green)"/>
+              <stop offset="100%" stop-color="var(--brand-green)"/>
             </linearGradient>
           </defs>
 
           <!-- Dual Zone Background -->
-          <rect x="0" y="0" width="1000" height="80" fill="rgba(255, 255, 255, 0.02)"/>
-          <rect x="0" y="80" width="1000" height="80" fill="rgba(0, 0, 0, 0.18)"/>
+          <rect x="0" y="0" width="1000" height="80" fill="var(--dg-surface)"/>
+          <rect x="0" y="80" width="1000" height="80" fill="var(--dg-paper)"/>
 
           <!-- Horizontal Reference Gridlines -->
-          <line x1="0" y1="28" x2="960" y2="28" stroke="rgba(255, 255, 255, 0.07)" stroke-dasharray="3 4" stroke-width="1"/>
-          <text x="988" y="32" fill="rgba(255, 255, 255, 0.35)" font-size="10" font-family="monospace" text-anchor="end">+3</text>
+          <line x1="0" y1="28" x2="960" y2="28" stroke="var(--border-color)" stroke-dasharray="3 4" stroke-width="1"/>
+          <text x="988" y="32" fill="var(--text-muted)" font-size="10" font-family="monospace" text-anchor="end">+3</text>
 
-          <line x1="0" y1="80" x2="960" y2="80" stroke="rgba(255, 255, 255, 0.22)" stroke-width="1.2"/>
-          <text x="988" y="84" fill="rgba(255, 255, 255, 0.45)" font-size="10" font-family="monospace" text-anchor="end">0</text>
+          <line x1="0" y1="80" x2="960" y2="80" stroke="var(--border-color)" stroke-width="1.2"/>
+          <text x="988" y="84" fill="var(--text-muted)" font-size="10" font-family="monospace" text-anchor="end">0</text>
 
-          <line x1="0" y1="132" x2="960" y2="132" stroke="rgba(255, 255, 255, 0.07)" stroke-dasharray="3 4" stroke-width="1"/>
-          <text x="988" y="136" fill="rgba(255, 255, 255, 0.35)" font-size="10" font-family="monospace" text-anchor="end">-3</text>
+          <line x1="0" y1="132" x2="960" y2="132" stroke="var(--border-color)" stroke-dasharray="3 4" stroke-width="1"/>
+          <text x="988" y="136" fill="var(--text-muted)" font-size="10" font-family="monospace" text-anchor="end">-3</text>
 
           <!-- Filled Curve Areas -->
           <path id="eval-white-area" fill="url(#grad-white-adv)"/>
@@ -76,11 +76,11 @@ export class EvalChart {
           <g id="eval-dots-group"></g>
 
           <!-- Interactive Hover Guide Line -->
-          <line id="eval-hover-line" x1="0" y1="0" x2="0" y2="160" stroke="rgba(255, 255, 255, 0.4)" stroke-width="1.5" stroke-dasharray="2 2" opacity="0"/>
+          <line id="eval-hover-line" x1="0" y1="0" x2="0" y2="160" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="2 2" opacity="0"/>
 
           <!-- Active Move Scrub Cursor -->
-          <line id="eval-scrub-line" x1="0" y1="0" x2="0" y2="160" stroke="#e6a520" stroke-width="2" opacity="0"/>
-          <circle id="eval-scrub-dot" cx="0" cy="80" r="4.5" fill="#e6a520" stroke="#ffffff" stroke-width="1.5" opacity="0"/>
+          <line id="eval-scrub-line" x1="0" y1="0" x2="0" y2="160" stroke="var(--brand-gold)" stroke-width="2" opacity="0"/>
+          <circle id="eval-scrub-dot" cx="0" cy="80" r="4.5" fill="var(--brand-gold)" stroke="var(--dg-surface)" stroke-width="1.5" opacity="0"/>
         </svg>
       </div>
     `;
@@ -124,7 +124,7 @@ export class EvalChart {
       const isWhite = item.turn === 'w';
       const sideText = isWhite ? '白方' : '黑方';
       const evalSign = item.cp > 0 ? `+${(item.cp / 100).toFixed(2)}` : (item.cp / 100).toFixed(2);
-      const evalColor = item.cp > 40 ? '#4ade80' : (item.cp < -40 ? '#f87171' : 'var(--text-muted)');
+      const evalColor = item.cp > 40 ? 'var(--brand-green)' : (item.cp < -40 ? 'var(--brand-red)' : 'var(--text-muted)');
 
       this.tooltip.replaceChildren();
 
@@ -140,25 +140,25 @@ export class EvalChart {
 
       if (item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition) {
         const badge = document.createElement('span');
-        badge.style.color = '#00d2ff';
+        badge.style.color = 'var(--brand-blue)';
         badge.style.fontWeight = '700';
         badge.textContent = item.isCombinationFollowup ? ' · ✨ 妙手组合延续' : ' · ✨ 妙手 (突破直觉)';
         topRow.appendChild(badge);
       } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
         const badge = document.createElement('span');
-        badge.style.color = '#f59e0b';
+        badge.style.color = 'var(--brand-gold)';
         badge.style.fontWeight = '700';
         badge.textContent = ` · 🫤 俗手 (直觉陷阱 -${item.lossPawns})`;
         topRow.appendChild(badge);
       } else if (item.severity === 'blunder') {
         const badge = document.createElement('span');
-        badge.style.color = '#f87171';
+        badge.style.color = 'var(--brand-red)';
         badge.style.fontWeight = '700';
         badge.textContent = ` · 大漏 (${item.lossPawns})`;
         topRow.appendChild(badge);
       } else if (item.severity === 'mistake') {
         const badge = document.createElement('span');
-        badge.style.color = '#fbbf24';
+        badge.style.color = 'var(--brand-gold)';
         badge.style.fontWeight = '700';
         badge.textContent = ` · 失误 (${item.lossPawns})`;
         topRow.appendChild(badge);
@@ -269,9 +269,9 @@ export class EvalChart {
     if (this.cursorBadge) {
       this.cursorBadge.textContent = evalSign;
       if (item.cp > 50) {
-        this.cursorBadge.style.color = '#4ade80';
+        this.cursorBadge.style.color = 'var(--brand-green)';
       } else if (item.cp < -50) {
-        this.cursorBadge.style.color = '#f87171';
+        this.cursorBadge.style.color = 'var(--brand-red)';
       } else {
         this.cursorBadge.style.color = 'var(--text-muted)';
       }
@@ -352,25 +352,25 @@ export class EvalChart {
         circle.setAttribute('cx', p.x);
         circle.setAttribute('cy', p.y);
 
-        let color = '#f59e0b';
+        let color = 'var(--brand-gold)';
         let radius = '4.5';
         if (isBeyond) {
-          color = '#00d2ff';
+          color = 'var(--brand-blue)';
           radius = '5.5';
         } else if (isTrap) {
-          color = '#f59e0b';
+          color = 'var(--brand-gold)';
           radius = '5';
         } else if (isBlunder) {
-          color = '#ef4444';
+          color = 'var(--brand-red)';
           radius = '5';
         } else if (isMistake) {
-          color = '#f97316';
+          color = 'var(--brand-gold)';
           radius = '4';
         }
 
         circle.setAttribute('r', radius);
         circle.setAttribute('fill', color);
-        circle.setAttribute('stroke', '#ffffff');
+        circle.setAttribute('stroke', 'var(--dg-surface)');
         circle.setAttribute('stroke-width', '1.5');
         circle.style.cursor = 'pointer';
         circle.style.transition = 'transform 0.15s ease';

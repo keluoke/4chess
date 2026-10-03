@@ -1,5 +1,5 @@
 /**
- * Popup Logic for Maia-3 Extension (Android Material Design 3 Edition)
+ * Diverge popup preferences and entry points
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -9,9 +9,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const presetSelect = document.getElementById('model-preset-select');
   const panelSwitch = document.getElementById('toggle-panel-switch');
 
-  // 1. Dual Engine Status
-  statusPill.textContent = '🟢 JS Float32 + SF19 就绪';
-  statusPill.style.color = '#07C160';
+  // 0. Dynamic i18n Translation
+  if (globalThis.chrome?.i18n?.getMessage) {
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      const key = el.getAttribute('data-i18n');
+      const msg = chrome.i18n.getMessage(key);
+      if (msg) el.textContent = msg;
+    });
+  }
+
+  // Popup has no engine connection: describe its purpose, never claim readiness.
+  statusPill.textContent = globalThis.chrome?.i18n?.getMessage('reviewOnly') || '仅供复盘';
+  if (globalThis.chrome?.i18n?.getUILanguage) document.documentElement.lang = chrome.i18n.getUILanguage();
+  if (!globalThis.chrome?.storage?.local) return;
 
   // 2. Query active tab to sync panel switch state
   if (chrome.tabs && chrome.tabs.query) {

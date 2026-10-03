@@ -273,7 +273,7 @@ class AnalysisStudioApp {
         const file = e.target.files?.[0];
         if (file) {
           this.handleFileUpload(file);
-          this.el.pgnModal.classList.remove('open');
+          this.closePgnModal();
           this.el.fileInput.value = '';
         }
       });
@@ -332,7 +332,17 @@ class AnalysisStudioApp {
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
-      if (['input', 'textarea', 'select'].includes(document.activeElement?.tagName?.toLowerCase())) return;
+      if (this.el.pgnModal.classList.contains('open')) {
+        if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
+        if (e.key === 'Tab') {
+          const controls = [...this.el.pgnModal.querySelectorAll('button, textarea, input, select')].filter(el => !el.disabled && el.getClientRects().length);
+          const first = controls[0], last = controls[controls.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        }
+        return;
+      }
+      if (['input', 'textarea', 'select', 'button', 'a'].includes(document.activeElement?.tagName?.toLowerCase())) return;
 
       if (e.key === 'ArrowLeft' || e.key === 'j') {
         e.preventDefault();
@@ -420,6 +430,11 @@ class AnalysisStudioApp {
 
   openPgnModal() {
     if (this.el.pgnModal) {
+      this.modalReturnFocus = document.activeElement;
+      this.el.pgnModal.inert = false;
+      this.el.pgnModal.setAttribute('aria-hidden', 'false');
+      document.querySelector('.studio-navbar').inert = true;
+      document.querySelector('.studio-layout').inert = true;
       this.el.pgnModal.classList.add('open');
       this.el.pgnInput?.focus();
     }
@@ -428,6 +443,11 @@ class AnalysisStudioApp {
   closePgnModal() {
     if (this.el.pgnModal) {
       this.el.pgnModal.classList.remove('open');
+      this.el.pgnModal.inert = true;
+      this.el.pgnModal.setAttribute('aria-hidden', 'true');
+      document.querySelector('.studio-navbar').inert = false;
+      document.querySelector('.studio-layout').inert = false;
+      this.modalReturnFocus?.focus();
     }
   }
 
@@ -760,8 +780,8 @@ class AnalysisStudioApp {
             <polyline points="15 7 18 4 21 7"></polyline>
           </svg>
         </div>
-        <div class="home-hero-title">全盘复盘 · 人机分歧研判</div>
-        <div class="home-hero-subtitle">纯前端运行的 Maia-3 人类直觉与 Stockfish 19 双引擎，挖掘关键妙手与直觉俗手</div>
+        <div class="home-hero-title">从一盘棋开始</div>
+        <div class="home-hero-subtitle">回看实战选择，找到妙手与直觉容易错过的机会。</div>
       </div>
 
       <div class="home-hero-actions">
@@ -771,7 +791,7 @@ class AnalysisStudioApp {
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
           </svg>
-          导入已完赛对局 (PGN / 网址)
+          导入已完赛对局 →
         </button>
       </div>
 
@@ -826,6 +846,8 @@ class AnalysisStudioApp {
     this.isBranching = false;
     this.branchFen = null;
     if (this.el.branchBanner) this.el.branchBanner.style.display = 'none';
+
+    this.el.btnReanalyze.disabled = true;
 
     // 2. Reset UI state immediately
     this.evalChart.setData([]);
@@ -905,6 +927,7 @@ class AnalysisStudioApp {
     }
 
     this.positions = positions;
+    this.el.btnReanalyze.disabled = false;
     this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
 
     // Update metadata headers
@@ -1232,7 +1255,7 @@ class AnalysisStudioApp {
         if (item.maiaTopSan) {
           subProb.appendChild(document.createTextNode('自然直觉首选: '));
           const topStrong = document.createElement('strong');
-          topStrong.style.color = '#e6a520';
+          topStrong.style.color = 'var(--brand-gold)';
           topStrong.textContent = item.maiaTopSan;
           subProb.appendChild(topStrong);
           if (item.maiaTopProb) {
@@ -1413,7 +1436,7 @@ class AnalysisStudioApp {
     if (this.positions?.isPartial) {
       const partialRow = document.createElement('div');
       partialRow.className = 'notation-partial-notice';
-      partialRow.style.cssText = 'padding: 8px 12px; margin: 8px 0; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; font-size: 11.5px; color: #f59e0b;';
+      partialRow.style.cssText = 'padding: 8px 12px; margin: 8px 0; background: var(--dg-gold-soft); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; font-size: 11.5px; color: var(--brand-gold);';
       partialRow.textContent = `⚠️ 棋谱在第 ${this.positions.stoppedAtPly} 步 ("${this.positions.unparsedSan || '未知'}") 存在非法走法，后续未加载`;
       this.el.moveNotationTable.appendChild(partialRow);
     }
@@ -1523,13 +1546,13 @@ class AnalysisStudioApp {
 
       // 1. Engine recommendation
       this.el.compareEngineSan.textContent = moveReview.bestSan || '—';
-      this.el.compareEngineSan.style.color = 'var(--brand-green)';
+      this.el.compareEngineSan.style.color = 'var(--brand-blue)';
       this.el.compareEngineMeta.textContent = moveReview.evalBefore ? `评估 ${moveReview.evalBefore}` : '';
 
       // 2. Maia intuition (from pre-computed data, with real-time fallback)
       if (moveReview.maiaTopSan) {
         this.el.compareIntuitionSan.textContent = moveReview.maiaTopSan;
-        this.el.compareIntuitionSan.style.color = '#e6a520';
+        this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
         this.el.compareIntuitionMeta.textContent = moveReview.maiaTopProb != null
           ? `概率 ${moveReview.maiaTopProb.toFixed(1)}%`
           : '';
@@ -1552,7 +1575,7 @@ class AnalysisStudioApp {
             moveReview.maiaTopProb = typeof top.prob === 'number' ? top.prob : null;
 
             this.el.compareIntuitionSan.textContent = top.san;
-            this.el.compareIntuitionSan.style.color = '#e6a520';
+            this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
             this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
 
             // Update match badge
@@ -1563,11 +1586,11 @@ class AnalysisStudioApp {
             const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
 
             if (isBeyond) {
-              this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
+              this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'var(--dg-blue-soft)', 'var(--brand-blue)');
             } else if (isTrap) {
-              this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
+              this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'var(--dg-gold-soft)', 'var(--brand-gold)');
             } else if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
-              this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
+              this.setComparePlayedSan(moveReview.san, '= 直觉', 'var(--dg-gold-soft)', 'var(--brand-gold)');
             } else {
               this.setComparePlayedSan(moveReview.san);
             }
@@ -1617,15 +1640,15 @@ class AnalysisStudioApp {
 
       // Add match indicator on played card
       if (isBeyond) {
-        this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'rgba(0, 210, 255, 0.18)', '#00d2ff');
+        this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'var(--dg-blue-soft)', 'var(--brand-blue)');
       } else if (isTrap) {
-        this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'rgba(245, 158, 11, 0.18)', '#f59e0b');
+        this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'var(--dg-gold-soft)', 'var(--brand-gold)');
       } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
         this.setComparePlayedSan(moveReview.san, '= 引擎');
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
-        this.setComparePlayedSan(moveReview.san, '= 直觉', 'rgba(230,165,32,0.15)', '#e6a520');
+        this.setComparePlayedSan(moveReview.san, '= 直觉', 'var(--dg-gold-soft)', 'var(--brand-gold)');
       } else if (moveReview.isBookMove) {
-        this.setComparePlayedSan(moveReview.san, '📖 理论着法', 'rgba(56, 189, 248, 0.15)', '#38bdf8');
+        this.setComparePlayedSan(moveReview.san, '📖 理论着法', 'var(--dg-blue-soft)', 'var(--brand-blue)');
       } else {
         this.setComparePlayedSan(moveReview.san);
       }
@@ -1633,32 +1656,32 @@ class AnalysisStudioApp {
       // --- Badge ---
       if (isBeyond) {
         this.el.divergenceBadge.textContent = '✨ 妙手 · 优于人类直觉走法';
-        this.el.divergenceBadge.style.color = '#00d2ff';
-        this.el.divergenceBadge.style.background = 'rgba(0, 210, 255, 0.12)';
+        this.el.divergenceBadge.style.color = 'var(--brand-blue)';
+        this.el.divergenceBadge.style.background = 'var(--dg-blue-soft)';
       } else if (isTrap) {
         this.el.divergenceBadge.textContent = '🫤 俗手 · 自然但吃亏的选择';
-        this.el.divergenceBadge.style.color = '#f59e0b';
-        this.el.divergenceBadge.style.background = 'rgba(245, 158, 11, 0.12)';
+        this.el.divergenceBadge.style.color = 'var(--brand-gold)';
+        this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
       } else if (moveReview.isBookMove) {
         this.el.divergenceBadge.textContent = `📖 开局理论着法${moveReview.openingName ? ' · ' + moveReview.openingName : ''}`;
-        this.el.divergenceBadge.style.color = '#38bdf8';
-        this.el.divergenceBadge.style.background = 'rgba(56, 189, 248, 0.12)';
+        this.el.divergenceBadge.style.color = 'var(--brand-blue)';
+        this.el.divergenceBadge.style.background = 'var(--dg-blue-soft)';
       } else if (moveReview.severity === 'blunder') {
         this.el.divergenceBadge.textContent = '⚠️ 大漏';
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
-        this.el.divergenceBadge.style.background = 'rgba(250, 81, 81, 0.12)';
+        this.el.divergenceBadge.style.background = 'var(--dg-red-soft)';
       } else if (moveReview.severity === 'mistake') {
         this.el.divergenceBadge.textContent = '⚠️ 失误';
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
-        this.el.divergenceBadge.style.background = 'rgba(250, 81, 81, 0.12)';
+        this.el.divergenceBadge.style.background = 'var(--dg-red-soft)';
       } else if (moveReview.severity === 'inaccuracy') {
         this.el.divergenceBadge.textContent = '⚡ 疑问手';
         this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-        this.el.divergenceBadge.style.background = 'rgba(250, 157, 59, 0.12)';
+        this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
       } else {
         this.el.divergenceBadge.textContent = '✓ 正常';
         this.el.divergenceBadge.style.color = 'var(--brand-green)';
-        this.el.divergenceBadge.style.background = 'rgba(7, 193, 96, 0.12)';
+        this.el.divergenceBadge.style.background = 'var(--dg-green-soft)';
       }
 
       // Display detailed divergence note if present
@@ -1675,7 +1698,7 @@ class AnalysisStudioApp {
         arrows.push({
           from: moveReview.bestUci.slice(0, 2),
           to: moveReview.bestUci.slice(2, 4),
-          color: 'green',
+          color: 'blue',
           label: moveReview.bestSan
         });
       }
@@ -1740,7 +1763,7 @@ class AnalysisStudioApp {
         if (pred && pred.moves && pred.moves.length > 0) {
           const top = pred.moves[0];
           this.el.compareIntuitionSan.textContent = top.san || '—';
-          this.el.compareIntuitionSan.style.color = '#e6a520';
+          this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
           this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
           if (top.uci) {
             arrows.push({
@@ -1765,12 +1788,12 @@ class AnalysisStudioApp {
           if (this.currentPly !== targetPly) return;
           if (sfRes && sfRes.bestMove) {
             this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
-            this.el.compareEngineSan.style.color = 'var(--brand-green)';
+            this.el.compareEngineSan.style.color = 'var(--brand-blue)';
             this.el.compareEngineMeta.textContent = `评估 ${sfRes.score}`;
             arrows.push({
               from: sfRes.bestMove.fromSq,
               to: sfRes.bestMove.toSq,
-              color: 'green',
+              color: 'blue',
               label: sfRes.bestMove.san
             });
             this.boardUI.setArrows(arrows);
@@ -1797,7 +1820,7 @@ class AnalysisStudioApp {
     if (this.el.divergenceBadge) {
       this.el.divergenceBadge.textContent = '局面研判';
       this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-      this.el.divergenceBadge.style.background = 'rgba(250, 157, 59, 0.12)';
+      this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
     }
   }
 
@@ -1831,7 +1854,7 @@ class AnalysisStudioApp {
       if (pred && pred.moves && pred.moves.length > 0) {
         const m = pred.moves[0];
         this.el.compareIntuitionSan.textContent = m.san || '—';
-        this.el.compareIntuitionSan.style.color = '#e6a520';
+        this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
         this.el.compareIntuitionMeta.textContent = m.prob != null ? `概率 ${m.prob.toFixed(1)}%` : '';
         if (m.uci) {
           arrows.push({
@@ -1851,12 +1874,12 @@ class AnalysisStudioApp {
         if (!this.isBranching || this.branchFen !== newFen) return;
         if (sfRes && sfRes.bestMove) {
           this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
-          this.el.compareEngineSan.style.color = 'var(--brand-green)';
+          this.el.compareEngineSan.style.color = 'var(--brand-blue)';
           this.el.compareEngineMeta.textContent = `评估 ${sfRes.score} (d${sfRes.depth})`;
           arrows.push({
             from: sfRes.bestMove.fromSq,
             to: sfRes.bestMove.toSq,
-            color: 'green',
+            color: 'blue',
             label: `${sfRes.bestMove.san || ''} (${sfRes.score})`
           });
           this.boardUI.setArrows(arrows);

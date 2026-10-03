@@ -4,13 +4,15 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-v1.2.0';
+const CACHE_NAME = '4chess-review-v1.2.0-ui-v2';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
   './analysis.js',
   './analysis.css',
+  '../ui/theme.css',
+  '../ui/theme.js',
   './board-ui.js',
   './chess-pieces.js',
   './eval-chart.js',

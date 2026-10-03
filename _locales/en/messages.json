@@ -1,0 +1,118 @@
+{
+  "extensionName": {
+    "message": "Diverge: Chess AI Review (Maia & Stockfish)",
+    "description": "Extension title"
+  },
+  "extensionDescription": {
+    "message": "In-browser chess review with Maia human intuition vs Stockfish engine best moves. Move heatmaps & 100% private local analysis.",
+    "description": "Short description"
+  },
+  "actionTitle": {
+    "message": "Diverge Chess Settings",
+    "description": "Action icon tooltip"
+  },
+  "popupSubtitle": {
+    "message": "Human intuition · Engine insight",
+    "description": "Popup subtitle below Diverge"
+  },
+  "statusReady": {
+    "message": "🟢 JS Float32 + SF19 Ready",
+    "description": "Engine ready status pill"
+  },
+  "floatingPanelTitle": {
+    "message": "Floating board panel",
+    "description": "Floating panel switch title"
+  },
+  "floatingPanelDesc": {
+    "message": "A closer look at each position",
+    "description": "Floating panel switch description"
+  },
+  "btnReviewStudio": {
+    "message": "Open Review Studio",
+    "description": "Open review studio button"
+  },
+  "btnLichess": {
+    "message": "Lichess Analysis",
+    "description": "Open Lichess analysis board"
+  },
+  "btnChesscom": {
+    "message": "Chess.com Analysis",
+    "description": "Open Chess.com analysis board"
+  },
+  "sectionEnginePrefs": {
+    "message": "Model & download settings",
+    "description": "Section header for engine preferences"
+  },
+  "defaultEloLabel": {
+    "message": "Intuition rating",
+    "description": "Default Elo label"
+  },
+  "eloBeginner": {
+    "message": "1100 (Beginner)",
+    "description": "Elo 1100 label"
+  },
+  "eloIntermediate": {
+    "message": "1500 (Intermediate)",
+    "description": "Elo 1500 label"
+  },
+  "eloClub": {
+    "message": "1900 (Advanced / Club)",
+    "description": "Elo 1900 label"
+  },
+  "eloMaster": {
+    "message": "2200 (Master)",
+    "description": "Elo 2200 label"
+  },
+  "dualEngineArchLabel": {
+    "message": "Dual-Engine Architecture",
+    "description": "Dual engine label"
+  },
+  "modelSpecLabel": {
+    "message": "Model Size",
+    "description": "Model spec label"
+  },
+  "modelCustomOption": {
+    "message": "Custom CDN address",
+    "description": "Custom model option"
+  },
+  "sectionFeatures": {
+    "message": "Core Architecture Highlights",
+    "description": "Core features section title"
+  },
+  "featureChessformer": {
+    "message": "64-square independent attention transformer",
+    "description": "Chessformer feature"
+  },
+  "featureSliced": {
+    "message": "Non-blocking sliced computing for smooth 60FPS board interaction",
+    "description": "Sliced computing feature"
+  },
+  "featureLru": {
+    "message": "LRU bidirectional memory cache: 0ms instant move replay",
+    "description": "LRU cache feature"
+  },
+  "reviewOnly": {
+    "message": "Review only"
+  },
+  "popupHeadline": {
+    "message": "Every move. Another possibility."
+  },
+  "popupIntro": {
+    "message": "Revisit your choices. Find moves beyond intuition."
+  },
+  "eloHelp": {
+    "message": "For Maia move predictions"
+  },
+  "modelStandard": {
+    "message": "Standard · 28 MB"
+  },
+  "modelLarge": {
+    "message": "Large · 104 MB"
+  },
+  "modelCacheHelp": {
+    "message": "Downloaded on first use, then cached in your browser."
+  },
+  "fairPlayNote": {
+    "message": "Locked during live games. Review unlocks when the game ends."
+  }
+}

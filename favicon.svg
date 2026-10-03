@@ -4,9 +4,20 @@
       <stop offset="0%" stop-color="#141c2c"/>
       <stop offset="100%" stop-color="#090d15"/>
     </linearGradient>
+    <!-- 8x8 标准国际象棋棋盘暗纹 (64/8 = 8px 每格) -->
+    <pattern id="chess-8x8" width="16" height="16" patternUnits="userSpaceOnUse">
+      <rect width="8" height="8" fill="rgba(255, 255, 255, 0.055)"/>
+      <rect x="8" width="8" height="8" fill="transparent"/>
+      <rect y="8" width="8" height="8" fill="transparent"/>
+      <rect x="8" y="8" width="8" height="8" fill="rgba(255, 255, 255, 0.055)"/>
+    </pattern>
   </defs>
+
   <!-- Background rounded rect -->
   <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+
+  <!-- 8x8 Chessboard pattern -->
+  <rect width="64" height="64" rx="15" fill="url(#chess-8x8)"/>
   <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" stroke="rgba(255,255,255,0.09)" stroke-width="1.5"/>
 
   <!-- Fork stem -->

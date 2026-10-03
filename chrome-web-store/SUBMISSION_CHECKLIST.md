@@ -15,23 +15,23 @@ Chrome 商店仅接受 **ZIP 包**。根据项目架构铁律，**严禁将大�
 cd /Volumes/AI/coding/simoextension
 
 # 打包纯轻量运行包（仅包含运行时必须的脚本、静态资源及 1.7MB Stockfish WASM，压缩后仅约 1.3 MB）
-zip -r -X ../diverge-extension-v1.0.0.zip \
+zip -r -X ../diverge-extension-v1.0.2.zip \
   manifest.json background.js index.html favicon.svg \
-  analysis content engine lib popup icons \
+  _locales analysis content engine lib popup icons ui \
   -x "*.DS_Store" "*__MACOSX*"
 ```
 
 > **打包安全自检：**
 > - ✅ **严禁包含 `models/` 目录**：Maia-3 模型权重 100% 走 CDN（`https://weights.4chess.cc/...`）动态分发并缓存在浏览器本地，严禁塞入 28MB+ 文件，保障上传秒过审。
 > - ✅ **排除无关工程目录**：已自动排除 `scripts/`（开发测试脚本）、`chrome-web-store/`（提审素材）、`functions/` 与 `cloudflare/`（云端部署配置）、`.git/`。
-> - ✅ **包含完整运行资源**：`manifest.json`、`background.js`、`content/`（守卫与悬浮球）、`engine/`（核心驱动）、`lib/`（Stockfish 19 WASM）、`analysis/`（全盘分析工作台）、`icons/`（16/48/128/svg）。
+> - ✅ **包含完整运行资源**：`manifest.json`、`background.js`、`content/`（守卫与悬浮球）、`engine/`（核心驱动）、`lib/`（Stockfish 19 WASM）、`analysis/`（全盘分析工作台）、`icons/`（16/48/128/svg）、`ui/`（主题与设计令牌）。
 
 ---
 
 ## 二、Developer Dashboard 提审操作流程
 
 1. 登录 [Chrome 开发者控制台 (Chrome Web Store Developer Dashboard)](https://chrome.google.com/webstore/devconsole/)。
-2. 点击「新建项目」→ 上传刚才生成的 `diverge-extension-v1.0.0.zip`（体积约 1.3MB，上传极快）。
+2. 点击「新建项目」→ 上传刚才生成的 `diverge-extension-v1.0.2.zip`（体积约 1.3MB，上传极快）。
 3. **商品详情（Store Listing）**（文案见 `STORE_LISTING.md`）：
    - 名称：`歧路 Diverge · 人类直觉与双引擎国际象棋复盘` / `Diverge · Chess Intuition & Dual-Engine Review`
    - 简短说明与详细说明（粘贴 `STORE_LISTING.md` 中的中英双语介绍）
@@ -64,6 +64,7 @@ zip -r -X ../diverge-extension-v1.0.0.zip \
 |---|---|---|---|
 | **扩展主图标** | 必需 | 128×128 (PNG) | `icons/icon128.png`（已包含标准歧路品牌矢量转图） |
 | **小促销图块 (Small promo tile)** | 推荐（用于商店搜索精选） | 440×280 (PNG) | `chrome-web-store/images/small-promo-tile-440x280.png` |
+| **大横幅 (Marquee promo tile)** | 用于商店首页精选展示 | 1400×560 (PNG) | `chrome-web-store/images/marquee-promo-tile-1400x560.png` |
 | **功能截图 (Screenshots)** | 必需（1–5张） | 1280×800 或 640×400 | `chrome-web-store/images/screenshot-*.png` |
 
 > **建议上传 4 张真实复盘截图：**
@@ -72,7 +73,7 @@ zip -r -X ../diverge-extension-v1.0.0.zip \
 > 3. **「歧路 Diverge」轻量悬浮面板**：展示胶囊按钮、直觉等级分调节与极简双引擎状态。—— ⚠️ 仍为 AI 概念图，建议替换真实截图
 > 4. **实时对局公平竞技锁定状态**：展示对局进行中的锁定界面，向审核团队直观证明防作弊机制。—— ⚠️ 仍为 AI 概念图，建议替换真实截图
 >
-> 小促销图块已重绘为纯文字版式：**「歧路 Diverge」+ slogan「人类直觉 × 引擎最优」**（PIL 程序绘制，440×280，文字清晰无水印）。
+> 两张促销图块均为纯文字版式：**「歧路 Diverge」+ 英文 slogan「Chess AI Review (Maia & Stockfish)」**（PIL 程序绘制，440×280 与 1400×560，深色品牌底、绿色点缀，文字清晰无水印）。
 
 ---
 
