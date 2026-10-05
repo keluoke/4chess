@@ -376,12 +376,27 @@ export function applyTranslations() {
   // Update document title
   document.title = t('appTitle');
 
-  // Update language toggle button text
+  // Update language toggle button text and ensure click binding
   const langBtn = document.getElementById('btn-lang-toggle');
   if (langBtn) {
     langBtn.textContent = currentLang === 'zh' ? 'English' : '中文';
     langBtn.setAttribute('aria-label', currentLang === 'zh' ? 'Switch to English' : '切换为中文');
+    if (!langBtn.__i18nBound) {
+      langBtn.__i18nBound = true;
+      langBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleLanguage();
+      });
+    }
   }
+
+  // Update theme toggle buttons to reflect language
+  document.querySelectorAll('[data-theme-toggle]').forEach(button => {
+    const isDark = (document.body.dataset.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+    const isEn = currentLang === 'en';
+    button.textContent = isDark ? (isEn ? 'Light' : '浅色') : (isEn ? 'Dark' : '深色');
+    button.setAttribute('aria-label', isEn ? `Switch to ${isDark ? 'light' : 'dark'} theme` : `切换为${isDark ? '浅色' : '深色'}界面`);
+  });
 
   // Notify registered callbacks
   listeners.forEach((fn) => {
@@ -431,6 +446,16 @@ export function initI18n() {
       const navLang = navigator.language || navigator.userLanguage || '';
       currentLang = navLang.toLowerCase().startsWith('zh') ? 'zh' : 'en';
     }
+  }
+
+  // Bind toggle click as early as possible
+  const langBtn = document.getElementById('btn-lang-toggle');
+  if (langBtn && !langBtn.__i18nBound) {
+    langBtn.__i18nBound = true;
+    langBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleLanguage();
+    });
   }
 
   // Check chrome.storage.local asynchronously if available

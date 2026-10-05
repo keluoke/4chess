@@ -15,6 +15,14 @@
   <link rel="stylesheet" href="analysis.css">
 </head>
 <body class="diverge-ui">
+  <script>
+    if (location.protocol === 'file:') {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'background: #991b1b; color: #fff; padding: 10px 16px; font-size: 13px; text-align: center; position: sticky; top: 0; z-index: 99999; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+      banner.innerHTML = '⚠️ <strong>浏览器安全限制 (file:// 协议)</strong>：直接双击本地 HTML 文件会阻断浏览器 ES Module 脚本加载导致功能无法响应。请通过<strong>插件弹窗「打开复盘研究室」</strong>、或访问 <strong><a href="https://4chess.cc" target="_blank" style="color: #fef08a; text-decoration: underline;">https://4chess.cc</a></strong>、或启动本地 HTTP 服务预览。';
+      document.body.prepend(banner);
+    }
+  </script>
   <!-- Header Navbar -->
   <header class="studio-navbar">
     <div class="studio-brand">

@@ -95,10 +95,10 @@ class AnalysisStudioApp {
     this.playTimer = null;
     this.currentDivergenceFilter = 'all';
 
+    this.initElements();
     initI18n();
     onLanguageChange(() => this.refreshAfterLanguageChange());
 
-    this.initElements();
     this.initEngines();
     this.initUI();
     this.bindEvents();
@@ -255,8 +255,9 @@ class AnalysisStudioApp {
   }
 
   bindEvents() {
-    // Language Toggle
-    if (this.el.btnLangToggle) {
+    // Language Toggle (if not already bound by i18n module)
+    if (this.el.btnLangToggle && !this.el.btnLangToggle.__i18nBound) {
+      this.el.btnLangToggle.__i18nBound = true;
       this.el.btnLangToggle.addEventListener('click', () => {
         toggleLanguage();
       });
@@ -446,6 +447,8 @@ class AnalysisStudioApp {
   }
 
   refreshAfterLanguageChange() {
+    if (!this.el) return;
+
     // 1. Meta player names if default
     if (this.el.metaWhite) {
       if (this.el.metaWhite.textContent.includes('白方') || this.el.metaWhite.textContent.includes('White')) {
