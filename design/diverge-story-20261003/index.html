@@ -1,0 +1,881 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="歧路：把实战着法、Maia 人类走法预测与 Stockfish 搜索建议放在同一张棋盘上。8 页图文介绍与复盘训练方法。"><title>我给自己做了个 Chrome 里的国际象棋对比引擎 · 歧路</title><script>if(new URLSearchParams(location.search).has("export"))document.documentElement.classList.add("export")</script><style>:root {
+  --paper:#f5f2e9;
+  --ink:#203d32;
+  --green:#285a46;
+  --gold:#a66a24;
+  --orange:#bd5638;
+  --muted:#677268;
+  --line:#d5d8cc;
+  --soft:#e6ecdf;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --serif:"Songti SC","STSong",serif
+}
+* {
+  box-sizing:border-box
+}
+html {
+  scroll-behavior:smooth
+}
+body {
+  margin:0;
+  background:#e8e9e2;
+  color:var(--ink);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased
+}
+a {
+  color:inherit;
+  text-underline-offset:5px
+}
+.toolbar {
+  max-width:1080px;
+  margin:24px auto;
+  padding:0 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:16px;
+  gap:20px
+}
+.toolbar a {
+  white-space:nowrap
+}
+.pages {
+  display:grid;
+  gap:28px;
+  padding-bottom:32px
+}
+.page {
+  width:100%;
+  max-width:1080px;
+  margin:auto;
+  background:var(--paper);
+  padding:66px 78px 42px;
+  min-height:1360px;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden
+}
+.page:before {
+  content:"";
+  position:absolute;
+  top:0;
+  left:0;
+  width:100%;
+  height:7px;
+  background:var(--green)
+}
+.page-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid var(--line);
+  padding-bottom:25px;
+  font-size:22px;
+  letter-spacing:2px
+}
+.brand {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-weight:700
+}
+.brand svg {
+  width:33px;
+  height:33px
+}
+.series {
+  font-size:20px;
+  letter-spacing:1px;
+  color:var(--muted)
+}
+.body {
+  flex:1;
+  padding-top:42px
+}
+.kicker {
+  font-size:23px;
+  font-weight:600;
+  letter-spacing:2px;
+  color:var(--gold);
+  margin:0 0 22px
+}
+h1,h2,h3,p {
+  margin:0
+}
+h1,h2 {
+  font-size:68px;
+  line-height:1.2;
+  letter-spacing:-2px;
+  font-weight:750
+}
+h1 span,h2 span {
+  display:block
+}
+h1 {
+  font-size:82px;
+  line-height:1.16
+}
+h1 span:nth-child(2) {
+  font-family:var(--serif);
+  font-weight:700
+}
+h1 span:last-child {
+  color:var(--orange)
+}
+.intro {
+  font-size:29px;
+  line-height:1.65;
+  white-space:pre-line;
+  margin-top:27px;
+  color:#4d6155
+}
+.takeaway {
+  font-size:33px;
+  line-height:1.5;
+  font-weight:650;
+  white-space:pre-line;
+  margin-top:30px;
+  padding:22px 0 0;
+  border-top:2px solid var(--ink)
+}
+.note {
+  font-size:24px;
+  line-height:1.55;
+  white-space:pre-line;
+  color:var(--muted);
+  margin-top:22px
+}
+.page-footer {
+  margin-top:32px;
+  padding-top:20px;
+  border-top:1px solid var(--line);
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:12px;
+  align-items:end;
+  font-size:20px;
+  color:var(--muted)
+}
+.footer-info {
+  display:flex;
+  flex-direction:column;
+  gap:8px
+}
+.page-number {
+  font-family:Georgia,serif;
+  font-size:30px;
+  color:var(--ink)
+}
+.page-number small {
+  font-family:var(--sans);
+  font-size:18px;
+  color:var(--muted)
+}
+.cover .intro {
+  font-size:33px;
+  font-weight:650;
+  color:var(--ink);
+  margin-top:22px
+}
+.cover .lead {
+  font-size:29px;
+  line-height:1.6;
+  white-space:pre-line;
+  margin-top:15px
+}
+.cover-art {
+  height:350px;
+  margin-top:28px;
+  position:relative;
+  display:grid;
+  grid-template-columns:1.1fr 1fr;
+  align-items:center;
+  gap:36px
+}
+.cover-art svg {
+  width:100%;
+  height:100%
+}
+.branch-words {
+  font-size:29px;
+  line-height:1.8
+}
+.branch-words b {
+  font-size:37px;
+  font-weight:650;
+  display:block
+}
+.branch-words .gold {
+  color:var(--gold)
+}
+.branch-words .green {
+  color:var(--green)
+}
+.cover .takeaway {
+  font-size:27px;
+  margin-top:10px
+}
+.rows {
+  margin-top:40px
+}
+.view-row {
+  display:grid;
+  grid-template-columns:85px 1fr;
+  gap:25px;
+  padding:26px 0;
+  border-top:1px solid var(--line)
+}
+.row-number {
+  font-family:Georgia,serif;
+  font-size:54px;
+  line-height:1.1;
+  color:var(--muted)
+}
+.row-tag {
+  font-size:23px;
+  line-height:1.5;
+  letter-spacing:1px
+}
+.row-name {
+  font-size:41px;
+  line-height:1.35;
+  margin-top:7px;
+  font-weight:650
+}
+.row-text {
+  font-size:27px;
+  line-height:1.65;
+  white-space:pre-line;
+  margin-top:10px;
+  color:#4d6155
+}
+.tone-gold .row-tag,.tone-gold .row-name {
+  color:var(--gold)
+}
+.tone-green .row-tag,.tone-green .row-name {
+  color:var(--green)
+}
+.legend .view-row {
+  grid-template-columns:150px 1fr;
+  padding:25px 0
+}
+.arrow-key {
+  display:flex;
+  align-items:center
+}
+.arrow-key svg {
+  width:145px
+}
+.heat-block {
+  margin-top:32px;
+  display:grid;
+  grid-template-columns:160px 1fr;
+  gap:28px;
+  padding:28px;
+  background:var(--soft);
+  align-items:center
+}
+.heat-block svg {
+  width:100%
+}
+.heat-block h3 {
+  font-size:30px
+}
+.heat-block p {
+  font-size:26px;
+  line-height:1.6;
+  white-space:pre-line;
+  margin-top:10px
+}
+.legend .takeaway {
+  color:var(--orange)
+}
+.example .intro {
+  font-family:Georgia,var(--sans);
+  font-size:32px
+}
+.example-visual {
+  display:grid;
+  grid-template-columns:1.2fr 1fr;
+  gap:30px;
+  margin-top:30px;
+  align-items:center
+}
+.board {
+  width:100%;
+  display:block
+}
+.board-caption {
+  font-size:22px;
+  margin-top:12px;
+  color:var(--muted)
+}
+.example .rows {
+  margin:0
+}
+.example .view-row {
+  display:block;
+  padding:22px 0
+}
+.example .row-name {
+  font-family:Georgia,serif;
+  font-size:41px
+}
+.example .row-text {
+  font-size:25px
+}
+.example .row-tag {
+  font-size:22px
+}
+.example .takeaway {
+  font-size:30px
+}
+.labels .rows {
+  display:grid;
+  gap:27px
+}
+.label-block {
+  padding:34px 38px;
+  background:var(--soft);
+  border-left:7px solid var(--green)
+}
+.label-block.tone-gold {
+  background:#eee4d3;
+  border-color:var(--gold)
+}
+.label-block .row-tag {
+  font-size:50px;
+  font-family:var(--serif);
+  font-weight:700
+}
+.label-block .row-name {
+  font-size:32px;
+  margin-top:12px
+}
+.label-block .row-text {
+  font-size:27px
+}
+.workflow .steps {
+  margin-top:34px
+}
+.step {
+  display:grid;
+  grid-template-columns:75px 1fr;
+  gap:24px;
+  position:relative;
+  padding:22px 0
+}
+.step:not(:last-child):after {
+  content:"";
+  position:absolute;
+  width:1px;
+  background:var(--line);
+  left:28px;
+  top:78px;
+  bottom:-15px
+}
+.step-num {
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  background:var(--green);
+  color:var(--paper);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:Georgia,serif;
+  font-size:31px
+}
+.step h3 {
+  font-size:33px;
+  line-height:1.45
+}
+.step p {
+  font-size:27px;
+  line-height:1.7;
+  margin-top:8px;
+  color:#4d6155
+}
+.fairplay {
+  background:var(--ink);
+  color:var(--paper)
+}
+.fairplay:before {
+  background:#e0bb72
+}
+.fairplay .page-header,.fairplay .page-footer {
+  border-color:#547062
+}
+.fairplay .series,.fairplay .note,.fairplay .page-footer {
+  color:#c3cebc
+}
+.fairplay .page-number,.fairplay .intro {
+  color:var(--paper)
+}
+.fairplay .kicker {
+  color:#e0bb72
+}
+.fairplay .takeaway {
+  border-color:#e0bb72;
+  color:#e0bb72
+}
+.fairplay .stages {
+  margin-top:36px
+}
+.stage {
+  display:grid;
+  grid-template-columns:68px 1fr;
+  gap:20px;
+  padding:28px 0;
+  border-top:1px solid #547062
+}
+.stage .state-icon {
+  width:54px;
+  height:54px
+}
+.stage h3 {
+  font-size:34px;
+  line-height:1.4
+}
+.stage p {
+  font-size:27px;
+  line-height:1.6;
+  color:#d9dfd0;
+  margin-top:8px
+}
+.checklist ul {
+  list-style:none;
+  padding:0;
+  margin:35px 0
+}
+.checklist li {
+  display:flex;
+  gap:24px;
+  align-items:center;
+  border-bottom:1px solid var(--line);
+  padding:17px 0;
+  font-size:30px;
+  line-height:1.5
+}
+.checklist li:before {
+  content:"";
+  width:24px;
+  height:24px;
+  border:2px solid var(--green);
+  flex:0 0 24px
+}
+.setup {
+  margin-top:26px;
+  background:var(--soft);
+  padding:27px 30px
+}
+.setup h3 {
+  font-size:27px
+}
+.setup p {
+  font-size:25px;
+  line-height:1.7;
+  margin-top:10px;
+  white-space:pre-line
+}
+.checklist .takeaway {
+  font-size:34px
+}
+.checklist .note {
+  font-size:22px
+}
+.sources {
+  max-width:1080px;
+  margin:0 auto 40px;
+  background:var(--paper);
+  padding:48px 78px;
+  font-size:18px;
+  line-height:1.8
+}
+.sources h2 {
+  font-size:31px;
+  letter-spacing:0
+}
+.source-entry {
+  margin-top:20px
+}
+.source-entry p {
+  color:var(--muted);
+  margin-top:6px
+}
+.sources .editorial {
+  margin-top:30px;
+  padding-top:20px;
+  border-top:1px solid var(--line)
+}
+.export .toolbar,.export .sources {
+  display:none
+}
+.export .pages {
+  padding:0;
+  gap:0
+}
+.export .page {
+  width:1080px;
+  height:1440px;
+  min-height:1440px;
+  max-height:1440px;
+  margin:0;
+  padding:66px 78px 42px
+}
+.export .body {
+  flex:none
+}
+.export .page-footer {
+  margin-top:auto
+}
+.export body {
+  background:var(--paper)
+}
+
+/* Keep image text readable;
+   reclaim space through editing and tighter grouping. */
+.row-text {
+  font-size:30px;
+  line-height:1.55;
+  margin-top:7px
+}
+
+.rows {
+  margin-top:30px
+}
+.view-row {
+  padding:21px 0
+}
+
+.legend .view-row {
+  padding:21px 0
+}
+.heat-block {
+  margin-top:24px;
+  padding:24px
+}
+
+.heat-block p {
+  font-size:28px;
+  line-height:1.55
+}
+
+.labels .rows {
+  gap:20px
+}
+.label-block {
+  padding:28px 32px
+}
+
+.label-block .row-tag {
+  font-size:45px
+}
+.label-block .row-text {
+  font-size:30px;
+  line-height:1.6
+}
+
+.step p {
+  font-size:30px;
+  line-height:1.55
+}
+.step {
+  padding:18px 0
+}
+
+.stage p {
+  font-size:30px;
+  line-height:1.55
+}
+
+.example .row-text {
+  font-size:29px;
+  line-height:1.55
+}
+
+.checklist ul {
+  margin:27px 0
+}
+.checklist li {
+  padding:14px 0
+}
+
+.setup {
+  margin-top:22px;
+  padding:24px 28px
+}
+.setup p {
+  font-size:28px;
+  line-height:1.55
+}
+
+.note {
+  line-height:1.5
+}
+
+@media(max-width:650px) {
+  html:not(.export) .toolbar {
+  font-size:13px;
+  margin:18px auto;
+  padding:0 18px
+}
+html:not(.export) .pages {
+  gap:16px
+}
+html:not(.export) .page {
+  min-height:0;
+  padding:28px 24px 25px
+}
+html:not(.export) .page-header {
+  font-size:13px;
+  letter-spacing:1px;
+  padding-bottom:16px
+}
+html:not(.export) .brand {
+  gap:7px
+}
+html:not(.export) .brand svg {
+  width:23px;
+  height:23px
+}
+html:not(.export) .series {
+  font-size:11px
+}
+html:not(.export) .body {
+  padding-top:25px
+}
+html:not(.export) .kicker {
+  font-size:12px;
+  letter-spacing:1px;
+  margin-bottom:16px
+}
+html:not(.export) h1 {
+  font-size:39px;
+  letter-spacing:-1px
+}
+html:not(.export) h2 {
+  font-size:31px;
+  letter-spacing:-1px
+}
+html:not(.export) .intro {
+  font-size:17px;
+  line-height:1.75;
+  margin-top:20px
+}
+html:not(.export) .cover .intro {
+  font-size:20px
+}
+html:not(.export) .lead {
+  font-size:17px;
+  line-height:1.7
+}
+html:not(.export) .cover-art {
+  height:170px;
+  gap:12px;
+  margin-top:20px
+}
+html:not(.export) .branch-words {
+  font-size:13px
+}
+html:not(.export) .branch-words b {
+  font-size:20px
+}
+html:not(.export) .takeaway {
+  font-size:20px;
+  line-height:1.6;
+  margin-top:24px;
+  padding-top:17px
+}
+html:not(.export) .cover .takeaway {
+  font-size:17px;
+  margin-top:10px
+}
+html:not(.export) .note {
+  font-size:14px;
+  line-height:1.75;
+  margin-top:16px
+}
+html:not(.export) .page-footer {
+  font-size:11px;
+  margin-top:30px;
+  gap:8px;
+  padding-top:15px
+}
+html:not(.export) .page-number {
+  font-size:25px
+}
+html:not(.export) .page-number small {
+  font-size:12px
+}
+html:not(.export) .rows {
+  margin-top:26px
+}
+html:not(.export) .view-row {
+  grid-template-columns:36px 1fr;
+  gap:12px;
+  padding:22px 0
+}
+html:not(.export) .row-number {
+  font-size:28px
+}
+html:not(.export) .row-tag {
+  font-size:14px
+}
+html:not(.export) .row-name {
+  font-size:25px;
+  margin-top:5px
+}
+html:not(.export) .row-text {
+  font-size:17px;
+  line-height:1.75
+}
+html:not(.export) .legend .view-row {
+  grid-template-columns:58px 1fr;
+  gap:14px
+}
+html:not(.export) .arrow-key svg {
+  width:58px
+}
+html:not(.export) .legend .row-name {
+  font-size:22px
+}
+html:not(.export) .heat-block {
+  padding:20px;
+  gap:16px;
+  grid-template-columns:70px 1fr;
+  margin-top:20px
+}
+html:not(.export) .heat-block h3 {
+  font-size:19px
+}
+html:not(.export) .heat-block p {
+  font-size:15px
+}
+html:not(.export) .example-visual {
+  grid-template-columns:1fr;
+  gap:18px;
+  margin-top:20px
+}
+html:not(.export) .board-caption {
+  font-size:13px
+}
+html:not(.export) .example .rows {
+  margin-top:0;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px
+}
+html:not(.export) .example .row-name {
+  font-size:30px
+}
+html:not(.export) .example .row-text {
+  font-size:16px
+}
+html:not(.export) .example .row-tag {
+  font-size:13px
+}
+html:not(.export) .label-block {
+  padding:23px 20px;
+  border-left-width:4px
+}
+html:not(.export) .label-block .row-tag {
+  font-size:34px
+}
+html:not(.export) .label-block .row-name {
+  font-size:20px
+}
+html:not(.export) .label-block .row-text {
+  font-size:16px
+}
+html:not(.export) .workflow .steps {
+  margin-top:22px
+}
+html:not(.export) .step {
+  grid-template-columns:35px 1fr;
+  gap:14px;
+  padding:18px 0
+}
+html:not(.export) .step-num {
+  width:33px;
+  height:33px;
+  font-size:20px
+}
+html:not(.export) .step h3 {
+  font-size:21px
+}
+html:not(.export) .step p {
+  font-size:16px
+}
+html:not(.export) .step:not(:last-child):after {
+  left:16px;
+  top:62px
+}
+html:not(.export) .stage {
+  grid-template-columns:40px 1fr;
+  gap:13px;
+  padding:24px 0
+}
+html:not(.export) .stage .state-icon {
+  width:35px;
+  height:35px
+}
+html:not(.export) .stage h3 {
+  font-size:22px
+}
+html:not(.export) .stage p {
+  font-size:16px
+}
+html:not(.export) .stages {
+  margin-top:26px
+}
+html:not(.export) .checklist li {
+  font-size:18px;
+  padding:14px 0;
+  gap:14px
+}
+html:not(.export) .checklist li:before {
+  width:19px;
+  height:19px;
+  flex-basis:19px
+}
+html:not(.export) .checklist ul {
+  margin:25px 0
+}
+html:not(.export) .setup {
+  padding:20px;
+  margin-top:20px
+}
+html:not(.export) .setup h3 {
+  font-size:19px
+}
+html:not(.export) .setup p {
+  font-size:15px
+}
+html:not(.export) .sources {
+  padding:30px 24px;
+  font-size:14px;
+  margin-bottom:0
+}
+html:not(.export) .sources h2 {
+  font-size:25px
+}
+
+}
+
+</style></head><body><nav class="toolbar" aria-label="作品导航"><span>8 页复盘笔记 · 网页文字可选择</span><a href="#sources">查看来源 ↗</a></nav><main class="pages"><article class="page cover" id="01-cover" aria-label="第1页：我给自己做了个，Chrome 里的，国际象棋，对比引擎"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">一个棋友的工具箱 / 01</p><h1><span>我给自己做了个</span><span>Chrome 里的</span><span>国际象棋</span><span>对比引擎</span></h1><p class="intro">它叫「歧路」Diverge。</p><p class="lead">把我下的、人类可能下的、引擎建议的，
+放在同一张棋盘上。</p><div class="cover-art"><svg viewBox="0 0 390 350" role="img" aria-label="棋盘上的两条分岔路径，象征人类直觉与搜索建议"><defs><marker id="hero-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a66a24"/></marker><marker id="hero-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#285a46"/></marker></defs><rect x="20" y="15" width="40" height="40" fill="#e3e4d5"/><rect x="20" y="55" width="40" height="40" fill="#b3c3ac"/><rect x="20" y="95" width="40" height="40" fill="#e3e4d5"/><rect x="20" y="135" width="40" height="40" fill="#b3c3ac"/><rect x="20" y="175" width="40" height="40" fill="#e3e4d5"/><rect x="20" y="215" width="40" height="40" fill="#b3c3ac"/><rect x="20" y="255" width="40" height="40" fill="#e3e4d5"/><rect x="20" y="295" width="40" height="40" fill="#b3c3ac"/><rect x="60" y="15" width="40" height="40" fill="#b3c3ac"/><rect x="60" y="55" width="40" height="40" fill="#e3e4d5"/><rect x="60" y="95" width="40" height="40" fill="#b3c3ac"/><rect x="60" y="135" width="40" height="40" fill="#e3e4d5"/><rect x="60" y="175" width="40" height="40" fill="#b3c3ac"/><rect x="60" y="215" width="40" height="40" fill="#e3e4d5"/><rect x="60" y="255" width="40" height="40" fill="#b3c3ac"/><rect x="60" y="295" width="40" height="40" fill="#e3e4d5"/><rect x="100" y="15" width="40" height="40" fill="#e3e4d5"/><rect x="100" y="55" width="40" height="40" fill="#b3c3ac"/><rect x="100" y="95" width="40" height="40" fill="#e3e4d5"/><rect x="100" y="135" width="40" height="40" fill="#b3c3ac"/><rect x="100" y="175" width="40" height="40" fill="#e3e4d5"/><rect x="100" y="215" width="40" height="40" fill="#b3c3ac"/><rect x="100" y="255" width="40" height="40" fill="#e3e4d5"/><rect x="100" y="295" width="40" height="40" fill="#b3c3ac"/><rect x="140" y="15" width="40" height="40" fill="#b3c3ac"/><rect x="140" y="55" width="40" height="40" fill="#e3e4d5"/><rect x="140" y="95" width="40" height="40" fill="#b3c3ac"/><rect x="140" y="135" width="40" height="40" fill="#e3e4d5"/><rect x="140" y="175" width="40" height="40" fill="#b3c3ac"/><rect x="140" y="215" width="40" height="40" fill="#e3e4d5"/><rect x="140" y="255" width="40" height="40" fill="#b3c3ac"/><rect x="140" y="295" width="40" height="40" fill="#e3e4d5"/><rect x="180" y="15" width="40" height="40" fill="#e3e4d5"/><rect x="180" y="55" width="40" height="40" fill="#b3c3ac"/><rect x="180" y="95" width="40" height="40" fill="#e3e4d5"/><rect x="180" y="135" width="40" height="40" fill="#b3c3ac"/><rect x="180" y="175" width="40" height="40" fill="#e3e4d5"/><rect x="180" y="215" width="40" height="40" fill="#b3c3ac"/><rect x="180" y="255" width="40" height="40" fill="#e3e4d5"/><rect x="180" y="295" width="40" height="40" fill="#b3c3ac"/><rect x="220" y="15" width="40" height="40" fill="#b3c3ac"/><rect x="220" y="55" width="40" height="40" fill="#e3e4d5"/><rect x="220" y="95" width="40" height="40" fill="#b3c3ac"/><rect x="220" y="135" width="40" height="40" fill="#e3e4d5"/><rect x="220" y="175" width="40" height="40" fill="#b3c3ac"/><rect x="220" y="215" width="40" height="40" fill="#e3e4d5"/><rect x="220" y="255" width="40" height="40" fill="#b3c3ac"/><rect x="220" y="295" width="40" height="40" fill="#e3e4d5"/><rect x="260" y="15" width="40" height="40" fill="#e3e4d5"/><rect x="260" y="55" width="40" height="40" fill="#b3c3ac"/><rect x="260" y="95" width="40" height="40" fill="#e3e4d5"/><rect x="260" y="135" width="40" height="40" fill="#b3c3ac"/><rect x="260" y="175" width="40" height="40" fill="#e3e4d5"/><rect x="260" y="215" width="40" height="40" fill="#b3c3ac"/><rect x="260" y="255" width="40" height="40" fill="#e3e4d5"/><rect x="260" y="295" width="40" height="40" fill="#b3c3ac"/><rect x="300" y="15" width="40" height="40" fill="#b3c3ac"/><rect x="300" y="55" width="40" height="40" fill="#e3e4d5"/><rect x="300" y="95" width="40" height="40" fill="#b3c3ac"/><rect x="300" y="135" width="40" height="40" fill="#e3e4d5"/><rect x="300" y="175" width="40" height="40" fill="#b3c3ac"/><rect x="300" y="215" width="40" height="40" fill="#e3e4d5"/><rect x="300" y="255" width="40" height="40" fill="#b3c3ac"/><rect x="300" y="295" width="40" height="40" fill="#e3e4d5"/><path d="M180 295V202Q180 172 128 150L74 94" stroke="#a66a24" stroke-width="9" fill="none" marker-end="url(#hero-gold)"/><path d="M180 295V202Q180 172 232 150L290 94" stroke="#285a46" stroke-width="9" stroke-dasharray="14 9" fill="none" marker-end="url(#hero-green)"/><circle cx="180" cy="295" r="12" fill="#203d32"/></svg><div class="branch-words"><span class="gold">人类直觉<b>这步很自然。</b></span><br><span class="green">引擎搜索<b>还有另一条路。</b></span></div></div><p class="takeaway">看完这组图，你会知道它是什么，
+以及怎样用它把复盘变成训练。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>项目功能 [1] · 引擎定位 [2][3]</span></div><span class="page-number">01 <small>/ 08</small></span></footer></article><article class="page views" id="02-three-views" aria-label="第2页：最佳走法之外，，我还想看见直觉。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">先说我想解决的问题 / 02</p><h2><span>最佳走法之外，</span><span>我还想看见直觉。</span></h2><p class="intro">复盘时，我想知道：
+自然的第一反应，漏掉了什么？</p><div class="rows"><div class="view-row tone-ink"><div class="row-number">01</div><div><p class="row-tag">我实际下了什么</p><h3 class="row-name">实战着法</h3><p class="row-text">把当时的选择作为复盘起点。</p></div></div><div class="view-row tone-gold"><div class="row-number">02</div><div><p class="row-tag">模型预测人会怎么下</p><h3 class="row-name">Maia 3</h3><p class="row-text">预测所设等级分下的人类候选与概率。</p></div></div><div class="view-row tone-green"><div class="row-number">03</div><div><p class="row-tag">搜索发现什么更好</p><h3 class="row-name">Stockfish</h3><p class="row-text">给出当前搜索下的推荐与局面评估。</p></div></div></div><p class="takeaway">三方对照 → 看见分歧 → 找出漏算</p><p class="note">Maia 不代表你个人；Stockfish 受搜索条件影响。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>三方对比 [1] · Maia [2] · Stockfish [3]</span></div><span class="page-number">02 <small>/ 08</small></span></footer></article><article class="page legend" id="03-read-the-board" aria-label="第3页：两根箭头，，两种问题。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">怎样读懂这张棋盘 / 03</p><h2><span>两根箭头，</span><span>两种问题。</span></h2><p class="intro">在赛后复盘或分析台，歧路把候选直接画在棋盘上。</p><div class="rows"><div class="view-row tone-gold"><div class="arrow-key"><svg viewBox="0 0 160 65" aria-hidden="true"><path d="M6 33H133" fill="none" stroke="#a66a24" stroke-width="6" /><path d="M128 18L149 33L128 48" fill="none" stroke="#a66a24" stroke-width="6" stroke-linejoin="round"/></svg></div><div><p class="row-tag">金色实线 · Maia</p><h3 class="row-name">这步有多像人会下的？</h3><p class="row-text">箭头表示直觉候选；百分比是模型给出的走法概率。</p></div></div><div class="view-row tone-green"><div class="arrow-key"><svg viewBox="0 0 160 65" aria-hidden="true"><path d="M6 33H133" fill="none" stroke="#285a46" stroke-width="6" stroke-dasharray="13 9"/><path d="M128 18L149 33L128 48" fill="none" stroke="#285a46" stroke-width="6" stroke-linejoin="round"/></svg></div><div><p class="row-tag">绿色虚线 · Stockfish</p><h3 class="row-name">搜索更推荐哪一步？</h3><p class="row-text">箭头表示搜索建议；评分用于比较局面的优劣。</p></div></div></div><div class="heat-block"><svg viewBox="0 0 144 144" role="img" aria-label="候选落点概率热力图的概念示意"><rect x="0" y="0" width="34" height="34" fill="#d5ddca"/><rect x="36" y="0" width="34" height="34" fill="#d5ddca"/><rect x="72" y="0" width="34" height="34" fill="#d5ddca"/><rect x="108" y="0" width="34" height="34" fill="#d5ddca"/><rect x="0" y="36" width="34" height="34" fill="#d5ddca"/><rect x="36" y="36" width="34" height="34" fill="#d6b573"/><rect x="72" y="36" width="34" height="34" fill="#d5ddca"/><rect x="108" y="36" width="34" height="34" fill="#d5ddca"/><rect x="0" y="72" width="34" height="34" fill="#b7c6a3"/><rect x="36" y="72" width="34" height="34" fill="#c99945"/><rect x="72" y="72" width="34" height="34" fill="#e2b36b"/><rect x="108" y="72" width="34" height="34" fill="#d5ddca"/><rect x="0" y="108" width="34" height="34" fill="#d5ddca"/><rect x="36" y="108" width="34" height="34" fill="#d6b573"/><rect x="72" y="108" width="34" height="34" fill="#d5ddca"/><rect x="108" y="108" width="34" height="34" fill="#d5ddca"/></svg><div><h3>落点概率热力图</h3><p>汇总候选的落点概率，
+看模型的选择集中在哪里。</p></div></div><p class="takeaway">走法概率 ≠ 获胜概率</p><p class="note">等级分只是模型输入，不能据此认证个人棋力。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>图例示意 [1] · 模型含义 [2]</span></div><span class="page-number">03 <small>/ 08</small></span></footer></article><article class="page example" id="04-a-position" aria-label="第4页：出子很自然，，但将杀更紧迫。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">拿一个简单局面说明 / 04</p><h2><span>出子很自然，</span><span>但将杀更紧迫。</span></h2><p class="intro">1. f3 e5 2. g4 后，轮到黑方。</p><div class="example-visual"><div><svg class="board" viewBox="0 0 532 532" role="img" aria-label="白方走完 f3 和 g4 后的教学局面。黑后从 d8 到 h4 可将杀，黑马也可从 b8 到 c6。"><defs><marker id="case-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#285a46"/></marker><marker id="case-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a66a24"/></marker></defs><rect x="32" y="10" width="60" height="60" fill="#e7e6d5"/><rect x="92" y="10" width="60" height="60" fill="#9ab398"/><rect x="152" y="10" width="60" height="60" fill="#e7e6d5"/><rect x="212" y="10" width="60" height="60" fill="#9ab398"/><rect x="272" y="10" width="60" height="60" fill="#e7e6d5"/><rect x="332" y="10" width="60" height="60" fill="#9ab398"/><rect x="392" y="10" width="60" height="60" fill="#e7e6d5"/><rect x="452" y="10" width="60" height="60" fill="#9ab398"/><rect x="32" y="70" width="60" height="60" fill="#9ab398"/><rect x="92" y="70" width="60" height="60" fill="#e7e6d5"/><rect x="152" y="70" width="60" height="60" fill="#9ab398"/><rect x="212" y="70" width="60" height="60" fill="#e7e6d5"/><rect x="272" y="70" width="60" height="60" fill="#9ab398"/><rect x="332" y="70" width="60" height="60" fill="#e7e6d5"/><rect x="392" y="70" width="60" height="60" fill="#9ab398"/><rect x="452" y="70" width="60" height="60" fill="#e7e6d5"/><rect x="32" y="130" width="60" height="60" fill="#e7e6d5"/><rect x="92" y="130" width="60" height="60" fill="#9ab398"/><rect x="152" y="130" width="60" height="60" fill="#e7e6d5"/><rect x="212" y="130" width="60" height="60" fill="#9ab398"/><rect x="272" y="130" width="60" height="60" fill="#e7e6d5"/><rect x="332" y="130" width="60" height="60" fill="#9ab398"/><rect x="392" y="130" width="60" height="60" fill="#e7e6d5"/><rect x="452" y="130" width="60" height="60" fill="#9ab398"/><rect x="32" y="190" width="60" height="60" fill="#9ab398"/><rect x="92" y="190" width="60" height="60" fill="#e7e6d5"/><rect x="152" y="190" width="60" height="60" fill="#9ab398"/><rect x="212" y="190" width="60" height="60" fill="#e7e6d5"/><rect x="272" y="190" width="60" height="60" fill="#9ab398"/><rect x="332" y="190" width="60" height="60" fill="#e7e6d5"/><rect x="392" y="190" width="60" height="60" fill="#9ab398"/><rect x="452" y="190" width="60" height="60" fill="#e7e6d5"/><rect x="32" y="250" width="60" height="60" fill="#e7e6d5"/><rect x="92" y="250" width="60" height="60" fill="#9ab398"/><rect x="152" y="250" width="60" height="60" fill="#e7e6d5"/><rect x="212" y="250" width="60" height="60" fill="#9ab398"/><rect x="272" y="250" width="60" height="60" fill="#e7e6d5"/><rect x="332" y="250" width="60" height="60" fill="#9ab398"/><rect x="392" y="250" width="60" height="60" fill="#e7e6d5"/><rect x="452" y="250" width="60" height="60" fill="#9ab398"/><rect x="32" y="310" width="60" height="60" fill="#9ab398"/><rect x="92" y="310" width="60" height="60" fill="#e7e6d5"/><rect x="152" y="310" width="60" height="60" fill="#9ab398"/><rect x="212" y="310" width="60" height="60" fill="#e7e6d5"/><rect x="272" y="310" width="60" height="60" fill="#9ab398"/><rect x="332" y="310" width="60" height="60" fill="#e7e6d5"/><rect x="392" y="310" width="60" height="60" fill="#9ab398"/><rect x="452" y="310" width="60" height="60" fill="#e7e6d5"/><rect x="32" y="370" width="60" height="60" fill="#e7e6d5"/><rect x="92" y="370" width="60" height="60" fill="#9ab398"/><rect x="152" y="370" width="60" height="60" fill="#e7e6d5"/><rect x="212" y="370" width="60" height="60" fill="#9ab398"/><rect x="272" y="370" width="60" height="60" fill="#e7e6d5"/><rect x="332" y="370" width="60" height="60" fill="#9ab398"/><rect x="392" y="370" width="60" height="60" fill="#e7e6d5"/><rect x="452" y="370" width="60" height="60" fill="#9ab398"/><rect x="32" y="430" width="60" height="60" fill="#9ab398"/><rect x="92" y="430" width="60" height="60" fill="#e7e6d5"/><rect x="152" y="430" width="60" height="60" fill="#9ab398"/><rect x="212" y="430" width="60" height="60" fill="#e7e6d5"/><rect x="272" y="430" width="60" height="60" fill="#9ab398"/><rect x="332" y="430" width="60" height="60" fill="#e7e6d5"/><rect x="392" y="430" width="60" height="60" fill="#9ab398"/><rect x="452" y="430" width="60" height="60" fill="#e7e6d5"/><g transform="translate(32,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M15 12H23V19H28V12H34V19H39V12H46V26H40L38 44H22L20 26H15Z"/><path d="M18 45H42L46 51H14Z"/></g></g><g transform="translate(92,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M20 44Q17 34 31 27L18 28L14 23L21 15L30 13L31 8L38 14Q49 24 43 44Z"/><circle cx="30" cy="19" r="1.9" fill="#f5f2e9" stroke="none"/><path d="M17 45H44L47 51H14Z"/></g></g><g transform="translate(152,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M30 8Q13 19 25 29L20 44H40L35 29Q47 19 30 8Z"/><path d="M30 13L35 22" fill="none"/><path d="M17 45H43L46 51H14Z"/></g></g><g transform="translate(212,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="13" r="3"/><circle cx="30" cy="8" r="3"/><circle cx="48" cy="13" r="3"/><path d="M12 16L18 36H42L48 16L37 24L30 12L23 24Z"/><path d="M20 39H40L43 45H17Z"/><path d="M15 47H45L47 52H13Z"/></g></g><g transform="translate(272,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M28 5H32V11H38V15H32V22H28V15H22V11H28Z"/><path d="M29 24Q18 15 16 27Q14 35 22 42H38Q46 35 44 27Q42 15 31 24Z"/><path d="M19 44H41L46 52H14Z"/></g></g><g transform="translate(332,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M30 8Q13 19 25 29L20 44H40L35 29Q47 19 30 8Z"/><path d="M30 13L35 22" fill="none"/><path d="M17 45H43L46 51H14Z"/></g></g><g transform="translate(392,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M20 44Q17 34 31 27L18 28L14 23L21 15L30 13L31 8L38 14Q49 24 43 44Z"/><circle cx="30" cy="19" r="1.9" fill="#f5f2e9" stroke="none"/><path d="M17 45H44L47 51H14Z"/></g></g><g transform="translate(452,10)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><path d="M15 12H23V19H28V12H34V19H39V12H46V26H40L38 44H22L20 26H15Z"/><path d="M18 45H42L46 51H14Z"/></g></g><g transform="translate(32,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(92,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(152,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(212,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(332,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(392,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(452,70)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(272,190)"><g fill="#203d32" stroke="#f5f2e9" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(392,250)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(332,310)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(32,370)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(92,370)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(152,370)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(212,370)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(272,370)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(452,370)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="30" cy="16" r="8"/><path d="M25 25H35L39 42H21Z"/><path d="M18 45H42L45 51H15Z"/></g></g><g transform="translate(32,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M15 12H23V19H28V12H34V19H39V12H46V26H40L38 44H22L20 26H15Z"/><path d="M18 45H42L46 51H14Z"/></g></g><g transform="translate(92,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M20 44Q17 34 31 27L18 28L14 23L21 15L30 13L31 8L38 14Q49 24 43 44Z"/><circle cx="30" cy="19" r="1.9" fill="#203d32" stroke="none"/><path d="M17 45H44L47 51H14Z"/></g></g><g transform="translate(152,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M30 8Q13 19 25 29L20 44H40L35 29Q47 19 30 8Z"/><path d="M30 13L35 22" fill="none"/><path d="M17 45H43L46 51H14Z"/></g></g><g transform="translate(212,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="13" r="3"/><circle cx="30" cy="8" r="3"/><circle cx="48" cy="13" r="3"/><path d="M12 16L18 36H42L48 16L37 24L30 12L23 24Z"/><path d="M20 39H40L43 45H17Z"/><path d="M15 47H45L47 52H13Z"/></g></g><g transform="translate(272,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M28 5H32V11H38V15H32V22H28V15H22V11H28Z"/><path d="M29 24Q18 15 16 27Q14 35 22 42H38Q46 35 44 27Q42 15 31 24Z"/><path d="M19 44H41L46 52H14Z"/></g></g><g transform="translate(332,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M30 8Q13 19 25 29L20 44H40L35 29Q47 19 30 8Z"/><path d="M30 13L35 22" fill="none"/><path d="M17 45H43L46 51H14Z"/></g></g><g transform="translate(392,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M20 44Q17 34 31 27L18 28L14 23L21 15L30 13L31 8L38 14Q49 24 43 44Z"/><circle cx="30" cy="19" r="1.9" fill="#203d32" stroke="none"/><path d="M17 45H44L47 51H14Z"/></g></g><g transform="translate(452,430)"><g fill="#fffdf5" stroke="#203d32" stroke-width="1.8" stroke-linejoin="round"><path d="M15 12H23V19H28V12H34V19H39V12H46V26H40L38 44H22L20 26H15Z"/><path d="M18 45H42L46 51H14Z"/></g></g><path d="M243 41L472 270" stroke="#285a46" stroke-width="8" stroke-dasharray="12 7" fill="none" marker-end="url(#case-green)"/><path d="M122 47V103H182V153" stroke="#a66a24" stroke-width="6" fill="none" marker-end="url(#case-gold)"/><g fill="#677268" font-family="sans-serif" font-size="21"><text x="62" y="519" text-anchor="middle">a</text><text x="122" y="519" text-anchor="middle">b</text><text x="182" y="519" text-anchor="middle">c</text><text x="242" y="519" text-anchor="middle">d</text><text x="302" y="519" text-anchor="middle">e</text><text x="362" y="519" text-anchor="middle">f</text><text x="422" y="519" text-anchor="middle">g</text><text x="482" y="519" text-anchor="middle">h</text><text x="14" y="49" text-anchor="middle">8</text><text x="14" y="109" text-anchor="middle">7</text><text x="14" y="169" text-anchor="middle">6</text><text x="14" y="229" text-anchor="middle">5</text><text x="14" y="289" text-anchor="middle">4</text><text x="14" y="349" text-anchor="middle">3</text><text x="14" y="409" text-anchor="middle">2</text><text x="14" y="469" text-anchor="middle">1</text></g></svg><p class="board-caption">黑方走 · 先找将军、吃子、威胁</p></div><div class="rows"><div class="view-row tone-gold"><div><p class="row-tag">假设我的第一反应</p><h3 class="row-name">2…Nc6</h3><p class="row-text">发展马，看起来顺理成章。</p></div></div><div class="view-row tone-green"><div><p class="row-tag">先检查强制手段</p><h3 class="row-name">2…Qh4#</h3><p class="row-text">后沿斜线直击白王，当场将杀。</p></div></div></div></div><p class="takeaway">复盘问题：我为何没先检查将军？</p><p class="note">教学局面与合法走法已校验；并非插件实测，
+不代表 Maia 会预测 Nc6。# 表示将杀。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>教学例 [4] · 非引擎跑分</span></div><span class="page-number">04 <small>/ 08</small></span></footer></article><article class="page labels" id="05-key-moments" aria-label="第5页：「妙手」与「俗手」，，值得回头看。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">把分歧变成复盘线索 / 05</p><h2><span>「妙手」与「俗手」，</span><span>值得回头看。</span></h2><p class="intro">用这两个复盘标签，回看直觉与搜索分开的时刻。</p><div class="rows"><div class="label-block tone-green"><div><p class="row-tag">妙手</p><h3 class="row-name">走出了直觉之外的好棋</h3><p class="row-text">实战符合引擎首选，复核后也优于 Maia 首选。
+回头问：我怎样想到这个候选？</p></div></div><div class="label-block tone-gold"><div><p class="row-tag">俗手</p><h3 class="row-name">自然的选择，却有代价</h3><p class="row-text">实战属于直觉优先候选，复核后发现明显损失。
+回头问：我漏掉了哪种回应？</p></div></div></div><p class="takeaway">先看变化，再接受标签。</p><p class="note">引擎意见不同，不足以判定好坏；
+复核未完成或证据不足时，标签不能当定论。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>全盘分析与复核逻辑 [1]</span></div><span class="page-number">05 <small>/ 08</small></span></footer></article><article class="page workflow" id="06-practice-loop" aria-label="第6页：看见分歧之后，，还要自己走一遍。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">我会这样用它练棋 / 06</p><h2><span>看见分歧之后，</span><span>还要自己走一遍。</span></h2><p class="intro">插件负责呈现对比；思考、记录与重做，需要我来完成。</p><div class="steps"><div class="step"><div class="step-num">1</div><div><h3>先写下自己的想法</h3><p>先记下当时想走什么、为什么，再导入已结束的 PGN。</p></div></div><div class="step"><div class="step-num">2</div><div><h3>找到一个关键局面</h3><p>结合走势与妙手／俗手线索，只挑一个值得复查的位置。</p></div></div><div class="step"><div class="step-num">3</div><div><h3>沿两条路分别试走</h3><p>试走直觉候选与搜索建议，找出对手最强的回应。</p></div></div><div class="step"><div class="step-num">4</div><div><h3>隔天隐藏提示重做</h3><p>保存局面与漏算原因。之后先独立算，再打开分析验证。</p></div></div></div><p class="takeaway">目标是下次能找到，而不只是这次看懂。</p><p class="note">记录与重做是手动练法，不是自动生成题库。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>导入与全盘分析 [1] · 练法为编辑建议</span></div><span class="page-number">06 <small>/ 08</small></span></footer></article><article class="page fairplay" id="07-fair-play" aria-label="第7页：对局中上锁，，结束后复盘。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">什么时候可以用 / 07</p><h2><span>对局中上锁，</span><span>结束后复盘。</span></h2><p class="intro">歧路用于学习与赛后分析。
+正在进行的对局，自己做决定。</p><div class="stages"><div class="stage"><svg class="state-icon" viewBox="0 0 60 60" fill="none" stroke="#e0bb72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="30" cy="30" r="21"/><path d="M30 16V30L39 36"/></svg><div><h3>赛前待命</h3><p>引擎未启动，不显示建议。</p></div></div><div class="stage"><svg class="state-icon" viewBox="0 0 60 60" fill="none" stroke="#e0bb72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="13" y="25" width="34" height="27" rx="3"/><path d="M20 25V17A10 10 0 0 1 40 17V25M30 34V43"/></svg><div><h3>对局进行中</h3><p>停止计算，清空箭头与热力图，锁定分析。</p></div></div><div class="stage"><svg class="state-icon" viewBox="0 0 60 60" fill="none" stroke="#e0bb72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 31L24 45L51 15"/></svg><div><h3>明确完赛后</h3><p>自动解锁，进入复盘；新局开始重新上锁。</p></div></div></div><p class="takeaway">有明确终局证据才解锁；
+状态不确定时，保持保护。</p><p class="note">分析台、研究与已完赛棋谱是学习入口。
+这些是项目的使用规则，不是平台官方背书。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>公平竞技守卫与项目准则 [1]</span></div><span class="page-number">07 <small>/ 08</small></span></footer></article><article class="page checklist" id="08-save-and-start" aria-label="第8页：从一盘棋开始，，带走一个发现。"><header class="page-header"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 57V34C32 22 18 25 11 10M32 34C32 22 46 25 53 10M11 10H25M11 10V24M53 10H39M53 10V24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>歧路 DIVERGE</span><span class="series">国际象棋 · 复盘笔记</span></header><div class="body"><p class="kicker">保存这页，下一盘结束后用 / 08</p><h2><span>从一盘棋开始，</span><span>带走一个发现。</span></h2><p class="intro">不用一次研究所有错误。
+先把一个反复漏掉的候选，练成下一次的习惯。</p><ul><li>这盘棋已经结束了吗？</li><li>我当时的第一反应是什么？</li><li>直觉与搜索，在哪一步分开？</li><li>对手最强的回应，我漏了哪一招？</li><li>隐藏提示后，我还能找到吗？</li></ul><div class="setup"><h3>开始方式</h3><p>拿到扩展文件后，在 Chrome 扩展程序开启开发者模式，选择「加载已解压的扩展程序」。
+首次分析需联网下载模型，之后缓存复用。</p></div><p class="takeaway">让复盘，多一个看人的角度。</p></div><footer class="page-footer"><div class="footer-info"><span>歧路 · 开发者笔记</span><span>安装与模型缓存 [1]</span></div><span class="page-number">08 <small>/ 08</small></span></footer></article></main><aside class="sources" id="sources"><h2>来源与编辑说明</h2><p>核对日期：2026-10-03。数字与模型概念以来源为准，产品描述基于当前项目源码。</p><div class="source-entry"><b>[1] <a href="https://github.com/keluoke/4chess">歧路项目：功能、安装与公平竞技规则</a></b><p>本地代码 c1bf8b9161ec1a61aec0491034cd5a7482920597；README.md、analysis/index.html、engine/game-analyzer.js、content/heatmap-overlay.js、content/fair-play-guard.js、AGENTS.md。基于源码整理，不等同于生产端运行验收。</p></div><div class="source-entry"><b>[2] <a href="https://github.com/CSSLab/maia3">CSSLab / Maia-3 官方仓库</a></b><p>Maia-3 用于预测不同棋力水平的人类着法。模型条件与输出概率不等于个人棋力证明。</p></div><div class="source-entry"><b>[3] <a href="https://stockfishchess.org/">Stockfish 官方网站</a></b><p>Stockfish 分析局面、评估局面并搜索推荐着法。</p></div><div class="source-entry"><b>[4] 教学局面：愚人将杀前一手</b><p>自行构造的标准教学例：1. f3 e5 2. g4。使用项目 ChessBoard 检查 Nc6、Qh4# 的合法性与将杀；无 Maia 概率或 Stockfish 实测评分。</p></div><p class="editorial">核心观点：把实战、直觉与计算放在一起，找到值得练的那一步。<br>第 6、8 页的手动练法是编辑建议，未经过涨分效果实验；不承诺提升等级分。本作品与导出图片共享同一份内容数据和 SVG 图形。</p></aside></body></html>

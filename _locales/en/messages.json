@@ -27,6 +27,14 @@
     "message": "A closer look at each position",
     "description": "Floating panel switch description"
   },
+  "liveEvalTitle": {
+    "message": "Live evaluation",
+    "description": "Live evaluation switch title"
+  },
+  "liveEvalDesc": {
+    "message": "Candidate arrows & intuition heatmap",
+    "description": "Live evaluation switch description"
+  },
   "btnReviewStudio": {
     "message": "Open Review Studio",
     "description": "Open review studio button"

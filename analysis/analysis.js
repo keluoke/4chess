@@ -12,6 +12,42 @@ import { EvalChart } from './eval-chart.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { ModelCache } from '../engine/model-cache.js';
 import { soundEffects } from './sound-effects.js';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js';
+
+export function formatScoreWhiteCentric(cp, isMate = false) {
+  if (cp === null || cp === undefined) return '0.00';
+  if (isMate) {
+    const m = Math.round((10000 - Math.abs(cp)) / 100);
+    return `M${cp > 0 ? '+' : '-'}${Math.max(1, m)}`;
+  }
+  const pawns = (cp / 100).toFixed(2);
+  return cp > 0 ? `+${pawns}` : pawns;
+}
+
+export function formatEvalObjWhite(evalRes, fenOrTurn) {
+  if (!evalRes) return '0.00';
+  const turn = typeof fenOrTurn === 'string' && fenOrTurn.length === 1 ? fenOrTurn : (fenOrTurn?.split?.(' ')?.[1] || 'w');
+  const scoreCp = evalRes.scoreCp ?? 0;
+  const isMate = evalRes.isMate;
+  const whiteCp = turn === 'b' ? -scoreCp : scoreCp;
+  return formatScoreWhiteCentric(whiteCp, isMate);
+}
+
+export function getMoveReviewWhiteScore(moveReview, isAfter = false) {
+  if (!moveReview) return '0.00';
+  if (!isAfter) {
+    const cp = moveReview.evalBeforeCp ?? 0;
+    const isMate = typeof moveReview.evalBefore === 'string' && moveReview.evalBefore.startsWith('M');
+    const whiteCp = moveReview.turn === 'b' ? -cp : cp;
+    return formatScoreWhiteCentric(whiteCp, isMate);
+  } else {
+    const opponentTurn = moveReview.turn === 'w' ? 'b' : 'w';
+    const cp = moveReview.evalAfterCp ?? 0;
+    const isMate = typeof moveReview.evalAfter === 'string' && moveReview.evalAfter.startsWith('M');
+    const whiteCp = opponentTurn === 'b' ? -cp : cp;
+    return formatScoreWhiteCentric(whiteCp, isMate);
+  }
+}
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -59,6 +95,9 @@ class AnalysisStudioApp {
     this.playTimer = null;
     this.currentDivergenceFilter = 'all';
 
+    initI18n();
+    onLanguageChange(() => this.refreshAfterLanguageChange());
+
     this.initElements();
     this.initEngines();
     this.initUI();
@@ -68,6 +107,7 @@ class AnalysisStudioApp {
 
   initElements() {
     this.el = {
+      btnLangToggle: document.getElementById('btn-lang-toggle'),
       metaWhite: document.getElementById('meta-white'),
       metaBlack: document.getElementById('meta-black'),
       metaResult: document.getElementById('meta-result'),
@@ -215,6 +255,13 @@ class AnalysisStudioApp {
   }
 
   bindEvents() {
+    // Language Toggle
+    if (this.el.btnLangToggle) {
+      this.el.btnLangToggle.addEventListener('click', () => {
+        toggleLanguage();
+      });
+    }
+
     // Elo selector
     this.el.eloSelector.addEventListener('change', (e) => {
       this.currentElo = parseInt(e.target.value, 10);
@@ -246,9 +293,9 @@ class AnalysisStudioApp {
         this.updateSoundToggleUI();
         if (enabled) {
           soundEffects.playMove();
-          this.showToast('🔊 行棋音效已开启');
+          this.showToast(getLang() === 'zh' ? '🔊 行棋音效已开启' : '🔊 Sound effects enabled');
         } else {
-          this.showToast('🔇 行棋音效已静音');
+          this.showToast(getLang() === 'zh' ? '🔇 行棋音效已静音' : '🔇 Sound effects muted');
         }
       });
     }
@@ -396,6 +443,62 @@ class AnalysisStudioApp {
         if (this.el.btnSound) this.el.btnSound.click();
       }
     });
+  }
+
+  refreshAfterLanguageChange() {
+    // 1. Meta player names if default
+    if (this.el.metaWhite) {
+      if (this.el.metaWhite.textContent.includes('白方') || this.el.metaWhite.textContent.includes('White')) {
+        this.el.metaWhite.textContent = t('whitePlayer');
+      }
+    }
+    const sideLabelW = document.getElementById('metric-side-white');
+    if (sideLabelW) sideLabelW.textContent = t('whitePlayer');
+    const sideLabelB = document.getElementById('metric-side-black');
+    if (sideLabelB) sideLabelB.textContent = t('blackPlayer');
+
+    if (this.el.metaBlack) {
+      if (this.el.metaBlack.textContent.includes('黑方') || this.el.metaBlack.textContent.includes('Black')) {
+        this.el.metaBlack.textContent = t('blackPlayer');
+      }
+    }
+
+    // 2. Tab labels
+    const lblBlunders = document.getElementById('lbl-tab-blunders');
+    if (lblBlunders) lblBlunders.textContent = t('tabKeyMoments', { count: '' }).replace(/\(\s*\)/, '').trim();
+    const lblMoves = document.getElementById('lbl-tab-moves');
+    if (lblMoves) lblMoves.textContent = t('tabNotation', { count: '' }).replace(/\(\s*\)/, '').trim();
+
+    // 3. Filter pills
+    const lblFilterAll = document.getElementById('lbl-filter-all');
+    if (lblFilterAll) lblFilterAll.textContent = t('filterAll', { count: '' }).replace(/\(\s*\)/, '').trim();
+    const lblFilterBeyond = document.getElementById('lbl-filter-beyond');
+    if (lblFilterBeyond) lblFilterBeyond.textContent = t('beyondText');
+    const lblFilterTrap = document.getElementById('lbl-filter-trap');
+    if (lblFilterTrap) lblFilterTrap.textContent = t('trapText');
+
+    // 4. Board status text & comparison panel
+    if (this.currentPly === 0) {
+      this.el.boardStatusText.textContent = t('startingPosition');
+      this.el.divergenceBadge.textContent = t('badgeOpening');
+    } else if (this.positions && this.positions[this.currentPly]) {
+      const currentPos = this.positions[this.currentPly];
+      const sideText = currentPos.turn === 'w' ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
+      this.el.boardStatusText.textContent = t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
+      this.updateActivePositionAnalysis();
+    }
+
+    // 5. Blunder list or empty hero state
+    if (!this.moves || this.moves.length === 0) {
+      this.renderEmptyHomeState();
+    } else if (this.reviewResult) {
+      const rawMoments = (this.reviewResult?.keyMoments || this.reviewResult?.allMoves || []);
+      const validMoments = rawMoments.filter(
+        m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+      ).sort((a, b) => a.ply - b.ply);
+      this.renderBlunderCards(validMoments);
+      this.annotateMoveList(this.reviewResult?.allMoves);
+    }
   }
 
   switchTab(tabName) {
@@ -777,16 +880,16 @@ class AnalysisStudioApp {
     if (!loaded) {
       this.startNewSession({
         fen: ChessBoard.INITIAL_FEN,
-        white: '开局准备',
-        black: '等待导入',
+        white: t('whitePlayer').replace('⚪ ', ''),
+        black: t('blackPlayer').replace('⚫ ', ''),
         result: '*',
         autoReview: false
       });
       if (this.el.boardStatusText) {
-        this.el.boardStatusText.textContent = '开局局面 · 请导入对局或选择示例开始复盘';
+        this.el.boardStatusText.textContent = t('startingPosition');
       }
       if (this.el.divergenceContent) {
-        this.el.divergenceContent.textContent = '点击下方“导入已完赛对局”或选择示例对局开始深度人机分歧复盘。';
+        this.el.divergenceContent.textContent = t('heroSubtitle');
       }
       this.renderEmptyHomeState();
     }
@@ -812,8 +915,8 @@ class AnalysisStudioApp {
             <polyline points="15 7 18 4 21 7"></polyline>
           </svg>
         </div>
-        <div class="home-hero-title">从一盘棋开始</div>
-        <div class="home-hero-subtitle">回看实战选择，找到妙手与直觉容易错过的机会。</div>
+        <div class="home-hero-title">${t('heroTitle')}</div>
+        <div class="home-hero-subtitle">${t('heroSubtitle')}</div>
       </div>
 
       <div class="home-hero-actions">
@@ -823,21 +926,21 @@ class AnalysisStudioApp {
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
           </svg>
-          导入已完赛对局 →
+          ${t('btnImportCompleted')} →
         </button>
       </div>
 
       <div class="home-hero-samples">
-        <div class="home-samples-label">或选择经典名局体验：</div>
+        <div class="home-samples-label">${t('modalSampleLabel')}</div>
         <div class="home-samples-chips">
-          <button type="button" class="btn-sample-chip" id="btn-chip-fischer">♟️ 菲舍尔“世纪之局” (1956)</button>
-          <button type="button" class="btn-sample-chip" id="btn-chip-kasparov">♟️ 卡斯帕罗夫不朽之局 (1999)</button>
+          <button type="button" class="btn-sample-chip" id="btn-chip-fischer">${t('chipFischer')}</button>
+          <button type="button" class="btn-sample-chip" id="btn-chip-kasparov">${t('chipKasparov')}</button>
         </div>
       </div>
 
       <div class="home-hero-tips">
-        <div class="home-tip-item">⚡ 支持直接拖放 .pgn 棋谱文件或文本</div>
-        <div class="home-tip-item">📱 PWA 模式下可直接在系统文件管理器“以此应用打开”</div>
+        <div class="home-tip-item">${t('tipDragDrop')}</div>
+        <div class="home-tip-item">${t('tipPwa')}</div>
       </div>
     `;
 
@@ -1023,8 +1126,8 @@ class AnalysisStudioApp {
     const blackEloMatch = pgnText.match(/\[BlackElo\s+"([^"]+)"\]/i);
     const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
 
-    const whiteName = whiteMatch ? whiteMatch[1] : '白方';
-    const blackName = blackMatch ? blackMatch[1] : '黑方';
+    const whiteName = whiteMatch ? whiteMatch[1] : t('whitePlayer').replace('⚪ ', '');
+    const blackName = blackMatch ? blackMatch[1] : t('blackPlayer').replace('⚫ ', '');
     const whiteElo = whiteEloMatch ? ` (${whiteEloMatch[1]})` : '';
     const blackElo = blackEloMatch ? ` (${blackEloMatch[1]})` : '';
     const result = resultMatch ? resultMatch[1] : '*';
@@ -1045,19 +1148,19 @@ class AnalysisStudioApp {
     this.el.progressCard.style.display = 'flex';
     this.el.progressBar.style.width = '0%';
     this.el.percentText.textContent = '0%';
-    this.el.phaseText.textContent = '正在准备引擎评估...';
+    this.el.phaseText.textContent = t('preparingEngine');
 
     this.el.blunderList.replaceChildren();
     const loadingCard = document.createElement('div');
     loadingCard.style.cssText = 'padding: 28px; text-align: center; color: var(--brand-green); font-size: 13px;';
     const lTitle = document.createElement('div');
     lTitle.style.cssText = 'margin-bottom: 8px; font-weight: 600;';
-    lTitle.textContent = '⚡ 正在分析全盘对局...';
+    lTitle.textContent = t('launchingEngines');
     loadingCard.appendChild(lTitle);
     const lDetail = document.createElement('div');
     lDetail.style.cssText = 'font-size: 11.5px; color: var(--text-dim);';
     lDetail.id = 'blunder-loading-detail';
-    lDetail.textContent = '正在启动计算与直觉引擎...';
+    lDetail.textContent = t('startingEngines');
     loadingCard.appendChild(lDetail);
     this.el.blunderList.appendChild(loadingCard);
 
@@ -1072,11 +1175,11 @@ class AnalysisStudioApp {
           this.el.percentText.textContent = `${prog.percent}%`;
           const detailEl = document.getElementById('blunder-loading-detail');
           if (prog.phase === 'evaluating') {
-            const txt = `引擎评估中 (${prog.current}/${prog.total}) · ${prog.currentMove || ''}`;
+            const txt = t('evaluatingEngine', { current: prog.current, total: prog.total, move: prog.currentMove || '' });
             this.el.phaseText.textContent = txt;
             if (detailEl) detailEl.textContent = txt;
           } else if (prog.phase === 'intuition') {
-            const txt = `人类直觉盲区分析 (${prog.current}/${prog.total}) · ${prog.currentMove || ''}`;
+            const txt = t('analyzingIntuition', { current: prog.current, total: prog.total, move: prog.currentMove || '' });
             this.el.phaseText.textContent = txt;
             if (detailEl) detailEl.textContent = txt;
           }
@@ -1102,7 +1205,7 @@ class AnalysisStudioApp {
       this.el.divergenceContent.replaceChildren();
       const errSpan = document.createElement('span');
       errSpan.style.color = 'var(--brand-red)';
-      errSpan.textContent = `⚠️ 复盘分析出错: ${err.message}`;
+      errSpan.textContent = t('errorReviewError', { error: err.message });
       this.el.divergenceContent.appendChild(errSpan);
 
       this.el.blunderList.replaceChildren();
@@ -1110,14 +1213,14 @@ class AnalysisStudioApp {
       errBox.style.cssText = 'padding: 28px; text-align: center; color: var(--brand-red); font-size: 13px;';
       const msgDiv = document.createElement('div');
       msgDiv.style.marginBottom = '8px';
-      msgDiv.textContent = `⚠️ 棋局分析未能完成: ${err.message}`;
+      msgDiv.textContent = t('errorAnalysisFailed', { error: err.message });
       errBox.appendChild(msgDiv);
 
       const retryBtn = document.createElement('button');
       retryBtn.type = 'button';
       retryBtn.className = 'btn-header btn-primary';
       retryBtn.style.cssText = 'margin: 0 auto; display: inline-flex;';
-      retryBtn.textContent = '重试分析';
+      retryBtn.textContent = t('btnRetryAnalysis');
       retryBtn.addEventListener('click', () => this.runFullReview(true));
       errBox.appendChild(retryBtn);
 
@@ -1206,10 +1309,10 @@ class AnalysisStudioApp {
 
     if (!filteredMoments || filteredMoments.length === 0) {
       const emptyMsg = this.currentDivergenceFilter === 'beyond'
-        ? '本盘未检测到实战走出更优选择的妙手'
+        ? t('noBeyondDetected')
         : (this.currentDivergenceFilter === 'trap'
-          ? '本盘未检测到实战采用自然但明显吃亏选择的俗手'
-          : '👏 本盘棋未检测到显著的妙手或俗手瞬间。');
+          ? t('noTrapDetected')
+          : t('noKeyMoments'));
       const emptyBox = document.createElement('div');
       emptyBox.style.cssText = 'padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;';
       emptyBox.textContent = emptyMsg;
@@ -1275,17 +1378,17 @@ class AnalysisStudioApp {
 
       if (isBeyond) {
         typeTag.classList.add('tag-beyond');
-        typeTag.title = '✨ 妙手：你走出了引擎首选。相比人类直觉的自然走法，这步保留了更多优势。';
-        typeTag.textContent = '✨ 妙手';
+        typeTag.title = t('beyondTitle');
+        typeTag.textContent = t('beyondText');
         rightTag.classList.add('tag-gain');
-        rightTag.title = '走出优于自然直觉的引擎首选';
-        rightTag.textContent = item.isCombinationFollowup ? '组合延续' : '突破直觉';
+        rightTag.title = t('playedEngineBest');
+        rightTag.textContent = item.isCombinationFollowup ? t('beyondComboText') : t('beyondIntuitionBreak');
 
         const subProb = document.createElement('span');
         subProb.className = 'sub-trap-prob';
         subProb.style.color = 'var(--text-dim)';
         if (item.maiaTopSan) {
-          subProb.appendChild(document.createTextNode('自然直觉首选: '));
+          subProb.appendChild(document.createTextNode(t('naturalIntuitionTop')));
           const topStrong = document.createElement('strong');
           topStrong.style.color = 'var(--brand-gold)';
           topStrong.textContent = item.maiaTopSan;
@@ -1294,23 +1397,24 @@ class AnalysisStudioApp {
             subProb.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
           }
           if (item.maiaLossCp != null && item.maiaLossCp > 0) {
-            subProb.appendChild(document.createTextNode(` · 优于直觉 +${(item.maiaLossCp / 100).toFixed(1)} 兵`));
+            const pawns = (item.maiaLossCp / 100).toFixed(1);
+            subProb.appendChild(document.createTextNode(t('betterThanIntuition', { pawns })));
           }
         } else {
-          subProb.textContent = '实战走出引擎首选，优于自然直觉';
+          subProb.textContent = t('playedEngineBest');
         }
         cardSub.appendChild(subProb);
       } else if (isTrap) {
         typeTag.classList.add('tag-trap');
-        typeTag.title = '🫤 俗手：这步人类直觉的优先选择，看起来很自然，但会明显损失优势。';
-        typeTag.textContent = '🫤 俗手';
-        rightTag.title = '相比最佳着法的损耗';
-        rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
+        typeTag.title = t('trapTitle');
+        typeTag.textContent = t('trapText');
+        rightTag.title = t('lossVersusBest');
+        rightTag.textContent = t('lossPawns', { loss: lossPawnsNum });
 
         if (bestMoveText) {
           const subBest = document.createElement('span');
           subBest.className = 'sub-best-move';
-          subBest.appendChild(document.createTextNode('最佳走法: '));
+          subBest.appendChild(document.createTextNode(t('bestMoveIs')));
           const bStrong = document.createElement('strong');
           bStrong.textContent = bestMoveText;
           subBest.appendChild(bStrong);
@@ -1323,29 +1427,29 @@ class AnalysisStudioApp {
         const cleanPlayed = item.san ? item.san.replace(/[+#?!]/g, '') : '';
         const cleanTop1 = item.maiaTopSan ? item.maiaTopSan.replace(/[+#?!]/g, '') : '';
         if (cleanPlayed === cleanTop1) {
-          subTrap.textContent = item.maiaTopProb ? `直觉一选 (${Math.round(item.maiaTopProb)}% 倾向)` : '人类直觉一选';
+          subTrap.textContent = item.maiaTopProb ? t('trapTopTendency', { prob: Math.round(item.maiaTopProb) }) : t('trapTopTendency', { prob: '100' }).replace(' (100% 倾向)', '').replace(' (100% tendency)', '');
         } else {
-          subTrap.textContent = item.humanProbability ? `人类自然走法 (${Math.round(item.humanProbability)}% 倾向)` : '易受人类直觉惯性诱导';
+          subTrap.textContent = item.humanProbability ? t('trapHumanTendency', { prob: Math.round(item.humanProbability) }) : t('trapProne');
         }
         cardSub.appendChild(subTrap);
       } else {
         if (item.severity === 'mistake') {
           typeTag.classList.add('tag-mistake');
-          typeTag.textContent = '失误 ?';
+          typeTag.textContent = t('mistakeText');
         } else if (item.severity === 'inaccuracy') {
           typeTag.classList.add('tag-inaccuracy');
-          typeTag.textContent = '疑问手 ?!';
+          typeTag.textContent = t('inaccuracyText');
         } else {
           typeTag.classList.add('tag-blunder');
-          typeTag.textContent = '大漏 ??';
+          typeTag.textContent = t('blunderText');
         }
-        rightTag.title = '相比最佳着法的损耗';
-        rightTag.textContent = `损耗 -${lossPawnsNum} 兵`;
+        rightTag.title = t('lossVersusBest');
+        rightTag.textContent = t('lossPawns', { loss: lossPawnsNum });
 
         if (bestMoveText) {
           const subBest = document.createElement('span');
           subBest.className = 'sub-best-move';
-          subBest.appendChild(document.createTextNode('最佳走法: '));
+          subBest.appendChild(document.createTextNode(t('bestMoveIs')));
           const bStrong = document.createElement('strong');
           bStrong.textContent = bestMoveText;
           subBest.appendChild(bStrong);
@@ -1484,24 +1588,24 @@ class AnalysisStudioApp {
       if (m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition) {
         badge.textContent = '✨';
         badge.className = 'annotation-badge annotation-beyond';
-        badge.title = m.isCombinationFollowup ? '✨ 妙手组合延续' : '✨ 妙手：走出优于直觉的引擎首选';
+        badge.title = m.isCombinationFollowup ? `✨ ${t('beyondComboText')}` : `✨ ${t('beyondText')}: ${t('playedEngineBest')}`;
       } else if (m.divergenceType === 'intuition_trap' || m.isHumanTrap) {
         badge.textContent = '🫤';
         badge.className = 'annotation-badge annotation-trap';
         const lossTxt = m.lossPawns || (m.lossCp ? (Math.abs(m.lossCp) / 100).toFixed(1) : '0');
-        badge.title = `🫤 俗手：直觉陷阱 (-${lossTxt} 兵)`;
+        badge.title = `🫤 ${t('trapText')} (-${lossTxt} ${t('pawnsUnit')})`;
       } else if (m.severity === 'blunder') {
         badge.textContent = '??';
         badge.className = 'annotation-badge annotation-blunder';
-        badge.title = `大漏 (${m.lossPawns} 兵)`;
+        badge.title = `${t('blunderText')} (${m.lossPawns} ${t('pawnsUnit')})`;
       } else if (m.severity === 'mistake') {
         badge.textContent = '?';
         badge.className = 'annotation-badge annotation-mistake';
-        badge.title = `失误 (${m.lossPawns} 兵)`;
+        badge.title = `${t('mistakeText')} (${m.lossPawns} ${t('pawnsUnit')})`;
       } else if (m.severity === 'inaccuracy') {
         badge.textContent = '?!';
         badge.className = 'annotation-badge annotation-mistake';
-        badge.title = `疑问手 (${m.lossPawns} 兵)`;
+        badge.title = `${t('inaccuracyText')} (${m.lossPawns} ${t('pawnsUnit')})`;
       } else {
         badge.textContent = '';
       }
@@ -1567,8 +1671,8 @@ class AnalysisStudioApp {
       this.el.divergenceBadge.style.color = 'var(--brand-green)';
       this.resetComparePanel();
     } else {
-      const sideText = currentPos.turn === 'w' ? '白方' : '黑方';
-      this.el.boardStatusText.textContent = `第 ${currentPos.moveNumber} 步 (${sideText} ${currentPos.san})`;
+      const sideText = currentPos.turn === 'w' ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
+      this.el.boardStatusText.textContent = t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
       this.updateActivePositionAnalysis();
     }
   }
@@ -1593,18 +1697,19 @@ class AnalysisStudioApp {
       // 1. Engine recommendation
       this.el.compareEngineSan.textContent = moveReview.bestSan || '—';
       this.el.compareEngineSan.style.color = 'var(--brand-blue)';
-      this.el.compareEngineMeta.textContent = moveReview.evalBefore ? `评估 ${moveReview.evalBefore}` : '';
+      const whiteScoreBefore = getMoveReviewWhiteScore(moveReview, false);
+      this.el.compareEngineMeta.textContent = whiteScoreBefore ? `${t('evalLabel')} ${whiteScoreBefore}` : '';
 
       // 2. Maia intuition (from pre-computed data, with real-time fallback)
       if (moveReview.maiaTopSan) {
         this.el.compareIntuitionSan.textContent = moveReview.maiaTopSan;
         this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
         this.el.compareIntuitionMeta.textContent = moveReview.maiaTopProb != null
-          ? `概率 ${moveReview.maiaTopProb.toFixed(1)}%`
+          ? `${t('probLabel')} ${moveReview.maiaTopProb.toFixed(1)}%`
           : '';
       } else {
         // Fallback: Real-time Maia prediction if not yet stored
-        this.el.compareIntuitionSan.textContent = '计算中...';
+        this.el.compareIntuitionSan.textContent = t('statusCalculating');
         this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
         this.el.compareIntuitionMeta.textContent = '';
 
@@ -1622,7 +1727,7 @@ class AnalysisStudioApp {
 
             this.el.compareIntuitionSan.textContent = top.san;
             this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-            this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
+            this.el.compareIntuitionMeta.textContent = top.prob != null ? `${t('probLabel')} ${top.prob.toFixed(1)}%` : '';
 
             // Update match badge
             const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
@@ -1632,11 +1737,11 @@ class AnalysisStudioApp {
             const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
 
             if (isBeyond) {
-              this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'var(--dg-blue-soft)', 'var(--brand-blue)');
+              this.setComparePlayedSan(moveReview.san, t('tagEngineBest'), 'var(--dg-blue-soft)', 'var(--brand-blue)');
             } else if (isTrap) {
-              this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'var(--dg-gold-soft)', 'var(--brand-gold)');
+              this.setComparePlayedSan(moveReview.san, t('tagTrap'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
             } else if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
-              this.setComparePlayedSan(moveReview.san, '= 直觉', 'var(--dg-gold-soft)', 'var(--brand-gold)');
+              this.setComparePlayedSan(moveReview.san, t('tagIntuition'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
             } else {
               this.setComparePlayedSan(moveReview.san);
             }
@@ -1664,7 +1769,8 @@ class AnalysisStudioApp {
       }
 
       // 3. Played move
-      this.el.comparePlayedMeta.textContent = moveReview.evalAfter ? `结果 ${moveReview.evalAfter}` : '';
+      const whiteScoreAfter = getMoveReviewWhiteScore(moveReview, true);
+      this.el.comparePlayedMeta.textContent = whiteScoreAfter ? `${t('evalResultLabel')} ${whiteScoreAfter}` : '';
 
       // Highlight played card based on severity
       const playedCard = this.el.comparePlayedCard;
@@ -1686,46 +1792,46 @@ class AnalysisStudioApp {
 
       // Add match indicator on played card
       if (isBeyond) {
-        this.setComparePlayedSan(moveReview.san, '= 引擎一选 ✨', 'var(--dg-blue-soft)', 'var(--brand-blue)');
+        this.setComparePlayedSan(moveReview.san, t('tagEngineBest'), 'var(--dg-blue-soft)', 'var(--brand-blue)');
       } else if (isTrap) {
-        this.setComparePlayedSan(moveReview.san, '= 俗手 🫤', 'var(--dg-gold-soft)', 'var(--brand-gold)');
+        this.setComparePlayedSan(moveReview.san, t('tagTrap'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
       } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
-        this.setComparePlayedSan(moveReview.san, '= 引擎');
+        this.setComparePlayedSan(moveReview.san, t('tagEngine'));
       } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
-        this.setComparePlayedSan(moveReview.san, '= 直觉', 'var(--dg-gold-soft)', 'var(--brand-gold)');
+        this.setComparePlayedSan(moveReview.san, t('tagIntuition'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
       } else if (moveReview.isBookMove) {
-        this.setComparePlayedSan(moveReview.san, '📖 理论着法', 'var(--dg-blue-soft)', 'var(--brand-blue)');
+        this.setComparePlayedSan(moveReview.san, t('tagBook'), 'var(--dg-blue-soft)', 'var(--brand-blue)');
       } else {
         this.setComparePlayedSan(moveReview.san);
       }
 
       // --- Badge ---
       if (isBeyond) {
-        this.el.divergenceBadge.textContent = '✨ 妙手 · 优于人类直觉走法';
+        this.el.divergenceBadge.textContent = t('badgeBeyond');
         this.el.divergenceBadge.style.color = 'var(--brand-blue)';
         this.el.divergenceBadge.style.background = 'var(--dg-blue-soft)';
       } else if (isTrap) {
-        this.el.divergenceBadge.textContent = '🫤 俗手 · 自然但吃亏的选择';
+        this.el.divergenceBadge.textContent = t('badgeTrap');
         this.el.divergenceBadge.style.color = 'var(--brand-gold)';
         this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
       } else if (moveReview.isBookMove) {
-        this.el.divergenceBadge.textContent = `📖 开局理论着法${moveReview.openingName ? ' · ' + moveReview.openingName : ''}`;
+        this.el.divergenceBadge.textContent = `${t('badgeBook')}${moveReview.openingName ? ' · ' + moveReview.openingName : ''}`;
         this.el.divergenceBadge.style.color = 'var(--brand-blue)';
         this.el.divergenceBadge.style.background = 'var(--dg-blue-soft)';
       } else if (moveReview.severity === 'blunder') {
-        this.el.divergenceBadge.textContent = '⚠️ 大漏';
+        this.el.divergenceBadge.textContent = t('badgeBlunder');
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
         this.el.divergenceBadge.style.background = 'var(--dg-red-soft)';
       } else if (moveReview.severity === 'mistake') {
-        this.el.divergenceBadge.textContent = '⚠️ 失误';
+        this.el.divergenceBadge.textContent = t('badgeMistake');
         this.el.divergenceBadge.style.color = 'var(--brand-red)';
         this.el.divergenceBadge.style.background = 'var(--dg-red-soft)';
       } else if (moveReview.severity === 'inaccuracy') {
-        this.el.divergenceBadge.textContent = '⚡ 疑问手';
+        this.el.divergenceBadge.textContent = t('badgeInaccuracy');
         this.el.divergenceBadge.style.color = 'var(--brand-gold)';
         this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
       } else {
-        this.el.divergenceBadge.textContent = '✓ 正常';
+        this.el.divergenceBadge.textContent = t('badgeNormal');
         this.el.divergenceBadge.style.color = 'var(--brand-green)';
         this.el.divergenceBadge.style.background = 'var(--dg-green-soft)';
       }
@@ -1779,7 +1885,7 @@ class AnalysisStudioApp {
       this.boardUI.setArrows(arrows);
     } else {
       // Review data not yet computed for this ply - provide real-time dual-engine preview
-      this.el.divergenceBadge.textContent = '⚡ 实时分析中';
+      this.el.divergenceBadge.textContent = t('badgeRealtime');
       this.el.divergenceBadge.style.color = 'var(--brand-gold)';
 
       // Immediately display played move
@@ -1789,10 +1895,10 @@ class AnalysisStudioApp {
       this.el.comparePlayedCard.classList.remove('is-blunder');
 
       // Set placeholders
-      this.el.compareEngineSan.textContent = '计算中...';
+      this.el.compareEngineSan.textContent = t('statusCalculating');
       this.el.compareEngineSan.style.color = 'var(--brand-gold)';
       this.el.compareEngineMeta.textContent = '';
-      this.el.compareIntuitionSan.textContent = '计算中...';
+      this.el.compareIntuitionSan.textContent = t('statusCalculating');
       this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
       this.el.compareIntuitionMeta.textContent = '';
 
@@ -1810,7 +1916,7 @@ class AnalysisStudioApp {
           const top = pred.moves[0];
           this.el.compareIntuitionSan.textContent = top.san || '—';
           this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-          this.el.compareIntuitionMeta.textContent = top.prob != null ? `概率 ${top.prob.toFixed(1)}%` : '';
+          this.el.compareIntuitionMeta.textContent = top.prob != null ? `${t('probLabel')} ${top.prob.toFixed(1)}%` : '';
           if (top.uci) {
             arrows.push({
               from: top.uci.slice(0, 2),
@@ -1835,7 +1941,8 @@ class AnalysisStudioApp {
           if (sfRes && sfRes.bestMove) {
             this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
             this.el.compareEngineSan.style.color = 'var(--brand-blue)';
-            this.el.compareEngineMeta.textContent = `评估 ${sfRes.score}`;
+            const whiteScore = formatEvalObjWhite(sfRes, evalFen);
+            this.el.compareEngineMeta.textContent = `${t('evalLabel')} ${whiteScore}`;
             arrows.push({
               from: sfRes.bestMove.fromSq,
               to: sfRes.bestMove.toSq,
@@ -1864,7 +1971,7 @@ class AnalysisStudioApp {
     this.el.comparePlayedMeta.textContent = '';
     this.el.comparePlayedCard.classList.remove('is-blunder');
     if (this.el.divergenceBadge) {
-      this.el.divergenceBadge.textContent = '局面研判';
+      this.el.divergenceBadge.textContent = t('divergenceBadgeDefault');
       this.el.divergenceBadge.style.color = 'var(--brand-gold)';
       this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
     }
@@ -1884,9 +1991,9 @@ class AnalysisStudioApp {
     soundEffects.playSoundForMove(move.san || move.uci);
     this.branchFen = newFen;
     this.el.branchBanner.style.display = 'flex';
-    this.el.boardStatusText.textContent = `🌿 分支走法: ${move.san || move.uci}`;
+    this.el.boardStatusText.textContent = t('branchMoveIndicator', { move: move.san || move.uci });
 
-    this.el.divergenceBadge.textContent = '🌿 分支试演';
+    this.el.divergenceBadge.textContent = t('badgeBranch');
     this.el.divergenceBadge.style.color = 'var(--brand-gold)';
     this.resetComparePanel();
     this.el.comparePlayedSan.textContent = move.san || move.uci;
@@ -1902,7 +2009,7 @@ class AnalysisStudioApp {
         const m = pred.moves[0];
         this.el.compareIntuitionSan.textContent = m.san || '—';
         this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-        this.el.compareIntuitionMeta.textContent = m.prob != null ? `概率 ${m.prob.toFixed(1)}%` : '';
+        this.el.compareIntuitionMeta.textContent = m.prob != null ? `${t('probLabel')} ${m.prob.toFixed(1)}%` : '';
         if (m.uci) {
           arrows.push({
             from: m.uci.slice(0, 2),
@@ -1922,12 +2029,13 @@ class AnalysisStudioApp {
         if (sfRes && sfRes.bestMove) {
           this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
           this.el.compareEngineSan.style.color = 'var(--brand-blue)';
-          this.el.compareEngineMeta.textContent = `评估 ${sfRes.score} (d${sfRes.depth})`;
+          const whiteScore = formatEvalObjWhite(sfRes, newFen);
+          this.el.compareEngineMeta.textContent = `${t('evalLabel')} ${whiteScore} (d${sfRes.depth})`;
           arrows.push({
             from: sfRes.bestMove.fromSq,
             to: sfRes.bestMove.toSq,
             color: 'blue',
-            label: `${sfRes.bestMove.san || ''} (${sfRes.score})`
+            label: `${sfRes.bestMove.san || ''} (${whiteScore})`
           });
           this.boardUI.setArrows(arrows);
         }

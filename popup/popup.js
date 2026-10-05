@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cdnInput = document.getElementById('cdn-url');
   const presetSelect = document.getElementById('model-preset-select');
   const panelSwitch = document.getElementById('toggle-panel-switch');
+  const liveEvalSwitch = document.getElementById('toggle-live-eval-switch');
 
   // 0. Dynamic i18n Translation
   if (globalThis.chrome?.i18n?.getMessage) {
@@ -33,6 +34,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (response && typeof response.closed === 'boolean') {
             if (panelSwitch) panelSwitch.checked = !response.closed;
           }
+          if (response && typeof response.liveEvaluation === 'boolean') {
+            if (liveEvalSwitch) liveEvalSwitch.checked = response.liveEvaluation;
+          }
         });
       }
     });
@@ -55,8 +59,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // 3.1 Handle live evaluation toggle switch (disables board arrows & heatmaps on chess sites)
+  if (liveEvalSwitch) {
+    liveEvalSwitch.addEventListener('change', () => {
+      const isEnabled = liveEvalSwitch.checked;
+      chrome.storage.local.set({ liveEvaluation: isEnabled });
+      if (chrome.tabs && chrome.tabs.query) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTab = tabs?.[0];
+          if (activeTab?.id) {
+            chrome.tabs.sendMessage(activeTab.id, { type: 'SET_LIVE_EVAL', enabled: isEnabled }, () => {
+              if (chrome.runtime.lastError) {}
+            });
+          }
+        });
+      }
+    });
+  }
+
   // 4. Load saved preferences
-  chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'cloudflareCdnUrl'], (res) => {
+  chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'cloudflareCdnUrl', 'liveEvaluation'], (res) => {
+    if (liveEvalSwitch) {
+      liveEvalSwitch.checked = res.liveEvaluation !== false;
+    }
     const elo = res.defaultElo || res.maia3_target_elo || 1900;
     if (eloSelect) eloSelect.value = elo;
     const currentUrl = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';

@@ -1102,9 +1102,9 @@ export class GameAnalyzer {
 
               // --- Candidate Archetype Filtering ---
 
-              // Candidate 1: 妙手候选 (实战是引擎一选，且与 Maia 一选不同)
+              // Candidate 1: 妙手候选 (实战是引擎一选，且与 Maia 一选不同；前5个回合即前10步不判定妙手)
               const isEngineBest = cleanBest && (cleanPlayed === cleanBest || (typeof mv.lossCp === 'number' && mv.lossCp <= 5));
-              if (isEngineBest && !mv.isBookMove && !mv.isOnlyLegalMove) {
+              if (mv.ply > 10 && isEngineBest && !mv.isBookMove && !mv.isOnlyLegalMove) {
                 if (cleanMaia && cleanMaia !== cleanPlayed) {
                   mv.isBeyondIntuitionCandidate = true;
                   mv._candidateMaiaSan = cleanMaia;
@@ -1211,9 +1211,9 @@ export class GameAnalyzer {
               ? deepLossMap.get(cm.maiaTopUci)
               : null;
 
-            // 3. 复核判定 妙手 (实战＝Stockfish一选，且Stockfish评估收益超过Maia一选: maiaLossCp > 0)
+            // 3. 复核判定 妙手 (实战＝Stockfish一选，且Stockfish评估收益超过Maia一选: maiaLossCp > 0；前5个回合即前10步不判定妙手)
             const isStillDeepBest = (deepBestSan === cleanPlayed || deepBestUci === cm.uci || deepLossCp === 0);
-            if (cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
+            if (cm.ply > 10 && cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
               if (isStillDeepBest && maiaLossCp !== null && maiaLossCp > 0) {
                 // 连续组合去重：检查同方上一有效决策步是否已是妙手
                 const prevSameSideMove = analyzedMoves

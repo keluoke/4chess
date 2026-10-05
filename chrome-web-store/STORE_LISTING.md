@@ -2,7 +2,7 @@
 
 > **当前配置指南**：针对 Chrome 开发者控制台商品详情页（[Dashboard Listing Edit](https://chrome.google.com/webstore/devconsole/6c7445bd-661a-43f4-adc7-c9415dddb75b/egiimjkekgiaimaagaljiclacljmdkmo/edit/listing)）。
 > **核心策略**：**英语为主（Primary English），中文为辅（Secondary Chinese）**。
-> **🎉 原生 i18n 已就绪**：安装包已内置 `_locales/en` 与 `_locales/zh_CN`。上传 `diverge-extension-v1.0.2.zip` 时，控制台会自动识别并填充英语为默认语言，同时自动挂载简体中文语言槽！
+> **🎉 原生 i18n 已就绪**：安装包已内置 `_locales/en` 与 `_locales/zh_CN`。上传 `diverge-extension-v1.0.3.zip` 时，控制台会自动识别并填充英语为默认语言，同时自动挂载简体中文语言槽！
 > 本文档提供两种填报方案：
 > - **方案 A（推荐 · 国际化双语言）**：默认语言设为 **English (United States)**，另通过「+ 添加语言」增加 **简体中文 (zh-CN)**（上传带 `_locales` 的包后通常会自动激活）。
 > - **方案 B（单页双语混合）**：若开发者控制台维持单一 listing 页面，直接使用「英文在上、中文在下」的中英一体排版。

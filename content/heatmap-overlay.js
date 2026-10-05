@@ -15,6 +15,7 @@ export class HeatmapOverlay {
     this.orientation = 'white';
     this.showHeatmap = true;
     this.showArrows = true;
+    this.liveEvaluationEnabled = true;
     this.heatmapOpacity = 0.55;
     this.currentData = null;
     this.activeHoverMove = null;
@@ -112,6 +113,15 @@ export class HeatmapOverlay {
     }
   }
 
+  setLiveEvaluation(enabled) {
+    this.liveEvaluationEnabled = Boolean(enabled);
+    if (!this.liveEvaluationEnabled) {
+      this.clear();
+    } else if (this.currentData) {
+      this.render(this.currentData);
+    }
+  }
+
   /**
    * Converts square index (0..63) to SVG canvas coordinates
    * sqIdx = rank * 8 + file (a1 = 0, h1 = 7, a8 = 56, h8 = 63)
@@ -147,7 +157,7 @@ export class HeatmapOverlay {
 
   render(predictionData) {
     if (!this.svg) return;
-    if (FairPlayGuard.isLiveGameInProgress()) {
+    if (FairPlayGuard.isLiveGameInProgress() || !this.liveEvaluationEnabled) {
       this.clear();
       return;
     }

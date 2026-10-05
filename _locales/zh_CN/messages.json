@@ -27,6 +27,14 @@
     "message": "分析时随手查看当前局面",
     "description": "悬浮面板开关描述"
   },
+  "liveEvalTitle": {
+    "message": "实时评估",
+    "description": "实时评估开关标题"
+  },
+  "liveEvalDesc": {
+    "message": "棋盘走法建议与直觉热力图",
+    "description": "实时评估开关描述"
+  },
   "btnReviewStudio": {
     "message": "进入全盘分析",
     "description": "打开工作台按钮"

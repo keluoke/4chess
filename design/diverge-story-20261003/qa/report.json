@@ -1,0 +1,355 @@
+{
+  "export": [
+    {
+      "id": "01-cover",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1279,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "02-three-views",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1278,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "03-read-the-board",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1269,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "04-a-position",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1217,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "05-key-moments",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1270,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "06-practice-loop",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1208,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "07-fair-play",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1267,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    },
+    {
+      "id": "08-save-and-start",
+      "width": 1080,
+      "height": 1440,
+      "bodyBottom": 1262,
+      "footerTop": 1313,
+      "overlap": false,
+      "overflow": [],
+      "mode": "export"
+    }
+  ],
+  "mobile": [
+    {
+      "width": 390,
+      "horizontal": {
+        "viewport": 390,
+        "scrollWidth": 390
+      },
+      "pages": [
+        {
+          "id": "01-cover",
+          "width": 390,
+          "height": 819.09375,
+          "bodyBottom": 708,
+          "footerTop": 738,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "02-three-views",
+          "width": 390,
+          "height": 956.875,
+          "bodyBottom": 846,
+          "footerTop": 876,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "03-read-the-board",
+          "width": 390,
+          "height": 1009.25,
+          "bodyBottom": 898,
+          "footerTop": 928,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "04-a-position",
+          "width": 390,
+          "height": 1084.125,
+          "bodyBottom": 973,
+          "footerTop": 1003,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "05-key-moments",
+          "width": 390,
+          "height": 1016.875,
+          "bodyBottom": 906,
+          "footerTop": 936,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "06-practice-loop",
+          "width": 390,
+          "height": 1056.5,
+          "bodyBottom": 946,
+          "footerTop": 976,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "07-fair-play",
+          "width": 390,
+          "height": 976.25,
+          "bodyBottom": 865,
+          "footerTop": 895,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        },
+        {
+          "id": "08-save-and-start",
+          "width": 390,
+          "height": 994.625,
+          "bodyBottom": 884,
+          "footerTop": 914,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-390"
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "horizontal": {
+        "viewport": 375,
+        "scrollWidth": 375
+      },
+      "pages": [
+        {
+          "id": "01-cover",
+          "width": 375,
+          "height": 819.09375,
+          "bodyBottom": 708,
+          "footerTop": 738,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "02-three-views",
+          "width": 375,
+          "height": 986.625,
+          "bodyBottom": 876,
+          "footerTop": 906,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "03-read-the-board",
+          "width": 375,
+          "height": 1009.25,
+          "bodyBottom": 898,
+          "footerTop": 928,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "04-a-position",
+          "width": 375,
+          "height": 1069.125,
+          "bodyBottom": 958,
+          "footerTop": 988,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "05-key-moments",
+          "width": 375,
+          "height": 1016.875,
+          "bodyBottom": 906,
+          "footerTop": 936,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "06-practice-loop",
+          "width": 375,
+          "height": 1056.5,
+          "bodyBottom": 946,
+          "footerTop": 976,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "07-fair-play",
+          "width": 375,
+          "height": 976.25,
+          "bodyBottom": 865,
+          "footerTop": 895,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        },
+        {
+          "id": "08-save-and-start",
+          "width": 375,
+          "height": 994.625,
+          "bodyBottom": 884,
+          "footerTop": 914,
+          "overlap": false,
+          "overflow": [],
+          "mode": "mobile-375"
+        }
+      ]
+    }
+  ],
+  "desktop": [
+    {
+      "id": "01-cover",
+      "width": 1080,
+      "height": 1437.65625,
+      "bodyBottom": 1279,
+      "footerTop": 1311,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "02-three-views",
+      "width": 1080,
+      "height": 1437.40625,
+      "bodyBottom": 1278,
+      "footerTop": 1310,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "03-read-the-board",
+      "width": 1080,
+      "height": 1428.21875,
+      "bodyBottom": 1269,
+      "footerTop": 1301,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "04-a-position",
+      "width": 1080,
+      "height": 1375.609375,
+      "bodyBottom": 1217,
+      "footerTop": 1249,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "05-key-moments",
+      "width": 1080,
+      "height": 1428.90625,
+      "bodyBottom": 1270,
+      "footerTop": 1302,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "06-practice-loop",
+      "width": 1080,
+      "height": 1366.90625,
+      "bodyBottom": 1208,
+      "footerTop": 1240,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "07-fair-play",
+      "width": 1080,
+      "height": 1426.15625,
+      "bodyBottom": 1267,
+      "footerTop": 1299,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    },
+    {
+      "id": "08-save-and-start",
+      "width": 1080,
+      "height": 1421.046875,
+      "bodyBottom": 1262,
+      "footerTop": 1294,
+      "overlap": false,
+      "overflow": [],
+      "mode": "desktop"
+    }
+  ],
+  "errors": [],
+  "fonts": {
+    "status": "loaded",
+    "pingfang": true,
+    "songti": true,
+    "images": true
+  },
+  "samePageText": true,
+  "passed": true
+}

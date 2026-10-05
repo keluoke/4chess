@@ -888,6 +888,34 @@ export class IntuitionPanel {
     }
   }
 
+  formatWhiteScore(sf, turn = this.currentTurn) {
+    if (!sf) return '';
+    const score = sf.score || sf.scoreText;
+    if (!score || score === '?') return '';
+    const isBlack = turn === 'b';
+
+    if (sf.isMate || String(score).startsWith('M') || String(score).startsWith('#')) {
+      const match = String(score).match(/[-+]?\d+/);
+      if (match) {
+        let m = parseInt(match[0], 10);
+        if (isBlack) m = -m;
+        return `M${m > 0 ? '+' : ''}${m}`;
+      }
+      return score;
+    }
+
+    let cp = sf.scoreCp;
+    if (typeof cp !== 'number') {
+      const num = parseFloat(score);
+      if (!isNaN(num)) cp = Math.round(num * 100);
+      else return score;
+    }
+
+    const whiteCp = isBlack ? -cp : cp;
+    const pawns = (whiteCp / 100).toFixed(2);
+    return whiteCp > 0 ? `+${pawns}` : pawns;
+  }
+
   setLanguage(lang) {
     this.lang = lang;
     this._setStorage({ maia3_lang: lang });
@@ -1212,7 +1240,7 @@ export class IntuitionPanel {
                 </div>
                 <div class="weui-move-right">
                   <span class="weui-delta-tag tag-best">0.00</span>
-                  <span class="weui-move-prob" style="color: var(--weui-BRAND);">${sf.score}</span>
+                  <span class="weui-move-prob" style="color: var(--weui-BRAND);">${this.formatWhiteScore(sf, predictionData.turn)}</span>
                 </div>
               </div>
               <div class="weui-progress-track">
@@ -1235,7 +1263,8 @@ export class IntuitionPanel {
           const recText = document.createTextNode(this.lang === 'zh' ? '建议走 ' : 'Recommended ');
           const moveStrong = document.createElement('strong');
           moveStrong.textContent = sf.bestMove.san;
-          const evalText = document.createTextNode(` (${this.lang === 'zh' ? '评估评分' : 'Eval'}: ${sf.score})。`);
+          const whiteScore = this.formatWhiteScore(sf, predictionData.turn);
+          const evalText = document.createTextNode(` (${this.lang === 'zh' ? '评估' : 'Eval'}: ${whiteScore})。`);
           const br = document.createElement('br');
           const subSpan = document.createElement('span');
           subSpan.style.cssText = 'color: var(--weui-FG-1); font-size: 11px;';
@@ -1325,7 +1354,7 @@ export class IntuitionPanel {
         const rightSpan = document.createElement('span');
         rightSpan.className = 'weui-sf-eval';
         rightSpan.style.cssText = 'color: var(--weui-BRAND); font-weight: 700;';
-        rightSpan.textContent = `${evalPrefix} ${sf.score}`;
+        rightSpan.textContent = `${evalPrefix} ${this.formatWhiteScore(sf, predictionData.turn)}`;
 
         miniRow.append(leftSpan, rightSpan);
         insightText.appendChild(miniRow);
@@ -1482,9 +1511,14 @@ export class IntuitionPanel {
       const lossEl = document.createElement('strong');
       lossEl.style.color = '#FA5151';
       lossEl.textContent = `${blunderInfo.lossPawns || 0}`;
+
+      const evalBeforeStr = this.formatWhiteScore({ score: blunderInfo.evalBefore, scoreCp: blunderInfo.evalBeforeCp }, blunderInfo.turn);
+      const opponentTurn = blunderInfo.turn === 'w' ? 'b' : 'w';
+      const evalAfterStr = this.formatWhiteScore({ score: blunderInfo.evalAfter, scoreCp: blunderInfo.evalAfterCp }, opponentTurn);
+
       const lossUnit = document.createTextNode(isZh
-        ? ` 兵 (局势变动: ${blunderInfo.evalBefore || '0.00'} ➔ ${blunderInfo.evalAfter || '0.00'})`
-        : ` (${blunderInfo.evalBefore || '0.00'} ➔ ${blunderInfo.evalAfter || '0.00'})`);
+        ? ` 兵 (局势变动: ${evalBeforeStr} ➔ ${evalAfterStr})`
+        : ` (${evalBeforeStr} ➔ ${evalAfterStr})`);
 
       line2.append(lossLabel, lossEl, lossUnit);
       textEl.append(line1, line2);

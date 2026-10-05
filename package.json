@@ -1,12 +1,12 @@
 {
   "name": "diverge-chess-analysis",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "歧路 Diverge · Standalone Deep Analysis Studio",
   "type": "module",
   "scripts": {
     "build": "node scripts/prepare_cloudflare.mjs",
     "clean": "node scripts/clean_cloudflare.mjs",
-    "package": "zip -r -X diverge-extension-v1.0.2.zip manifest.json background.js index.html favicon.svg _locales analysis content engine lib popup icons ui -x \"*.DS_Store\" \"*__MACOSX*\"",
+    "package": "zip -r -X diverge-extension-v1.0.3.zip manifest.json background.js index.html favicon.svg _locales analysis content engine lib popup icons ui -x \"*.DS_Store\" \"*__MACOSX*\"",
     "test": "node scripts/test_fair_play.mjs && node scripts/test_dom_fixtures.mjs && node scripts/test_security_audit.mjs && node scripts/test_sound_effects.mjs",
     "test:baseline": "python3 scripts/verify_official_baseline.py"
   },

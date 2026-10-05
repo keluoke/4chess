@@ -15,7 +15,7 @@ Chrome 商店仅接受 **ZIP 包**。根据项目架构铁律，**严禁将大�
 cd /Volumes/AI/coding/simoextension
 
 # 打包纯轻量运行包（仅包含运行时必须的脚本、静态资源及 1.7MB Stockfish WASM，压缩后仅约 1.3 MB）
-zip -r -X ../diverge-extension-v1.0.2.zip \
+zip -r -X ../diverge-extension-v1.0.3.zip \
   manifest.json background.js index.html favicon.svg \
   _locales analysis content engine lib popup icons ui \
   -x "*.DS_Store" "*__MACOSX*"
@@ -31,7 +31,7 @@ zip -r -X ../diverge-extension-v1.0.2.zip \
 ## 二、Developer Dashboard 提审操作流程
 
 1. 登录 [Chrome 开发者控制台 (Chrome Web Store Developer Dashboard)](https://chrome.google.com/webstore/devconsole/)。
-2. 点击「新建项目」→ 上传刚才生成的 `diverge-extension-v1.0.2.zip`（体积约 1.3MB，上传极快）。
+2. 点击「新建项目」或「更新项目」→ 上传刚才生成的 `diverge-extension-v1.0.3.zip`（体积约 1.3MB，上传极快）。
 3. **商品详情（Store Listing）**（文案见 `STORE_LISTING.md`）：
    - 名称：`歧路 Diverge · 人类直觉与双引擎国际象棋复盘` / `Diverge · Chess Intuition & Dual-Engine Review`
    - 简短说明与详细说明（粘贴 `STORE_LISTING.md` 中的中英双语介绍）

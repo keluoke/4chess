@@ -16,9 +16,19 @@ export async function initMaiaExtension() {
 
   let currentFen = null;
   let currentOrientation = 'white';
+  let liveEvaluationEnabled = true;
   const overlay = new HeatmapOverlay();
   let panel = null;
   let detector = null;
+
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.get(['liveEvaluation'], (res) => {
+      if (res && typeof res.liveEvaluation === 'boolean') {
+        liveEvaluationEnabled = res.liveEvaluation;
+        overlay.setLiveEvaluation(liveEvaluationEnabled);
+      }
+    });
+  }
 
   const engine = new MaiaEngine((status) => {
     if (panel) {
@@ -450,7 +460,7 @@ export async function initMaiaExtension() {
         }
         sendResponse({ closed: panel.isPanelClosed() });
       } else if (msg.type === 'GET_PANEL_STATE') {
-        sendResponse({ closed: panel.isPanelClosed() });
+        sendResponse({ closed: panel.isPanelClosed(), liveEvaluation: liveEvaluationEnabled });
       } else if (msg.type === 'OPEN_PANEL') {
         panel.open();
         sendResponse({ closed: false });
@@ -460,6 +470,26 @@ export async function initMaiaExtension() {
       } else if (msg.type === 'SET_ELO' && typeof msg.elo === 'number') {
         panel.setElo(msg.elo);
         sendResponse({ ok: true, elo: msg.elo });
+      } else if (msg.type === 'SET_LIVE_EVAL') {
+        liveEvaluationEnabled = Boolean(msg.enabled);
+        overlay.setLiveEvaluation(liveEvaluationEnabled);
+        if (liveEvaluationEnabled && currentFen) {
+          runPrediction(currentFen);
+        }
+        sendResponse({ ok: true, enabled: liveEvaluationEnabled });
+      }
+    });
+  }
+
+  // Synchronize live evaluation toggle from chrome.storage changes
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.liveEvaluation) {
+        liveEvaluationEnabled = Boolean(changes.liveEvaluation.newValue);
+        overlay.setLiveEvaluation(liveEvaluationEnabled);
+        if (liveEvaluationEnabled && currentFen) {
+          runPrediction(currentFen);
+        }
       }
     });
   }

@@ -439,7 +439,7 @@ export class MaiaEngine {
     return result;
   }
 
-  buildComparison(topMove, sfRes, elo) {
+  buildComparison(topMove, sfRes, elo, turn = 'w') {
     if (!topMove) return null;
     if (!sfRes || !sfRes.bestMove) {
       return {
@@ -454,17 +454,35 @@ export class MaiaEngine {
       };
     }
 
+    // Convert eval score to standard White-centric format (+ for White, - for Black)
+    let evalScore = sfRes.score;
+    if (sfRes && sfRes.score) {
+      const isBlack = turn === 'b';
+      if (sfRes.isMate || String(sfRes.score).startsWith('M') || String(sfRes.score).startsWith('#')) {
+        const match = String(sfRes.score).match(/[-+]?\d+/);
+        if (match) {
+          let m = parseInt(match[0], 10);
+          if (isBlack) m = -m;
+          evalScore = `M${m > 0 ? '+' : ''}${m}`;
+        }
+      } else if (typeof sfRes.scoreCp === 'number') {
+        const whiteCp = isBlack ? -sfRes.scoreCp : sfRes.scoreCp;
+        const pawns = (whiteCp / 100).toFixed(2);
+        evalScore = whiteCp > 0 ? `+${pawns}` : pawns;
+      }
+    }
+
     const isConsensus = topMove.uci === sfRes.bestMove.uci;
     if (isConsensus) {
       return {
         agreed: true,
         badge: '🎯 人机高度共识',
         badgeEn: '🎯 High Consensus',
-        summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！(局面评级: ${sfRes.score})`,
-        summaryEn: `Human intuition & Stockfish both agree on <strong>${topMove.san}</strong> (${topMove.prob}%)! (Eval: ${sfRes.score})`,
+        summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！(局面评级: ${evalScore})`,
+        summaryEn: `Human intuition & Stockfish both agree on <strong>${topMove.san}</strong> (${topMove.prob}%)! (Eval: ${evalScore})`,
         delta: 0,
         deltaText: '0.00',
-        evalScore: sfRes.score
+        evalScore
       };
     }
 
@@ -485,11 +503,11 @@ export class MaiaEngine {
       agreed: false,
       badge: '⚠️ 人机着法分歧',
       badgeEn: '⚠️ Engine Divergence',
-      summary: `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (评级: ${sfRes.score}${lossStrZh})。`,
-      summaryEn: `~<strong>${topMove.prob}%</strong> of ${elo} players favor <strong>${topMove.san}</strong>, while Stockfish advises <strong>${sfRes.bestMove.san}</strong> (Eval: ${sfRes.score}${lossStrEn}).`,
+      summary: `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (评级: ${evalScore}${lossStrZh})。`,
+      summaryEn: `~<strong>${topMove.prob}%</strong> of ${elo} players favor <strong>${topMove.san}</strong>, while Stockfish advises <strong>${sfRes.bestMove.san}</strong> (Eval: ${evalScore}${lossStrEn}).`,
       delta: deltaCp !== null ? deltaCp / 100 : null,
       deltaText,
-      evalScore: sfRes.score
+      evalScore
     };
   }
 
@@ -519,8 +537,9 @@ export class MaiaEngine {
 
   attachStockfishResult(predictionResult, sfRes, elo = this.targetElo) {
     if (!predictionResult || !sfRes) return predictionResult;
+    const turn = predictionResult.turn || 'w';
     const topMove = predictionResult.moves?.[0] || null;
-    const comparison = this.buildComparison(topMove, sfRes, elo);
+    const comparison = this.buildComparison(topMove, sfRes, elo, turn);
     const enrichedMoves = this.enrichMovesWithDelta(predictionResult.moves, sfRes);
 
     return {

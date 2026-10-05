@@ -4,6 +4,8 @@
  * reference gridlines, key moment markers, and interactive hover tooltip.
  */
 
+import { t, onLanguageChange } from './i18n.js';
+
 export class EvalChart {
   constructor(containerEl, onSelectPly) {
     this.container = containerEl;
@@ -12,19 +14,31 @@ export class EvalChart {
     this.currentPly = 0;
     this.hoverIndex = -1;
     this.initDOM();
+    onLanguageChange(() => this.updateStaticLabels());
+  }
+
+  updateStaticLabels() {
+    const titleEl = this.container.querySelector('#eval-chart-title-label');
+    if (titleEl) titleEl.textContent = t('evalChartTitle');
+    const legBeyond = this.container.querySelector('#legend-beyond-label');
+    if (legBeyond) legBeyond.textContent = t('chartLegendBeyond');
+    const legTrap = this.container.querySelector('#legend-trap-label');
+    if (legTrap) legTrap.textContent = t('chartLegendTrap');
+    const legBlunder = this.container.querySelector('#legend-blunder-label');
+    if (legBlunder) legBlunder.textContent = t('chartLegendBlunder');
   }
 
   initDOM() {
     this.container.innerHTML = `
       <div class="eval-chart-header">
         <div class="eval-chart-title-group">
-          <span class="eval-chart-title">局面走势</span>
+          <span class="eval-chart-title" id="eval-chart-title-label">${t('evalChartTitle')}</span>
           <span id="eval-chart-cursor-badge" class="eval-chart-badge">0.00</span>
         </div>
         <div class="eval-chart-legend">
-          <span class="legend-item"><span class="dot-cyan"></span> ✨ 妙手</span>
-          <span class="legend-item"><span class="dot-gold"></span> 🫤 俗手</span>
-          <span class="legend-item"><span class="dot-red"></span> 大漏</span>
+          <span class="legend-item"><span class="dot-cyan"></span> <span id="legend-beyond-label">${t('chartLegendBeyond')}</span></span>
+          <span class="legend-item"><span class="dot-gold"></span> <span id="legend-trap-label">${t('chartLegendTrap')}</span></span>
+          <span class="legend-item"><span class="dot-red"></span> <span id="legend-blunder-label">${t('chartLegendBlunder')}</span></span>
         </div>
       </div>
       <div class="eval-chart-body" id="eval-chart-body">
@@ -122,7 +136,7 @@ export class EvalChart {
       this.tooltip.style.display = 'block';
 
       const isWhite = item.turn === 'w';
-      const sideText = isWhite ? '白方' : '黑方';
+      const sideText = isWhite ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
       const evalSign = item.cp > 0 ? `+${(item.cp / 100).toFixed(2)}` : (item.cp / 100).toFixed(2);
       const evalColor = item.cp > 40 ? 'var(--brand-green)' : (item.cp < -40 ? 'var(--brand-red)' : 'var(--text-muted)');
 
@@ -132,7 +146,7 @@ export class EvalChart {
       topRow.style.fontWeight = '600';
       topRow.style.marginBottom = '2px';
 
-      topRow.appendChild(document.createTextNode(`第 ${item.moveNumber} 步 (${sideText} `));
+      topRow.appendChild(document.createTextNode(`${t('chartMove', { move: item.moveNumber, side: sideText, san: '' }).trim()} `));
       const sanSpan = document.createElement('span');
       sanSpan.textContent = item.san;
       topRow.appendChild(sanSpan);
@@ -142,25 +156,25 @@ export class EvalChart {
         const badge = document.createElement('span');
         badge.style.color = 'var(--brand-blue)';
         badge.style.fontWeight = '700';
-        badge.textContent = item.isCombinationFollowup ? ' · ✨ 妙手组合延续' : ' · ✨ 妙手 (突破直觉)';
+        badge.textContent = item.isCombinationFollowup ? ` · ${t('chartLegendBeyond')} ${t('beyondComboText')}` : ` · ${t('chartLegendBeyond')} (${t('beyondIntuitionBreak')})`;
         topRow.appendChild(badge);
       } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
         const badge = document.createElement('span');
         badge.style.color = 'var(--brand-gold)';
         badge.style.fontWeight = '700';
-        badge.textContent = ` · 🫤 俗手 (直觉陷阱 -${item.lossPawns})`;
+        badge.textContent = ` · ${t('chartLegendTrap')} (-${item.lossPawns})`;
         topRow.appendChild(badge);
       } else if (item.severity === 'blunder') {
         const badge = document.createElement('span');
         badge.style.color = 'var(--brand-red)';
         badge.style.fontWeight = '700';
-        badge.textContent = ` · 大漏 (${item.lossPawns})`;
+        badge.textContent = ` · ${t('chartLegendBlunder')} (${item.lossPawns})`;
         topRow.appendChild(badge);
       } else if (item.severity === 'mistake') {
         const badge = document.createElement('span');
         badge.style.color = 'var(--brand-gold)';
         badge.style.fontWeight = '700';
-        badge.textContent = ` · 失误 (${item.lossPawns})`;
+        badge.textContent = ` · ${t('chartLegendMistake')} (${item.lossPawns})`;
         topRow.appendChild(badge);
       }
       this.tooltip.appendChild(topRow);
@@ -168,7 +182,7 @@ export class EvalChart {
       const evalRow = document.createElement('div');
       evalRow.style.color = 'var(--text-dim)';
       evalRow.style.fontSize = '10.5px';
-      evalRow.appendChild(document.createTextNode('白方局势: '));
+      evalRow.appendChild(document.createTextNode(t('chartWhiteAdvantage')));
       const evalStrong = document.createElement('strong');
       evalStrong.style.color = evalColor;
       evalStrong.textContent = evalSign;

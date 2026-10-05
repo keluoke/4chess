@@ -29,7 +29,7 @@
       </span>
       <div class="studio-title">
         歧路 Diverge
-        <span class="studio-badge">棋谱研究室</span>
+        <span class="studio-badge" data-i18n="studioBadge">棋谱研究室</span>
       </div>
     </div>
 
@@ -44,11 +44,12 @@
 
     <div class="studio-header-actions">
       <!-- Actions -->
+      <button type="button" class="btn-header" id="btn-lang-toggle" aria-label="Switch Language">English</button>
       <button type="button" class="btn-header btn-theme" data-theme-toggle>深色</button>
-      <button type="button" class="btn-header" id="btn-import-pgn">
+      <button type="button" class="btn-header" id="btn-import-pgn" data-i18n="btnImportPgn">
         导入 PGN
       </button>
-      <button type="button" class="btn-header btn-primary" id="btn-reanalyze" disabled>
+      <button type="button" class="btn-header btn-primary" id="btn-reanalyze" data-i18n="btnReanalyze" disabled>
         重新分析
       </button>
     </div>
@@ -58,31 +59,31 @@
   <main class="studio-layout">
     <!-- Left: Chessboard Column -->
     <section class="board-column" aria-label="棋盘与局面走势">
-      <div class="workspace-section-heading"><span>棋盘</span><small>点击或拖动棋子，试演其他可能</small></div>
+      <div class="workspace-section-heading"><span data-i18n="boardHeading">棋盘</span><small data-i18n="boardSubheading">点击或拖动棋子，试演其他可能</small></div>
       <!-- Interactive SVG/DOM Chessboard -->
       <div id="board-container" class="maia-board-wrapper"></div>
 
       <!-- Free Branch Exploration Banner -->
       <div id="branch-banner" class="branch-banner" style="display: none;">
-        <span>🌿 试演分支局面 · 探索其他可能</span>
-        <button type="button" class="btn-header" id="btn-exit-branch" style="height: 26px; padding: 0 10px; font-size: 11px;">返回对局</button>
+        <span id="branch-banner-text" data-i18n="branchBannerText">🌿 试演分支局面 · 探索其他可能</span>
+        <button type="button" class="btn-header" id="btn-exit-branch" data-i18n="btnExitBranch" style="height: 26px; padding: 0 10px; font-size: 11px;">返回对局</button>
       </div>
 
       <!-- Navigation & Playback Controls -->
       <div class="board-controls">
         <div class="btn-nav-group">
-          <button type="button" class="btn-nav" id="btn-first" title="开局首步 (Home)">|◀</button>
-          <button type="button" class="btn-nav" id="btn-prev" title="上一步 (Left Arrow)">◀</button>
-          <button type="button" class="btn-nav" id="btn-play" title="自动播放/暂停">▶</button>
-          <button type="button" class="btn-nav" id="btn-next" title="下一步 (Right Arrow)">▶</button>
-          <button type="button" class="btn-nav" id="btn-last" title="终局末步 (End)">▶|</button>
-          <button type="button" class="btn-nav" id="btn-flip" title="翻转黑白视角 (快捷键: F)">
+          <button type="button" class="btn-nav" id="btn-first" data-i18n-title="btnFirst" title="开局首步 (Home)">|◀</button>
+          <button type="button" class="btn-nav" id="btn-prev" data-i18n-title="btnPrev" title="上一步 (Left Arrow)">◀</button>
+          <button type="button" class="btn-nav" id="btn-play" data-i18n-title="btnPlay" title="自动播放/暂停">▶</button>
+          <button type="button" class="btn-nav" id="btn-next" data-i18n-title="btnNext" title="下一步 (Right Arrow)">▶</button>
+          <button type="button" class="btn-nav" id="btn-last" data-i18n-title="btnLast" title="终局末步 (End)">▶|</button>
+          <button type="button" class="btn-nav" id="btn-flip" data-i18n-title="btnFlip" title="翻转黑白视角 (快捷键: F)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
               <path d="M7 20V4m0 0L3 8m4-4 4 4"/>
               <path d="M17 4v16m0 0 4-4m-4 4-4-4"/>
             </svg>
           </button>
-          <button type="button" class="btn-nav" id="btn-sound" title="行棋音效开关 (快捷键: M)" aria-label="行棋音效开关">
+          <button type="button" class="btn-nav" id="btn-sound" data-i18n-title="btnSound" title="行棋音效开关 (快捷键: M)" aria-label="行棋音效开关">
             <svg id="icon-sound-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
               <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
@@ -95,7 +96,7 @@
             </svg>
           </button>
         </div>
-        <div id="board-status-text" style="font-size: 12px; font-weight: 600; color: var(--text-muted);">
+        <div id="board-status-text" data-i18n="startingPosition" style="font-size: 12px; font-weight: 600; color: var(--text-muted);">
           开局局面
         </div>
       </div>
@@ -119,23 +120,23 @@
 
     <!-- Right: Analysis & Insights Column -->
     <section class="analysis-column" aria-label="当前局面分析">
-      <div class="studio-insight-heading"><span class="studio-eyebrow">A DIFFERENT PERSPECTIVE</span><h1>比较三种选择</h1><p>实战、人类直觉与引擎推荐，在这里相遇。</p></div>
+      <div class="studio-insight-heading"><span class="studio-eyebrow" data-i18n="perspectiveEyebrow">A DIFFERENT PERSPECTIVE</span><h1 data-i18n="compareTitle">比较三种选择</h1><p data-i18n="compareSubtitle">实战、人类直觉与引擎推荐，在这里相遇。</p></div>
       <!-- 2. Three-Way Comparison Panel -->
       <div class="divergence-box" id="divergence-box">
-        <div class="divergence-badge" id="divergence-badge">局面研判</div>
+        <div class="divergence-badge" id="divergence-badge" data-i18n="divergenceBadgeDefault">局面研判</div>
         <div class="compare-panel" id="compare-panel">
           <div class="compare-card card-engine" id="compare-engine">
-            <div class="compare-card-label"><span class="dot dot-engine"></span> 引擎推荐</div>
+            <div class="compare-card-label"><span class="dot dot-engine"></span> <span data-i18n="cardEngineBest">引擎推荐</span></div>
             <div class="compare-card-san" id="compare-engine-san">—</div>
             <div class="compare-card-meta" id="compare-engine-meta"></div>
           </div>
           <div class="compare-card card-intuition" id="compare-intuition">
-            <div class="compare-card-label"><span class="dot dot-intuition"></span> 直觉预判</div>
+            <div class="compare-card-label"><span class="dot dot-intuition"></span> <span data-i18n="cardIntuition">直觉预判</span></div>
             <div class="compare-card-san" id="compare-intuition-san">—</div>
             <div class="compare-card-meta" id="compare-intuition-meta"></div>
           </div>
           <div class="compare-card card-played" id="compare-played">
-            <div class="compare-card-label"><span class="dot dot-played"></span> 实战着法</div>
+            <div class="compare-card-label"><span class="dot dot-played"></span> <span data-i18n="cardPlayed">实战着法</span></div>
             <div class="compare-card-san" id="compare-played-san">—</div>
             <div class="compare-card-meta" id="compare-played-meta"></div>
           </div>
@@ -143,15 +144,15 @@
         <div class="divergence-content" id="divergence-content" style="display: none;"></div>
       </div>
 
-      <details class="studio-engine-tools"><summary>直觉等级与引擎状态</summary>
+      <details class="studio-engine-tools"><summary data-i18n="engineToolsTitle">直觉等级与引擎状态</summary>
       <!-- Target Elo selector -->
       <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
-        <span>直觉 ELO:</span>
+        <span data-i18n="eloLabel">直觉 ELO:</span>
         <select id="elo-selector" class="btn-header" style="padding: 0 8px; cursor: pointer;">
-          <option value="1100">1100 (初学)</option>
-          <option value="1500">1500 (进阶)</option>
-          <option value="1900" selected>1900 (俱乐部)</option>
-          <option value="2200">2200 (大师)</option>
+          <option value="1100" data-i18n="eloBeginner">1100 (初学)</option>
+          <option value="1500" data-i18n="eloIntermediate">1500 (进阶)</option>
+          <option value="1900" selected data-i18n="eloClub">1900 (俱乐部)</option>
+          <option value="2200" data-i18n="eloMaster">2200 (大师)</option>
         </select>
       </div>
 
@@ -168,21 +169,21 @@
       </details>
     </section>
     <section class="review-column" aria-label="关键步与完整记谱">
-      <div class="workspace-section-heading"><span>回看关键选择</span></div>
+      <div class="workspace-section-heading"><span data-i18n="reviewHeading">回看关键选择</span></div>
       <!-- Engine Accuracy Summary Card -->
       <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
         <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-white">⚪ 白方</span></div>
+          <div class="metric-side-label"><span class="side-badge side-white" id="metric-side-white" data-i18n="whitePlayer">⚪ 白方</span></div>
           <div class="metric-group metric-accuracy-group">
-            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+            <span class="metric-title" data-i18n="accuracyLabel" data-i18n-title="accuracyTooltip" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
             <span class="metric-value" id="val-accuracy-white">—</span>
           </div>
         </div>
         <div class="metric-divider"></div>
         <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-black">⚫ 黑方</span></div>
+          <div class="metric-side-label"><span class="side-badge side-black" id="metric-side-black" data-i18n="blackPlayer">⚫ 黑方</span></div>
           <div class="metric-group metric-accuracy-group">
-            <span class="metric-title" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
+            <span class="metric-title" data-i18n="accuracyLabel" data-i18n-title="accuracyTooltip" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
             <span class="metric-value" id="val-accuracy-black">—</span>
           </div>
         </div>
@@ -192,10 +193,10 @@
       <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="panel-tabs">
           <button type="button" class="tab-btn active" id="tab-blunders">
-            关键步 (<span id="blunder-count-badge">0</span>)
+            <span id="lbl-tab-blunders">关键步</span> (<span id="blunder-count-badge">0</span>)
           </button>
           <button type="button" class="tab-btn" id="tab-moves">
-            记谱 (<span id="move-count-badge">0</span>)
+            <span id="lbl-tab-moves">记谱</span> (<span id="move-count-badge">0</span>)
           </button>
         </div>
 
@@ -203,12 +204,12 @@
           <!-- Divergence Moments Tab -->
           <div id="blunder-tab-content">
             <div class="divergence-filters" id="divergence-filters">
-              <button type="button" class="filter-pill active" data-filter="all">全部 (<span id="filter-count-all">0</span>)</button>
-              <button type="button" class="filter-pill pill-beyond" data-filter="beyond">✨ 妙手 (<span id="filter-count-beyond">0</span>)</button>
-              <button type="button" class="filter-pill pill-trap" data-filter="trap">🫤 俗手 (<span id="filter-count-trap">0</span>)</button>
+              <button type="button" class="filter-pill active" data-filter="all"><span id="lbl-filter-all">全部</span> (<span id="filter-count-all">0</span>)</button>
+              <button type="button" class="filter-pill pill-beyond" data-filter="beyond">✨ <span id="lbl-filter-beyond">妙手</span> (<span id="filter-count-beyond">0</span>)</button>
+              <button type="button" class="filter-pill pill-trap" data-filter="trap">🫤 <span id="lbl-filter-trap">俗手</span> (<span id="filter-count-trap">0</span>)</button>
             </div>
             <div class="blunder-list" id="blunder-list">
-              <div style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
+              <div id="blunder-loading-state" data-i18n="loadingGameData" style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
                 正在加载棋局数据...
               </div>
             </div>
@@ -229,36 +230,36 @@
   <div class="drag-drop-overlay" id="drag-drop-overlay" style="display: none;">
     <div class="drag-drop-card">
       <span style="font-size: 38px;">♟️</span>
-      <div style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-top: 6px;">释放以载入 PGN 棋谱</div>
-      <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">支持 .pgn 棋谱文件与文本拖拽</div>
+      <div data-i18n="dragDropTitle" style="font-size: 16px; font-weight: 700; color: var(--text-main); margin-top: 6px;">释放以载入 PGN 棋谱</div>
+      <div data-i18n="dragDropSubtitle" style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">支持 .pgn 棋谱文件与文本拖拽</div>
     </div>
   </div>
 
   <!-- PGN Import Modal -->
   <div class="modal-overlay" id="pgn-modal" inert aria-hidden="true" role="dialog" aria-modal="true" aria-label="导入已完赛对局">
     <div class="modal-card">
-      <div class="studio-eyebrow">A NEW PERSPECTIVE</div>
-      <h3 class="modal-title">从一盘棋开始</h3>
-      <p class="modal-description">导入已完赛对局，回看直觉之外的选择。</p>
-      <textarea id="pgn-input" class="pgn-textarea" placeholder="在此粘贴：
+      <div class="studio-eyebrow" data-i18n="modalEyebrow">A NEW PERSPECTIVE</div>
+      <h3 class="modal-title" data-i18n="modalTitle">从一盘棋开始</h3>
+      <p class="modal-description" data-i18n="modalDesc">导入已完赛对局，回看直觉之外的选择。</p>
+      <textarea id="pgn-input" class="pgn-textarea" data-i18n-placeholder="modalPlaceholder" placeholder="在此粘贴：
 1. PGN 棋谱文本 或 FEN 局面
 2. Lichess 对局网址 (如 https://lichess.org/aBcDeFgH)
 3. Chess.com 对局网址 (如 https://www.chess.com/game/live/12345678)
 或直接将本地 .pgn 文件拖拽至窗口任意位置"></textarea>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
         <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
-          <span>示例:</span>
-          <button type="button" class="btn-header" id="sample-fischer" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
-          <button type="button" class="btn-header" id="sample-kasparov" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫对局</button>
+          <span data-i18n="modalSampleLabel">示例:</span>
+          <button type="button" class="btn-header" id="sample-fischer" data-i18n="sampleFischerBtn" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
+          <button type="button" class="btn-header" id="sample-kasparov" data-i18n="sampleKasparovBtn" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫对局</button>
         </div>
         <div>
           <input type="file" id="pgn-file-input" accept=".pgn,.txt" style="display: none;">
-          <button type="button" class="btn-header" id="btn-upload-file" style="height: 24px; padding: 0 10px; font-size: 11px;">📁 选择 PGN 文件</button>
+          <button type="button" class="btn-header" id="btn-upload-file" data-i18n="btnUploadPgn" style="height: 24px; padding: 0 10px; font-size: 11px;">📁 选择 PGN 文件</button>
         </div>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn-header" id="btn-cancel-pgn">取消</button>
-        <button type="button" class="btn-header btn-primary" id="btn-submit-pgn">智能解析并载入</button>
+        <button type="button" class="btn-header" id="btn-cancel-pgn" data-i18n="btnCancel">取消</button>
+        <button type="button" class="btn-header btn-primary" id="btn-submit-pgn" data-i18n="btnSubmitPgn">智能解析并载入</button>
       </div>
     </div>
   </div>

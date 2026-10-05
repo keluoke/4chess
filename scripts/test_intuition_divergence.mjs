@@ -236,25 +236,44 @@ const mockMaiaTactical = {
 };
 
 const tacticalAnalyzer = new GameAnalyzer(mockStockfishTactical, mockMaiaTactical);
-const tacticalMoves = [
+
+// 4.1 Verify ply <= 10 suppression (move at ply 7 must NOT be 妙手)
+const earlyTacticalMoves = [
   { san: 'e4' }, { san: 'e5' }, { san: 'Nf3' }, { san: 'Nc6' },
   { san: 'Bc4' }, { san: 'Bc5' },
-  { san: 'Bxf7+' }, // Tactical brilliant sacrifice at ply 7
+  { san: 'Bxf7+' }, // Tactical sacrifice at ply 7
+  { san: 'Kxf7' }
+];
+const earlyReview = await tacticalAnalyzer.analyzeGame(earlyTacticalMoves, { depth: 6, elo: 1900, forceRefresh: true });
+const move7 = earlyReview.allMoves.find(m => m.ply === 7);
+if (move7.isBeyondIntuition || move7.divergenceType === 'beyond_intuition') {
+  throw new Error(`Early tactical move at ply 7 (<= 10) must not be labeled as 妙手, got ${move7.divergenceType}`);
+}
+console.log('4.1 Early ply 7 (<= 10 plies) brilliant move suppression verified: not 妙手');
+
+// 4.2 Verify brilliant move at ply > 10 (ply 11)
+// 1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. Bc4 Bc5 5. c3 dxc3 6. Bxf7+ Kxf7
+const tacticalMoves = [
+  { san: 'e4' }, { san: 'e5' }, { san: 'Nf3' }, { san: 'Nc6' },
+  { san: 'd4' }, { san: 'exd4' }, { san: 'Bc4' }, { san: 'Bc5' },
+  { san: 'c3' }, { san: 'dxc3' },
+  { san: 'Bxf7+' }, // Tactical brilliant sacrifice at ply 11
   { san: 'Kxf7' }
 ];
 
-const tacticalReview = await tacticalAnalyzer.analyzeGame(tacticalMoves, { depth: 6, elo: 1900 });
-const move7 = tacticalReview.allMoves.find(m => m.ply === 7);
-console.log('Tactical Ply 7 classification:', {
-  san: move7.san,
-  divergenceType: move7.divergenceType,
-  divergenceStatus: move7.divergenceStatus,
-  divergenceNote: move7.divergenceNote
+const tacticalReview = await tacticalAnalyzer.analyzeGame(tacticalMoves, { depth: 6, elo: 1900, forceRefresh: true });
+const move11 = tacticalReview.allMoves.find(m => m.ply === 11);
+console.log('Tactical Ply 11 classification:', {
+  san: move11.san,
+  divergenceType: move11.divergenceType,
+  divergenceStatus: move11.divergenceStatus,
+  divergenceNote: move11.divergenceNote
 });
 
-if (move7.divergenceType !== 'beyond_intuition') {
-  throw new Error(`Tactical move Bxf7+ should be confirmed as beyond_intuition (妙手), got ${move7.divergenceType}`);
+if (move11.divergenceType !== 'beyond_intuition') {
+  throw new Error(`Tactical move Bxf7+ at ply 11 should be confirmed as beyond_intuition (妙手), got ${move11.divergenceType}`);
 }
+console.log('4.2 Ply 11 brilliant move (妙手) confirmed');
 
 console.log('\n=== TEST SUITE 5: Cache Schema v5 Round-Trip & Stale Purging ===');
 
