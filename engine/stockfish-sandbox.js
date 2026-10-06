@@ -5,6 +5,9 @@
 
 (function() {
   let worker = null;
+  let isInitialized = false;
+  let readyTimer = null;
+  let stopWatchdog = null;
   let engineName = 'Stockfish 19 Lite WASM';
   const multiPvMap = new Map();
   let lastInfo = null;
@@ -61,11 +64,17 @@
   }
 
   function initWorker() {
-    let initialized = false;
-    let readyTimer = null;
+    isInitialized = false;
+    if (readyTimer) {
+      clearTimeout(readyTimer);
+      readyTimer = null;
+    }
 
+    const wasmUrl = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
+      ? chrome.runtime.getURL('lib/stockfish.wasm')
+      : '../lib/stockfish.wasm';
     const sf19Url = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
-      ? chrome.runtime.getURL('lib/stockfish-19.js#stockfish.wasm')
+      ? chrome.runtime.getURL('lib/stockfish-19.js#' + encodeURIComponent(wasmUrl))
       : '../lib/stockfish-19.js#stockfish.wasm';
 
     function tryWorker(scriptUrl, name) {
@@ -92,8 +101,8 @@
               clearTimeout(readyTimer);
               readyTimer = null;
             }
-            if (!initialized) {
-              initialized = true;
+            if (!isInitialized) {
+              isInitialized = true;
               sendToParent({ type: 'STOCKFISH_READY', engineName });
             }
             return;
@@ -232,7 +241,7 @@
     }
 
     readyTimer = setTimeout(() => {
-      if (!initialized) {
+      if (!isInitialized) {
         console.error('[Stockfish Sandbox] Stockfish 19 Lite WASM 引擎就绪等待超时 (15000ms)');
         sendToParent({
           type: 'STOCKFISH_ERROR',
@@ -244,7 +253,6 @@
     worker = tryWorker(sf19Url, 'Stockfish 19 Lite WASM');
   }
 
-  let stopWatchdog = null;
   function triggerStop() {
     if (!isSearching) {
       isStopping = false;
@@ -278,10 +286,59 @@
     }, 2500);
   }
 
+  function verifyToken(token, callback) {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+      callback(true);
+      return;
+    }
+    if (!token) {
+      callback(false);
+      return;
+    }
+    chrome.runtime.sendMessage({ type: 'VERIFY_SANDBOX_TOKEN', token }, function(res) {
+      if (chrome.runtime?.lastError) {
+        console.warn('[Stockfish Sandbox] Verification notice (background asleep):', chrome.runtime.lastError.message);
+        // Direct session storage fallback when background worker is hibernating
+        if (chrome.storage?.session) {
+          try {
+            chrome.storage.session.get(['active_tokens'], function(stored) {
+              const tokens = stored?.active_tokens;
+              if (tokens && tokens[token] && tokens[token] > Date.now()) {
+                delete tokens[token];
+                chrome.storage.session.set({ active_tokens: tokens }, function() {});
+                callback(true);
+                return;
+              }
+              callback(false);
+            });
+            return;
+          } catch (e) {}
+        }
+        callback(false);
+        return;
+      }
+      callback(!!(res && res.ok));
+    });
+  }
+
   // Secure Handshake: ONLY accept INIT_AUTH_PORT from window message with single-use token
   window.addEventListener('message', function(e) {
     const data = e.data;
-    if (!data || data.type !== 'INIT_AUTH_PORT') return;
+    if (!data) return;
+
+    if (data.type === 'PING_SANDBOX') {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'SANDBOX_PONG',
+          engineName,
+          isInitialized,
+          isPortAuthenticated
+        }, '*');
+      }
+      return;
+    }
+
+    if (data.type !== 'INIT_AUTH_PORT') return;
     if (!e.ports || !e.ports[0]) return;
 
     const candidatePort = e.ports[0];
@@ -294,24 +351,24 @@
       authenticatedPort = candidatePort;
       isPortAuthenticated = true;
       setupPortListener(authenticatedPort);
+      sendToParent({ type: 'PORT_ACK', engineName });
       flushPendingOutbox();
-      if (initialized) {
+      if (isInitialized) {
         sendToParent({ type: 'STOCKFISH_READY', engineName });
       }
     }
 
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ type: 'VERIFY_SANDBOX_TOKEN', token }, function(res) {
-        if (res && res.ok) {
-          activatePort();
-        } else {
-          console.warn('[Stockfish Sandbox] ❌ Sandbox token verification failed, rejecting port');
-          try { candidatePort.close(); } catch (err) {}
+    verifyToken(token, function(isValid) {
+      if (isValid) {
+        activatePort();
+      } else {
+        console.warn('[Stockfish Sandbox] ❌ Sandbox token verification failed, rejecting port');
+        try { candidatePort.close(); } catch (err) {}
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'SANDBOX_PORT_REJECTED' }, '*');
         }
-      });
-    } else {
-      activatePort();
-    }
+      }
+    });
   });
 
   function setupPortListener(port) {
@@ -346,7 +403,7 @@
   // Notify parent that sandbox is ready to receive authenticated port
   function pingParent() {
     if (!isPortAuthenticated && window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: 'SANDBOX_READY_FOR_PORT' }, '*');
+      window.parent.postMessage({ type: 'SANDBOX_READY_FOR_PORT', isInitialized }, '*');
     }
   }
   pingParent();

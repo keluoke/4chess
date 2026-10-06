@@ -87,6 +87,11 @@ function movesToPgn(moves, headers = {}) {
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Maia-3 Extension] Installed successfully.');
+  if (chrome.storage?.session?.setAccessLevel) {
+    try {
+      chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+    } catch (e) {}
+  }
   // Initialize default user settings in chrome.storage.local
   chrome.storage.local.set({
     defaultElo: 1900,
@@ -96,6 +101,12 @@ chrome.runtime.onInstalled.addListener(() => {
     heatmapOpacity: 0.55
   });
 });
+
+if (chrome.storage?.session?.setAccessLevel) {
+  try {
+    chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+  } catch (e) {}
+}
 
 const sandboxTokens = new Map();
 

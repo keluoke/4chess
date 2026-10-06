@@ -52,9 +52,12 @@ export class StockfishInBrowser {
 
       if (typeof Worker !== 'undefined' && (isExtensionPage || !isHostPage)) {
         try {
+          const wasmUrl = isExtensionPage
+            ? chrome.runtime.getURL('lib/stockfish.wasm')
+            : (window.location.pathname.includes('/analysis/') ? '../lib/stockfish.wasm' : 'lib/stockfish.wasm');
           const sf19Url = isExtensionPage
-            ? chrome.runtime.getURL('lib/stockfish-19.js#stockfish.wasm')
-            : (window.location.pathname.includes('/analysis/') ? '../lib/stockfish-19.js#stockfish.wasm' : 'lib/stockfish-19.js#stockfish.wasm');
+            ? chrome.runtime.getURL('lib/stockfish-19.js#' + encodeURIComponent(wasmUrl))
+            : (window.location.pathname.includes('/analysis/') ? `../lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}` : `lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}`);
 
           this.initDirectWorker(sf19Url);
           return;
@@ -257,6 +260,10 @@ export class StockfishInBrowser {
   }
 
   initIframeBridge() {
+    if (this.iframe && !document.contains(this.iframe)) {
+      this.iframe = null;
+    }
+
     let frame = document.getElementById('maia3-stockfish-frame');
     if (!frame) {
       frame = document.createElement('iframe');
@@ -269,6 +276,7 @@ export class StockfishInBrowser {
       frame.style.opacity = '0.01';
       frame.style.border = 'none';
       frame.style.pointerEvents = 'none';
+      frame.setAttribute('credentialless', '');
 
       const url = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
         ? chrome.runtime.getURL('engine/stockfish-sandbox.html')
@@ -296,11 +304,38 @@ export class StockfishInBrowser {
     const channel = new MessageChannel();
     this.port = channel.port1;
 
+    let portConfirmed = false;
+    let isTransferring = false;
+    let pingInterval = null;
+    let ackWatchdog = null;
+    let onWindowMsg = null;
+
+    const cleanupHandshake = () => {
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
+      if (ackWatchdog) {
+        clearTimeout(ackWatchdog);
+        ackWatchdog = null;
+      }
+      if (onWindowMsg) {
+        window.removeEventListener('message', onWindowMsg);
+        onWindowMsg = null;
+      }
+    };
+
     this.port.onmessage = (event) => {
       const data = event.data;
       if (!data) return;
 
-      if (data.type === 'STOCKFISH_READY') {
+      if (data.type === 'PORT_ACK') {
+        portConfirmed = true;
+        cleanupHandshake();
+        if (data.engineName) this.engineName = data.engineName;
+      } else if (data.type === 'STOCKFISH_READY') {
+        portConfirmed = true;
+        cleanupHandshake();
         if (this._initTimeout) {
           clearTimeout(this._initTimeout);
           this._initTimeout = null;
@@ -322,6 +357,7 @@ export class StockfishInBrowser {
         }
       } else if (data.type === 'STOCKFISH_ERROR') {
         console.warn('[Stockfish In-Browser] ⚠️ Error:', data.error);
+        cleanupHandshake();
         if (this._initTimeout) {
           clearTimeout(this._initTimeout);
           this._initTimeout = null;
@@ -339,53 +375,78 @@ export class StockfishInBrowser {
       }
     };
 
-    let portTransferred = false;
-    let onWindowMsg = null;
-
-    const handshake = (token) => {
-      const sendPort = () => {
-        if (portTransferred) return;
-        try {
-          if (this.iframe && this.iframe.contentWindow) {
-            portTransferred = true;
-            if (onWindowMsg) {
-              window.removeEventListener('message', onWindowMsg);
-              onWindowMsg = null;
+    const acquireToken = () => {
+      return new Promise((resolve) => {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage({ type: 'ACQUIRE_SANDBOX_TOKEN' }, (res) => {
+            if (chrome.runtime?.lastError) {
+              console.warn('[Stockfish In-Browser] Token acquisition notice:', chrome.runtime.lastError.message);
             }
-            this.iframe.contentWindow.postMessage({ type: 'INIT_AUTH_PORT', token }, '*', [channel.port2]);
-          }
-        } catch (e) {
-          console.warn('[Stockfish In-Browser] Failed to post INIT_AUTH_PORT:', e);
+            resolve(res?.ok ? res.token : 'fallback_session_token');
+          });
+        } else {
+          resolve('standalone_token');
         }
-      };
-
-      onWindowMsg = (e) => {
-        if (e.data && e.data.type === 'SANDBOX_READY_FOR_PORT') {
-          sendPort();
-        }
-      };
-      window.addEventListener('message', onWindowMsg);
-
-      // If iframe was already mounted and loaded in DOM, trigger sendPort immediately!
-      try {
-        if (this.iframe && this.iframe.contentWindow) {
-          setTimeout(sendPort, 30);
-        }
-      } catch (e) {}
-
-      this.iframe.addEventListener('load', () => {
-        setTimeout(sendPort, 40);
-      }, { once: true });
+      });
     };
 
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ type: 'ACQUIRE_SANDBOX_TOKEN' }, (res) => {
-        const token = res?.ok ? res.token : null;
-        handshake(token);
-      });
-    } else {
-      handshake('standalone_token');
-    }
+    const sendPort = async () => {
+      if (portConfirmed || isTransferring) return;
+      isTransferring = true;
+      try {
+        if (this.iframe && this.iframe.contentWindow) {
+          const token = await acquireToken();
+          if (portConfirmed) return;
+          this.iframe.contentWindow.postMessage({ type: 'INIT_AUTH_PORT', token }, '*', [channel.port2]);
+
+          if (ackWatchdog) clearTimeout(ackWatchdog);
+          ackWatchdog = setTimeout(() => {
+            if (!portConfirmed && !this.isReady) {
+              console.warn('[Stockfish In-Browser] Port ACK timeout, retrying handshake...');
+              cleanupHandshake();
+              this.initIframeBridge();
+            }
+          }, 3000);
+        }
+      } catch (e) {
+        console.warn('[Stockfish In-Browser] Failed to post INIT_AUTH_PORT:', e);
+        isTransferring = false;
+      }
+    };
+
+    onWindowMsg = (e) => {
+      if (!e.data) return;
+      if (e.data.type === 'SANDBOX_READY_FOR_PORT' || e.data.type === 'SANDBOX_PONG') {
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
+        sendPort();
+      } else if (e.data.type === 'SANDBOX_PORT_REJECTED') {
+        console.warn('[Stockfish In-Browser] Sandbox rejected port token, retrying...');
+        isTransferring = false;
+        sendPort();
+      }
+    };
+    window.addEventListener('message', onWindowMsg);
+
+    const pingSandbox = () => {
+      if (portConfirmed) {
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
+        return;
+      }
+      try {
+        if (this.iframe && this.iframe.contentWindow) {
+          this.iframe.contentWindow.postMessage({ type: 'PING_SANDBOX' }, '*');
+        }
+      } catch (e) {}
+    };
+
+    pingInterval = setInterval(pingSandbox, 80);
+    pingSandbox();
 
     if (this._initTimeout) {
       clearTimeout(this._initTimeout);
@@ -393,12 +454,13 @@ export class StockfishInBrowser {
     }
     this._initTimeout = setTimeout(() => {
       this._initTimeout = null;
-      if (onWindowMsg) {
-        window.removeEventListener('message', onWindowMsg);
-        onWindowMsg = null;
-      }
+      cleanupHandshake();
       if (!this.isReady) {
         console.warn('[Stockfish In-Browser] ⚠️ 引擎初始化就绪等待超时 (Stockfish init timeout)');
+        if (this.iframe && this.iframe.parentNode) {
+          try { this.iframe.parentNode.removeChild(this.iframe); } catch (e) {}
+        }
+        this.iframe = null;
         this.initPromise = null;
         if (this._readyResolve) {
           const r = this._readyResolve;
@@ -406,7 +468,7 @@ export class StockfishInBrowser {
           r(false);
         }
       }
-    }, 16000);
+    }, 15000);
   }
 
   async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1) {
