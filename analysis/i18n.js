@@ -153,6 +153,28 @@ export const DICTIONARY = {
     btnCancel: '取消',
     btnSubmitPgn: '智能解析并载入',
 
+    // Audio & Controls
+    btnSoundMute: '行棋音效：开启 (点击静音，快捷键: M)',
+    btnSoundUnmute: '行棋音效：静音 (点击开启，快捷键: M)',
+    soundEnabled: '🔊 行棋音效已开启',
+    soundMuted: '🔇 行棋音效已静音',
+    btnPlayStart: '自动播放',
+    btnPlayPause: '暂停播放',
+    freeAnalysisBoard: '自由局面分析',
+
+    // Toasts & Alerts
+    toastLoadedFen: '♟️ 已载入 FEN 局面',
+    toastLoadedPgn: '♟️ 成功载入 PGN 棋谱{label}',
+    toastUnrecognizedInput: '⚠️ 未能识别该内容，请确认是否为有效 PGN 文本或对局链接',
+    toastFetchingLichess: '🔍 正在从 Lichess 获取对局 ({gameId})...',
+    toastFairPlayReview: '🔒 公平竞技保护：{reason}。请在完赛后再行导入复盘。',
+    toastFairPlay: '🔒 公平竞技保护：{reason}',
+    toastLoadedLichess: '✅ 成功载入 Lichess 完赛对局 ({gameId})',
+    toastFailedLichess: '❌ 未能从 Lichess 获取该对局，请确认对局公开且已完赛',
+    toastFetchingChesscom: '🔍 正在从 Chess.com 获取对局 ({gameId})...',
+    toastLoadedChesscom: '✅ 成功载入 Chess.com 完赛对局 ({gameId})',
+    toastFailedChesscom: '⚠️ 未能从 Chess.com 获取该对局，建议在完赛后直接在对局页点击扩展或复制 PGN',
+
     // Errors & Notifications
     errorParseMove: '未能解析出有效走法数据',
     errorIllegalFen: 'PGN 中的起始 FEN 格式非法，已拒绝加载。',
@@ -310,6 +332,28 @@ export const DICTIONARY = {
     btnCancel: 'Cancel',
     btnSubmitPgn: 'Parse & Load',
 
+    // Audio & Controls
+    btnSoundMute: 'Sound: Enabled (Click to mute, key: M)',
+    btnSoundUnmute: 'Sound: Muted (Click to enable, key: M)',
+    soundEnabled: '🔊 Sound effects enabled',
+    soundMuted: '🔇 Sound effects muted',
+    btnPlayStart: 'Auto-play',
+    btnPlayPause: 'Pause auto-play',
+    freeAnalysisBoard: 'Free Board Analysis',
+
+    // Toasts & Alerts
+    toastLoadedFen: '♟️ Loaded FEN position',
+    toastLoadedPgn: '♟️ Successfully loaded PGN game{label}',
+    toastUnrecognizedInput: '⚠️ Unrecognized input. Please provide valid PGN or game link.',
+    toastFetchingLichess: '🔍 Fetching game from Lichess ({gameId})...',
+    toastFairPlayReview: '🔒 Fair Play Protection: {reason}. Please review after game conclusion.',
+    toastFairPlay: '🔒 Fair Play Protection: {reason}',
+    toastLoadedLichess: '✅ Successfully loaded Lichess game ({gameId})',
+    toastFailedLichess: '❌ Failed to fetch Lichess game. Ensure game is public and concluded.',
+    toastFetchingChesscom: '🔍 Fetching game from Chess.com ({gameId})...',
+    toastLoadedChesscom: '✅ Successfully loaded Chess.com game ({gameId})',
+    toastFailedChesscom: '⚠️ Failed to fetch Chess.com game. Try copying PGN or reviewing after game ends.',
+
     // Errors & Notifications
     errorParseMove: 'Could not parse valid move data',
     errorIllegalFen: 'Illegal starting FEN format in PGN, loading aborted.',
@@ -429,8 +473,11 @@ export function toggleLanguage() {
 }
 
 export function initI18n() {
-  // 1. Check URL param: ?lang=en or ?lang=zh
-  const urlLang = new URLSearchParams(window.location.search).get('lang');
+  // 1. Check URL param: ?lang=en or #...&lang=en
+  const searchParams = new URLSearchParams(window.location.search);
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const hashParams = new URLSearchParams(hash);
+  const urlLang = searchParams.get('lang') || hashParams.get('lang');
   if (urlLang === 'zh' || urlLang === 'en') {
     currentLang = urlLang;
   } else {

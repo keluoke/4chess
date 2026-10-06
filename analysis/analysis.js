@@ -235,7 +235,7 @@ class AnalysisStudioApp {
     if (this.el.iconSoundOn) this.el.iconSoundOn.style.display = isEnabled ? 'inline-block' : 'none';
     if (this.el.iconSoundOff) this.el.iconSoundOff.style.display = isEnabled ? 'none' : 'inline-block';
     if (this.el.btnSound) {
-      this.el.btnSound.title = isEnabled ? '行棋音效：开启 (点击静音，快捷键: M)' : '行棋音效：静音 (点击开启，快捷键: M)';
+      this.el.btnSound.title = isEnabled ? t('btnSoundMute') : t('btnSoundUnmute');
       this.el.btnSound.classList.toggle('muted', !isEnabled);
     }
   }
@@ -294,9 +294,9 @@ class AnalysisStudioApp {
         this.updateSoundToggleUI();
         if (enabled) {
           soundEffects.playMove();
-          this.showToast(getLang() === 'zh' ? '🔊 行棋音效已开启' : '🔊 Sound effects enabled');
+          this.showToast(t('soundEnabled'));
         } else {
-          this.showToast(getLang() === 'zh' ? '🔇 行棋音效已静音' : '🔇 Sound effects muted');
+          this.showToast(t('soundMuted'));
         }
       });
     }
@@ -491,6 +491,30 @@ class AnalysisStudioApp {
       this.updateActivePositionAnalysis();
     }
 
+    // 4.1 Update progress card and loading state if currently reviewing
+    if (this.el.progressCard && this.el.progressCard.style.display !== 'none') {
+      const detailEl = document.getElementById('blunder-loading-detail');
+      const titleEl = detailEl?.previousElementSibling;
+      if (titleEl) titleEl.textContent = t('launchingEngines');
+      if (this.lastProgress) {
+        const prog = this.lastProgress;
+        const txt = prog.phase === 'intuition'
+          ? t('analyzingIntuition', { current: prog.current, total: prog.total, move: prog.currentMove || '' })
+          : t('evaluatingEngine', { current: prog.current, total: prog.total, move: prog.currentMove || '' });
+        this.el.phaseText.textContent = txt;
+        if (detailEl) detailEl.textContent = txt;
+      } else {
+        this.el.phaseText.textContent = t('preparingEngine');
+        if (detailEl) detailEl.textContent = t('startingEngines');
+      }
+    }
+
+    // 4.2 Update control button tooltips
+    if (this.el.btnPlay) {
+      this.el.btnPlay.title = this.isPlaying ? t('btnPlayPause') : t('btnPlayStart');
+    }
+    this.updateSoundToggleUI();
+
     // 5. Blunder list or empty hero state
     if (!this.moves || this.moves.length === 0) {
       this.renderEmptyHomeState();
@@ -501,6 +525,15 @@ class AnalysisStudioApp {
       ).sort((a, b) => a.ply - b.ply);
       this.renderBlunderCards(validMoments);
       this.annotateMoveList(this.reviewResult?.allMoves);
+
+      const elAccW = document.getElementById('val-accuracy-white');
+      const elAccB = document.getElementById('val-accuracy-black');
+      if (elAccW && this.reviewResult.coverageRateWhite != null && this.reviewResult.coverageRateWhite < 100) {
+        elAccW.title = t('coverageTooltip', { pct: this.reviewResult.coverageRateWhite });
+      }
+      if (elAccB && this.reviewResult.coverageRateBlack != null && this.reviewResult.coverageRateBlack < 100) {
+        elAccB.title = t('coverageTooltip', { pct: this.reviewResult.coverageRateBlack });
+      }
     }
   }
 
@@ -523,11 +556,11 @@ class AnalysisStudioApp {
       clearInterval(this.playTimer);
       this.isPlaying = false;
       this.el.btnPlay.textContent = '▶';
-      this.el.btnPlay.title = '自动播放';
+      this.el.btnPlay.title = t('btnPlayStart');
     } else {
       this.isPlaying = true;
       this.el.btnPlay.textContent = '⏸';
-      this.el.btnPlay.title = '暂停播放';
+      this.el.btnPlay.title = t('btnPlayPause');
       this.playTimer = setInterval(() => {
         if (this.currentPly < this.positions.length - 1) {
           this.goToPly(this.currentPly + 1);
@@ -599,7 +632,7 @@ class AnalysisStudioApp {
     const lichessMatch = text.match(/(?:https?:\/\/)?(?:www\.)?lichess\.org\/([a-zA-Z0-9]{8,12})/i);
     if (lichessMatch) {
       const gameId = lichessMatch[1].slice(0, 8);
-      this.showToast(`🔍 正在从 Lichess 获取对局 (${gameId})...`, 5000);
+      this.showToast(t('toastFetchingLichess', { gameId }), 5000);
       try {
         const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true&clocks=true`, {
           headers: { 'Accept': 'application/json' }
@@ -610,11 +643,11 @@ class AnalysisStudioApp {
           const v = FairPlayGuard.verifyConcludedGame(data);
           if (!v.ok) {
             this.analyzer.cancel();
-            this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+            this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
             return false;
           }
           if (data.pgn && data.pgn.includes('1.')) {
-            this.showToast(`✅ 成功载入 Lichess 完赛对局 (${gameId})`);
+            this.showToast(t('toastLoadedLichess', { gameId }));
             this.startNewSession({ pgn: data.pgn, autoReview: true });
             return true;
           }
@@ -622,7 +655,7 @@ class AnalysisStudioApp {
       } catch (err) {
         console.warn('[Analysis Studio] Lichess export error:', err);
       }
-      this.showToast(`❌ 未能从 Lichess 获取该对局，请确认对局公开且已完赛`);
+      this.showToast(t('toastFailedLichess'));
       return false;
     }
 
@@ -649,7 +682,7 @@ class AnalysisStudioApp {
     if (chesscomGameId) {
       const type = chesscomType;
       const gameId = chesscomGameId;
-      this.showToast(`🔍 正在从 Chess.com 获取对局 (${gameId})...`, 5000);
+      this.showToast(t('toastFetchingChesscom', { gameId }), 5000);
 
       let fetchedData = null;
 
@@ -690,14 +723,14 @@ class AnalysisStudioApp {
         const v = FairPlayGuard.verifyConcludedGame(gameObj);
         if (!v.ok) {
           this.analyzer.cancel();
-          this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+          this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
           return false;
         }
 
         // 1. Direct PGN string
         let pgn = gameObj.pgn || fetchedData.pgn;
         if (pgn && typeof pgn === 'string' && pgn.includes('1.')) {
-          this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
+          this.showToast(t('toastLoadedChesscom', { gameId }));
           this.startNewSession({ pgn, autoReview: true });
           return true;
         }
@@ -717,7 +750,7 @@ class AnalysisStudioApp {
               Black: black,
               Result: result
             });
-            this.showToast(`✅ 成功载入 Chess.com 完赛对局 (${gameId})`);
+            this.showToast(t('toastLoadedChesscom', { gameId }));
             this.startNewSession({
               pgn: generatedPgn,
               moves,
@@ -731,7 +764,7 @@ class AnalysisStudioApp {
         }
       }
 
-      this.showToast(`⚠️ 未能从 Chess.com 获取该对局，建议在完赛后直接在对局页点击扩展或复制 PGN`);
+      this.showToast(t('toastFailedChesscom'));
       return false;
     }
 
@@ -740,13 +773,13 @@ class AnalysisStudioApp {
     if (fenParts.length >= 2 && fenParts[0].split('/').length === 8) {
       const ok = this.startNewSession({
         fen: text,
-        white: '自由局面分析',
+        white: t('freeAnalysisBoard'),
         black: 'FEN',
         result: '*',
         autoReview: false
       });
       if (ok) {
-        this.showToast('♟️ 已载入 FEN 局面');
+        this.showToast(t('toastLoadedFen'));
         return true;
       }
     }
@@ -756,19 +789,19 @@ class AnalysisStudioApp {
       const v = FairPlayGuard.verifyConcludedGame(text);
       if (!v.ok && v.isLive) {
         this.analyzer.cancel();
-        this.showToast(`🔒 公平竞技保护：${v.reason}。请在完赛后再行导入复盘。`, 7000);
+        this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
         return false;
       }
       const label = sourceName ? ` (${sourceName})` : '';
       const ok = this.startNewSession({ pgn: text, autoReview: true });
       if (ok) {
-        this.showToast(`♟️ 成功载入 PGN 棋谱${label}`);
+        this.showToast(t('toastLoadedPgn', { label }));
         return true;
       }
       return false;
     }
 
-    this.showToast('⚠️ 未能识别该内容，请确认是否为有效 PGN 文本或对局链接');
+    this.showToast(t('toastUnrecognizedInput'));
     return false;
   }
 
@@ -780,6 +813,11 @@ class AnalysisStudioApp {
       const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
       const hashParams = new URLSearchParams(hash);
       const searchParams = new URLSearchParams(window.location.search);
+
+      const langParam = hashParams.get('lang') || searchParams.get('lang');
+      if (langParam === 'zh' || langParam === 'en') {
+        setLanguage(langParam);
+      }
 
       const textParam = hashParams.get('text') || searchParams.get('text');
       const pgnParam = hashParams.get('pgn') || searchParams.get('pgn') || (textParam && (textParam.includes('1.') || textParam.includes('[Event')) ? textParam : null);
@@ -809,7 +847,7 @@ class AnalysisStudioApp {
         if (cleanPgn) {
           const v = FairPlayGuard.verifyConcludedGame(cleanPgn);
           if (!v.ok && v.isLive) {
-            this.showToast(`🔒 公平竞技保护：${v.reason}`, 7000);
+            this.showToast(t('toastFairPlay', { reason: v.reason }), 7000);
           } else {
             this.startNewSession({
               pgn: cleanPgn,
@@ -860,7 +898,7 @@ class AnalysisStudioApp {
         if (game && (game.moves?.length > 0 || game.pgn)) {
           const v = FairPlayGuard.verifyConcludedGame(game);
           if (!v.ok && v.isLive) {
-            this.showToast(`🔒 公平竞技保护：${v.reason}`, 7000);
+            this.showToast(t('toastFairPlay', { reason: v.reason }), 7000);
           } else {
             this.startNewSession({
               pgn: game.pgn,
@@ -1013,8 +1051,8 @@ class AnalysisStudioApp {
         moveEl: null
       }];
       this.currentGameKey = `fen_${fen.replace(/\s+/g, '_')}`;
-      this.el.metaWhite.textContent = `⚪ ${white || '白方'}`;
-      this.el.metaBlack.textContent = `⚫ ${black || '黑方'}`;
+      this.el.metaWhite.textContent = `⚪ ${white || t('whitePlayer').replace('⚪ ', '')}`;
+      this.el.metaBlack.textContent = `⚫ ${black || t('blackPlayer').replace('⚫ ', '')}`;
       this.el.metaResult.textContent = result || '*';
       this.el.moveCountBadge.textContent = '0';
       this.renderMoveList();
@@ -1034,21 +1072,21 @@ class AnalysisStudioApp {
     }
 
     if (!parsedMoves || parsedMoves.length === 0) {
-      alert('未能解析出有效走法数据');
+      alert(t('errorParseMove'));
       return false;
     }
 
     if (parsedMoves.startFen) {
       const testBoard = new ChessBoard();
       if (!testBoard.load(parsedMoves.startFen)) {
-        alert('PGN 中的起始 FEN 格式非法，已拒绝加载。');
+        alert(t('errorIllegalFen'));
         return false;
       }
     }
 
     const positions = GameAnalyzer.buildPositionChain(parsedMoves);
     if (!positions || positions.length <= 1) {
-      alert('未能从该棋谱构建出有效局面链。');
+      alert(t('errorBuildChain'));
       return false;
     }
 
@@ -1087,7 +1125,7 @@ class AnalysisStudioApp {
     }
 
     this.el.moveCountBadge.textContent = this.moves.isPartial
-      ? `${this.moves.length} (已截断)`
+      ? t('errorTruncated', { count: this.moves.length })
       : String(this.moves.length);
 
     this.renderMoveList();
@@ -1174,6 +1212,7 @@ class AnalysisStudioApp {
         forceRefresh,
         onProgress: (prog) => {
           if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
+          this.lastProgress = prog;
           this.el.progressBar.style.width = `${prog.percent}%`;
           this.el.percentText.textContent = `${prog.percent}%`;
           const detailEl = document.getElementById('blunder-loading-detail');
@@ -1189,6 +1228,7 @@ class AnalysisStudioApp {
         }
       });
 
+      this.lastProgress = null;
       this.el.progressCard.style.display = 'none';
 
       // Verify epoch and game key to ensure results from a stale task or different game are not applied
@@ -1201,6 +1241,7 @@ class AnalysisStudioApp {
         this.applyReviewResult(result);
       }
     } catch (err) {
+      this.lastProgress = null;
       if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
       console.error('[Analysis Studio] Review failed:', err);
       this.el.progressCard.style.display = 'none';
@@ -1244,7 +1285,7 @@ class AnalysisStudioApp {
       if (elAccW) {
         elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
         if (result.coverageRateWhite != null && result.coverageRateWhite < 100) {
-          elAccW.title = `计算覆盖率: ${result.coverageRateWhite}%`;
+          elAccW.title = t('coverageTooltip', { pct: result.coverageRateWhite });
         }
       }
 
@@ -1252,7 +1293,7 @@ class AnalysisStudioApp {
       if (elAccB) {
         elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
         if (result.coverageRateBlack != null && result.coverageRateBlack < 100) {
-          elAccB.title = `计算覆盖率: ${result.coverageRateBlack}%`;
+          elAccB.title = t('coverageTooltip', { pct: result.coverageRateBlack });
         }
       }
 
@@ -1576,7 +1617,7 @@ class AnalysisStudioApp {
       const partialRow = document.createElement('div');
       partialRow.className = 'notation-partial-notice';
       partialRow.style.cssText = 'padding: 8px 12px; margin: 8px 0; background: var(--dg-gold-soft); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; font-size: 11.5px; color: var(--brand-gold);';
-      partialRow.textContent = `⚠️ 棋谱在第 ${this.positions.stoppedAtPly} 步 ("${this.positions.unparsedSan || '未知'}") 存在非法走法，后续未加载`;
+      partialRow.textContent = t('errorPartialPgn', { ply: this.positions.stoppedAtPly, san: this.positions.unparsedSan || (getLang() === 'zh' ? '未知' : 'unknown') });
       this.el.moveNotationTable.appendChild(partialRow);
     }
   }
@@ -1668,9 +1709,9 @@ class AnalysisStudioApp {
     });
 
     if (clampedPly === 0) {
-      this.el.boardStatusText.textContent = '开局局面';
+      this.el.boardStatusText.textContent = t('startingPosition');
       this.boardUI.clearArrows();
-      this.el.divergenceBadge.textContent = '♟️ 开局';
+      this.el.divergenceBadge.textContent = t('badgeOpening');
       this.el.divergenceBadge.style.color = 'var(--brand-green)';
       this.resetComparePanel();
     } else {

@@ -4,13 +4,14 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-v1.2.0-ui-v2';
+const CACHE_NAME = '4chess-review-v1.0.3-i18n-v2';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
   './analysis.js',
   './analysis.css',
+  './i18n.js',
   '../ui/theme.css',
   '../ui/theme.js',
   './board-ui.js',
@@ -71,24 +72,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Navigation & HTML Entry: Network-First (ensures fresh deploys, falls back to cache offline)
-  const isHtmlRequest = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('.html');
-  if (isHtmlRequest) {
+  // 1. Navigation, HTML Entry & App Scripts/Styles: Network-First (ensures fresh deploys, falls back to cache offline)
+  const isCodeOrHtml = req.mode === 'navigate' || 
+                       url.pathname.endsWith('/') || 
+                       url.pathname.endsWith('.html') || 
+                       url.pathname.endsWith('.js') || 
+                       url.pathname.endsWith('.css');
+  if (isCodeOrHtml) {
     event.respondWith(
       fetch(req).then((freshRes) => {
-        if (freshRes && freshRes.status === 200) {
+        if (freshRes && freshRes.status === 200 && (url.protocol === 'http:' || url.protocol === 'https:')) {
           const clone = freshRes.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
         }
         return freshRes;
       }).catch(() => {
-        return caches.match(req).then((cached) => cached || caches.match('./index.html'));
+        return caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html') : null));
       })
     );
     return;
   }
 
-  // 2. Static Assets (Scripts, Styles, WASM, Images): Cache-First with Background Revalidation
+  // 2. Static Heavy Assets (WASM, Images, Manifest): Cache-First with Background Revalidation
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) {

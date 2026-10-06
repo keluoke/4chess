@@ -234,7 +234,8 @@ export async function initMaiaExtension() {
         black: blackPlayer,
         result: gameResult,
         pgn: moves.rawPgn || null,
-        url: window.location.href
+        url: window.location.href,
+        lang: panel.lang || 'zh'
       };
 
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {

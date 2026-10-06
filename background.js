@@ -198,7 +198,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
     }
 
-    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl', 'defaultElo'], (settings) => {
+    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl', 'defaultElo', 'maia3_lang'], (settings) => {
       chrome.storage.local.set({ active_analysis_game: gameData }, () => {
         // Default to true: open 4chess.cc web review directly!
         const useWeb = settings?.useWebReview !== false;
@@ -211,10 +211,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
           const pgnParam = encodeURIComponent(gameData.pgn);
           const elo = settings?.defaultElo || 1900;
+          const lang = settings?.maia3_lang || gameData.lang;
           let extra = '';
           if (gameData.white && gameData.white !== '白方') extra += `&white=${encodeURIComponent(gameData.white)}`;
           if (gameData.black && gameData.black !== '黑方') extra += `&black=${encodeURIComponent(gameData.black)}`;
           if (gameData.result && gameData.result !== '*') extra += `&result=${encodeURIComponent(gameData.result)}`;
+          if (lang) extra += `&lang=${encodeURIComponent(lang)}`;
           targetUrl = `${base}/#pgn=${pgnParam}&elo=${elo}${extra}`;
         }
 
