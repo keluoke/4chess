@@ -28,12 +28,10 @@
     "description": "Floating panel switch description"
   },
   "liveEvalTitle": {
-    "message": "Live evaluation",
-    "description": "Live evaluation switch title"
+    "message": "Analysis overlays"
   },
   "liveEvalDesc": {
-    "message": "Candidate arrows & intuition heatmap",
-    "description": "Live evaluation switch description"
+    "message": "Compare Maia and Stockfish on permitted boards"
   },
   "btnReviewStudio": {
     "message": "Open Review Studio",
@@ -122,5 +120,32 @@
   },
   "fairPlayNote": {
     "message": "Locked during live games. Review unlocks when the game ends."
+  },
+  "firstUseGuide": {
+    "message": "First time? Read the guide ↗"
+  },
+  "firstUseSteps": {
+    "message": "Open an analysis board → Choose a model → Compare both engines"
+  },
+  "aboutCredits": {
+    "message": "About · Credits & licenses"
+  },
+  "sfLite": {
+    "message": "SF19 Lite · In extension"
+  },
+  "sfStandardWeb": {
+    "message": "SF19 Standard · Web studio"
+  },
+  "sfWebHelp": {
+    "message": "The extension uses Lite. Standard runs in the web review studio."
+  },
+  "customModelHelp": {
+    "message": "The URL must match the selected Maia version."
+  },
+  "preferencesSaved": {
+    "message": "Saved. Applies to open analysis boards."
+  },
+  "invalidModelUrl": {
+    "message": "Enter an HTTPS model URL."
   }
 }

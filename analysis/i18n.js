@@ -8,6 +8,7 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    guideAndCredits: "使用指南 · 双引擎图例 · 关于与许可 ↗",
     engineEdition: "引擎版本",
     intuitionEdition: "直觉版本",
     sfLiteEdition: "SF19 轻量版",
@@ -230,6 +231,7 @@ export const DICTIONARY = {
   },
 
   en: {
+    guideAndCredits: "Guide · Dual-engine legend · Credits & licenses ↗",
     engineEdition: "Engine version",
     intuitionEdition: "Intuition model",
     sfLiteEdition: "SF19 Lite",

@@ -7,6 +7,8 @@
  * 4. Zero-Overflow Segmented Tabs & Native WeChat Switches (weui-switch)
  * 5. High Information Density & Zero Lag Experience
  */
+import { MAIA_VARIANTS } from '../engine/engine-variants.js';
+import { readEnginePreferences } from '../engine/engine-preferences.js';
 
 let appearanceListenerInstalled = false;
 
@@ -21,14 +23,14 @@ const I18N = {
     btnClose: '收起悬浮窗',
     drawerTitle: '复盘偏好',
     lblLang: '界面语言',
-    lblModelSpec: '模型与下载',
+    lblModelSpec: 'Maia 模型',
     maiaEngine: 'Maia 3',
     sfEngine: 'Stockfish 19',
     notStarted: '未启动',
     connecting: '正在连接...',
     starting: '启动中...',
     readyWasm: '就绪 (WASM)',
-    readyLocal: '就绪 (本地GPU)',
+    readyLocal: '就绪 (本地 CPU)',
     initError: '启动异常',
     eloTitle: '人类直觉等级',
     eloDesc: {
@@ -38,8 +40,22 @@ const I18N = {
       2200: '2200 · 大师段位直觉'
     },
     boardVisuals: '棋盘显示',
-    heatmap: '意图热力图',
-    arrows: '直觉走法建议',
+    heatmap: 'Maia 落点偏好热力图',
+    arrows: 'Maia 候选箭头',
+    sfArrows: 'Stockfish 最佳箭头',
+    dualIntro: 'Stockfish 看好不好，Maia 看常不常见',
+    maiaLegend: '金色实线 · Maia 预测',
+    sfLegend: '绿色虚线 · 引擎最佳',
+    consensusLegend: '青色 · 两者首选一致',
+    heatmapHelp: '暖色越深，Maia 越常选择这个落点；是相对强度，不是胜率或危险程度。',
+    guide: '使用指南与图例 ↗',
+    about: '关于 · 署名与许可 ↗',
+    collapsedTitle: '悬浮窗已收起',
+    collapsedHelp: '保留侧栏覆盖。展开后查看双引擎对比。',
+    expand: '展开分析',
+    sfWebOnly: '插件内运行 SF19 Lite；标准版在全盘分析网页版使用。',
+    modelHelp: '首次使用下载所选模型，各版本缓存独立；对局中只保存选择，结束后加载。',
+    modelSaved: '已保存；允许分析时加载所选模型。',
     candidates: '人类直觉候选着法',
     whiteCandidates: '白方候选着法',
     blackCandidates: '黑方候选着法',
@@ -52,7 +68,7 @@ const I18N = {
     divergenceBadge: '⚠️ 人机着法分歧',
     intuitionBadge: '🫤 人类直觉首选',
     evalLabel: '局面',
-    deltaLoss: '直觉损耗',
+    deltaLoss: '相对引擎首选的评分变化；负值表示较弱',
     floatTitle: '歧路 Diverge',
     btnStandaloneStudio: '全盘分析',
     fairPlayTitle: '对局进行中 · 公平竞技保护',
@@ -70,14 +86,14 @@ const I18N = {
     btnClose: 'Minimize to Floating Ball',
     drawerTitle: '⚙️ Settings',
     lblLang: 'Language:',
-    lblModelSpec: 'Model Weights (Auto Switch):',
+    lblModelSpec: 'Maia model',
     maiaEngine: 'Maia 3',
     sfEngine: 'Stockfish 19',
     notStarted: 'Not Started',
     connecting: 'Connecting...',
     starting: 'Starting...',
     readyWasm: 'Ready (WASM)',
-    readyLocal: 'Ready (Local GPU)',
+    readyLocal: 'Ready (Local CPU)',
     initError: 'Init Error',
     eloTitle: 'Intuition Rating (ELO)',
     eloDesc: {
@@ -87,8 +103,22 @@ const I18N = {
       2200: '2200 · Master Intuition'
     },
     boardVisuals: 'Visual Overlays',
-    heatmap: 'Attention Heatmap',
-    arrows: 'Intuition Arrows',
+    heatmap: 'Maia destination heatmap',
+    arrows: 'Maia candidate arrows',
+    sfArrows: 'Stockfish best-move arrow',
+    dualIntro: 'Stockfish: move quality · Maia: human likelihood',
+    maiaLegend: 'Gold solid · Maia prediction',
+    sfLegend: 'Green dashed · Engine best',
+    consensusLegend: 'Cyan · Both favor the same move',
+    heatmapHelp: 'Warmer squares are more common Maia destinations. Relative intensity, not win probability or danger.',
+    guide: 'Guide & visual legend ↗',
+    about: 'About · Credits & licenses ↗',
+    collapsedTitle: 'Panel collapsed',
+    collapsedHelp: 'Sidebar cover remains. Expand to compare both engines.',
+    expand: 'Expand analysis',
+    sfWebOnly: 'The extension runs SF19 Lite. Standard runs in the web review studio.',
+    modelHelp: 'Downloads on first use; each model is cached separately. During a live game, selection is saved and loading waits until it ends.',
+    modelSaved: 'Saved; the selected model loads when analysis is permitted.',
     candidates: 'Candidate Moves',
     whiteCandidates: 'White Candidates',
     blackCandidates: 'Black Candidates',
@@ -101,7 +131,7 @@ const I18N = {
     divergenceBadge: '⚠️ Engine Divergence',
     intuitionBadge: '🫤 Human Intuition',
     evalLabel: 'Eval',
-    deltaLoss: 'Intuition Loss',
+    deltaLoss: 'Score change from the engine best; negative means weaker',
     floatTitle: 'Diverge',
     btnStandaloneStudio: 'Full Game Analysis',
     fairPlayTitle: 'Live Game Active · Fair Play Guard',
@@ -133,6 +163,9 @@ export class IntuitionPanel {
       closedPref = sessionStorage.getItem('maia3_panel_closed') === 'true';
     } catch (e) {}
     this.isClosed = closedPref;
+    this.isHidden = false;
+    try { this.isHidden = sessionStorage.getItem('maia3_panel_hidden') === 'true'; } catch {}
+    this.enginePreferences = { maiaVariant: '5m', stockfishVariant: 'lite' };
     this.isFairPlayLocked = false;
     this.currentElo = 1900;
     this.lang = (navigator.language && navigator.language.startsWith('zh')) ? 'zh' : 'en';
@@ -143,11 +176,18 @@ export class IntuitionPanel {
     this.lastReviewResult = null;
     this.reviewFilter = 'all';
 
-    this.showHeatmap = true;
+    this.showHeatmap = false;
     this.showArrows = true;
+    this.showStockfishArrows = true;
     this.opacity = 0.55;
 
     this.init();
+    readEnginePreferences().then(prefs => this.setEnginePreferences(prefs));
+    this._getStorage(['showHeatmap', 'showArrows', 'showStockfishArrows'], saved => {
+      for (const key of ['showHeatmap', 'showArrows', 'showStockfishArrows']) if (typeof saved[key] === 'boolean') this[key] = saved[key];
+      this.syncStudyChrome();
+      this.onToggleChange?.({ showHeatmap: this.showHeatmap, showArrows: this.showArrows, showStockfishArrows: this.showStockfishArrows });
+    });
 
     // Asynchronously synchronize preferences from chrome.storage.local (avoiding host localStorage pollution)
     this._getStorage(['defaultElo', 'maia3_target_elo', 'maia3_lang', 'maia3_panel_pos', 'maia3_fab_pos'], (res) => {
@@ -167,6 +207,8 @@ export class IntuitionPanel {
             this.container.style.left = `${left}px`;
             this.container.style.top = `${top}px`;
             this.container.style.right = 'auto';
+            this.userPositioned = true;
+            this.fitPanel();
           }
         } catch (e) {}
       }
@@ -292,14 +334,9 @@ export class IntuitionPanel {
       } catch (e) {}
     }
 
-    // 6. Set Visibility State (Closed vs Open)
-    if (this.isClosed) {
-      this.container.style.display = 'none';
-      this.fab.style.display = 'flex';
-    } else {
-      this.container.style.display = 'block';
-      this.fab.style.display = 'none';
-    }
+    this.container.style.display = this.isHidden ? 'none' : 'flex';
+    this.container.dataset.collapsed = String(this.isClosed);
+    this.fab.style.display = 'none';
 
     this.renderSkeleton();
     if (globalThis.chrome?.storage?.local) {
@@ -348,6 +385,11 @@ export class IntuitionPanel {
 
     this.setupDraggable();
     this.setupFabEvents();
+    this.fitPanel();
+    this.layoutObserver = new MutationObserver(() => { if (!this.userPositioned) this.fitPanel(); });
+    this.layoutObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    window.addEventListener('resize', () => this.fitPanel());
+    window.addEventListener('scroll', () => { if (!this.userPositioned) this.fitPanel(); }, { passive: true });
   }
 
   renderSkeleton() {
@@ -382,6 +424,7 @@ export class IntuitionPanel {
         </div>
       </div>
 
+      <div class="diverge-collapsed-summary"><strong id="compact-title"></strong><p id="compact-help"></p><button type="button" id="maia-restore" data-dg-text="expand"></button><a href="https://4chess.cc/guide/" target="_blank" rel="noopener" data-dg-text="guide"></a></div>
       <!-- Settings Dropdown Drawer (隐藏在设置胶囊内) -->
       <div id="cdn-config-drawer" class="weui-drawer-overlay" style="display: none; max-height: 480px; overflow-y: auto;">
         <div class="weui-drawer-header">
@@ -420,23 +463,30 @@ export class IntuitionPanel {
           <div class="weui-cells" style="margin-top: 2px; border-radius: 8px; overflow: hidden; background: var(--weui-BG-3);">
             <div class="weui-cell" style="padding: 7px 10px;">
               <div class="weui-cell__bd" id="lbl-heatmap" style="font-size: 11.5px;">${this.t('heatmap')}</div>
-              <input type="checkbox" id="maia-chk-heatmap" class="weui-switch" checked />
+              <input type="checkbox" id="maia-chk-heatmap" class="weui-switch" />
             </div>
             <div class="weui-cell" style="padding: 7px 10px; border-top: 0.5px solid var(--weui-BORDER);">
               <div class="weui-cell__bd" id="lbl-arrows" style="font-size: 11.5px;">${this.t('arrows')}</div>
               <input type="checkbox" id="maia-chk-arrows" class="weui-switch" checked />
             </div>
+            <div class="weui-cell"><div class="weui-cell__bd" data-dg-text="sfArrows"></div><input type="checkbox" id="maia-chk-sf-arrows" class="weui-switch" checked /></div>
           </div>
+          <p class="diverge-help" data-dg-text="heatmapHelp"></p>
         </div>
 
-        <!-- 4. Model Spec (5M & 23M, background auto-switch) -->
+        <div class="weui-drawer-item"><label for="maia-sf-select">Stockfish</label><select id="maia-sf-select"><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard · Web</option></select><p class="diverge-help" data-dg-text="sfWebOnly"></p></div>
+        <!-- Maia model variants -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
-          <div style="display: flex; gap: 8px;">
-            <button type="button" class="weui-preset-btn active" data-url="https://weights.4chess.cc/maia3_model.bin" style="flex: 1; padding: 7px 0; text-align: center; border-radius: 6px; font-size: 11.5px; font-weight: 600;">5M (28M)</button>
-            <button type="button" class="weui-preset-btn" data-url="https://weights.4chess.cc/maia3_23m.bin" style="flex: 1; padding: 7px 0; text-align: center; border-radius: 6px; font-size: 11.5px; font-weight: 600;">23M (104M)</button>
+          <div class="diverge-model-options">
+            <button type="button" class="weui-preset-btn" data-model="5m">5M · 28 MB</button>
+            <button type="button" class="weui-preset-btn" data-model="23m">23M · 104 MB</button>
+            <button type="button" class="weui-preset-btn" data-model="79m">79M · 159 MB</button>
           </div>
-          <div id="model-switch-hint" style="font-size: 10px; color: var(--weui-FG-2); margin-top: 5px; text-align: center;">${this.lang === 'zh' ? '✓ 点击在后台自动切换模型' : '✓ Click to switch model in background'}</div>
+          <p class="diverge-help" data-dg-text="modelHelp"></p>
+          <div id="model-switch-hint" role="status" class="diverge-help"></div>
+          <a class="diverge-guide-link" href="https://4chess.cc/guide/" target="_blank" rel="noopener" data-dg-text="guide"></a>
+          <a class="diverge-guide-link" href="https://4chess.cc/guide/#about" target="_blank" rel="noopener" data-dg-text="about"></a>
         </div>
       </div>
 
@@ -475,6 +525,7 @@ export class IntuitionPanel {
           </div>
         </div>
 
+        <section class="diverge-visual-legend"><strong data-dg-text="dualIntro"></strong><span class="legend-maia" data-dg-text="maiaLegend"></span><span class="legend-sf" data-dg-text="sfLegend"></span><span class="legend-consensus" data-dg-text="consensusLegend"></span><p data-dg-text="heatmapHelp"></p><a href="https://4chess.cc/guide/#dual-engines" target="_blank" rel="noopener" data-dg-text="guide"></a></section>
         <!-- Candidate Moves List Group -->
         <div class="diverge-candidates">
           <div class="weui-cells__title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -513,6 +564,7 @@ export class IntuitionPanel {
     `;
 
     this.bindEvents();
+    this.syncStudyChrome();
   }
 
   setupFabEvents() {
@@ -580,30 +632,81 @@ export class IntuitionPanel {
 
   close() {
     this.isClosed = true;
+    this.container.dataset.collapsed = 'true';
+    sessionStorage.setItem('maia3_panel_closed', 'true');
+    this.syncStudyChrome();
+  }
+
+  hide() {
+    this.isHidden = true;
     this.container.style.display = 'none';
-    if (this.fab) {
-      this.fab.style.display = 'flex';
-      const eloBadge = this.fab.querySelector('#weui-float-elo');
-      if (eloBadge) eloBadge.textContent = this.currentElo;
-    }
-    try {
-      sessionStorage.setItem('maia3_panel_closed', 'true');
-    } catch (e) {}
+    sessionStorage.setItem('maia3_panel_hidden', 'true');
   }
 
   open() {
-    this.isClosed = false;
-    this.container.style.display = 'block';
-    if (this.fab) {
-      this.fab.style.display = 'none';
-    }
-    try {
-      sessionStorage.setItem('maia3_panel_closed', 'false');
-    } catch (e) {}
+    this.isClosed = this.isHidden = false;
+    this.container.style.display = 'flex';
+    this.container.dataset.collapsed = 'false';
+    sessionStorage.setItem('maia3_panel_closed', 'false');
+    sessionStorage.setItem('maia3_panel_hidden', 'false');
+    this.fitPanel();
   }
 
-  isPanelClosed() {
-    return this.isClosed;
+  isPanelClosed() { return this.isHidden; }
+
+  setEnginePreferences(prefs) {
+    this.enginePreferences = prefs;
+    const select = this.container.querySelector('#maia-sf-select');
+    if (select) select.value = prefs.stockfishVariant;
+    this.container.querySelectorAll('[data-model]').forEach(btn => btn.classList.toggle('active', btn.dataset.model === prefs.maiaVariant));
+    this.syncStudyChrome();
+  }
+
+  syncStudyChrome() {
+    if (!this.container) return;
+    this.container.querySelectorAll('[data-dg-text]').forEach(el => { el.textContent = this.t(el.dataset.dgText); });
+    const title = this.container.querySelector('#compact-title');
+    if (title) title.textContent = this.t(this.isFairPlayLocked ? 'fairPlayTitle' : 'collapsedTitle');
+    const help = this.container.querySelector('#compact-help');
+    if (help) help.textContent = this.t(this.isFairPlayLocked ? 'fairPlayUnlockTip' : 'collapsedHelp');
+    const name = this.container.querySelector('#lbl-engine-maia');
+    if (name) name.textContent = MAIA_VARIANTS[this.enginePreferences.maiaVariant]?.name || 'Maia-3';
+    const sf = this.container.querySelector('#lbl-engine-sf');
+    if (sf) sf.textContent = 'Stockfish 19 Lite';
+    const modelHint = this.container.querySelector('#model-switch-hint');
+    if (modelHint?.dataset.saved) modelHint.textContent = this.t('modelSaved');
+    const standardOption = this.container.querySelector('#maia-sf-select option[value="standard"]');
+    if (standardOption) standardOption.textContent = this.lang === 'zh' ? 'SF19 标准版 · 网页版' : 'SF19 Standard · Web';
+    for (const [id, key] of [['maia-chk-heatmap', 'showHeatmap'], ['maia-chk-arrows', 'showArrows'], ['maia-chk-sf-arrows', 'showStockfishArrows']]) {
+      const field = this.container.querySelector('#' + id); if (field) field.checked = this[key];
+    }
+    this.container.querySelectorAll('a[href*="4chess.cc/guide"]').forEach(link => {
+      const url = new URL(link.href); url.searchParams.set('lang', this.lang); link.href = url.href;
+    });
+  }
+
+  fitPanel() {
+    if (!this.container) return;
+    let width = 300, height = 600;
+    if (!this.userPositioned && location.hostname.includes('chess.com')) {
+      const board = document.querySelector('wc-chess-board, chess-board, .board-layout-chessboard')?.getBoundingClientRect();
+      const ad = [...document.querySelectorAll('[id^="google_ads_iframe"], [id^="div-gpt-ad"], [data-ad-slot], .ad-slot, .ad-container, .board-layout-ad')].find(el => {
+        const r = el.getBoundingClientRect(); return r.width >= 250 && r.width <= 420 && r.height >= 200 && r.height <= 800 && r.right <= innerWidth && r.top < innerHeight && (!board || r.left >= board.right - 8);
+      });
+      if (ad) {
+        this.container.dataset.adCover = 'true';
+        const r = ad.getBoundingClientRect(); width = r.width; height = r.height;
+        this.container.style.left = Math.max(12, r.left) + 'px';
+        this.container.style.top = Math.max(12, r.top) + 'px';
+        this.container.style.right = 'auto';
+      }
+    }
+    width = Math.min(width, innerWidth - 24); height = Math.min(height, innerHeight - 24);
+    this.container.style.setProperty('--diverge-panel-width', width + 'px');
+    this.container.style.setProperty('--diverge-panel-height', height + 'px');
+    const r = this.container.getBoundingClientRect();
+    this.container.style.top = Math.max(12, Math.min(r.top, innerHeight - height - 12)) + 'px';
+    if (this.container.style.left) this.container.style.left = Math.max(12, Math.min(parseFloat(this.container.style.left), innerWidth - width - 12)) + 'px';
   }
 
   setElo(elo, triggerCallback = true) {
@@ -711,10 +814,13 @@ export class IntuitionPanel {
     const updateToggles = () => {
       this.showHeatmap = chkHeatmap ? chkHeatmap.checked : true;
       this.showArrows = chkArrows ? chkArrows.checked : true;
+      this.showStockfishArrows = this.container.querySelector('#maia-chk-sf-arrows')?.checked !== false;
+      this._setStorage({ showHeatmap: this.showHeatmap, showArrows: this.showArrows, showStockfishArrows: this.showStockfishArrows });
       if (this.onToggleChange) {
         this.onToggleChange({
           showHeatmap: this.showHeatmap,
           showArrows: this.showArrows,
+          showStockfishArrows: this.showStockfishArrows,
           opacity: this.opacity
         });
       }
@@ -722,41 +828,19 @@ export class IntuitionPanel {
 
     if (chkHeatmap) chkHeatmap.addEventListener('change', updateToggles);
     if (chkArrows) chkArrows.addEventListener('change', updateToggles);
+    this.container.querySelector('#maia-chk-sf-arrows')?.addEventListener('change', updateToggles);
 
-    // 5. CDN Drawer & Config
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['cloudflareCdnUrl'], (res) => {
-        const url = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
-        this.container.querySelectorAll('.weui-preset-btn').forEach(btn => {
-          btn.classList.toggle('active', btn.getAttribute('data-url') === url);
-        });
-      });
-    }
-
-    // Preset buttons: auto switch in background on click
-    this.container.querySelectorAll('.weui-preset-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        this.container.querySelectorAll('.weui-preset-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const url = btn.getAttribute('data-url');
-        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-          await chrome.storage.local.set({ cloudflareCdnUrl: url });
-        }
-        const hintEl = this.container.querySelector('#model-switch-hint');
-        if (hintEl) {
-          const originalText = hintEl.textContent;
-          hintEl.textContent = this.lang === 'zh' ? '✓ 模型已在后台切换' : '✓ Model switched in background';
-          hintEl.style.color = 'var(--weui-BRAND)';
-          setTimeout(() => {
-            hintEl.textContent = originalText;
-            hintEl.style.color = 'var(--weui-FG-2)';
-          }, 1500);
-        }
-        if (this.onCdnSave) {
-          this.onCdnSave(url);
-        }
-      });
-    });
+    const saveModels = async changes => {
+      this.enginePreferences = { ...this.enginePreferences, ...changes };
+      if (globalThis.chrome?.storage?.local) await chrome.storage.local.set(this.enginePreferences);
+      this.setEnginePreferences(this.enginePreferences);
+      const hint = this.container.querySelector('#model-switch-hint');
+      hint.dataset.saved = 'true';
+      hint.textContent = this.t('modelSaved');
+    };
+    this.container.querySelectorAll('[data-model]').forEach(btn => btn.addEventListener('click', () => saveModels({ maiaVariant: btn.dataset.model, cloudflareCdnUrl: MAIA_VARIANTS[btn.dataset.model].url })));
+    this.container.querySelector('#maia-sf-select').addEventListener('change', event => saveModels({ stockfishVariant: event.target.value }));
+    this.container.querySelector('#maia-restore').addEventListener('click', () => this.open());
 
     // 6. Standalone Game Review Button
     const triggerStandaloneBtn = this.container.querySelector('#btn-trigger-standalone');
@@ -778,6 +862,7 @@ export class IntuitionPanel {
 
   updateEngineStatus(status) {
     if (!this.container || !status) return;
+    this.lastEngineStatus = status;
 
     // 1. Update Maia-3 Status Dot & Text
     const dotMaia = this.container.querySelector('#dot-maia');
@@ -800,7 +885,8 @@ export class IntuitionPanel {
       } else if (state === 'ready') {
         if (dotMaia) dotMaia.className = 'weui-status-dot status-ready';
         if (labelMaia) {
-          labelMaia.textContent = this.lang === 'zh' ? `就绪 (${source || '本地'})` : `Ready (${source || 'Local'})`;
+          const sourceLabel = source === 'IndexedDB 缓存' ? (this.lang === 'zh' ? '缓存' : 'Cache') : source;
+          labelMaia.textContent = this.lang === 'zh' ? `就绪 (${sourceLabel || '本地'})` : `Ready (${sourceLabel || 'Local'})`;
           labelMaia.className = 'weui-cell__ft status-green';
         }
         if (cdnCard) cdnCard.style.display = 'none';
@@ -812,7 +898,7 @@ export class IntuitionPanel {
         }
         if (cdnCard) {
           cdnCard.style.display = 'block';
-          if (cdnStatusLabel) cdnStatusLabel.textContent = `⚡ CDN 传输中 (${percent}%)`;
+          if (cdnStatusLabel) cdnStatusLabel.textContent = this.lang === 'zh' ? `⚡ CDN 传输中 (${percent}%)` : `⚡ Downloading (${percent}%)`;
           if (cdnSpeedLabel) cdnSpeedLabel.textContent = speed ? `${speed} MB/s` : '-- MB/s';
           if (cdnBarFill) cdnBarFill.style.width = `${percent}%`;
           if (cdnBytesLabel) cdnBytesLabel.textContent = `${loadedMB} / ${totalMB} MB`;
@@ -827,7 +913,7 @@ export class IntuitionPanel {
       } else {
         if (dotMaia) dotMaia.className = 'weui-status-dot status-loading';
         if (labelMaia) {
-          labelMaia.textContent = source || this.t('connecting');
+          labelMaia.textContent = status.maia.stage === 'cache' ? (this.lang === 'zh' ? '读取缓存中…' : 'Reading cache…') : status.maia.stage === 'preparing' ? (this.lang === 'zh' ? '初始化模型…' : 'Preparing model…') : this.t('connecting');
           labelMaia.className = 'weui-cell__ft';
         }
         if (cdnCard) cdnCard.style.display = 'none';
@@ -934,6 +1020,7 @@ export class IntuitionPanel {
 
   applyLanguage() {
     if (!this.container) return;
+    this.syncStudyChrome();
     const txtPanelTitle = this.container.querySelector('#txt-panel-title');
     if (txtPanelTitle) txtPanelTitle.textContent = this.t('panelTitle');
 
@@ -950,7 +1037,7 @@ export class IntuitionPanel {
     if (lblLang) lblLang.textContent = this.t('lblLang');
 
     const lblModelSpec = this.container.querySelector('#lbl-model-spec');
-    if (lblModelSpec) lblModelSpec.textContent = this.t('lblModelSpec');
+    if (lblModelSpec) lblModelSpec.textContent = this.lang === 'zh' ? 'Maia 模型' : 'Maia model';
 
     const lblEngineMaia = this.container.querySelector('#lbl-engine-maia');
     if (lblEngineMaia) lblEngineMaia.textContent = this.t('maiaEngine');
@@ -988,7 +1075,7 @@ export class IntuitionPanel {
     }
 
     const turnPill = this.container.querySelector('#maia-turn-pill');
-    if (turnPill) {
+    if (turnPill && !this.isFairPlayLocked) {
       const isWhite = this.currentTurn === 'w';
       turnPill.textContent = isWhite ? this.t('white') : this.t('black');
     }
@@ -996,6 +1083,12 @@ export class IntuitionPanel {
     if (this.fab) {
       const fabTitle = this.fab.querySelector('.weui-float-title');
       if (fabTitle) fabTitle.textContent = this.t('floatTitle');
+    }
+    this.syncStudyChrome();
+    if (this.lastEngineStatus) this.updateEngineStatus(this.lastEngineStatus);
+    if (this.isFairPlayLocked) {
+      this.isFairPlayLocked = false;
+      this.setFairPlayLocked(true);
     }
   }
 
@@ -1035,6 +1128,7 @@ export class IntuitionPanel {
         window.removeEventListener('mouseup', onMouseUp);
 
         const rect = this.container.getBoundingClientRect();
+        this.userPositioned = true;
         this._setStorage({ maia3_panel_pos: { left: rect.left, top: rect.top } });
       };
 
@@ -1056,7 +1150,9 @@ export class IntuitionPanel {
     const insightBox = this.container.querySelector('#maia-insight-card');
     const turnPill = this.container.querySelector('#maia-turn-pill');
 
+    this.syncStudyChrome();
     if (isLocked) {
+      this.currentData = null;
       if (insightBox) insightBox.style.display = 'none';
       if (movesHeader) movesHeader.textContent = this.lang === 'zh' ? '公平竞技保护 (Fair Play)' : 'Fair Play Guard';
       if (timeEl) timeEl.textContent = this.t('fairPlayLocked');
@@ -1226,6 +1322,7 @@ export class IntuitionPanel {
     // 1. If Maia-3 engine is NOT ready yet: check if Stockfish has preliminary result
     if (!predictionData.isAvailable) {
       const sf = predictionData.stockfish;
+      const maiaFailed = predictionData.status?.maia?.state === 'error';
       if (sf && sf.bestMove) {
         if (timeEl) timeEl.textContent = `${latencyMs.toFixed(0)} ms · Stockfish`;
         if (movesHeader) movesHeader.textContent = isWhite ? (this.lang === 'zh' ? '白方最佳 (Stockfish WASM)' : 'White Best (Stockfish WASM)') : (this.lang === 'zh' ? '黑方最佳 (Stockfish WASM)' : 'Black Best (Stockfish WASM)');
@@ -1248,9 +1345,16 @@ export class IntuitionPanel {
               </div>
             </div>
             <div style="padding: 10px 12px; text-align: center; color: var(--weui-FG-1); font-size: 11px;">
-              ${this.lang === 'zh' ? '🧠 Maia-3 人类直觉载入中，完毕后将呈现人机共识对比...' : '🧠 Maia-3 intuition loading, consensus comparison will appear once ready...'}
+              ${maiaFailed ? (this.lang === 'zh' ? 'Maia 加载失败，Stockfish 仍可使用。' : 'Maia failed to load; Stockfish is still available.') : (this.lang === 'zh' ? '🧠 Maia-3 人类直觉载入中，完毕后将呈现人机共识对比...' : '🧠 Maia-3 intuition loading, consensus comparison will appear once ready...')}
             </div>
           `;
+          if (maiaFailed) {
+            const retry = document.createElement('button');
+            retry.type = 'button'; retry.className = 'weui-btn-primary';
+            retry.textContent = this.lang === 'zh' ? '重试 Maia 下载' : 'Retry Maia download';
+            retry.addEventListener('click', () => this.onModelLoaded?.());
+            movesContainer.appendChild(retry);
+          }
         }
 
         if (insightBox && insightBadge && insightText) {
@@ -1268,7 +1372,7 @@ export class IntuitionPanel {
           const br = document.createElement('br');
           const subSpan = document.createElement('span');
           subSpan.style.cssText = 'color: var(--weui-FG-1); font-size: 11px;';
-          subSpan.textContent = this.lang === 'zh' ? 'Maia-3 载入就绪后将立即呈现人类直觉热力图。' : 'Attention heatmap will display once Maia-3 is ready.';
+          subSpan.textContent = this.lang === 'zh' ? 'Maia 就绪后加入直觉候选；热力图可在设置中开启。' : 'Maia candidates appear when ready; enable the destination heatmap in Settings.';
           insightText.append(recText, moveStrong, evalText, br, subSpan);
         }
       } else {
@@ -1308,7 +1412,7 @@ export class IntuitionPanel {
     }
 
     if (timeEl) {
-      const backendText = predictionData.backend?.includes('本地') ? (this.lang === 'zh' ? '本地 GPU' : 'Local GPU') : (this.lang === 'zh' ? '浏览器' : 'Browser');
+      const backendText = this.lang === 'zh' ? '浏览器 CPU' : 'Browser CPU';
       timeEl.textContent = `${latencyMs.toFixed(0)} ms (${backendText})`;
     }
 
@@ -1376,7 +1480,7 @@ export class IntuitionPanel {
       return;
     }
 
-    const topMoves = predictionData.moves.slice(0, 4);
+    const topMoves = predictionData.moves.slice(0, 3);
     movesContainer.innerHTML = '';
 
     topMoves.forEach((move, idx) => {

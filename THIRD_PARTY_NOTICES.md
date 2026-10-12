@@ -94,3 +94,11 @@ The studio also offers **Maia-3 23M**, reusing the existing CDN export at `https
   Complete text is located at [`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt)
 - **The MIT License**:  
   Full text is located in [`LICENSE`](LICENSE)
+
+## User-facing credits and bundled license access
+
+- Project author and maintainer: **keluoke**. Existing Diverge contributor credits are retained.
+- Public user guide and credits: https://4chess.cc/guide/#about
+- Cburnett SVG pieces: **Colin M. L. Burnett**, GPL-2.0-or-later, from https://github.com/lichess-org/lila/tree/master/public/piece/cburnett; license declared in https://github.com/lichess-org/lila/blob/master/COPYING.md. The SVGs are inlined into JavaScript and given responsive dimensions / light color-scheme; their drawing paths are retained. Full text is shipped as LICENSES/GPL-2.0.txt.
+- Maia-3 / Chessformer research authors: **Daniel Monroe, George Eilender, Philip Chalmers, Zhenwei Tang and Ashton Anderson**, CSSLab. See https://openreview.net/forum?id=2ltBRzEHyd and the upstream repository. Keep the per-model source links and conversion records. The 5M and 23M model-card text refers readers to the upstream repository for code/weight terms; the 79M raw README also states AGPLv3. Do not apply the paper's CC BY 4.0 to the code or checkpoints. Code licensing and checkpoint provenance are recorded separately.
+- The extension ZIP includes LICENSE, THIRD_PARTY_NOTICES.md, LICENSES and the guide. The full-network Stockfish web runner and its glue are excluded from the MV3 extension package; the extension uses its bundled Lite WASM and links to the web studio for Standard.

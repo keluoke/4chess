@@ -10,6 +10,7 @@ import { BoardDetector } from './board-detector.js';
 import { HeatmapOverlay } from './heatmap-overlay.js';
 import { IntuitionPanel } from './intuition-panel.js';
 import { FairPlayGuard } from './fair-play-guard.js';
+import { readEnginePreferences } from '../engine/engine-preferences.js';
 
 export async function initMaiaExtension() {
   console.log('[Maia-3] 🚀 Starting Human Intuition Extension (Scheme 0 Standalone)...');
@@ -20,6 +21,9 @@ export async function initMaiaExtension() {
   const overlay = new HeatmapOverlay();
   let panel = null;
   let detector = null;
+  let predictionEpoch = 0;
+  let engineInitStarted = false;
+  let preferences = await readEnginePreferences();
 
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     chrome.storage.local.get(['liveEvaluation'], (res) => {
@@ -30,13 +34,13 @@ export async function initMaiaExtension() {
     });
   }
 
-  const engine = new MaiaEngine((status) => {
+  let engine = new MaiaEngine((status) => {
     if (panel) {
       panel.updateEngineStatus(status);
     }
-  });
+  }, null, { variant: preferences.maiaVariant });
 
-  const analyzer = new GameAnalyzer(engine.stockfishInBrowser, engine);
+  let analyzer = new GameAnalyzer(engine.stockfishInBrowser, engine);
 
   panel = new IntuitionPanel({
     onEloChange: async (elo) => {
@@ -52,25 +56,12 @@ export async function initMaiaExtension() {
       overlay.setHoverMove(moveUci);
     },
     onModelLoaded: async () => {
-      try {
-        await engine.reinitialize();
-        if (currentFen) {
-          await runPrediction(currentFen);
-        }
-      } catch (e) {
-        console.error('[Maia-3] Re-init error:', e);
-      }
+      if (FairPlayGuard.isLiveGameInProgress()) return;
+      engineInitStarted = false;
+      ensureEngineInitialized();
     },
     onCdnSave: async (newUrl) => {
-      console.log('[Maia-3] Custom CDN updated:', newUrl);
-      try {
-        await engine.reinitialize(newUrl);
-        if (currentFen) {
-          await runPrediction(currentFen);
-        }
-      } catch (e) {
-        console.error('[Maia-3] Re-init error with custom CDN:', e);
-      }
+      await applyEnginePreferences();
     },
     onOpenStandaloneAnalysis: async () => {
       if (FairPlayGuard.isLiveGameInProgress()) {
@@ -200,7 +191,14 @@ export async function initMaiaExtension() {
         element: null
       }));
 
-      const cleanReview = analyzer.lastReviewResult ? {
+      const review = analyzer.lastReviewResult;
+      const expectedKey = GameAnalyzer.getGameKey(moves, { depth: review?.depth || 6, elo: panel.currentElo, engineKey: engine.stockfishInBrowser.engineKey, modelKey: engine.modelKey });
+      const cleanReview = review?.gameKey === expectedKey ? {
+        gameKey: review.gameKey,
+        elo: review.elo,
+        depth: review.depth,
+        engineKey: review.engineKey,
+        modelKey: review.modelKey,
         schemaVersion: analyzer.lastReviewResult.schemaVersion || 5,
         totalMoves: analyzer.lastReviewResult.totalMoves,
         blundersCount: analyzer.lastReviewResult.blundersCount,
@@ -251,8 +249,7 @@ export async function initMaiaExtension() {
 
   // Notify initial status
   panel.updateEngineStatus(engine.status);
-
-  let predictionEpoch = 0;
+  panel.setEnginePreferences(preferences);
 
   async function runPrediction(fen, blunderContext = null, viewMode = 'decision') {
     const thisEpoch = ++predictionEpoch;
@@ -289,9 +286,24 @@ export async function initMaiaExtension() {
     try {
       if (FairPlayGuard.isLiveGameInProgress() || abortCheck()) return;
 
+      // Show the bundled engine while the first Maia download is still pending.
+      let preliminarySf = null;
+      if (engine.stockfishInBrowser.isReady && !analyzer.isAnalyzing) {
+        engine.evaluateStockfishAsync(fen, sfRes => {
+          if (!sfRes || abortCheck() || FairPlayGuard.isLiveGameInProgress() || analyzer.isAnalyzing) return;
+          preliminarySf = sfRes;
+          if (!engine.isReady) {
+            const partial = { isAvailable: false, turn: fen.split(' ')[1], stockfish: sfRes, status: engine.status, moves: [], blunderContext, viewMode };
+            overlay.render(partial);
+            panel.update(partial, performance.now() - t0);
+          }
+        });
+      }
+
       // Phase 1: Instant Maia-3 Human Intuition (0 wait, non-blocking)
-      const maiaResult = await engine.predict(fen, panel.currentElo, null, abortCheck);
+      let maiaResult = await engine.predict(fen, panel.currentElo, preliminarySf, abortCheck);
       if (abortCheck() || !maiaResult || FairPlayGuard.isLiveGameInProgress()) return;
+      if (preliminarySf) maiaResult = engine.attachStockfishResult(maiaResult, preliminarySf, panel.currentElo);
 
       const latency = performance.now() - t0;
 
@@ -318,7 +330,7 @@ export async function initMaiaExtension() {
       }
 
       // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia, mutually exclusive with review)
-      if (engine.stockfishInBrowser.isReady && !FairPlayGuard.isLiveGameInProgress() && !abortCheck() && !analyzer.isAnalyzing) {
+      if (!preliminarySf && engine.stockfishInBrowser.isReady && !FairPlayGuard.isLiveGameInProgress() && !abortCheck() && !analyzer.isAnalyzing) {
         engine.evaluateStockfishAsync(fen, (sfRes) => {
           if (abortCheck() || FairPlayGuard.isLiveGameInProgress() || !sfRes || analyzer.isAnalyzing) return;
           const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
@@ -348,22 +360,26 @@ export async function initMaiaExtension() {
   }
 
   // When Stockfish is ready, immediately compute best move if a position is on board
-  engine.stockfishInBrowser.onReadyCallback = () => {
-    engine.status.stockfish.state = 'ready';
-    engine.status.stockfish.error = null;
-    engine.notifyStatus();
-    if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
-      runPrediction(currentFen);
-    }
-  };
+  function wireStockfishReady() {
+    const owner = engine;
+    owner.stockfishInBrowser.onReadyCallback = () => {
+      if (owner !== engine) return;
+      owner.status.stockfish.state = 'ready';
+      owner.status.stockfish.error = null;
+      owner.notifyStatus();
+      if (currentFen && !FairPlayGuard.isLiveGameInProgress()) runPrediction(currentFen);
+    };
+  }
+  wireStockfishReady();
 
   // Lazy engine initialization: avoid eager 28MB download/WASM spin-up on homepages or active games
-  let engineInitStarted = false;
   const ensureEngineInitialized = () => {
-    if (engineInitStarted) return;
+    if (engineInitStarted || !currentFen) return;
     if (FairPlayGuard.isLiveGameInProgress()) return;
     engineInitStarted = true;
-    engine.initialize().then(() => {
+    const owner = engine;
+    engine.initialize(preferences.cloudflareCdnUrl).then(() => {
+      if (owner !== engine) return;
       if (engine.stockfishInBrowser?.isReady) {
         console.log('[Maia-3] ✅ 双引擎 (Maia-3 + Stockfish) 均已就绪！');
       } else {
@@ -373,10 +389,35 @@ export async function initMaiaExtension() {
         runPrediction(currentFen);
       }
     }).catch(err => {
+      if (owner !== engine) return;
       console.warn('[Maia-3] Engine initialization notice:', err?.message || err);
       engineInitStarted = false;
     });
   };
+
+  async function applyEnginePreferences() {
+    const next = await readEnginePreferences();
+    const changed = next.maiaVariant !== preferences.maiaVariant || next.cloudflareCdnUrl !== preferences.cloudflareCdnUrl;
+    preferences = next;
+    panel.setEnginePreferences(next);
+    if (!changed) return;
+    predictionEpoch++;
+    analyzer.cancel();
+    overlay.clear();
+    engine.dispose();
+    engine.stockfishInBrowser.reset();
+    const fresh = new MaiaEngine(status => { if (engine === fresh) panel.updateEngineStatus(status); }, null, { variant: next.maiaVariant });
+    engine = fresh;
+    engine.setElo(panel.currentElo);
+    analyzer = new GameAnalyzer(engine.stockfishInBrowser, engine);
+    engineInitStarted = false;
+    wireStockfishReady();
+    panel.updateEngineStatus(engine.status);
+    if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
+      panel.setEvaluating(currentFen);
+      ensureEngineInitialized();
+    }
+  }
 
   // If in safe environment on load (analysis/puzzles/study/post-game), initialize engine lazily
   if (!FairPlayGuard.isLiveGameInProgress()) {
@@ -457,7 +498,7 @@ export async function initMaiaExtension() {
         if (panel.isPanelClosed()) {
           panel.open();
         } else {
-          panel.close();
+          panel.hide();
         }
         sendResponse({ closed: panel.isPanelClosed() });
       } else if (msg.type === 'GET_PANEL_STATE') {
@@ -466,7 +507,7 @@ export async function initMaiaExtension() {
         panel.open();
         sendResponse({ closed: false });
       } else if (msg.type === 'CLOSE_PANEL') {
-        panel.close();
+        panel.hide();
         sendResponse({ closed: true });
       } else if (msg.type === 'SET_ELO' && typeof msg.elo === 'number') {
         panel.setElo(msg.elo);
@@ -485,6 +526,7 @@ export async function initMaiaExtension() {
   // Synchronize live evaluation toggle from chrome.storage changes
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && (changes.maiaVariant || changes.stockfishVariant || changes.cloudflareCdnUrl)) applyEnginePreferences();
       if (area === 'local' && changes.liveEvaluation) {
         liveEvaluationEnabled = Boolean(changes.liveEvaluation.newValue);
         overlay.setLiveEvaluation(liveEvaluationEnabled);

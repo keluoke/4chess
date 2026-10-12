@@ -28,12 +28,10 @@
     "description": "悬浮面板开关描述"
   },
   "liveEvalTitle": {
-    "message": "实时评估",
-    "description": "实时评估开关标题"
+    "message": "分析标记"
   },
   "liveEvalDesc": {
-    "message": "棋盘走法建议与直觉热力图",
-    "description": "实时评估开关描述"
+    "message": "在分析或完赛棋盘上对比 Maia 与 Stockfish"
   },
   "btnReviewStudio": {
     "message": "进入全盘分析",
@@ -122,5 +120,32 @@
   },
   "fairPlayNote": {
     "message": "对局进行中自动锁定，结束后立即解锁复盘。"
+  },
+  "firstUseGuide": {
+    "message": "第一次使用？查看使用指南 ↗"
+  },
+  "firstUseSteps": {
+    "message": "打开分析板 → 选择模型 → 对比直觉与引擎"
+  },
+  "aboutCredits": {
+    "message": "关于 · 署名与许可"
+  },
+  "sfLite": {
+    "message": "SF19 Lite · 插件内"
+  },
+  "sfStandardWeb": {
+    "message": "SF19 标准版 · 网页版"
+  },
+  "sfWebHelp": {
+    "message": "插件内使用 Lite；标准版在全盘分析网页版使用。"
+  },
+  "customModelHelp": {
+    "message": "地址须对应上方所选的 Maia 版本。"
+  },
+  "preferencesSaved": {
+    "message": "已保存，已打开的分析页面会同步更新。"
+  },
+  "invalidModelUrl": {
+    "message": "请输入 HTTPS 模型地址。"
   }
 }

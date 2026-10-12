@@ -1,5 +1,5 @@
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-review6';
-import { t } from './i18n.js?v=20261012-review6';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-entries1';
+import { t } from './i18n.js?v=20261012-entries1';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {

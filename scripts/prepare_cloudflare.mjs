@@ -31,4 +31,4 @@ if (!existsSync(binTarget) && existsSync(resolve(assetsDir, 'chessimg2pos_weight
   console.log('✅ Recovered models/chessimg2pos_weights.bin');
 }
 
-console.log('ℹ️ Note: If loading as unpacked Chrome extension locally, run "npm run clean" to remove _headers/_redirects.');
+console.log('ℹ️ Build the isolated extension ZIP with npm run package; website build files stay outside that package.');

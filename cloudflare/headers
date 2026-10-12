@@ -25,5 +25,11 @@
   Cache-Control: no-cache, no-store, must-revalidate
 /ui/*
   Cache-Control: no-cache, no-store, must-revalidate
+/guide/*
+  Cache-Control: no-cache, no-store, must-revalidate
+/LICENSE*
+  Cache-Control: no-cache, no-store, must-revalidate
+/THIRD_PARTY_NOTICES.md
+  Cache-Control: no-cache, no-store, must-revalidate
 /content/*.js
   Cache-Control: no-cache, no-store, must-revalidate

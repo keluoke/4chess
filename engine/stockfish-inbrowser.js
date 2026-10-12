@@ -7,7 +7,6 @@
  */
 
 import { ChessBoard } from './chess-core.js';
-import { ModelCache } from './model-cache.js';
 import { STOCKFISH_VARIANTS } from './engine-variants.js';
 
 export class StockfishInBrowser {
@@ -93,22 +92,9 @@ export class StockfishInBrowser {
   }
 
   async initStandardWorker(epoch) {
-    // MV3 extension packages use the bundled Lite WASM; the web studio can load CDN WASM.
-    if (location.protocol === 'chrome-extension:') throw new Error('Standard Stockfish is available in the web studio');
-    const spec = STOCKFISH_VARIANTS.standard;
-    let buffer = await ModelCache.getModel(spec.key);
-    if (epoch !== this.lifecycleEpoch) return;
-    if (!buffer || buffer.byteLength !== spec.bytes) {
-      this.downloadController = new AbortController();
-      const response = await fetch(spec.wasmUrl, { signal: this.downloadController.signal });
-      if (!response.ok) throw new Error(`Stockfish download HTTP ${response.status}`);
-      buffer = await response.arrayBuffer();
-      if (buffer.byteLength !== spec.bytes) throw new Error('Invalid standard Stockfish binary');
-      await ModelCache.saveModel(spec.key, buffer);
-    }
-    if (epoch !== this.lifecycleEpoch) return;
-    this.wasmBlobUrl = URL.createObjectURL(new Blob([buffer], { type: 'application/wasm' }));
-    this.initDirectWorker(new URL('../lib/stockfish-19-standard.js', import.meta.url).href + '#' + encodeURIComponent(this.wasmBlobUrl));
+    if (globalThis.chrome?.runtime?.id || location.protocol === 'chrome-extension:') throw new Error('Standard Stockfish is available in the web studio');
+    const { loadStandardWorker } = await import('./stockfish-standard-web.js');
+    return loadStandardWorker(this, epoch);
   }
 
   initDirectWorker(scriptUrl) {

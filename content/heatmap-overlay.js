@@ -1,7 +1,7 @@
 /**
  * Board Overlay for Maia-3 Human Intuition Heatmap & Arrows
  * Injects an SVG canvas over the chessboard to render:
- * 1. 64-square attention heatmap with smooth thermal gradient
+ * 1. Relative Maia destination-probability heatmap in one warm hue
  * 2. Unambiguous directed intuition arrows pointing precisely from origin to destination
  * 3. Tactical trap warning rings
  */
@@ -17,6 +17,7 @@ export class HeatmapOverlay {
     this.showArrows = true;
     this.liveEvaluationEnabled = true;
     this.heatmapOpacity = 0.55;
+    this.showStockfishArrows = true;
     this.currentData = null;
     this.activeHoverMove = null;
   }
@@ -96,9 +97,10 @@ export class HeatmapOverlay {
     }
   }
 
-  setToggles({ showHeatmap, showArrows, opacity }) {
+  setToggles({ showHeatmap, showArrows, showStockfishArrows, opacity }) {
     if (showHeatmap !== undefined) this.showHeatmap = showHeatmap;
     if (showArrows !== undefined) this.showArrows = showArrows;
+    if (showStockfishArrows !== undefined) this.showStockfishArrows = showStockfishArrows;
     if (opacity !== undefined) this.heatmapOpacity = opacity;
 
     if (this.currentData) {
@@ -162,6 +164,13 @@ export class HeatmapOverlay {
       return;
     }
     this.currentData = predictionData;
+    // Engine scores arrive in the side-to-move perspective; labels use White's perspective.
+    if (predictionData?.stockfish && predictionData.turn === 'b') {
+      const score = String(predictionData.stockfish.score ?? '?');
+      const mate = score.match(/^[M#]([-+]?\d+)$/);
+      const whiteScore = mate ? `M${-Number(mate[1]) > 0 ? '+' : ''}${-Number(mate[1])}` : Number.isFinite(Number(score)) ? (-Number(score)).toFixed(2) : score;
+      predictionData = { ...predictionData, stockfish: { ...predictionData.stockfish, score: whiteScore } };
+    }
 
     const heatmapGroup = this.svg.querySelector('#maia-heatmap-layer');
     const arrowsGroup = this.svg.querySelector('#maia-arrows-layer');
@@ -174,14 +183,14 @@ export class HeatmapOverlay {
     trapsGroup.innerHTML = '';
 
     // If Stockfish has bestMove, draw Stockfish arrow immediately regardless of Maia state
-    if (this.showArrows && predictionData?.stockfish?.bestMove && sfArrowsGroup && !predictionData.isAvailable) {
+    if (this.showStockfishArrows && predictionData?.stockfish?.bestMove && sfArrowsGroup && !predictionData.isAvailable) {
       const bm = predictionData.stockfish.bestMove;
       this.drawArrow(sfArrowsGroup, {
         from: bm.fromSq !== undefined ? bm.fromSq : bm.from,
         to: bm.toSq !== undefined ? bm.toSq : bm.to,
         color: '#10b981',
         width: 7.5,
-        dashed: true,
+        dashed: '7 4',
         marker: 'maia-arrow-sf',
         label: `🐟 ${bm.san} (${predictionData.stockfish.score})`,
         opacity: 0.90
@@ -199,8 +208,10 @@ export class HeatmapOverlay {
     }
 
     // 2. Render Dual Move Arrows (Maia Human + Stockfish Objective)
-    if (this.showArrows) {
-      this.renderDualArrows(arrowsGroup, sfArrowsGroup, predictionData);
+    if (this.showArrows || this.showStockfishArrows) {
+      this.renderDualArrows(arrowsGroup, sfArrowsGroup, { ...predictionData, stockfish: this.showStockfishArrows ? predictionData.stockfish : null });
+      if (!this.showArrows) arrowsGroup.replaceChildren();
+      if (!this.showStockfishArrows) sfArrowsGroup.replaceChildren();
     }
 
     // 3. Render Tactical Trap Indicator
@@ -216,19 +227,7 @@ export class HeatmapOverlay {
 
       const { x, y, size } = this.squareToCoords(i);
       const alpha = Math.min(0.80, val * this.heatmapOpacity);
-      let r, g, b;
-
-      if (val < 0.5) {
-        const t = val / 0.5;
-        r = Math.round(99 + t * (245 - 99));
-        g = Math.round(102 + t * (158 - 102));
-        b = Math.round(241 - t * (241 - 11));
-      } else {
-        const t = (val - 0.5) / 0.5;
-        r = Math.round(245 + t * (239 - 245));
-        g = Math.round(158 - t * (158 - 68));
-        b = Math.round(11 + t * (68 - 11));
-      }
+      const r = 245, g = 158, b = 11;
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', x + 4);
@@ -263,7 +262,7 @@ export class HeatmapOverlay {
           width: 8.5,
           marker: 'maia-arrow-blunder',
           dashed: '7 4',
-          label: `❌ 实战: ${blunder.san} (${blunder.lossPawns})`,
+          label: `❌ ${blunder.san} (${blunder.lossPawns})`,
           opacity: 0.96,
           badgeOffsetY: -18
         });
@@ -283,7 +282,8 @@ export class HeatmapOverlay {
           color: '#10b981',
           width: 8.5,
           marker: 'maia-arrow-sf',
-          label: `🐟 推荐: ${bestSan} (${evalScore})`,
+          dashed: '7 4',
+          label: `🐟 ${bestSan} (${evalScore})`,
           opacity: 0.96,
           isStockfish: true,
           badgeOffsetY: 18
@@ -306,7 +306,7 @@ export class HeatmapOverlay {
             color: '#f59e0b',
             width: 6.5,
             marker: 'maia-arrow-gold',
-            label: `🧠 直觉: ${topMove.san} (${topMove.prob}%)`,
+            label: `🧠 ${topMove.san} (${topMove.prob}%)`,
             opacity: 0.85,
             badgeOffsetY: 0
           });
@@ -318,7 +318,7 @@ export class HeatmapOverlay {
 
     // SCENARIO 2: Standard Dual-Engine Comparative Display
     const topMove = moves[0];
-    const isConsensus = sf && sf.bestMove && topMove && (topMove.uci === sf.bestMove.uci);
+    const isConsensus = this.showArrows && this.showStockfishArrows && sf && sf.bestMove && topMove && (topMove.uci === sf.bestMove.uci);
 
     if (isConsensus) {
       // Single Glowing Consensus Arrow (Maia == Stockfish)
@@ -336,9 +336,9 @@ export class HeatmapOverlay {
         this.drawArrow(maiaGroup, {
           from: m.from,
           to: m.to,
-          color: idx === 0 ? '#f59e0b' : '#a855f7',
+          color: '#f59e0b',
           width: 5.0,
-          marker: idx === 0 ? 'maia-arrow-gold' : 'maia-arrow-purple',
+          marker: 'maia-arrow-gold',
           label: `${m.prob}%`,
           opacity: 0.65
         });
@@ -378,9 +378,9 @@ export class HeatmapOverlay {
         this.drawArrow(maiaGroup, {
           from: m.from,
           to: m.to,
-          color: '#a855f7',
+          color: '#f59e0b',
           width: 4.5,
-          marker: 'maia-arrow-purple',
+          marker: 'maia-arrow-gold',
           label: `${m.prob}%`,
           opacity: 0.60
         });

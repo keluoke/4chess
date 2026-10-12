@@ -85,6 +85,7 @@ export class MaiaInBrowserEngine {
           }
 
           console.log(`[Maia-3] 🌐 从网络/CDN 下载模型: ${fetchUrl}`);
+          onProgress?.({ percent: 0, speedMBps: '', receivedMB: '0', totalMB: '--', source: 'cdn' });
           const res = await fetch(fetchUrl);
           if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 

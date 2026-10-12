@@ -22,7 +22,7 @@ A. Original Extension UI & Scaffolding (MIT License)
 The newly authored UI components, DOM bridge, CSS stylesheets, icons, and non-derivative
 glue code created specifically for Diverge are authored under the permissive MIT License:
 
-Copyright (c) 2026 Diverge Contributors
+Copyright (c) 2026 keluoke and Diverge Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -61,6 +61,13 @@ official Stockfish chess engine.
 - Upstream Stockfish C++: https://github.com/official-stockfish/Stockfish (Stockfish 19 release)
 - License: GNU General Public License v3.0 (GPL-3.0)
 - Full License Text: LICENSES/GPL-3.0.txt
+
+D. Cburnett Vector Chess Pieces (GPLv2 or later)
+The inline SVG pieces in analysis/chess-pieces.js are by Colin M. L. Burnett,
+from lichess-org/lila/public/piece/cburnett, licensed GPL-2.0-or-later.
+- Source: https://github.com/lichess-org/lila/tree/master/public/piece/cburnett
+- Attribution: https://github.com/lichess-org/lila/blob/master/COPYING.md
+- Full License Text: LICENSES/GPL-2.0.txt
 
 3. Corresponding Source Code & Reproducibility
 ----------------------------------------------

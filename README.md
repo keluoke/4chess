@@ -6,9 +6,9 @@
 
 > ⚡ **纯前端独立架构特性**：
 > - **100% 浏览器原生执行**：零本地 Python 依赖，零后台推理服务器，零终端命令行。
-> - **真实神经网络参数**：采用官方 Maia3-5M 架构（7,327,236 真实神经参数，Float32 导出约 27.97 MB）。
+> - **可选模型**：Maia-3 5M / 23M / 79M（79M 采用 FP16 存储）；插件内运行 SF19 Lite，网页版另可选 SF19 标准版。
 > - **按需分发与持久缓存**：遵循轻量代码包与 Cloudflare 单文件 25MB 限制，大模型二进制文件不入 Git 仓库，由专用 CDN 首次按需流式拉取并自动持久化于浏览器客户端 `IndexedDB`，后续使用秒开且支持断网离线复用。
-> - **端到端本地隐私保护**：棋盘与走法数据 100% 在本地完成推理计算，绝无棋谱上传外部第三方服务器。
+> - **本地推理**：棋盘与走法在浏览器中计算；模型从 CDN 下载，导入平台网址会向对应平台请求棋谱。
 > - **双形态部署**：兼具浏览器扩展插件与具备 Service Worker 离线能力的独立 PWA 网页。
 
 ---
@@ -105,6 +105,8 @@ diverge-extension/
 
 ## 🚀 安装与使用指南
 
+完整的中英文指南、双引擎图例、署名与许可证全文：[4chess.cc/guide/](https://4chess.cc/guide/)。项目署名：**keluoke**；保留第三方作者署名。
+
 ### 第一步：在 Chrome 中加载插件
 1. 打开 Chrome / Edge / Brave 浏览器，在地址栏输入：
    ```text
@@ -112,12 +114,13 @@ diverge-extension/
    ```
 2. 在页面右上角开启 **开发者模式 (Developer mode)**。
 3. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
-4. 选择本项目所在根目录文件夹。
+4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.0.5.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
 5. 看到 `歧路 Diverge · 人类直觉与双引擎研判` 图标亮起即安装成功。
 
 ### 第二步：首次加载与模型缓存
-首次点击分析或打开面板时，插件会从官方专用 CDN (`https://weights.4chess.cc/maia3_model.bin`) 流式下载模型权重（约 28MB）。
-下载完成后自动写入浏览器的 `IndexedDB` 存储，后续使用及断网离线复盘均实现 0ms 瞬间秒开。
+在允许分析的页面且已读取有效局面后，插件才从专用 CDN 下载所选 Maia 权重。5M / 23M / 79M 首次下载约 28 / 104 / 159 MiB；下载完成后写入 IndexedDB，各版本缓存独立。再次打开仍需读取缓存并初始化，不能保证零延迟。
+对局中修改模型只保存设置，不启动下载或计算。SF19 标准版选项用于网页版全盘分析，插件内使用打包的 Lite WASM。
+更新本地插件后，在 `chrome://extensions` 重新加载扩展，再刷新棋盘标签页；更新网站不会自动更新已安装插件。
 
 ### 第三步：赛后复盘或分析台研判
 1. 访问合法研判页面：
@@ -128,7 +131,7 @@ diverge-extension/
 3. 棋盘上将呈现：
    - **金色箭头**: 人类直觉候选
    - **翡翠绿虚线箭头**: Stockfish 引擎最优推荐
-   - **落点热力图**: 人类行棋概率分布
+   - **暖色落点热力图**（默认关闭）: 汇总合法候选的落点概率、按最高落点归一化；颜色深浅表示相对偏好，不是注意力、危险程度或胜率。两类箭头可分别开关。
 4. 点击悬浮面板上的“**深度复盘**”，即可跳转至独立复盘大屏，全面分析整局走法与直觉盲区。
 
 ---
@@ -140,4 +143,5 @@ diverge-extension/
 - **Diverge UI & Extension Core**: 独立前端界面、DOM 桥接与样式遵循宽松的 **MIT License**。
 - **Maia 3 神经网络架构与权重**: 衍生自多伦多大学与 CMU CSSLab Maia-3 项目，遵循 **GNU Affero General Public License v3.0 (AGPL-3.0)**（全文见 [LICENSES/AGPL-3.0.txt](LICENSES/AGPL-3.0.txt)）。权重转换工具及端侧推理实现全部开源。
 - **Stockfish 19 WebAssembly & Stockfish.js**: 基于 Stockfish.js (Nathan Rugg / Chess.com) 与官方 Stockfish 19，遵循 **GNU General Public License v3.0 (GPLv3)**（全文见 [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt)）。
+- **Cburnett 棋子 SVG**：Colin M. L. Burnett，GPL-2.0-or-later；许可全文见 [LICENSES/GPL-2.0.txt](LICENSES/GPL-2.0.txt)。
 

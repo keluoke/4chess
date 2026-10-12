@@ -1,5 +1,6 @@
 /**
  * Official Lichess Vector Chess Pieces (Cburnett / lichess-org/lila)
+ * Author: Colin M. L. Burnett · GPL-2.0-or-later (see LICENSES/GPL-2.0.txt).
  * Direct extraction from lichess-org/lila/public/piece/cburnett
  * 100% authentic Lichess pieces: K, Q, R, B, N, P (white) and k, q, r, b, n, p (black).
  */

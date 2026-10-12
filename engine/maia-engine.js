@@ -168,6 +168,7 @@ export class MaiaEngine {
   async _doInitialize(overrideUrl = null) {
     this.isLoading = true;
     this.status.maia.state = 'loading';
+    this.status.maia.stage = 'cache';
     this.status.maia.source = '检测缓存中...';
     if (!this.stockfishInBrowser.isReady) {
       this.status.stockfish.state = 'initializing';
@@ -218,7 +219,8 @@ export class MaiaEngine {
     for (const url of candidates) {
       try {
         const onProgress = (prog) => {
-          this.status.maia.state = prog.percent === 100 ? 'ready' : 'downloading';
+          this.status.maia.state = prog.percent === 100 ? 'loading' : 'downloading';
+          this.status.maia.stage = prog.percent === 100 ? 'preparing' : 'download';
           this.status.maia.percent = prog.percent;
           this.status.maia.speed = prog.speedMBps;
           this.status.maia.loadedMB = prog.receivedMB;
@@ -254,6 +256,7 @@ export class MaiaEngine {
       this.isReady = true;
       this.isLoading = false;
       this.status.maia.state = 'ready';
+      this.status.maia.stage = 'ready';
       this.notifyStatus();
       if (this.stockfishInBrowser?.isReady) {
         console.log('[Maia Engine] ✅ Maia-3 与 Stockfish 双引擎均已就绪！');
@@ -445,7 +448,8 @@ export class MaiaEngine {
       analysis: {
         topMove: topMove?.uci,
         commentary: comparison?.summary || '',
-        isTacticalTrap: comparison ? !comparison.agreed : false
+        // A disagreement alone provides no evidence of a tactical trap.
+        isTacticalTrap: false
       },
       latencyMs: totalLatency
     };
@@ -570,7 +574,7 @@ export class MaiaEngine {
       analysis: {
         topMove: topMove?.uci,
         commentary: comparison?.summary || predictionResult.analysis?.commentary || '',
-        isTacticalTrap: comparison ? !comparison.agreed : false
+        isTacticalTrap: false
       }
     };
   }

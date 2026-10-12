@@ -4,6 +4,7 @@
  */
 
 import { ChessBoard } from './engine/chess-core.js';
+import { normalizeEnginePreferences } from './engine/engine-preferences.js';
 
 const TCN_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=";
 const TCN_PROMO_PIECES = "qnrbkp";
@@ -85,7 +86,7 @@ function movesToPgn(moves, headers = {}) {
   return pgn.trim();
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   console.log('[Maia-3 Extension] Installed successfully.');
   if (chrome.storage?.session?.setAccessLevel) {
     try {
@@ -93,13 +94,15 @@ chrome.runtime.onInstalled.addListener(() => {
     } catch (e) {}
   }
   // Initialize default user settings in chrome.storage.local
-  chrome.storage.local.set({
+  const defaults = {
     defaultElo: 1900,
     preferredBackend: 'inbrowser',
-    showHeatmap: true,
+    showHeatmap: false,
     showArrows: true,
     heatmapOpacity: 0.55
-  });
+  };
+  const saved = await chrome.storage.local.get(Object.keys(defaults));
+  await chrome.storage.local.set(Object.fromEntries(Object.entries(defaults).filter(([key]) => saved[key] === undefined)));
 });
 
 if (chrome.storage?.session?.setAccessLevel) {
@@ -209,7 +212,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
     }
 
-    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl', 'defaultElo', 'maia3_lang'], (settings) => {
+    chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl', 'defaultElo', 'maia3_lang', 'maiaVariant', 'stockfishVariant', 'cloudflareCdnUrl'], (settings) => {
       chrome.storage.local.set({ active_analysis_game: gameData }, () => {
         // Default to true: open 4chess.cc web review directly!
         const useWeb = settings?.useWebReview !== false;
@@ -228,7 +231,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (gameData.black && gameData.black !== '黑方') extra += `&black=${encodeURIComponent(gameData.black)}`;
           if (gameData.result && gameData.result !== '*') extra += `&result=${encodeURIComponent(gameData.result)}`;
           if (lang) extra += `&lang=${encodeURIComponent(lang)}`;
-          targetUrl = `${base}/#pgn=${pgnParam}&elo=${elo}${extra}`;
+          const prefs = normalizeEnginePreferences(settings);
+          const sf = prefs.stockfishVariant;
+          const maia = prefs.maiaVariant;
+          targetUrl = `${base}/?sf=${sf}&maia=${maia}#pgn=${pgnParam}&elo=${elo}${extra}`;
         }
 
         chrome.tabs.create({ url: targetUrl }, (tab) => {

@@ -19,9 +19,10 @@
       <div class="eyebrow">ANOTHER WAY TO SEE YOUR GAME</div>
       <h2 data-i18n="popupHeadline">每一步，都有<br>另一种可能。</h2>
       <p data-i18n="popupIntro">回看你的选择，发现直觉之外的好棋。</p>
+      <a id="guide-link" class="guide-entry" href="https://4chess.cc/guide/" target="_blank" rel="noopener"><strong data-i18n="firstUseGuide">第一次使用？查看使用指南 ↗</strong><small data-i18n="firstUseSteps">打开分析板 → 选择模型 → 对比直觉与引擎</small></a>
     </section>
     <nav class="popup-actions" aria-label="分析页面">
-      <a href="https://4chess.cc" target="_blank" rel="noopener" class="action-primary"><span data-i18n="btnReviewStudio">进入全盘分析</span><span aria-hidden="true">↗</span></a>
+      <a id="studio-link" href="https://4chess.cc/analysis/" target="_blank" rel="noopener" class="action-primary"><span data-i18n="btnReviewStudio">进入全盘分析</span><span aria-hidden="true">↗</span></a>
       <div class="platform-actions">
         <a href="https://lichess.org/analysis" target="_blank" rel="noopener" data-i18n="btnLichess">Lichess 分析板</a>
         <a href="https://www.chess.com/analysis" target="_blank" rel="noopener" data-i18n="btnChesscom">Chess.com 分析板</a>
@@ -34,15 +35,19 @@
     </section>
     <details class="advanced-settings">
       <summary data-i18n="sectionEnginePrefs">模型与下载设置</summary>
-      <label for="model-preset-select" data-i18n="modelSpecLabel">模型规格</label>
-      <select id="model-preset-select"><option value="https://weights.4chess.cc/maia3_model.bin" selected data-i18n="modelStandard">标准 · 28 MB</option><option value="https://weights.4chess.cc/maia3_23m.bin" data-i18n="modelLarge">大规格 · 104 MB</option><option value="custom" data-i18n="modelCustomOption">自定义 CDN 地址</option></select>
-      <input type="url" id="cdn-url" style="display:none" aria-label="模型 CDN URL" placeholder="https://weights.4chess.cc/maia3_model.bin">
+      <label for="sf-preset-select">Stockfish</label>
+      <select id="sf-preset-select"><option value="lite" data-i18n="sfLite">SF19 Lite · 插件内</option><option value="standard" data-i18n="sfStandardWeb">SF19 标准版 · 网页版</option></select>
+      <p data-i18n="sfWebHelp">插件内使用 Lite；标准版在全盘分析网页版使用。</p>
+      <label for="model-preset-select">Maia-3</label>
+      <select id="model-preset-select"><option value="5m">5M · 28 MB</option><option value="23m">23M · 104 MB</option><option value="79m">79M · 159 MB (FP16)</option></select>
+      <details class="custom-cdn"><summary data-i18n="modelCustomOption">自定义 CDN 地址</summary><input type="url" id="cdn-url" aria-label="模型 CDN URL" placeholder="https://weights.4chess.cc/maia3_model.bin"><small data-i18n="customModelHelp">地址须对应上方所选的 Maia 版本。</small></details>
       <p data-i18n="modelCacheHelp">首次使用下载模型，完成后缓存在浏览器中。</p>
+      <p id="preference-feedback" role="status"></p>
     </details>
     <aside class="fair-play-note"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m12 3 8 3v6c0 5-8 9-8 9S4 17 4 12V6z"/><path d="m8 12 3 3 5-6"/></svg><p data-i18n="fairPlayNote">对局进行中自动锁定，结束后立即解锁复盘。</p></aside>
-    <footer class="popup-footer"><span>MAIA × STOCKFISH</span><button type="button" data-theme-toggle>深色</button></footer>
+    <footer class="popup-footer"><a href="https://4chess.cc/guide/#about" target="_blank" rel="noopener" data-i18n="aboutCredits">关于 · 署名与许可</a><button type="button" data-theme-toggle>深色</button></footer>
   </main>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
   <script type="module" src="../ui/theme.js"></script>
 </body>
 </html>

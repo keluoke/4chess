@@ -1,140 +1,62 @@
-/**
- * Diverge popup preferences and entry points
- */
+import { MAIA_VARIANTS } from '../engine/engine-variants.js';
+import { readEnginePreferences, studioUrl } from '../engine/engine-preferences.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const statusPill = document.getElementById('status-pill');
-  const eloSelect = document.getElementById('default-elo');
-  const cdnInput = document.getElementById('cdn-url');
-  const presetSelect = document.getElementById('model-preset-select');
-  const panelSwitch = document.getElementById('toggle-panel-switch');
-  const liveEvalSwitch = document.getElementById('toggle-live-eval-switch');
-
-  // 0. Dynamic i18n Translation
-  if (globalThis.chrome?.i18n?.getMessage) {
-    document.querySelectorAll('[data-i18n]').forEach((el) => {
-      const key = el.getAttribute('data-i18n');
-      const msg = chrome.i18n.getMessage(key);
-      if (msg) el.textContent = msg;
-    });
-  }
-
-  // Popup has no engine connection: describe its purpose, never claim readiness.
-  statusPill.textContent = globalThis.chrome?.i18n?.getMessage('reviewOnly') || '仅供复盘';
-  if (globalThis.chrome?.i18n?.getUILanguage) document.documentElement.lang = chrome.i18n.getUILanguage();
+  const message = (key, fallback) => globalThis.chrome?.i18n?.getMessage(key) || fallback;
+  const lang = (globalThis.chrome?.i18n?.getUILanguage?.() || navigator.language).startsWith('zh') ? 'zh' : 'en';
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.querySelectorAll('[data-i18n]').forEach(el => { const text = message(el.dataset.i18n, ''); if (text) el.textContent = text; });
+  document.getElementById('guide-link').href = 'https://4chess.cc/guide/?lang=' + lang;
+  document.querySelector('.popup-footer a').href = 'https://4chess.cc/guide/?lang=' + lang + '#about';
   if (!globalThis.chrome?.storage?.local) return;
-
-  // 2. Query active tab to sync panel switch state
-  if (chrome.tabs && chrome.tabs.query) {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const activeTab = tabs?.[0];
-      if (activeTab?.id) {
-        chrome.tabs.sendMessage(activeTab.id, { type: 'GET_PANEL_STATE' }, (response) => {
-          if (chrome.runtime.lastError) return;
-          if (response && typeof response.closed === 'boolean') {
-            if (panelSwitch) panelSwitch.checked = !response.closed;
-          }
-          if (response && typeof response.liveEvaluation === 'boolean') {
-            if (liveEvalSwitch) liveEvalSwitch.checked = response.liveEvaluation;
-          }
-        });
-      }
-    });
-  }
-
-  // 3. Handle panel toggle switch
-  if (panelSwitch) {
-    panelSwitch.addEventListener('change', () => {
-      const shouldOpen = panelSwitch.checked;
-      if (chrome.tabs && chrome.tabs.query) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const activeTab = tabs?.[0];
-          if (activeTab?.id) {
-            chrome.tabs.sendMessage(activeTab.id, { type: shouldOpen ? 'OPEN_PANEL' : 'CLOSE_PANEL' }, () => {
-              if (chrome.runtime.lastError) {}
-            });
-          }
-        });
-      }
-    });
-  }
-
-  // 3.1 Handle live evaluation toggle switch (disables board arrows & heatmaps on chess sites)
-  if (liveEvalSwitch) {
-    liveEvalSwitch.addEventListener('change', () => {
-      const isEnabled = liveEvalSwitch.checked;
-      chrome.storage.local.set({ liveEvaluation: isEnabled });
-      if (chrome.tabs && chrome.tabs.query) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const activeTab = tabs?.[0];
-          if (activeTab?.id) {
-            chrome.tabs.sendMessage(activeTab.id, { type: 'SET_LIVE_EVAL', enabled: isEnabled }, () => {
-              if (chrome.runtime.lastError) {}
-            });
-          }
-        });
-      }
-    });
-  }
-
-  // 4. Load saved preferences
-  chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'cloudflareCdnUrl', 'liveEvaluation'], (res) => {
-    if (liveEvalSwitch) {
-      liveEvalSwitch.checked = res.liveEvaluation !== false;
-    }
-    const elo = res.defaultElo || res.maia3_target_elo || 1900;
-    if (eloSelect) eloSelect.value = elo;
-    const currentUrl = res?.cloudflareCdnUrl || 'https://weights.4chess.cc/maia3_model.bin';
-    if (cdnInput) cdnInput.value = currentUrl;
-
-    if (presetSelect) {
-      const match = Array.from(presetSelect.options).find(opt => opt.value === currentUrl);
-      if (match) {
-        presetSelect.value = currentUrl;
-        if (cdnInput) cdnInput.style.display = 'none';
-      } else {
-        presetSelect.value = 'custom';
-        if (cdnInput) cdnInput.style.display = 'block';
-      }
-    }
+  const prefs = await readEnginePreferences();
+  const elo = document.getElementById('default-elo');
+  const model = document.getElementById('model-preset-select');
+  const sf = document.getElementById('sf-preset-select');
+  const cdn = document.getElementById('cdn-url');
+  const panel = document.getElementById('toggle-panel-switch');
+  const overlays = document.getElementById('toggle-live-eval-switch');
+  const saved = await chrome.storage.local.get(['defaultElo', 'maia3_target_elo', 'liveEvaluation']);
+  elo.value = String(saved.defaultElo || saved.maia3_target_elo || 1900);
+  model.value = prefs.maiaVariant; sf.value = prefs.stockfishVariant; cdn.value = prefs.cloudflareCdnUrl;
+  overlays.checked = saved.liveEvaluation !== false;
+  const syncLink = () => { document.getElementById('studio-link').href = studioUrl(prefs, elo.value, lang); };
+  syncLink();
+  const sendToTab = async payload => {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]?.id) chrome.tabs.sendMessage(tabs[0].id, payload, () => { void chrome.runtime.lastError; });
+  };
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs[0]?.id) chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_PANEL_STATE' }, response => {
+    if (chrome.runtime.lastError) return;
+    if (typeof response?.closed === 'boolean') panel.checked = !response.closed;
+    if (typeof response?.liveEvaluation === 'boolean') overlays.checked = response.liveEvaluation;
   });
-
-  // 5. Save changes
-  if (eloSelect) {
-    eloSelect.addEventListener('change', (e) => {
-      const val = parseInt(e.target.value, 10);
-      chrome.storage.local.set({ defaultElo: val, maia3_target_elo: val });
-      if (chrome.tabs && chrome.tabs.query) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const activeTab = tabs?.[0];
-          if (activeTab?.id) {
-            chrome.tabs.sendMessage(activeTab.id, { type: 'SET_ELO', elo: val }, () => {
-              if (chrome.runtime.lastError) {}
-            });
-          }
-        });
-      }
-    });
-  }
-
-  if (presetSelect) {
-    presetSelect.addEventListener('change', (e) => {
-      const val = e.target.value;
-      if (val === 'custom') {
-        if (cdnInput) cdnInput.style.display = 'block';
-      } else {
-        if (cdnInput) {
-          cdnInput.style.display = 'none';
-          cdnInput.value = val;
-        }
-        chrome.storage.local.set({ cloudflareCdnUrl: val });
-      }
-    });
-  }
-
-  if (cdnInput) {
-    cdnInput.addEventListener('change', (e) => {
-      chrome.storage.local.set({ cloudflareCdnUrl: e.target.value.trim() });
-    });
-  }
+  panel.addEventListener('change', () => sendToTab({ type: panel.checked ? 'OPEN_PANEL' : 'CLOSE_PANEL' }));
+  overlays.addEventListener('change', async () => {
+    await chrome.storage.local.set({ liveEvaluation: overlays.checked });
+    sendToTab({ type: 'SET_LIVE_EVAL', enabled: overlays.checked });
+  });
+  elo.addEventListener('change', async () => {
+    await chrome.storage.local.set({ defaultElo: Number(elo.value), maia3_target_elo: Number(elo.value) });
+    syncLink(); sendToTab({ type: 'SET_ELO', elo: Number(elo.value) });
+  });
+  const save = async () => {
+    await chrome.storage.local.set(prefs);
+    syncLink();
+    document.getElementById('preference-feedback').textContent = message('preferencesSaved', '已保存，已打开的分析页面会同步更新。');
+  };
+  model.addEventListener('change', () => {
+    prefs.maiaVariant = model.value;
+    prefs.cloudflareCdnUrl = MAIA_VARIANTS[model.value].url;
+    cdn.value = prefs.cloudflareCdnUrl;
+    save();
+  });
+  sf.addEventListener('change', () => { prefs.stockfishVariant = sf.value; save(); });
+  cdn.addEventListener('change', () => {
+    let valid = false;
+    try { valid = new URL(cdn.value.trim()).protocol === 'https:'; } catch {}
+    if (!valid) { document.getElementById('preference-feedback').textContent = message('invalidModelUrl', '请输入 HTTPS 模型地址。'); return; }
+    prefs.cloudflareCdnUrl = cdn.value.trim(); save();
+  });
 });

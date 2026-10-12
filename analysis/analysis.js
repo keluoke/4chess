@@ -3,17 +3,17 @@
  * High-performance, zero-latency, 100% self-contained chess analysis workstation.
  */
 
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-review6';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-review6';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-review6';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-review6';
-import { BoardUI } from './board-ui.js?v=20261012-review6';
-import { EvalChart } from './eval-chart.js?v=20261012-review6';
-import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-review6';
-import { PositionAnalysis } from './position-analysis.js?v=20261012-review6';
-import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261012-review6';
-import { soundEffects } from './sound-effects.js?v=20261012-review6';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-review6';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-entries1';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-entries1';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-entries1';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-entries1';
+import { BoardUI } from './board-ui.js?v=20261012-entries1';
+import { EvalChart } from './eval-chart.js?v=20261012-entries1';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-entries1';
+import { PositionAnalysis } from './position-analysis.js?v=20261012-entries1';
+import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261012-entries1';
+import { soundEffects } from './sound-effects.js?v=20261012-entries1';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-entries1';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -54,6 +54,9 @@ class AnalysisStudioApp {
       if (STOCKFISH_VARIANTS[saved.engine]) this.engineVariant = saved.engine;
       if (MAIA_VARIANTS[saved.model]) this.modelVariant = saved.model;
     } catch {}
+    const versionParams = new URLSearchParams(location.search || location.hash.slice(1));
+    if (STOCKFISH_VARIANTS[versionParams.get('sf')]) this.engineVariant = versionParams.get('sf');
+    if (MAIA_VARIANTS[versionParams.get('maia')]) this.modelVariant = versionParams.get('maia');
     if (location.protocol === 'chrome-extension:') this.engineVariant = 'lite';
     this.moves = [];
     this.positions = [];
@@ -1173,6 +1176,12 @@ class AnalysisStudioApp {
     this.engineVariant = engine;
     this.modelVariant = model;
     try { localStorage.setItem('diverge_engine_versions', JSON.stringify({ engine, model })); } catch {}
+    const url = new URL(location.href);
+    if (url.searchParams.has('sf') || url.searchParams.has('maia')) {
+      url.searchParams.set('sf', engine);
+      url.searchParams.set('maia', model);
+      history.replaceState(null, '', url);
+    }
     this.initEngines();
     this.currentGameKey = this.getReviewKey();
     this.reviewResult = null;
