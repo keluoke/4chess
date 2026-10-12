@@ -4,7 +4,7 @@
  * reference gridlines, key moment markers, and interactive hover tooltip.
  */
 
-import { t, onLanguageChange } from './i18n.js';
+import { t, onLanguageChange } from './i18n.js?v=20261012-review3';
 
 export class EvalChart {
   constructor(containerEl, onSelectPly) {

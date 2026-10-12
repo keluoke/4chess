@@ -5,12 +5,23 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
+const staleAssets = new Map(['analysis.css', 'i18n.js'].map(name => [
+  `/analysis/${name}`, execFileSync('git', ['show', `c669463:analysis/${name}`], { cwd: root })
+]));
+let staleRequests = 0;
 const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.svg': 'image/svg+xml' };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  if (staleAssets.has(url.pathname) && !url.searchParams.has('v')) {
+    staleRequests++;
+    res.writeHead(200, { 'Content-Type': mime[path.extname(url.pathname)], 'Cache-Control': 'public, max-age=14400' });
+    res.end(staleAssets.get(url.pathname));
+    return;
+  }
   let file = path.join(root, decodeURIComponent(url.pathname));
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
@@ -27,10 +38,13 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp?.positions?.length);
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.stockfish.isReady), false, 'Blank landing must not initialize an engine');
   assert.equal(await page.locator('#text-status-sf').textContent(), '未启动');
+  assert.equal(await page.locator('.candidate-line').count(), 0);
+  assert.equal(await page.locator('.candidate-heading').first().evaluate(el => getComputedStyle(el).display), 'flex', 'New UI styling must not reuse the previous cached CSS');
   for (const id of ['btn-lang-toggle', 'btn-import-pgn', 'btn-reanalyze', 'btn-first', 'btn-prev', 'btn-play', 'btn-next', 'btn-last', 'btn-flip', 'btn-sound']) assert.equal(await page.locator(`#${id}`).count(), 1);
   assert.equal(await page.locator('#icon-sound-on polygon').count(), 1);
   assert.equal(await page.locator('#btn-settings').innerText(), '', 'Settings button is icon-only');
   assert.equal(await page.locator('#tab-moves, #tab-blunders').count(), 0);
+  assert.equal(await page.locator('.position-analysis-heading, #btn-position-current, #btn-position-before, #position-turn').count(), 0);
   await page.evaluate(async () => {
     const { ChessBoard } = await import('./../engine/chess-core.js');
     const app = window.__maiaStudioApp;
@@ -56,7 +70,7 @@ try {
   await page.locator('#btn-flip').click();
   assert.equal(await page.locator('#evaluation-gauge').innerText(), score, 'Flip preserves White-centric score and its sign');
   assert.match(await page.locator('#evaluation-gauge').getAttribute('class'), /flipped/);
-  await page.locator('#btn-position-before').click();
+  await page.evaluate(() => window.__maiaStudioApp.goToPly(4, { before: true }));
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.chess.getFen() === window.__maiaStudioApp.positions[3].fen), true);
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
   await page.locator('#engine-candidate-lines .candidate-move').first().click();
@@ -117,6 +131,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `No horizontal overflow at ${width}px`);
   }
   assert.deepEqual(errors, []);
+  assert.equal(staleRequests, 0, 'Versioned style and shared translations bypass the deliberately stale four-hour responses');
   console.log('✅ Browser UI passed: real Stockfish, bilingual layout, original controls, before/after positions, candidate rehearsal, settings, heatmap, sound, key filters, stale-game isolation and responsive widths. Maia uses a deterministic fixture in this regression.');
 } finally {
   await browser.close();

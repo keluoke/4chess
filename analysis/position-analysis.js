@@ -1,5 +1,5 @@
-import { ChessBoard } from '../engine/chess-core.js';
-import { t } from './i18n.js';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-review3';
+import { t } from './i18n.js?v=20261012-review3';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -196,10 +196,6 @@ export class PositionAnalysis {
     if (terminal) evaluation = board.inCheck() ? { cp: board.turn === 'w' ? -10000 : 10000, isMate: true, text: board.turn === 'w' ? '-M0' : '+M0' } : { cp: 0, isMate: false, text: '0.00' };
     this.renderGauge(evaluation);
     const app = this.app;
-    app.el.positionTurn.textContent = terminal ? t(board.inCheck() ? 'positionCheckmate' : 'positionDraw') : t(board.turn === 'w' ? 'whiteToMove' : 'blackToMove');
-    app.el.positionBefore.disabled = app.currentPly === 0 || app.isBranching;
-    app.el.positionBefore.setAttribute('aria-pressed', String(app.isReviewingMove && !app.isBranching));
-    app.el.positionCurrent.setAttribute('aria-pressed', String(!app.isReviewingMove || app.isBranching));
     const lines = engineLines(entry.sf, ctx.fen);
     const pending = app.analyzer.isAnalyzing ? 'candidatesAfterReview' : 'statusCalculating';
     document.getElementById('candidate-engine-status').textContent = `Stockfish · ${entry.sf ? t('candidateDepth', { depth: entry.sf.depth }) : t(app.stockfish.isReady ? 'engineReady' : 'engineNotStarted')}`;

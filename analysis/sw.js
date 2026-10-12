@@ -4,21 +4,21 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-v1.0.4-review2';
+const CACHE_NAME = '4chess-review-20261012-review3';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js',
-  './analysis.css',
-  './i18n.js',
-  '../ui/theme.css',
-  '../ui/theme.js',
+  './analysis.js?v=20261012-review3',
+  './analysis.css?v=20261012-review3',
+  './i18n.js?v=20261012-review3',
+  '../ui/theme.css?v=20261012-review3',
+  '../ui/theme.js?v=20261012-review3',
   './board-ui.js',
-  './position-analysis.js',
+  './position-analysis.js?v=20261012-review3',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js',
+  './eval-chart.js?v=20261012-review3',
   './manifest.webmanifest',
   './favicon.svg',
   '../engine/chess-core.js',
@@ -27,11 +27,16 @@ const STATIC_ASSETS = [
   '../engine/maia-inbrowser.js',
   '../engine/game-analyzer.js',
   '../engine/model-cache.js',
+  '../engine/opening-book.js',
+  '../content/fair-play-guard.js',
   '../lib/stockfish-19.js',
   '../lib/stockfish.wasm',
   '../icons/icon48.png',
   '../icons/icon128.png'
 ];
+
+// Cache both legacy nested imports and this release's versioned entry dependencies.
+STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261012-review3`));
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -39,7 +44,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.allSettled(
         STATIC_ASSETS.map((url) =>
-          cache.add(url).catch((err) => {
+          cache.add(new Request(url, { cache: 'no-cache' })).catch((err) => {
             console.debug('[SW] Cache add skipped for:', url, err.message);
           })
         )
@@ -53,7 +58,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key.startsWith('4chess-review-') && key !== CACHE_NAME) {
             console.log('[SW] Purging outdated cache:', key);
             return caches.delete(key);
           }
@@ -81,7 +86,7 @@ self.addEventListener('fetch', (event) => {
                        url.pathname.endsWith('.css');
   if (isCodeOrHtml) {
     event.respondWith(
-      fetch(req).then((freshRes) => {
+      fetch(req, { cache: 'no-cache' }).then((freshRes) => {
         if (freshRes && freshRes.status === 200 && (url.protocol === 'http:' || url.protocol === 'https:')) {
           const clone = freshRes.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));

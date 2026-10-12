@@ -17,3 +17,13 @@
 # Service Worker should not be cached aggressively
 /analysis/sw.js
   Cache-Control: no-cache, no-store, must-revalidate
+
+# Mutable app shell and modules must revalidate together after releases.
+/analysis/*
+  Cache-Control: no-cache, must-revalidate
+/engine/*
+  Cache-Control: no-cache, must-revalidate
+/ui/*
+  Cache-Control: no-cache, must-revalidate
+/content/*.js
+  Cache-Control: no-cache, must-revalidate

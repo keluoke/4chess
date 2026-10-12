@@ -1438,7 +1438,7 @@ body{font-size:14px;user-select:auto}
 .review-summary .eval-chart-title { font-size: 12px; }
 .review-summary .eval-chart-body { height: 90px; }
 .position-analysis, .notation-section { padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
-.position-analysis-heading, .candidate-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+.candidate-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
 .position-analysis-heading { margin-bottom: 7px; font-size: 12px; }
 .position-view-controls { display: flex; gap: 4px; }
 .btn-position-view { color: var(--text-muted); font: inherit; padding: 4px 7px; border: 1px solid var(--border-color); background: transparent; border-radius: 5px; cursor: pointer; }

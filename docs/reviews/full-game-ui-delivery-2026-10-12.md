@@ -38,3 +38,13 @@ PLAYWRIGHT_MODULE=/Users/yan/.cache/codex-runtimes/codex-primary-runtime/depende
 ## 交付范围
 
 实现位于正式 analysis/ 页面及两条 Stockfish 通信路径。本地预览为 http://127.0.0.1:8768/analysis/ 。没有发布线上、创建 PR 或提交 Git；原先已有的 vision、模型资产和构建脚本修改均保留。公平竞技守卫、模型 CDN 分发和原棋子/棋盘组件未修改。本次浏览器验证不替代宿主网站上已安装扩展的验收。
+
+## 后续线上缓存修复 · review3
+
+用户发布上一版后反馈候选行竖排、出现 whiteToMove / candidateDepth 原始翻译键。检查普通线上 URL：HTML、CSS、i18n、主程序及局面模块均与上一版源文件字节一致；HTML 为 `max-age=0`，CSS 与模块为 `max-age=14400`。新 HTML 可先于浏览器里的旧样式/翻译更新，之前的 Service Worker network-first 也没有绕过 HTTP 缓存。
+
+- HTML 的样式与脚本、主程序直接依赖、三个共享 i18n 导入统一使用 `20261012-review3` 资源版本。
+- 更新 Service Worker 缓存名称与版本化预缓存路径，代码请求和预缓存显式要求 HTTP 缓存重新验证；仅清理本应用的旧缓存。
+- `/analysis/*`、`/engine/*`、`/ui/*` 等可变代码资源采用 `no-cache, must-revalidate`。
+- 删除行棋方、当前局面、回看此步整个工具行及其事件、样式和节点访问。记谱定位、关键步走前回看、候选试演及返回对局继续保留。
+- 浏览器回归服务故意为未版本化 CSS/i18n 返回上一版文件和 4 小时缓存；新版页面绕过这些旧资源，样式与中英文翻译正常，原交互回归通过。`npm test`、构建和差异检查通过。

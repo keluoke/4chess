@@ -3,16 +3,16 @@
  * High-performance, zero-latency, 100% self-contained chess analysis workstation.
  */
 
-import { ChessBoard } from '../engine/chess-core.js';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
-import { MaiaEngine } from '../engine/maia-engine.js';
-import { GameAnalyzer } from '../engine/game-analyzer.js';
-import { BoardUI } from './board-ui.js';
-import { EvalChart } from './eval-chart.js';
-import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { PositionAnalysis } from './position-analysis.js';
-import { soundEffects } from './sound-effects.js';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-review3';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-review3';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-review3';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-review3';
+import { BoardUI } from './board-ui.js?v=20261012-review3';
+import { EvalChart } from './eval-chart.js?v=20261012-review3';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-review3';
+import { PositionAnalysis } from './position-analysis.js?v=20261012-review3';
+import { soundEffects } from './sound-effects.js?v=20261012-review3';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-review3';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -116,9 +116,6 @@ class AnalysisStudioApp {
       dropOverlay: document.getElementById('drag-drop-overlay'),
       fileInput: document.getElementById('pgn-file-input'),
       btnUploadFile: document.getElementById('btn-upload-file'),
-      positionTurn: document.getElementById('position-turn'),
-      positionCurrent: document.getElementById('btn-position-current'),
-      positionBefore: document.getElementById('btn-position-before'),
       positionDepth: document.getElementById('position-depth'),
       settingsDialog: document.getElementById('review-settings'),
       btnSettings: document.getElementById('btn-settings')
@@ -253,8 +250,6 @@ class AnalysisStudioApp {
     this.el.btnPlay.addEventListener('click', () => this.toggleAutoPlay());
     this.el.btnExitBranch.addEventListener('click', () => this.goToPly(this.currentPly));
 
-    this.el.positionCurrent.addEventListener('click', () => this.goToPly(this.currentPly));
-    this.el.positionBefore.addEventListener('click', () => this.goToPly(this.currentPly, { before: true }));
     this.el.btnSettings.addEventListener('click', () => {
       this.updateEngineStatus();
       this.el.settingsDialog.showModal();
