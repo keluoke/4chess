@@ -52,3 +52,5 @@ PLAYWRIGHT_MODULE=/Users/yan/.cache/codex-runtimes/codex-primary-runtime/depende
 线上发布 `1f72e31`（Pages 部署 `1a46da03-5e6a-477e-9b69-3045655fafd7`）已成功，普通线上 URL 的七个页面资源与源文件一致；实际浏览器完成真实双引擎复盘，显示六条 grid 候选行，无原始翻译键，无工具行，刷新并由 Service Worker 接管后仍正常。
 
 随后确认 Pages 项目的构建命令原为空，虽然源代码更新已发布，`_headers` 仍未生成，线上响应头继续为四小时缓存。已把该项目的构建命令设置为现有 `npm run build`，输出目录保留 `.`，让后续 Git 发布生成 `_headers` / `_redirects`。此记录提交触发按修复后配置重新构建。
+
+Pages 原始部署域名已应用 no-cache，但普通 4chess.cc 域名把未带 no-store 的脚本/样式响应改为 max-age=14400。最终小型界面资源使用 no-cache, no-store, must-revalidate，并升至 20261012-review4，绕开域名层已有响应缓存。大型 WASM 与 IndexedDB 模型缓存保持原策略，Service Worker 仍显式保存离线应用资源。

@@ -3,16 +3,16 @@
  * High-performance, zero-latency, 100% self-contained chess analysis workstation.
  */
 
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-review3';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-review3';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-review3';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-review3';
-import { BoardUI } from './board-ui.js?v=20261012-review3';
-import { EvalChart } from './eval-chart.js?v=20261012-review3';
-import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-review3';
-import { PositionAnalysis } from './position-analysis.js?v=20261012-review3';
-import { soundEffects } from './sound-effects.js?v=20261012-review3';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-review3';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-review4';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-review4';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-review4';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-review4';
+import { BoardUI } from './board-ui.js?v=20261012-review4';
+import { EvalChart } from './eval-chart.js?v=20261012-review4';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-review4';
+import { PositionAnalysis } from './position-analysis.js?v=20261012-review4';
+import { soundEffects } from './sound-effects.js?v=20261012-review4';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-review4';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
