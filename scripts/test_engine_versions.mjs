@@ -9,9 +9,9 @@ import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 const moves = [{ san: 'e4' }, { san: 'e5' }];
 const keys = new Set();
 for (const engineKey of ['sf19lite', 'sf19standard-v1']) {
-  for (const modelKey of ['maia3-5m', 'maia3-79m-fp16-v1']) keys.add(GameAnalyzer.getGameKey(moves, { engineKey, modelKey }));
+  for (const modelKey of ['maia3-5m', 'maia3-23m-fp32-v1', 'maia3-79m-fp16-v1']) keys.add(GameAnalyzer.getGameKey(moves, { engineKey, modelKey }));
 }
-assert.equal(keys.size, 4, 'Every engine/model combination must have a distinct review cache');
+assert.equal(keys.size, 6, 'Every engine/model combination must have a distinct review cache');
 
 // A legacy 5M cache must never satisfy a request for 79M.
 const originalGet = ModelCache.getModel, originalSave = ModelCache.saveModel, originalFetch = globalThis.fetch;

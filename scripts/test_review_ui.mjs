@@ -152,6 +152,7 @@ try {
   await page.locator('#btn-settings').click();
   assert.equal(await page.locator('#engine-edition option[value="standard"]').textContent(), 'SF19 Standard');
   assert.equal(await page.locator('#intuition-edition option[value="79m"]').textContent(), 'Maia-3 79M');
+  assert.deepEqual(await page.locator('#intuition-edition option').allTextContents(), ['Maia-3 5M', 'Maia-3 23M', 'Maia-3 79M']);
   await page.keyboard.press('Escape');
   for (const width of [320, 390, 736, 1024]) {
     await page.setViewportSize({ width, height: 1000 });

@@ -69,6 +69,8 @@ This document describes the third-party open-source components, models, and deri
 
 Both optional artifacts are downloaded on selection/use and cached separately in IndexedDB. Neither binary is included in the extension package. SF19 Standard is offered in the web studio; MV3 extension pages keep the bundled Lite engine.
 
+The studio also offers **Maia-3 23M**, reusing the existing CDN export at `https://weights.4chess.cc/maia3_23m.bin`. Its M3CF header declares Float32 storage, width 512, 16 heads, 8 blocks and 27,130,884 parameters (approximately 104 MiB). It has a distinct model/report cache key and follows the same browser inference and model delivery path. No additional weight file is uploaded or packaged for this option.
+
 | Component | Upstream / Authors | License | Scope / Boundary | Source / Artifact |
 |---|---|---|---|---|
 | **Diverge Extension UI & Bridge** | Diverge Contributors | **MIT** | UI layouts, CSS, board detector, state management | [LICENSE](LICENSE) |

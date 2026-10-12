@@ -10,6 +10,11 @@ export const STOCKFISH_VARIANTS = {
 
 export const MAIA_VARIANTS = {
   '5m': { name: 'Maia-3 5M', key: 'maia3-5m', url: 'https://weights.4chess.cc/maia3_model.bin' },
+  '23m': {
+    name: 'Maia-3 23M', key: 'maia3-23m-fp32-v1',
+    url: 'https://weights.4chess.cc/maia3_23m.bin',
+    expected: { dim_vit: 512, num_heads: 16, num_blocks: 8, total_params: 27130884 }
+  },
   '79m': {
     name: 'Maia-3 79M', key: 'maia3-79m-fp16-v1',
     url: 'https://weights.4chess.cc/maia3_79m_fp16_v1.bin',

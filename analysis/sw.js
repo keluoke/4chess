@@ -4,21 +4,21 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261012-review5';
+const CACHE_NAME = '4chess-review-20261012-review6';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261012-review5',
-  './analysis.css?v=20261012-review5',
-  './i18n.js?v=20261012-review5',
-  '../ui/theme.css?v=20261012-review5',
-  '../ui/theme.js?v=20261012-review5',
+  './analysis.js?v=20261012-review6',
+  './analysis.css?v=20261012-review6',
+  './i18n.js?v=20261012-review6',
+  '../ui/theme.css?v=20261012-review6',
+  '../ui/theme.js?v=20261012-review6',
   './board-ui.js',
-  './position-analysis.js?v=20261012-review5',
+  './position-analysis.js?v=20261012-review6',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js?v=20261012-review5',
+  './eval-chart.js?v=20261012-review6',
   './manifest.webmanifest',
   './favicon.svg',
   '../engine/chess-core.js',
@@ -38,7 +38,7 @@ const STATIC_ASSETS = [
 ];
 
 // Cache both legacy nested imports and this release's versioned entry dependencies.
-STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261012-review5`));
+STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261012-review6`));
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
