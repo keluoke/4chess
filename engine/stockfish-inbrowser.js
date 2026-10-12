@@ -191,7 +191,9 @@ export class StockfishInBrowser {
                   scoreCp: item.scoreCp,
                   deltaCp,
                   deltaText,
-                  isMate: item.isMate
+                  isMate: item.isMate,
+                  depth: item.depth,
+                  pv: item.pv || []
                 });
               }
             }

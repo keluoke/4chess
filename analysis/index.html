@@ -36,7 +36,7 @@
         </svg>
       </span>
       <div class="studio-title">
-        歧路 Diverge
+        <span data-i18n="studioName">歧路 Diverge</span>
         <span class="studio-badge" data-i18n="studioBadge">棋谱研究室</span>
       </div>
     </div>
@@ -60,6 +60,9 @@
       <button type="button" class="btn-header btn-primary" id="btn-reanalyze" data-i18n="btnReanalyze" disabled>
         重新分析
       </button>
+      <button type="button" class="btn-header btn-settings" id="btn-settings" data-i18n-title="reviewSettings" data-i18n-aria="reviewSettings" aria-label="复盘设置" title="复盘设置" aria-haspopup="dialog">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 3h5l.7 3 2.6 1.5 2.9-.9 2.5 4.3-2.2 2.1v3l2.2 2.1-2.5 4.3-2.9-.9-2.6 1.5-.7 3h-5l-.7-3-2.6-1.5-2.9.9-2.5-4.3L3 16v-3L.8 10.9 3.3 6.6l2.9.9L8.8 6z" transform="translate(2 0) scale(.83)"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
     </div>
   </header>
 
@@ -68,8 +71,13 @@
     <!-- Left: Chessboard Column -->
     <section class="board-column" aria-label="棋盘与局面走势">
       <div class="workspace-section-heading"><span data-i18n="boardHeading">棋盘</span><small data-i18n="boardSubheading">点击或拖动棋子，试演其他可能</small></div>
-      <!-- Interactive SVG/DOM Chessboard -->
-      <div id="board-container" class="maia-board-wrapper"></div>
+      <div class="board-with-evaluation">
+        <div id="evaluation-gauge" class="evaluation-gauge" role="img" aria-label="白方视角得分：未计算">
+          <div class="gauge-black" id="gauge-black"><span id="gauge-score-black"></span></div>
+          <div class="gauge-white" id="gauge-white"><span id="gauge-score-white">—</span></div>
+        </div>
+        <div id="board-container" class="maia-board-wrapper"></div>
+      </div>
 
       <!-- Free Branch Exploration Banner -->
       <div id="branch-banner" class="branch-banner" style="display: none;">
@@ -109,75 +117,9 @@
         </div>
       </div>
 
-      <!-- Review Progress Banner (shown during analysis) -->
-      <div id="analysis-progress-card" class="board-controls" style="display: none; flex-direction: column; gap: 8px; align-items: stretch;">
-        <div style="display: flex; justify-content: space-between; font-size: 11px;">
-          <span id="analysis-phase-text" style="color: var(--brand-green); font-weight: 600;">正在分析棋局...</span>
-          <span id="analysis-percent-text" style="color: var(--text-dim);">0%</span>
-        </div>
-        <div style="width: 100%; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
-          <div id="analysis-progress-bar" style="width: 0%; height: 100%; background: var(--brand-green); transition: width 0.15s ease;"></div>
-        </div>
-      </div>
-      <!-- 1. Advantage & Winrate Trend Curve -->
-      <div class="eval-chart-wrapper" id="eval-chart-container">
-        <!-- Rendered by EvalChart -->
-      </div>
-
     </section>
-
-    <!-- Right: Analysis & Insights Column -->
-    <section class="analysis-column" aria-label="当前局面分析">
-      <div class="studio-insight-heading"><span class="studio-eyebrow" data-i18n="perspectiveEyebrow">A DIFFERENT PERSPECTIVE</span><h1 data-i18n="compareTitle">比较三种选择</h1><p data-i18n="compareSubtitle">实战、人类直觉与引擎推荐，在这里相遇。</p></div>
-      <!-- 2. Three-Way Comparison Panel -->
-      <div class="divergence-box" id="divergence-box">
-        <div class="divergence-badge" id="divergence-badge" data-i18n="divergenceBadgeDefault">局面研判</div>
-        <div class="compare-panel" id="compare-panel">
-          <div class="compare-card card-engine" id="compare-engine">
-            <div class="compare-card-label"><span class="dot dot-engine"></span> <span data-i18n="cardEngineBest">引擎推荐</span></div>
-            <div class="compare-card-san" id="compare-engine-san">—</div>
-            <div class="compare-card-meta" id="compare-engine-meta"></div>
-          </div>
-          <div class="compare-card card-intuition" id="compare-intuition">
-            <div class="compare-card-label"><span class="dot dot-intuition"></span> <span data-i18n="cardIntuition">直觉预判</span></div>
-            <div class="compare-card-san" id="compare-intuition-san">—</div>
-            <div class="compare-card-meta" id="compare-intuition-meta"></div>
-          </div>
-          <div class="compare-card card-played" id="compare-played">
-            <div class="compare-card-label"><span class="dot dot-played"></span> <span data-i18n="cardPlayed">实战着法</span></div>
-            <div class="compare-card-san" id="compare-played-san">—</div>
-            <div class="compare-card-meta" id="compare-played-meta"></div>
-          </div>
-        </div>
-        <div class="divergence-content" id="divergence-content" style="display: none;"></div>
-      </div>
-
-      <details class="studio-engine-tools"><summary data-i18n="engineToolsTitle">直觉等级与引擎状态</summary>
-      <!-- Target Elo selector -->
-      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
-        <span data-i18n="eloLabel">直觉 ELO:</span>
-        <select id="elo-selector" class="btn-header" style="padding: 0 8px; cursor: pointer;">
-          <option value="1100" data-i18n="eloBeginner">1100 (初学)</option>
-          <option value="1500" data-i18n="eloIntermediate">1500 (进阶)</option>
-          <option value="1900" selected data-i18n="eloClub">1900 (俱乐部)</option>
-          <option value="2200" data-i18n="eloMaster">2200 (大师)</option>
-        </select>
-      </div>
-
-      <!-- Engine Status Badges -->
-      <div class="engine-status-pill" id="status-maia" title="Maia 3 直觉预测引擎">
-        <span class="status-dot loading" id="dot-maia"></span>
-        <span>Maia 3</span>
-      </div>
-      <div class="engine-status-pill" id="status-sf" title="Stockfish 19 WASM 评估引擎">
-        <span class="status-dot loading" id="dot-sf"></span>
-        <span>Stockfish 19</span>
-      </div>
-
-      </details>
-    </section>
-    <section class="review-column" aria-label="关键步与完整记谱">
-      <div class="workspace-section-heading"><span data-i18n="reviewHeading">回看关键选择</span></div>
+    <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
+      <section class="review-summary" id="review-summary" hidden>
       <!-- Engine Accuracy Summary Card -->
       <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
         <div class="metric-player-row">
@@ -197,42 +139,60 @@
         </div>
       </div>
 
-      <!-- 3. Dual Tabs: Human-Machine Divergence Moments & Move Notation -->
-      <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-        <div class="panel-tabs">
-          <button type="button" class="tab-btn active" id="tab-blunders">
-            <span id="lbl-tab-blunders">关键步</span> (<span id="blunder-count-badge">0</span>)
-          </button>
-          <button type="button" class="tab-btn" id="tab-moves">
-            <span id="lbl-tab-moves">记谱</span> (<span id="move-count-badge">0</span>)
-          </button>
+        <div class="eval-chart-wrapper" id="eval-chart-container"></div>
+      </section>
+      <!-- Review Progress Banner (shown during analysis) -->
+      <div id="analysis-progress-card" class="board-controls" style="display: none; flex-direction: column; gap: 8px; align-items: stretch;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px;">
+          <span id="analysis-phase-text" style="color: var(--brand-green); font-weight: 600;">正在分析棋局...</span>
+          <span id="analysis-percent-text" style="color: var(--text-dim);">0%</span>
         </div>
-
-        <div class="tab-content" id="tab-content-area">
-          <!-- Divergence Moments Tab -->
-          <div id="blunder-tab-content">
-            <div class="divergence-filters" id="divergence-filters">
-              <button type="button" class="filter-pill active" data-filter="all"><span id="lbl-filter-all">全部</span> (<span id="filter-count-all">0</span>)</button>
-              <button type="button" class="filter-pill pill-beyond" data-filter="beyond">✨ <span id="lbl-filter-beyond">妙手</span> (<span id="filter-count-beyond">0</span>)</button>
-              <button type="button" class="filter-pill pill-trap" data-filter="trap">🫤 <span id="lbl-filter-trap">俗手</span> (<span id="filter-count-trap">0</span>)</button>
-            </div>
-            <div class="blunder-list" id="blunder-list">
-              <div id="blunder-loading-state" data-i18n="loadingGameData" style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
-                正在加载棋局数据...
-              </div>
-            </div>
-          </div>
-
-          <!-- Move Notation Table Tab -->
-          <div id="moves-tab-content" style="display: none;">
-            <div class="move-notation-table" id="move-notation-table">
-              <!-- Dynamically populated rows -->
-            </div>
-          </div>
+        <div style="width: 100%; height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden;">
+          <div id="analysis-progress-bar" style="width: 0%; height: 100%; background: var(--brand-green); transition: width 0.15s ease;"></div>
         </div>
       </div>
+      <section class="position-analysis">
+        <div class="position-analysis-heading">
+          <span id="position-turn" aria-live="polite"></span>
+          <div class="position-view-controls">
+            <button type="button" class="btn-position-view active" id="btn-position-current" data-i18n="currentPosition" aria-pressed="true">当前局面</button>
+            <button type="button" class="btn-position-view" id="btn-position-before" data-i18n="reviewThisMove" aria-pressed="false" disabled>回看此步</button>
+          </div>
+        </div>
+        <div class="candidate-heading"><span data-i18n="engineCandidates">引擎</span><small id="candidate-engine-status"></small></div>
+        <div class="candidate-lines engine-lines" id="engine-candidate-lines" aria-live="polite"></div>
+        <div class="candidate-heading"><span data-i18n="intuitionCandidates">直觉</span><small id="candidate-maia-status"></small></div>
+        <div class="candidate-lines intuition-lines" id="maia-candidate-lines" aria-live="polite"></div>
+        <p class="position-note" id="divergence-content" hidden></p>
+      </section>
+      <section class="notation-section" data-i18n-aria="notationHeading" aria-label="记谱">
+        <div class="workspace-section-heading"><span><span id="lbl-tab-moves" data-i18n="notationHeading">记谱</span> (<span id="move-count-badge">0</span>)</span><small data-i18n="cardPlayed">实战着法</small></div>
+        <div class="move-notation-table" id="move-notation-table"></div>
+      </section>
+      <section class="key-moves-section" data-i18n-aria="keyMovesHeading" aria-label="关键步">
+        <div class="workspace-section-heading"><span><span id="lbl-tab-blunders" data-i18n="keyMovesHeading">关键步</span> (<span id="blunder-count-badge">0</span>)</span></div>
+        <div class="divergence-filters" id="divergence-filters">
+          <button type="button" class="filter-pill active" data-filter="all"><span id="lbl-filter-all">全部</span> (<span id="filter-count-all">0</span>)</button>
+          <button type="button" class="filter-pill pill-beyond" data-filter="beyond"><span id="lbl-filter-beyond">妙手</span> (<span id="filter-count-beyond">0</span>)</button>
+          <button type="button" class="filter-pill pill-trap" data-filter="trap"><span id="lbl-filter-trap">俗手</span> (<span id="filter-count-trap">0</span>)</button>
+        </div>
+        <div class="blunder-list" id="blunder-list"></div>
+      </section>
     </section>
   </main>
+
+  <dialog class="review-settings-dialog" id="review-settings" data-i18n-aria="reviewSettings" aria-label="复盘设置">
+    <div class="settings-heading"><h2 data-i18n="reviewSettings">复盘设置</h2><button type="button" class="btn-header" id="btn-close-settings" data-i18n="btnClose">关闭</button></div>
+    <div class="settings-fields">
+      <label><span data-i18n="eloLabel">直觉 ELO</span><select id="elo-selector" class="btn-header"><option value="1100" data-i18n="eloBeginner">1100 (初学)</option><option value="1500" data-i18n="eloIntermediate">1500 (进阶)</option><option value="1900" selected data-i18n="eloClub">1900 (俱乐部)</option><option value="2200" data-i18n="eloMaster">2200 (大师)</option></select></label>
+      <label><span data-i18n="positionStrength">局面分析强度</span><select id="position-depth" class="btn-header"><option value="10" data-i18n="strengthStandard">标准</option><option value="14" data-i18n="strengthDeep">深入</option></select></label>
+      <label><span data-i18n="showCandidateArrows">显示候选箭头</span><input type="checkbox" id="setting-arrows" checked></label>
+      <label><span data-i18n="showIntuitionHeatmap">显示直觉热力图</span><input type="checkbox" id="setting-heatmap"></label>
+      <label><span data-i18n="showIntuitionProbability">显示直觉概率</span><input type="checkbox" id="setting-probability" checked></label>
+      <label><span data-i18n="boardOrientation">棋盘方向</span><select id="setting-orientation" class="btn-header"><option value="white" data-i18n="whiteAtBottom">白方在下</option><option value="black" data-i18n="blackAtBottom">黑方在下</option></select></label>
+    </div>
+    <div class="settings-engine-status"><div class="engine-status-pill" id="status-sf"><span class="status-dot" id="dot-sf"></span><span>Stockfish 19</span><span id="text-status-sf"></span></div><div class="engine-status-pill" id="status-maia"><span class="status-dot" id="dot-maia"></span><span>Maia 3</span><span id="text-status-maia"></span></div></div>
+  </dialog>
 
   <!-- Drag & Drop Overlay -->
   <div class="drag-drop-overlay" id="drag-drop-overlay" style="display: none;">
@@ -273,11 +233,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=1.0.4"></script>
-  <script type="module" src="analysis.js?v=1.0.4"></script>
+  <script type="module" src="analysis.js?v=1.0.4-review2"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=1.0.4').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=1.0.4-review2').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

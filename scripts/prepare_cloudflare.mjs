@@ -17,4 +17,18 @@ if (existsSync(resolve(rootDir, 'cloudflare/redirects'))) {
   console.log('✅ Generated _redirects from cloudflare/redirects');
 }
 
+// Ensure lightweight vision models exist in models/
+const wasmTarget = resolve(rootDir, 'models/chess-cnn.wasm');
+const binTarget = resolve(rootDir, 'models/chessimg2pos_weights.bin');
+const assetsDir = resolve(rootDir, '../chesspuzzle/assets/models');
+
+if (!existsSync(wasmTarget) && existsSync(resolve(assetsDir, 'chess-cnn.wasm'))) {
+  copyFileSync(resolve(assetsDir, 'chess-cnn.wasm'), wasmTarget);
+  console.log('✅ Recovered models/chess-cnn.wasm');
+}
+if (!existsSync(binTarget) && existsSync(resolve(assetsDir, 'chessimg2pos_weights.bin'))) {
+  copyFileSync(resolve(assetsDir, 'chessimg2pos_weights.bin'), binTarget);
+  console.log('✅ Recovered models/chessimg2pos_weights.bin');
+}
+
 console.log('ℹ️ Note: If loading as unpacked Chrome extension locally, run "npm run clean" to remove _headers/_redirects.');

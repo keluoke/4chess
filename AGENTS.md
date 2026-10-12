@@ -54,12 +54,16 @@
 > **所有 Maia 模型权重必须 100% 且唯一通过外部对象存储 / 高速 CDN（如 `https://weights.4chess.cc/...`）提供按需流式分发与浏览器端持久化缓存，绝不许打包进 Git 仓库或扩展本地离线包。**
 
 ### 1. 资源分发准则 (Asset Distribution Rules)
-1. **纯 CDN 加载原则**：
+1. **纯 CDN 加载原则（Maia 大模型）**：
    - 前端与扩展代码（`maia-engine.js`、`maia-inbrowser.js`）仅允许从指定的 CDN 列表拉取模型权重（默认 `https://weights.4chess.cc/maia3_model.bin` 或用户自定义 CDN 节点），严禁配置本地相对路径打包回退（如 `models/maia3_model.bin`）。
    - 首次下载完成后，前端必须自动存入客户端浏览器 IndexedDB 缓存（`ModelCache`），实现后续使用 0ms 瞬间秒开与断网离线复用。
-2. **轻量化原则**：
-   - 扩展安装包（ZIP）与 Git 仓库源码应保持极简纯代码与轻量资源（仅保留 JS、CSS、HTML、图标与 1.7MB 的 Stockfish WASM），整体源码包控制在数兆字节以内。
-   - `manifest.json` 的 `web_accessible_resources` 严禁声明大模型二进制文件。
+2. **轻量化与离线合规原则（Vision 轻量 CNN 资产例外说明）**：
+   - 扩展安装包（ZIP）与 Git 仓库源码应保持极简纯代码与轻量资源（整体源码包控制在数兆字节以内）。
+   - **Chrome MV3 离线识别资产例外**：根据 Chrome 应用商店关于禁止加载远程托管可执行代码/模型的合规政策，仅局限于极轻量级局面识别小模型资产允许随扩展本地打包：
+     - `models/chess-cnn.wasm` (~6.2 KiB)
+     - `models/chessimg2pos_weights.bin` (~606 KiB，体积远远小于 25MB 限制)
+     - `models/manifest.json` (~1 KiB，记录 SHA-256 校验清单)
+   - `.gitignore` 明确允许跟踪 `!models/chessimg2pos_weights.bin`。任何大于 1MB 的模型资产仍严格禁止入库。
 3. **版本控制防线 (Git Protection)**：
-   - `.gitignore` 必须永久严格屏蔽 `*.bin`、`models/*.bin`、`*.pt`、`*.onnx` 等所有大文件，严禁通过 `!models/...` 例外跟踪。
-   - 任何试图将大模型二进制提交到代码仓库的行为都必须被立刻阻断。
+   - `.gitignore` 必须永久严格屏蔽 `*.pt`、`*.onnx`、`models/maia*` 等所有大文件及未授权的 `.bin` 文件。
+   - 任何试图将 Maia 大模型二进制或超出体积上限的资产提交到代码仓库的行为都必须被立刻阻断。

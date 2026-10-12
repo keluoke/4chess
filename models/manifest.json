@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "name": "chessimg2pos",
+  "architecture": "fast_cnn_32x32",
+  "manifestSha256": "3911bad0cc0ec0e86b4688aab70e33ef59ddc77b805efbfa680dd02826059720",
+  "files": {
+    "chessimg2pos_weights.bin": {
+      "size": 620852,
+      "sha256": "3911bad0cc0ec0e86b4688aab70e33ef59ddc77b805efbfa680dd02826059720"
+    },
+    "chess-cnn.wasm": {
+      "size": 6349,
+      "sha256": "cd54b2122ed679eb5f935785a3db425131591f253d1e961c82ce516b456fe169"
+    },
+    "chessimg2pos.onnx": {
+      "size": 623976,
+      "sha256": "8446a3686d57a4c0324b3cb3b73dfdda4734ab4f57b2814416b8128effb66822"
+    }
+  },
+  "labels": ["1", "R", "N", "B", "Q", "K", "P", "r", "n", "b", "q", "k", "p"],
+  "tileSize": 32
+}

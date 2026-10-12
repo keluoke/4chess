@@ -10,44 +10,9 @@ import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { BoardUI } from './board-ui.js';
 import { EvalChart } from './eval-chart.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { ModelCache } from '../engine/model-cache.js';
+import { PositionAnalysis } from './position-analysis.js';
 import { soundEffects } from './sound-effects.js';
 import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js';
-
-export function formatScoreWhiteCentric(cp, isMate = false) {
-  if (cp === null || cp === undefined) return '0.00';
-  if (isMate) {
-    const m = Math.round((10000 - Math.abs(cp)) / 100);
-    return `M${cp > 0 ? '+' : '-'}${Math.max(1, m)}`;
-  }
-  const pawns = (cp / 100).toFixed(2);
-  return cp > 0 ? `+${pawns}` : pawns;
-}
-
-export function formatEvalObjWhite(evalRes, fenOrTurn) {
-  if (!evalRes) return '0.00';
-  const turn = typeof fenOrTurn === 'string' && fenOrTurn.length === 1 ? fenOrTurn : (fenOrTurn?.split?.(' ')?.[1] || 'w');
-  const scoreCp = evalRes.scoreCp ?? 0;
-  const isMate = evalRes.isMate;
-  const whiteCp = turn === 'b' ? -scoreCp : scoreCp;
-  return formatScoreWhiteCentric(whiteCp, isMate);
-}
-
-export function getMoveReviewWhiteScore(moveReview, isAfter = false) {
-  if (!moveReview) return '0.00';
-  if (!isAfter) {
-    const cp = moveReview.evalBeforeCp ?? 0;
-    const isMate = typeof moveReview.evalBefore === 'string' && moveReview.evalBefore.startsWith('M');
-    const whiteCp = moveReview.turn === 'b' ? -cp : cp;
-    return formatScoreWhiteCentric(whiteCp, isMate);
-  } else {
-    const opponentTurn = moveReview.turn === 'w' ? 'b' : 'w';
-    const cp = moveReview.evalAfterCp ?? 0;
-    const isMate = typeof moveReview.evalAfter === 'string' && moveReview.evalAfter.startsWith('M');
-    const whiteCp = opponentTurn === 'b' ? -cp : cp;
-    return formatScoreWhiteCentric(whiteCp, isMate);
-  }
-}
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -94,6 +59,9 @@ class AnalysisStudioApp {
     this.isPlaying = false;
     this.playTimer = null;
     this.currentDivergenceFilter = 'all';
+    this.isReviewingMove = false;
+    this.hasAnalysisInput = false;
+    this.settings = { arrows: true, heatmap: false, probability: true };
 
     this.initElements();
     initI18n();
@@ -134,14 +102,9 @@ class AnalysisStudioApp {
       percentText: document.getElementById('analysis-percent-text'),
       progressBar: document.getElementById('analysis-progress-bar'),
       evalChartContainer: document.getElementById('eval-chart-container'),
-      divergenceBadge: document.getElementById('divergence-badge'),
       divergenceContent: document.getElementById('divergence-content'),
-      tabBlunders: document.getElementById('tab-blunders'),
-      tabMoves: document.getElementById('tab-moves'),
       blunderCountBadge: document.getElementById('blunder-count-badge'),
       moveCountBadge: document.getElementById('move-count-badge'),
-      blunderTabContent: document.getElementById('blunder-tab-content'),
-      movesTabContent: document.getElementById('moves-tab-content'),
       blunderList: document.getElementById('blunder-list'),
       moveNotationTable: document.getElementById('move-notation-table'),
       pgnModal: document.getElementById('pgn-modal'),
@@ -153,46 +116,21 @@ class AnalysisStudioApp {
       dropOverlay: document.getElementById('drag-drop-overlay'),
       fileInput: document.getElementById('pgn-file-input'),
       btnUploadFile: document.getElementById('btn-upload-file'),
-      // Three-way comparison panel
-      comparePanel: document.getElementById('compare-panel'),
-      compareEngineSan: document.getElementById('compare-engine-san'),
-      compareEngineMeta: document.getElementById('compare-engine-meta'),
-      compareIntuitionSan: document.getElementById('compare-intuition-san'),
-      compareIntuitionMeta: document.getElementById('compare-intuition-meta'),
-      comparePlayedSan: document.getElementById('compare-played-san'),
-      comparePlayedMeta: document.getElementById('compare-played-meta'),
-      comparePlayedCard: document.getElementById('compare-played')
+      positionTurn: document.getElementById('position-turn'),
+      positionCurrent: document.getElementById('btn-position-current'),
+      positionBefore: document.getElementById('btn-position-before'),
+      positionDepth: document.getElementById('position-depth'),
+      settingsDialog: document.getElementById('review-settings'),
+      btnSettings: document.getElementById('btn-settings')
     };
   }
 
   initEngines() {
     this.stockfish = new StockfishInBrowser();
-    this.maiaEngine = new MaiaEngine(null, this.stockfish);
+    this.maiaEngine = new MaiaEngine(() => this.updateEngineStatus(), this.stockfish);
     this.analyzer = new GameAnalyzer(this.stockfish, this.maiaEngine);
-
-    // Stockfish lifecycle monitoring
-    this.stockfish.initialize().then((ready) => {
-      if (ready) {
-        this.el.dotSf.className = 'status-dot ready';
-      } else {
-        this.el.dotSf.className = 'status-dot error';
-      }
-    }).catch(() => {
-      this.el.dotSf.className = 'status-dot error';
-    });
-
-    // Maia 3 lifecycle monitoring: if cached locally in IndexedDB, load instantly; otherwise defer until review starts
-    ModelCache.hasModel().then((isCached) => {
-      if (isCached) {
-        this.maiaEngine.initialize().then(() => {
-          this.el.dotMaia.className = 'status-dot ready';
-        }).catch(() => {
-          this.el.dotMaia.className = 'status-dot error';
-        });
-      } else {
-        this.el.dotMaia.className = 'status-dot';
-      }
-    });
+    // Empty visits stay idle; initialize only for an imported position or completed-game review.
+    this.updateEngineStatus();
 
     // Register PWA File Handling API (launchQueue)
     if ('launchQueue' in window && typeof window.LaunchParams !== 'undefined' && 'files' in window.LaunchParams.prototype) {
@@ -226,6 +164,8 @@ class AnalysisStudioApp {
       this.goToPly(selectedPly);
     });
 
+    this.positionAnalysis = new PositionAnalysis(this);
+
     // 3. Initialize Sound Toggle state
     this.updateSoundToggleUI();
   }
@@ -236,22 +176,29 @@ class AnalysisStudioApp {
     if (this.el.iconSoundOff) this.el.iconSoundOff.style.display = isEnabled ? 'none' : 'inline-block';
     if (this.el.btnSound) {
       this.el.btnSound.title = isEnabled ? t('btnSoundMute') : t('btnSoundUnmute');
+      this.el.btnSound.setAttribute('aria-label', this.el.btnSound.title);
+      this.el.btnSound.setAttribute('aria-pressed', String(isEnabled));
       this.el.btnSound.classList.toggle('muted', !isEnabled);
     }
   }
 
-  setComparePlayedSan(san, badgeText = null, badgeBg = null, badgeColor = null) {
-    this.el.comparePlayedSan.replaceChildren();
-    this.el.comparePlayedSan.appendChild(document.createTextNode(san || '—'));
-    if (badgeText) {
-      const badge = document.createElement('span');
-      badge.className = 'compare-match-badge';
-      if (badgeBg) badge.style.background = badgeBg;
-      if (badgeColor) badge.style.color = badgeColor;
-      badge.textContent = badgeText;
-      this.el.comparePlayedSan.appendChild(document.createTextNode(' '));
-      this.el.comparePlayedSan.appendChild(badge);
+  updateEngineStatus() {
+    for (const [name, engine] of [['sf', this.stockfish], ['maia', this.maiaEngine]]) {
+      const ready = engine?.isReady;
+      const loading = name === 'maia' ? engine?.isLoading : !!engine?.initPromise && !ready;
+      const failed = this.maiaEngine?.status?.[name === 'maia' ? 'maia' : 'stockfish']?.state === 'error';
+      const status = ready ? 'engineReady' : failed ? 'engineFailed' : loading ? 'engineStarting' : 'engineNotStarted';
+      const dot = document.getElementById(`dot-${name}`);
+      if (dot) dot.className = `status-dot${ready ? ' ready' : failed ? ' error' : loading ? ' loading' : ''}`;
+      const text = document.getElementById(`text-status-${name}`);
+      if (text) text.textContent = t(status);
     }
+  }
+
+  flipBoard() {
+    this.boardUI.flip();
+    document.getElementById('setting-orientation').value = this.boardUI.orientation;
+    this.positionAnalysis.render();
   }
 
   bindEvents() {
@@ -273,6 +220,9 @@ class AnalysisStudioApp {
         }
       } catch (err) {}
 
+      this.positionAnalysis.cancel();
+      this.positionAnalysis.cache.clear();
+      this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
       // Invalidate review result so old Elo data is not mixed
       this.reviewResult = null;
       if (this.moves && this.moves.length > 0) {
@@ -287,7 +237,7 @@ class AnalysisStudioApp {
     this.el.btnPrev.addEventListener('click', () => this.goToPly(this.currentPly - 1));
     this.el.btnNext.addEventListener('click', () => this.goToPly(this.currentPly + 1));
     this.el.btnLast.addEventListener('click', () => this.goToPly(this.positions.length - 1));
-    this.el.btnFlip.addEventListener('click', () => this.boardUI.flip());
+    this.el.btnFlip.addEventListener('click', () => this.flipBoard());
     if (this.el.btnSound) {
       this.el.btnSound.addEventListener('click', () => {
         const enabled = soundEffects.toggle();
@@ -301,11 +251,35 @@ class AnalysisStudioApp {
       });
     }
     this.el.btnPlay.addEventListener('click', () => this.toggleAutoPlay());
-    this.el.btnExitBranch.addEventListener('click', () => this.exitBranchMode());
+    this.el.btnExitBranch.addEventListener('click', () => this.goToPly(this.currentPly));
 
-    // Tabs
-    this.el.tabBlunders.addEventListener('click', () => this.switchTab('blunders'));
-    this.el.tabMoves.addEventListener('click', () => this.switchTab('moves'));
+    this.el.positionCurrent.addEventListener('click', () => this.goToPly(this.currentPly));
+    this.el.positionBefore.addEventListener('click', () => this.goToPly(this.currentPly, { before: true }));
+    this.el.btnSettings.addEventListener('click', () => {
+      this.updateEngineStatus();
+      this.el.settingsDialog.showModal();
+      document.getElementById('btn-close-settings').focus();
+    });
+    document.getElementById('btn-close-settings').addEventListener('click', () => this.el.settingsDialog.close());
+    this.el.settingsDialog.addEventListener('click', event => {
+      if (event.target === this.el.settingsDialog) {
+        const rect = this.el.settingsDialog.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) this.el.settingsDialog.close();
+      }
+    });
+    this.el.settingsDialog.addEventListener('close', () => this.el.btnSettings.focus());
+    this.el.positionDepth.addEventListener('change', () => this.positionAnalysis.refresh());
+    for (const [id, key] of [['setting-arrows', 'arrows'], ['setting-heatmap', 'heatmap'], ['setting-probability', 'probability']]) {
+      document.getElementById(id).addEventListener('change', event => {
+        this.settings[key] = event.target.checked;
+        if (key === 'heatmap') this.positionAnalysis.refresh();
+        else this.positionAnalysis.render();
+      });
+    }
+    document.getElementById('setting-orientation').addEventListener('change', event => {
+      this.boardUI.setOrientation(event.target.value);
+      this.positionAnalysis.render();
+    });
 
     // Divergence Category Filter Pills
     const filterPills = document.querySelectorAll('.divergence-filters .filter-pill');
@@ -409,6 +383,7 @@ class AnalysisStudioApp {
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
+      if (this.el.settingsDialog.open) return;
       if (this.el.pgnModal.classList.contains('open')) {
         if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
         if (e.key === 'Tab') {
@@ -438,7 +413,7 @@ class AnalysisStudioApp {
         this.toggleAutoPlay();
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
-        this.boardUI.flip();
+        this.flipBoard();
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         if (this.el.btnSound) this.el.btnSound.click();
@@ -451,7 +426,7 @@ class AnalysisStudioApp {
 
     // 1. Meta player names if default
     if (this.el.metaWhite) {
-      if (this.el.metaWhite.textContent.includes('白方') || this.el.metaWhite.textContent.includes('White')) {
+      if (/^⚪ (白方|White)$/.test(this.el.metaWhite.textContent)) {
         this.el.metaWhite.textContent = t('whitePlayer');
       }
     }
@@ -461,7 +436,7 @@ class AnalysisStudioApp {
     if (sideLabelB) sideLabelB.textContent = t('blackPlayer');
 
     if (this.el.metaBlack) {
-      if (this.el.metaBlack.textContent.includes('黑方') || this.el.metaBlack.textContent.includes('Black')) {
+      if (/^⚫ (黑方|Black)$/.test(this.el.metaBlack.textContent)) {
         this.el.metaBlack.textContent = t('blackPlayer');
       }
     }
@@ -483,13 +458,17 @@ class AnalysisStudioApp {
     // 4. Board status text & comparison panel
     if (this.currentPly === 0) {
       this.el.boardStatusText.textContent = t('startingPosition');
-      this.el.divergenceBadge.textContent = t('badgeOpening');
+
     } else if (this.positions && this.positions[this.currentPly]) {
       const currentPos = this.positions[this.currentPly];
       const sideText = currentPos.turn === 'w' ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
       this.el.boardStatusText.textContent = t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
-      this.updateActivePositionAnalysis();
+      if (this.isReviewingMove) this.el.boardStatusText.textContent = t('reviewMoveBefore', { move: currentPos.san, number: currentPos.moveNumber });
     }
+
+    if (this.isBranching) this.el.boardStatusText.textContent = t('badgeBranch');
+    this.positionAnalysis?.render();
+    this.updateEngineStatus();
 
     // 4.1 Update progress card and loading state if currently reviewing
     if (this.el.progressCard && this.el.progressCard.style.display !== 'none') {
@@ -534,20 +513,6 @@ class AnalysisStudioApp {
       if (elAccB && this.reviewResult.coverageRateBlack != null && this.reviewResult.coverageRateBlack < 100) {
         elAccB.title = t('coverageTooltip', { pct: this.reviewResult.coverageRateBlack });
       }
-    }
-  }
-
-  switchTab(tabName) {
-    if (tabName === 'blunders') {
-      this.el.tabBlunders.classList.add('active');
-      this.el.tabMoves.classList.remove('active');
-      this.el.blunderTabContent.style.display = 'block';
-      this.el.movesTabContent.style.display = 'none';
-    } else {
-      this.el.tabMoves.classList.add('active');
-      this.el.tabBlunders.classList.remove('active');
-      this.el.movesTabContent.style.display = 'block';
-      this.el.blunderTabContent.style.display = 'none';
     }
   }
 
@@ -1015,10 +980,15 @@ class AnalysisStudioApp {
     autoReview = true
   } = {}) {
     // 1. Immediately abort running tasks and advance session epochs
+    this.positionAnalysis.cancel();
+    this.positionAnalysis.active = null;
+    this.positionAnalysis.cache.clear();
     this.analyzer.cancel();
     this.gameEpoch++;
     this.reviewEpoch++;
     this.reviewResult = null;
+    this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && fen !== ChessBoard.INITIAL_FEN);
+    this.isReviewingMove = false;
     this.isBranching = false;
     this.branchFen = null;
     if (this.el.branchBanner) this.el.branchBanner.style.display = 'none';
@@ -1030,9 +1000,10 @@ class AnalysisStudioApp {
     this.el.blunderCountBadge.textContent = '0';
     this.el.blunderList.replaceChildren();
     this.el.divergenceContent.textContent = '—';
-    this.el.divergenceBadge.textContent = '—';
+    document.getElementById('review-summary').hidden = true;
+    this.el.progressCard.style.display = 'none';
     this.boardUI.clearArrows();
-    this.resetComparePanel();
+    this.resetPositionPanel();
 
     // 3. Single FEN setup mode (puzzle, free board, initial start)
     if (fen && (!moves || moves.length === 0) && !pgn) {
@@ -1181,6 +1152,9 @@ class AnalysisStudioApp {
   async runFullReview(forceRefresh = false) {
     if (!this.moves || this.moves.length === 0) return;
 
+    this.positionAnalysis.cancel();
+    if (forceRefresh) this.positionAnalysis.cache.clear();
+    document.getElementById('review-summary').hidden = true;
     const targetGameEpoch = this.gameEpoch;
     const targetReviewEpoch = ++this.reviewEpoch;
     const targetGameKey = this.currentGameKey;
@@ -1190,6 +1164,7 @@ class AnalysisStudioApp {
     this.el.progressBar.style.width = '0%';
     this.el.percentText.textContent = '0%';
     this.el.phaseText.textContent = t('preparingEngine');
+    setTimeout(() => { this.updateEngineStatus(); this.positionAnalysis.refresh({ calculate: false }); }, 0);
 
     this.el.blunderList.replaceChildren();
     const loadingCard = document.createElement('div');
@@ -1228,21 +1203,21 @@ class AnalysisStudioApp {
         }
       });
 
-      this.lastProgress = null;
-      this.el.progressCard.style.display = 'none';
-
       // Verify epoch and game key to ensure results from a stale task or different game are not applied
       if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch || this.currentGameKey !== targetGameKey || this.currentElo !== targetElo) {
         console.log('[Analysis Studio] Discarded stale review result from superseded game/request');
         return;
       }
 
+      this.lastProgress = null;
+      this.el.progressCard.style.display = 'none';
+      this.updateEngineStatus();
       if (result) {
         this.applyReviewResult(result);
       }
     } catch (err) {
-      this.lastProgress = null;
       if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
+      this.lastProgress = null;
       console.error('[Analysis Studio] Review failed:', err);
       this.el.progressCard.style.display = 'none';
 
@@ -1251,6 +1226,9 @@ class AnalysisStudioApp {
       errSpan.style.color = 'var(--brand-red)';
       errSpan.textContent = t('errorReviewError', { error: err.message });
       this.el.divergenceContent.appendChild(errSpan);
+      this.el.divergenceContent.hidden = false;
+      this.updateEngineStatus();
+      this.positionAnalysis.refresh();
 
       this.el.blunderList.replaceChildren();
       const errBox = document.createElement('div');
@@ -1281,9 +1259,11 @@ class AnalysisStudioApp {
       const elAccW = document.getElementById('val-accuracy-white');
       const elAccB = document.getElementById('val-accuracy-black');
 
+      if (elAccW) elAccW.removeAttribute('title');
+      if (elAccB) elAccB.removeAttribute('title');
       // White Accuracy
       if (elAccW) {
-        elAccW.textContent = result.accuracyWhite != null ? `${result.accuracyWhite}%` : '—';
+        elAccW.textContent = result.accuracyWhite != null ? Number(result.accuracyWhite).toFixed(1) : '—';
         if (result.coverageRateWhite != null && result.coverageRateWhite < 100) {
           elAccW.title = t('coverageTooltip', { pct: result.coverageRateWhite });
         }
@@ -1291,13 +1271,14 @@ class AnalysisStudioApp {
 
       // Black Accuracy
       if (elAccB) {
-        elAccB.textContent = result.accuracyBlack != null ? `${result.accuracyBlack}%` : '—';
+        elAccB.textContent = result.accuracyBlack != null ? Number(result.accuracyBlack).toFixed(1) : '—';
         if (result.coverageRateBlack != null && result.coverageRateBlack < 100) {
           elAccB.title = t('coverageTooltip', { pct: result.coverageRateBlack });
         }
       }
 
-      metricsCard.style.display = 'flex';
+      metricsCard.style.display = 'grid';
+      document.getElementById('review-summary').hidden = false;
     }
 
     // 1. Update Chart
@@ -1512,7 +1493,7 @@ class AnalysisStudioApp {
       card.addEventListener('click', () => {
         this.el.blunderList.querySelectorAll('.blunder-card').forEach(c => c.classList.remove('active'));
         card.classList.add('active');
-        this.goToPly(item.ply);
+        this.goToPly(item.ply, { before: true });
       });
 
       this.el.blunderList.appendChild(card);
@@ -1676,11 +1657,13 @@ class AnalysisStudioApp {
     const clampedPly = Math.max(0, Math.min(this.positions.length - 1, ply));
     const prevPly = this.currentPly;
     this.currentPly = clampedPly;
+    this.isReviewingMove = !!options.before && clampedPly > 0;
 
     const currentPos = this.positions[clampedPly];
     const lastMove = (clampedPly > 0 && currentPos) ? { from: currentPos.from, to: currentPos.to } : null;
 
-    this.boardUI.setPosition(currentPos.fen, lastMove);
+    const displayPos = this.isReviewingMove ? this.positions[clampedPly - 1] : currentPos;
+    this.boardUI.setPosition(displayPos.fen, this.isReviewingMove ? null : lastMove);
     this.evalChart.setCursor(clampedPly);
     this.highlightMoveRow(clampedPly);
 
@@ -1710,387 +1693,51 @@ class AnalysisStudioApp {
 
     if (clampedPly === 0) {
       this.el.boardStatusText.textContent = t('startingPosition');
-      this.boardUI.clearArrows();
-      this.el.divergenceBadge.textContent = t('badgeOpening');
-      this.el.divergenceBadge.style.color = 'var(--brand-green)';
-      this.resetComparePanel();
     } else {
       const sideText = currentPos.turn === 'w' ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
-      this.el.boardStatusText.textContent = t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
-      this.updateActivePositionAnalysis();
+      this.el.boardStatusText.textContent = this.isReviewingMove ? t('reviewMoveBefore', { move: currentPos.san, number: currentPos.moveNumber }) : t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
     }
+    this.updateActivePositionAnalysis();
   }
 
   updateActivePositionAnalysis() {
-    if (this.isBranching) return;
-    if (this.currentPly === 0) {
-      this.resetComparePanel();
-      return;
-    }
-
-    const currentPos = this.positions[this.currentPly];
-    if (!currentPos) return;
-
-    const moveReview = this.reviewResult?.allMoves?.find(m => m.ply === this.currentPly);
-
-    if (moveReview) {
-      const arrows = [];
-
-      // --- Populate three-way comparison cards ---
-
-      // 1. Engine recommendation
-      this.el.compareEngineSan.textContent = moveReview.bestSan || '—';
-      this.el.compareEngineSan.style.color = 'var(--brand-blue)';
-      const whiteScoreBefore = getMoveReviewWhiteScore(moveReview, false);
-      this.el.compareEngineMeta.textContent = whiteScoreBefore ? `${t('evalLabel')} ${whiteScoreBefore}` : '';
-
-      // 2. Maia intuition (from pre-computed data, with real-time fallback)
-      if (moveReview.maiaTopSan) {
-        this.el.compareIntuitionSan.textContent = moveReview.maiaTopSan;
-        this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-        this.el.compareIntuitionMeta.textContent = moveReview.maiaTopProb != null
-          ? `${t('probLabel')} ${moveReview.maiaTopProb.toFixed(1)}%`
-          : '';
-      } else {
-        // Fallback: Real-time Maia prediction if not yet stored
-        this.el.compareIntuitionSan.textContent = t('statusCalculating');
-        this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-        this.el.compareIntuitionMeta.textContent = '';
-
-        const targetGameEpoch = this.gameEpoch;
-        const targetPly = this.currentPly;
-        const targetElo = this.currentElo;
-        const historyFens = this.positions?.slice(Math.max(0, targetPly - 8), Math.max(0, targetPly - 1)).map(p => p.fen) || [];
-        this.maiaEngine.predict(moveReview.fenBefore || currentPos.fen, targetElo, null, null, historyFens).then(pred => {
-          if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly || this.currentElo !== targetElo) return;
-          if (pred && pred.moves && pred.moves.length > 0) {
-            const top = pred.moves[0];
-            moveReview.maiaTopSan = top.san || null;
-            moveReview.maiaTopUci = top.uci || null;
-            moveReview.maiaTopProb = typeof top.prob === 'number' ? top.prob : null;
-
-            this.el.compareIntuitionSan.textContent = top.san;
-            this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-            this.el.compareIntuitionMeta.textContent = top.prob != null ? `${t('probLabel')} ${top.prob.toFixed(1)}%` : '';
-
-            // Update match badge
-            const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
-            const cleanMaia = (top.san || '').replace(/[+#?!]/g, '');
-            const cleanBest = (moveReview.bestSan || '').replace(/[+#?!]/g, '');
-            const isBeyond = moveReview.divergenceType === 'beyond_intuition' || moveReview.isBeyondIntuition;
-            const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
-
-            if (isBeyond) {
-              this.setComparePlayedSan(moveReview.san, t('tagEngineBest'), 'var(--dg-blue-soft)', 'var(--brand-blue)');
-            } else if (isTrap) {
-              this.setComparePlayedSan(moveReview.san, t('tagTrap'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
-            } else if (cleanPlayed && cleanPlayed === cleanMaia && cleanPlayed !== cleanBest) {
-              this.setComparePlayedSan(moveReview.san, t('tagIntuition'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
-            } else {
-              this.setComparePlayedSan(moveReview.san);
-            }
-
-            // Draw gold arrow if different from engine best
-            if (top.uci && top.uci !== moveReview.bestUci) {
-              arrows.push({
-                from: top.uci.slice(0, 2),
-                to: top.uci.slice(2, 4),
-                color: 'gold',
-                label: `${top.san} ${top.prob != null ? Math.round(top.prob) + '%' : ''}`
-              });
-              this.boardUI.setArrows(arrows);
-            }
-          } else {
-            this.el.compareIntuitionSan.textContent = '—';
-            this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
-          }
-        }).catch(err => {
-          console.warn('[Analysis Studio] Fallback Maia prediction error:', err);
-          if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly) return;
-          this.el.compareIntuitionSan.textContent = '—';
-          this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
-        });
-      }
-
-      // 3. Played move
-      const whiteScoreAfter = getMoveReviewWhiteScore(moveReview, true);
-      this.el.comparePlayedMeta.textContent = whiteScoreAfter ? `${t('evalResultLabel')} ${whiteScoreAfter}` : '';
-
-      // Highlight played card based on severity
-      const playedCard = this.el.comparePlayedCard;
-      playedCard.classList.remove('is-blunder');
-      if (moveReview.severity === 'blunder' || moveReview.severity === 'mistake') {
-        this.el.comparePlayedSan.style.color = 'var(--brand-red)';
-        playedCard.classList.add('is-blunder');
-      } else {
-        this.el.comparePlayedSan.style.color = 'var(--text-main)';
-      }
-
-      // Check for match badges and divergence states
-      const cleanPlayed = moveReview.san.replace(/[+#?!]/g, '');
-      const cleanBest = (moveReview.bestSan || '').replace(/[+#?!]/g, '');
-      const cleanMaia = (moveReview.maiaTopSan || '').replace(/[+#?!]/g, '');
-
-      const isBeyond = moveReview.divergenceType === 'beyond_intuition' || moveReview.isBeyondIntuition;
-      const isTrap = moveReview.divergenceType === 'intuition_trap' || moveReview.isHumanTrap;
-
-      // Add match indicator on played card
-      if (isBeyond) {
-        this.setComparePlayedSan(moveReview.san, t('tagEngineBest'), 'var(--dg-blue-soft)', 'var(--brand-blue)');
-      } else if (isTrap) {
-        this.setComparePlayedSan(moveReview.san, t('tagTrap'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
-      } else if (cleanPlayed && cleanBest && cleanPlayed === cleanBest) {
-        this.setComparePlayedSan(moveReview.san, t('tagEngine'));
-      } else if (cleanPlayed && cleanMaia && cleanPlayed === cleanMaia) {
-        this.setComparePlayedSan(moveReview.san, t('tagIntuition'), 'var(--dg-gold-soft)', 'var(--brand-gold)');
-      } else if (moveReview.isBookMove) {
-        this.setComparePlayedSan(moveReview.san, t('tagBook'), 'var(--dg-blue-soft)', 'var(--brand-blue)');
-      } else {
-        this.setComparePlayedSan(moveReview.san);
-      }
-
-      // --- Badge ---
-      if (isBeyond) {
-        this.el.divergenceBadge.textContent = t('badgeBeyond');
-        this.el.divergenceBadge.style.color = 'var(--brand-blue)';
-        this.el.divergenceBadge.style.background = 'var(--dg-blue-soft)';
-      } else if (isTrap) {
-        this.el.divergenceBadge.textContent = t('badgeTrap');
-        this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-        this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
-      } else if (moveReview.isBookMove) {
-        this.el.divergenceBadge.textContent = `${t('badgeBook')}${moveReview.openingName ? ' · ' + moveReview.openingName : ''}`;
-        this.el.divergenceBadge.style.color = 'var(--brand-blue)';
-        this.el.divergenceBadge.style.background = 'var(--dg-blue-soft)';
-      } else if (moveReview.severity === 'blunder') {
-        this.el.divergenceBadge.textContent = t('badgeBlunder');
-        this.el.divergenceBadge.style.color = 'var(--brand-red)';
-        this.el.divergenceBadge.style.background = 'var(--dg-red-soft)';
-      } else if (moveReview.severity === 'mistake') {
-        this.el.divergenceBadge.textContent = t('badgeMistake');
-        this.el.divergenceBadge.style.color = 'var(--brand-red)';
-        this.el.divergenceBadge.style.background = 'var(--dg-red-soft)';
-      } else if (moveReview.severity === 'inaccuracy') {
-        this.el.divergenceBadge.textContent = t('badgeInaccuracy');
-        this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-        this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
-      } else {
-        this.el.divergenceBadge.textContent = t('badgeNormal');
-        this.el.divergenceBadge.style.color = 'var(--brand-green)';
-        this.el.divergenceBadge.style.background = 'var(--dg-green-soft)';
-      }
-
-      // Display detailed divergence note if present
-      if (moveReview.divergenceNote) {
-        this.el.divergenceContent.textContent = moveReview.divergenceNote;
-        this.el.divergenceContent.style.display = 'block';
-      } else {
-        this.el.divergenceContent.style.display = 'none';
-      }
-
-      // --- Arrows ---
-      // Green arrow: Stockfish best (only if different from played)
-      if (moveReview.bestUci && moveReview.bestUci.length >= 4 && cleanPlayed !== cleanBest) {
-        arrows.push({
-          from: moveReview.bestUci.slice(0, 2),
-          to: moveReview.bestUci.slice(2, 4),
-          color: 'blue',
-          label: moveReview.bestSan
-        });
-      }
-
-      // Gold arrow: Maia top pick (if different from both played and engine best)
-      if (moveReview.maiaTopUci && moveReview.maiaTopUci.length >= 4) {
-        const maiaFrom = moveReview.maiaTopUci.slice(0, 2);
-        const maiaTo = moveReview.maiaTopUci.slice(2, 4);
-        const isDiffFromBest = moveReview.maiaTopUci !== moveReview.bestUci;
-        const isDiffFromPlayed = cleanMaia !== cleanPlayed;
-        if (isDiffFromPlayed || isDiffFromBest) {
-          arrows.push({
-            from: maiaFrom,
-            to: maiaTo,
-            color: 'gold',
-            label: `${moveReview.maiaTopSan} ${moveReview.maiaTopProb != null ? moveReview.maiaTopProb.toFixed(0) + '%' : ''}`
-          });
-        }
-      }
-
-      // Red dashed arrow: played move (only if it's a blunder/mistake)
-      if ((moveReview.severity === 'blunder' || moveReview.severity === 'mistake') && moveReview.from && moveReview.to) {
-        arrows.push({
-          from: moveReview.from,
-          to: moveReview.to,
-          color: 'red',
-          dashed: true,
-          label: moveReview.san
-        });
-      }
-
-      this.boardUI.setArrows(arrows);
-    } else {
-      // Review data not yet computed for this ply - provide real-time dual-engine preview
-      this.el.divergenceBadge.textContent = t('badgeRealtime');
-      this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-
-      // Immediately display played move
-      this.el.comparePlayedSan.textContent = currentPos.san;
-      this.el.comparePlayedSan.style.color = 'var(--text-main)';
-      this.el.comparePlayedMeta.textContent = '';
-      this.el.comparePlayedCard.classList.remove('is-blunder');
-
-      // Set placeholders
-      this.el.compareEngineSan.textContent = t('statusCalculating');
-      this.el.compareEngineSan.style.color = 'var(--brand-gold)';
-      this.el.compareEngineMeta.textContent = '';
-      this.el.compareIntuitionSan.textContent = t('statusCalculating');
-      this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-      this.el.compareIntuitionMeta.textContent = '';
-
-      const prevPos = this.positions[this.currentPly - 1];
-      const evalFen = prevPos ? prevPos.fen : currentPos.fen;
-      const targetPly = this.currentPly;
-      const targetGameEpoch = this.gameEpoch;
-      const targetElo = this.currentElo;
-      const arrows = [];
-
-      // Fallback realtime Maia prediction
-      this.maiaEngine.predict(evalFen, targetElo).then(pred => {
-        if (this.gameEpoch !== targetGameEpoch || this.currentPly !== targetPly || this.currentElo !== targetElo) return;
-        if (pred && pred.moves && pred.moves.length > 0) {
-          const top = pred.moves[0];
-          this.el.compareIntuitionSan.textContent = top.san || '—';
-          this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-          this.el.compareIntuitionMeta.textContent = top.prob != null ? `${t('probLabel')} ${top.prob.toFixed(1)}%` : '';
-          if (top.uci) {
-            arrows.push({
-              from: top.uci.slice(0, 2),
-              to: top.uci.slice(2, 4),
-              color: 'gold',
-              label: `${top.san} (${top.prob}%)`
-            });
-            this.boardUI.setArrows(arrows);
-          }
-        } else {
-          this.el.compareIntuitionSan.textContent = '—';
-          this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
-        }
-      }).catch(err => {
-        console.warn('[Analysis Studio] Preview Maia prediction error:', err);
-      });
-
-      // Fallback realtime Stockfish evaluation
-      if (this.stockfish?.isReady) {
-        this.stockfish.evaluate(evalFen, 6, 2500, 1).then(sfRes => {
-          if (this.currentPly !== targetPly) return;
-          if (sfRes && sfRes.bestMove) {
-            this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
-            this.el.compareEngineSan.style.color = 'var(--brand-blue)';
-            const whiteScore = formatEvalObjWhite(sfRes, evalFen);
-            this.el.compareEngineMeta.textContent = `${t('evalLabel')} ${whiteScore}`;
-            arrows.push({
-              from: sfRes.bestMove.fromSq,
-              to: sfRes.bestMove.toSq,
-              color: 'blue',
-              label: sfRes.bestMove.san
-            });
-            this.boardUI.setArrows(arrows);
-          } else {
-            this.el.compareEngineSan.textContent = '—';
-            this.el.compareEngineSan.style.color = 'var(--text-dim)';
-          }
-        });
-      }
-    }
+    this.positionAnalysis.refresh();
   }
 
-  resetComparePanel() {
-    this.el.compareEngineSan.textContent = '—';
-    this.el.compareEngineSan.style.color = 'var(--text-dim)';
-    this.el.compareEngineMeta.textContent = '';
-    this.el.compareIntuitionSan.textContent = '—';
-    this.el.compareIntuitionSan.style.color = 'var(--text-dim)';
-    this.el.compareIntuitionMeta.textContent = '';
-    this.el.comparePlayedSan.textContent = '—';
-    this.el.comparePlayedSan.style.color = 'var(--text-dim)';
-    this.el.comparePlayedMeta.textContent = '';
-    this.el.comparePlayedCard.classList.remove('is-blunder');
-    if (this.el.divergenceBadge) {
-      this.el.divergenceBadge.textContent = t('divergenceBadgeDefault');
-      this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-      this.el.divergenceBadge.style.background = 'var(--dg-gold-soft)';
-    }
+  resetPositionPanel() {
+    this.el.divergenceContent.hidden = true;
+    this.el.divergenceContent.textContent = '';
+    this.positionAnalysis?.renderGauge(null);
   }
 
+  previewCandidate(context, variation) {
+    if (this.isPlaying) this.toggleAutoPlay();
+    this.hasAnalysisInput = true;
+    this.isBranching = true;
+    this.branchFen = variation.at(-1).fen;
+    this.branchHistory = [...context.history, context.fen, ...variation.slice(0, -1).map(move => move.fen)].slice(-7);
+    this.el.branchBanner.style.display = 'flex';
+    this.boardUI.setPosition(this.branchFen, { from: variation.at(-1).uci.slice(0, 2), to: variation.at(-1).uci.slice(2, 4) });
+    this.el.boardStatusText.textContent = t('branchMoveIndicator', { move: variation.map(move => move.label).join(' ') });
+    soundEffects.playSoundForMove(variation.at(-1).san);
+    this.updateActivePositionAnalysis();
+  }
 
   handleUserBoardMove(move, newFen) {
-    // 1. Check if user's move matches the next mainline move
-    const nextMainlinePos = this.positions[this.currentPly + 1];
-    if (!this.isBranching && nextMainlinePos && (nextMainlinePos.uci === move.uci || (nextMainlinePos.from === move.fromSq && nextMainlinePos.to === move.toSq))) {
-      this.goToPly(this.currentPly + 1);
+    const next = this.positions[this.currentPly + (this.isReviewingMove ? 0 : 1)];
+    if (!this.isBranching && next?.uci === move.uci) {
+      this.goToPly(this.currentPly + (this.isReviewingMove ? 0 : 1));
       return;
     }
-
-    // 2. User branched away from the mainline!
-    this.isBranching = true;
-    soundEffects.playSoundForMove(move.san || move.uci);
-    this.branchFen = newFen;
-    this.el.branchBanner.style.display = 'flex';
-    this.el.boardStatusText.textContent = t('branchMoveIndicator', { move: move.san || move.uci });
-
-    this.el.divergenceBadge.textContent = t('badgeBranch');
-    this.el.divergenceBadge.style.color = 'var(--brand-gold)';
-    this.resetComparePanel();
-    this.el.comparePlayedSan.textContent = move.san || move.uci;
-    this.el.comparePlayedSan.style.color = 'var(--text-main)';
-
-    // Realtime dual-engine evaluation on branch position
-    const arrows = [];
-
-    // Maia Prediction (instant)
-    this.maiaEngine.predict(newFen, this.currentElo).then(pred => {
-      if (!this.isBranching || this.branchFen !== newFen) return;
-      if (pred && pred.moves && pred.moves.length > 0) {
-        const m = pred.moves[0];
-        this.el.compareIntuitionSan.textContent = m.san || '—';
-        this.el.compareIntuitionSan.style.color = 'var(--brand-gold)';
-        this.el.compareIntuitionMeta.textContent = m.prob != null ? `${t('probLabel')} ${m.prob.toFixed(1)}%` : '';
-        if (m.uci) {
-          arrows.push({
-            from: m.uci.slice(0, 2),
-            to: m.uci.slice(2, 4),
-            color: 'gold',
-            label: `${m.san} (${m.prob}%)`
-          });
-          this.boardUI.setArrows(arrows);
-        }
-      }
-    });
-
-    // Stockfish Evaluation (fast background)
-    if (this.stockfish.isReady) {
-      this.stockfish.evaluate(newFen, 6, 2500, 1).then(sfRes => {
-        if (!this.isBranching || this.branchFen !== newFen) return;
-        if (sfRes && sfRes.bestMove) {
-          this.el.compareEngineSan.textContent = sfRes.bestMove.san || '—';
-          this.el.compareEngineSan.style.color = 'var(--brand-blue)';
-          const whiteScore = formatEvalObjWhite(sfRes, newFen);
-          this.el.compareEngineMeta.textContent = `${t('evalLabel')} ${whiteScore} (d${sfRes.depth})`;
-          arrows.push({
-            from: sfRes.bestMove.fromSq,
-            to: sfRes.bestMove.toSq,
-            color: 'blue',
-            label: `${sfRes.bestMove.san || ''} (${whiteScore})`
-          });
-          this.boardUI.setArrows(arrows);
-        }
-      });
-    }
+    const context = this.positionAnalysis.context();
+    this.previewCandidate(context, [{ ...move, label: move.san || move.uci, fen: newFen }]);
   }
 
   exitBranchMode() {
     if (!this.isBranching) return;
     this.isBranching = false;
     this.branchFen = null;
+    this.branchHistory = [];
     this.el.branchBanner.style.display = 'none';
   }
 }

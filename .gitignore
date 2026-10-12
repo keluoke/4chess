@@ -1,8 +1,9 @@
-# Checkpoints and models (large binaries >25MB forbidden in repo / Cloudflare Pages)
+# Large binaries >25MB forbidden in repo / Cloudflare Pages
 *.pt
 *.onnx
+models/maia*
 *.bin
-models/*.bin
+!models/chessimg2pos_weights.bin
 
 # Python
 __pycache__/

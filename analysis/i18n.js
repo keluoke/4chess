@@ -8,6 +8,43 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    // Compact two-column review studio
+    reviewSettings: "复盘设置",
+    btnClose: "关闭",
+    currentPosition: "当前局面",
+    reviewThisMove: "回看此步",
+    engineCandidates: "引擎",
+    intuitionCandidates: "直觉",
+    positionAnalysis: "当前局面分析",
+    notationHeading: "记谱",
+    keyMovesHeading: "关键步",
+    positionStrength: "局面分析强度",
+    strengthStandard: "标准",
+    strengthDeep: "深入",
+    showCandidateArrows: "显示候选箭头",
+    showIntuitionHeatmap: "显示直觉热力图",
+    showIntuitionProbability: "显示直觉概率",
+    boardOrientation: "棋盘方向",
+    whiteAtBottom: "白方在下",
+    blackAtBottom: "黑方在下",
+    whiteToMove: "白方行棋",
+    blackToMove: "黑方行棋",
+    whitePerspectiveScore: "白方视角得分：{score}",
+    candidateDepth: "深度 {depth}",
+    engineFailed: "启动失败",
+    engineReady: "就绪",
+    engineStarting: "启动中",
+    engineNotStarted: "未启动",
+    candidatesAfterReview: "整盘分析中，完成后显示当前局面候选",
+    positionUnavailable: "局面评估暂不可用，切步或重新分析可重试",
+    intuitionUnavailable: "直觉预测暂不可用",
+    noLegalMoves: "当前局面无合法着法",
+    positionCheckmate: "将死",
+    positionDraw: "无合法着法 · 和棋",
+    previewCandidate: "试演 {move}",
+    engineContinuation: "后续变化由引擎计算，概率仅对应 Maia 首选着法",
+    reviewMoveBefore: "回看第 {number} 步 {move} · 走前局面",
+
     // Header & Meta
     appTitle: '歧路 Diverge · 全盘分析',
     studioName: '歧路 Diverge',
@@ -187,6 +224,43 @@ export const DICTIONARY = {
   },
 
   en: {
+    // Compact two-column review studio
+    reviewSettings: "Review settings",
+    btnClose: "Close",
+    currentPosition: "Position",
+    reviewThisMove: "Review move",
+    engineCandidates: "Engine",
+    intuitionCandidates: "Intuition",
+    positionAnalysis: "Current position analysis",
+    notationHeading: "Moves",
+    keyMovesHeading: "Key moves",
+    positionStrength: "Position analysis strength",
+    strengthStandard: "Standard",
+    strengthDeep: "Deep",
+    showCandidateArrows: "Show candidate arrows",
+    showIntuitionHeatmap: "Show intuition heatmap",
+    showIntuitionProbability: "Show move probabilities",
+    boardOrientation: "Board orientation",
+    whiteAtBottom: "White at bottom",
+    blackAtBottom: "Black at bottom",
+    whiteToMove: "White to move",
+    blackToMove: "Black to move",
+    whitePerspectiveScore: "White’s perspective: {score}",
+    candidateDepth: "Depth {depth}",
+    engineFailed: "Failed to start",
+    engineReady: "Ready",
+    engineStarting: "Starting",
+    engineNotStarted: "Not started",
+    candidatesAfterReview: "Game review in progress; position candidates follow",
+    positionUnavailable: "Position evaluation unavailable; navigate or reanalyze to retry",
+    intuitionUnavailable: "Intuition prediction unavailable",
+    noLegalMoves: "No legal moves in this position",
+    positionCheckmate: "Checkmate",
+    positionDraw: "No legal moves · Draw",
+    previewCandidate: "Explore {move}",
+    engineContinuation: "Continuation calculated by the engine; probability applies to the first Maia move only",
+    reviewMoveBefore: "Review {number}. {move} · Before the move",
+
     // Header & Meta
     appTitle: 'Diverge · Game Review Studio',
     studioName: 'Diverge',
@@ -224,7 +298,7 @@ export const DICTIONARY = {
     // Eval Chart
     evalChartTitle: 'Evaluation Trend',
     chartLegendBeyond: '✨ Brilliant',
-    chartLegendTrap: '🫤 Inaccuracy',
+    chartLegendTrap: '🫤 Intuition trap',
     chartLegendBlunder: 'Blunder',
     chartLegendMistake: 'Mistake',
     chartLegendInaccuracy: 'Inaccuracy',
@@ -258,7 +332,7 @@ export const DICTIONARY = {
     // Move Classification Badges
     badgeOpening: '♟️ Opening',
     badgeBeyond: '✨ Brilliant · Beyond Human Intuition',
-    badgeTrap: '🫤 Inaccuracy · Natural but Costly',
+    badgeTrap: '🫤 Intuition trap · Natural but costly',
     badgeBook: '📖 Opening Theory',
     badgeBlunder: '⚠️ Blunder',
     badgeMistake: '⚠️ Mistake',
@@ -269,7 +343,7 @@ export const DICTIONARY = {
 
     // Played Move Tags
     tagEngineBest: '= Engine Best ✨',
-    tagTrap: '= Inaccuracy 🫤',
+    tagTrap: '= Intuition trap 🫤',
     tagIntuition: '= Intuition',
     tagEngine: '= Engine',
     tagBook: '📖 Book Move',
@@ -282,7 +356,7 @@ export const DICTIONARY = {
     tabNotation: 'Notation ({count})',
     filterAll: 'All ({count})',
     filterBeyond: '✨ Brilliant ({count})',
-    filterTrap: '🫤 Inaccuracy ({count})',
+    filterTrap: '🫤 Intuition trap ({count})',
     loadingGameData: 'Loading game data...',
     noBeyondDetected: 'No brilliant moves detected in this game.',
     noTrapDetected: 'No inaccurate intuition traps detected in this game.',
@@ -296,8 +370,8 @@ export const DICTIONARY = {
     naturalIntuitionTop: 'Natural intuition: ',
     betterThanIntuition: ' · Over intuition +{pawns} pawns',
     playedEngineBest: 'Played engine best, outperforming natural intuition',
-    trapTitle: '🫤 Inaccuracy: Natural human choice that looks appealing, but incurs a loss of advantage.',
-    trapText: '🫤 Inaccuracy',
+    trapTitle: '🫤 Intuition trap: Natural human choice that looks appealing, but incurs a loss of advantage.',
+    trapText: '🫤 Intuition trap',
     lossPawns: 'Loss -{loss} pawns',
     bestMoveIs: 'Best move: ',
     trapTopTendency: 'Top intuition pick ({prob}% tendency)',
@@ -406,6 +480,10 @@ export function applyTranslations() {
     if (translated && translated !== key) {
       el.title = translated;
     }
+  });
+
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+    el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
   });
 
   // Update elements with data-i18n-placeholder

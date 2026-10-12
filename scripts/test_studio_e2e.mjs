@@ -145,10 +145,10 @@ const testResult = await send('Runtime.evaluate', {
     const plyAfterClick = app.currentPly;
     const statusTextAfterMove = document.getElementById('board-status-text')?.textContent;
 
-    // 3. Test Three-Way Comparison Panel
-    const engineSan = document.getElementById('compare-engine-san')?.textContent;
-    const intuitionSan = document.getElementById('compare-intuition-san')?.textContent;
-    const playedSan = document.getElementById('compare-played-san')?.textContent;
+    // 3. Inspect compact candidate lines and the selected actual move
+    const engineSan = document.querySelector('#engine-candidate-lines .candidate-move')?.textContent;
+    const intuitionSan = document.querySelector('#maia-candidate-lines .candidate-move')?.textContent;
+    const playedSan = app.positions[app.currentPly]?.san;
 
     // 4. Test Clicking First Blunder Card (should trigger goToPly)
     let cardClickPly = null;
