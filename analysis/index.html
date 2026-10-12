@@ -11,8 +11,8 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
-  <link rel="stylesheet" href="../ui/theme.css?v=20261012-review4">
-  <link rel="stylesheet" href="analysis.css?v=20261012-review4">
+  <link rel="stylesheet" href="../ui/theme.css?v=20261012-review5">
+  <link rel="stylesheet" href="analysis.css?v=20261012-review5">
 </head>
 <body class="diverge-ui">
   <script>
@@ -177,6 +177,10 @@
   <dialog class="review-settings-dialog" id="review-settings" data-i18n-aria="reviewSettings" aria-label="复盘设置">
     <div class="settings-heading"><h2 data-i18n="reviewSettings">复盘设置</h2><button type="button" class="btn-header" id="btn-close-settings" data-i18n="btnClose">关闭</button></div>
     <div class="settings-fields">
+      <label><span data-i18n="engineEdition">引擎版本</span><select id="engine-edition" class="btn-header"><option value="lite" data-i18n="sfLiteEdition">SF19 轻量版</option><option value="standard" data-i18n="sfStandardEdition">SF19 标准版</option></select></label>
+      <label><span data-i18n="intuitionEdition">直觉版本</span><select id="intuition-edition" class="btn-header"><option value="5m">Maia-3 5M</option><option value="79m">Maia-3 79M</option></select></label>
+      <p class="settings-model-note" data-i18n="largeModelNote">标准版约 95 MB，79M 版约 159 MB；首次下载后保存在浏览器，切换版本会重新分析。</p>
+      <p class="settings-model-note" id="extension-standard-note" hidden><a href="https://4chess.cc/analysis/" target="_blank" rel="noopener" data-i18n="standardWebOnly">SF19 标准版请在网页版使用</a></p>
       <label><span data-i18n="eloLabel">直觉 ELO</span><select id="elo-selector" class="btn-header"><option value="1100" data-i18n="eloBeginner">1100 (初学)</option><option value="1500" data-i18n="eloIntermediate">1500 (进阶)</option><option value="1900" selected data-i18n="eloClub">1900 (俱乐部)</option><option value="2200" data-i18n="eloMaster">2200 (大师)</option></select></label>
       <label><span data-i18n="positionStrength">局面分析强度</span><select id="position-depth" class="btn-header"><option value="10" data-i18n="strengthStandard">标准</option><option value="14" data-i18n="strengthDeep">深入</option></select></label>
       <label><span data-i18n="showCandidateArrows">显示候选箭头</span><input type="checkbox" id="setting-arrows" checked></label>
@@ -184,7 +188,7 @@
       <label><span data-i18n="showIntuitionProbability">显示直觉概率</span><input type="checkbox" id="setting-probability" checked></label>
       <label><span data-i18n="boardOrientation">棋盘方向</span><select id="setting-orientation" class="btn-header"><option value="white" data-i18n="whiteAtBottom">白方在下</option><option value="black" data-i18n="blackAtBottom">黑方在下</option></select></label>
     </div>
-    <div class="settings-engine-status"><div class="engine-status-pill" id="status-sf"><span class="status-dot" id="dot-sf"></span><span>Stockfish 19</span><span id="text-status-sf"></span></div><div class="engine-status-pill" id="status-maia"><span class="status-dot" id="dot-maia"></span><span>Maia 3</span><span id="text-status-maia"></span></div></div>
+    <div class="settings-engine-status"><div class="engine-status-pill" id="status-sf"><span class="status-dot" id="dot-sf"></span><span id="name-status-sf">Stockfish 19 Lite</span><span id="text-status-sf"></span></div><div class="engine-status-pill" id="status-maia"><span class="status-dot" id="dot-maia"></span><span id="name-status-maia">Maia-3 5M</span><span id="text-status-maia"></span></div></div>
   </dialog>
 
   <!-- Drag & Drop Overlay -->
@@ -225,12 +229,12 @@
     </div>
   </div>
 
-  <script type="module" src="../ui/theme.js?v=20261012-review4"></script>
-  <script type="module" src="analysis.js?v=20261012-review4"></script>
+  <script type="module" src="../ui/theme.js?v=20261012-review5"></script>
+  <script type="module" src="analysis.js?v=20261012-review5"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261012-review4').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261012-review5').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

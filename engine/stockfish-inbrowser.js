@@ -7,11 +7,17 @@
  */
 
 import { ChessBoard } from './chess-core.js';
+import { ModelCache } from './model-cache.js';
+import { STOCKFISH_VARIANTS } from './engine-variants.js';
 
 export class StockfishInBrowser {
-  constructor() {
+  constructor({ variant = 'lite' } = {}) {
+    this.variant = STOCKFISH_VARIANTS[variant] ? variant : 'lite';
+    this.engineKey = STOCKFISH_VARIANTS[this.variant].key;
+    this.lifecycleEpoch = 0;
+    this.wasmBlobUrl = null;
     this.isReady = false;
-    this.engineName = 'Stockfish 19 Lite WASM';
+    this.engineName = this.variant === 'standard' ? 'Stockfish 19 WASM' : 'Stockfish 19 Lite WASM';
     this.worker = null;
     this.iframe = null;
     this.pendingRequests = new Map();
@@ -45,6 +51,19 @@ export class StockfishInBrowser {
 
       this._readyResolve = resolve;
 
+      if (this.variant === 'standard') {
+        const epoch = this.lifecycleEpoch;
+        this.initStandardWorker(epoch).catch(err => {
+          if (this.lifecycleEpoch !== epoch) return;
+          this.lastError = err.message;
+          const done = this._readyResolve;
+          this._readyResolve = null;
+          this.initPromise = null;
+          done?.(false);
+        });
+        return;
+      }
+
       // Mode A: Direct Dedicated Worker
       // Applicable on extension pages (chrome-extension://) or standalone pages not subject to host CSP
       const isExtensionPage = typeof chrome !== 'undefined' && chrome.runtime?.getURL && window.location.protocol === 'chrome-extension:';
@@ -71,6 +90,25 @@ export class StockfishInBrowser {
     });
 
     return this.initPromise;
+  }
+
+  async initStandardWorker(epoch) {
+    // MV3 extension packages use the bundled Lite WASM; the web studio can load CDN WASM.
+    if (location.protocol === 'chrome-extension:') throw new Error('Standard Stockfish is available in the web studio');
+    const spec = STOCKFISH_VARIANTS.standard;
+    let buffer = await ModelCache.getModel(spec.key);
+    if (epoch !== this.lifecycleEpoch) return;
+    if (!buffer || buffer.byteLength !== spec.bytes) {
+      this.downloadController = new AbortController();
+      const response = await fetch(spec.wasmUrl, { signal: this.downloadController.signal });
+      if (!response.ok) throw new Error(`Stockfish download HTTP ${response.status}`);
+      buffer = await response.arrayBuffer();
+      if (buffer.byteLength !== spec.bytes) throw new Error('Invalid standard Stockfish binary');
+      await ModelCache.saveModel(spec.key, buffer);
+    }
+    if (epoch !== this.lifecycleEpoch) return;
+    this.wasmBlobUrl = URL.createObjectURL(new Blob([buffer], { type: 'application/wasm' }));
+    this.initDirectWorker(new URL('../lib/stockfish-19-standard.js', import.meta.url).href + '#' + encodeURIComponent(this.wasmBlobUrl));
   }
 
   initDirectWorker(scriptUrl) {
@@ -234,12 +272,22 @@ export class StockfishInBrowser {
 
       this._initTimeout = setTimeout(() => {
         if (!this.isReady) {
-          console.warn('[Stockfish In-Browser] Direct worker init timeout, falling back to iframe');
-          this.initIframeBridge();
+          if (this.variant === 'standard') {
+            this.lastError = 'Standard Stockfish initialization timed out';
+            this.worker?.terminate();
+            const done = this._readyResolve;
+            this._readyResolve = null;
+            this.initPromise = null;
+            done?.(false);
+          } else {
+            console.warn('[Stockfish In-Browser] Direct worker init timeout, falling back to iframe');
+            this.initIframeBridge();
+          }
         }
-      }, 5000);
+      }, this.variant === 'standard' ? 30000 : 5000);
     } catch (e) {
       console.warn('[Stockfish In-Browser] Failed to spawn direct worker:', e);
+      if (this.variant === 'standard') throw e;
       this.initIframeBridge();
     }
   }
@@ -572,6 +620,19 @@ export class StockfishInBrowser {
   }
 
   reset() {
+    this.lifecycleEpoch++;
+    this.downloadController?.abort();
+    this._readyResolve?.(false);
+    for (const pending of this.pendingRequests.values()) pending.resolve(null);
+    this.pendingRequests.clear();
+    this.activeRequest = null;
+    this.queuedRequest = null;
+    this.isSearching = false;
+    this.isStopping = false;
+    this.multiPvMap.clear();
+    this.lastInfo = null;
+    if (this.wasmBlobUrl) URL.revokeObjectURL(this.wasmBlobUrl);
+    this.wasmBlobUrl = null;
     if (this._initTimeout) {
       clearTimeout(this._initTimeout);
       this._initTimeout = null;

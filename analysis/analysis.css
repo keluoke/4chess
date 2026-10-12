@@ -1477,3 +1477,16 @@ body{font-size:14px;user-select:auto}
 @media (max-width: 720px) { .studio-layout { gap: 20px; } .board-with-evaluation { grid-template-columns: 32px minmax(0, 1fr); gap: 7px; } .studio-header-actions { flex-wrap: wrap; margin-left: 0; } .studio-header-center { min-width: 0; } .game-meta-badge { overflow-wrap: anywhere; } .settings-fields label { flex-wrap: wrap; } }
 @media (max-width: 360px) { .btn-nav-group { gap: 3px; } .btn-nav { min-width: 36px; } }
 @media (prefers-reduced-motion: reduce) { .gauge-white, .gauge-black { transition: none; } }
+
+.settings-model-note { font-size: 11px; line-height: 1.7; color: var(--text-muted); margin: -3px 0 2px; }
+.settings-model-note[hidden] { display: none; }
+.settings-model-note a { color: var(--brand-green); }
+/* Keep board geometry stable while the complete review scrolls on the right. */
+@media (min-width: 721px) {
+  body { height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .studio-navbar { flex: 0 0 auto; }
+  .studio-layout { flex: 1; min-height: 0; overflow: hidden; align-items: start; }
+  .board-column { align-self: start; justify-self: center; width: 100%; max-width: min(100%, calc(100dvh - var(--studio-header-height, 80px) - 166px)); }
+  .analysis-column { height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding-right: 8px; }
+  .analysis-column > * { flex: 0 0 auto; }
+}

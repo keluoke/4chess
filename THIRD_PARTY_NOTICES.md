@@ -59,6 +59,16 @@ This document describes the third-party open-source components, models, and deri
 
 ## 3. Licenses & Component Boundary Matrix
 
+### Optional studio engines (2026-10-12)
+
+- **SF19 Standard** uses the unmodified full single-thread glue from `stockfish@19.0.0`, `bin/stockfish-19-single.js` (GPLv3). Corresponding source: [nmrugg/stockfish.js v19.0.0](https://github.com/nmrugg/stockfish.js/tree/54fde71d90c7c403964f6cacef48f7bbec495df1). The complete NNUE WASM is served from `https://weights.4chess.cc/engines/stockfish-19-standard-v1.wasm`, outside Git and the Pages package. Single-thread mode retains the full network and does not require cross-origin isolation.
+  - Glue SHA-256: `72772f8bdd7353e4e24245d946bb831f56bcccf02fa16a779c1b92a6c00e5cc2`
+  - WASM: 99,102,793 bytes; SHA-256 `8725c26572762617fd96b2ea83ff130e6640b85815890d682bf8c49db0820721`
+- **Maia-3 79M** comes from [UofTCSSLab/Maia3-79M](https://huggingface.co/UofTCSSLab/Maia3-79M), `maia3-79m.pt`, checkpoint SHA-256 `3fc6181d5db789b45a15305732148757ae74efa3e0028e81ba335b462dac45c2`. `scripts/export_weights.py` exports FP16 storage; inference converts tensors to Float32. The CDN artifact `https://weights.4chess.cc/maia3_79m_fp16_v1.bin` has 83,094,020 tensor parameters, width 1024, 32 heads and 8 blocks. Weight terms follow the upstream checkpoint; the derived JS implementation retains its existing AGPL notice.
+  - Export: 166,207,884 bytes; SHA-256 `17ffc09325bedd55e4696fe353fbdd9d65351cc4f724af894af0b58d5670f454`
+
+Both optional artifacts are downloaded on selection/use and cached separately in IndexedDB. Neither binary is included in the extension package. SF19 Standard is offered in the web studio; MV3 extension pages keep the bundled Lite engine.
+
 | Component | Upstream / Authors | License | Scope / Boundary | Source / Artifact |
 |---|---|---|---|---|
 | **Diverge Extension UI & Bridge** | Diverge Contributors | **MIT** | UI layouts, CSS, board detector, state management | [LICENSE](LICENSE) |

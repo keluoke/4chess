@@ -19,8 +19,9 @@ self.onmessage = async (e) => {
       try {
         await engine.loadModel(data?.url, (prog) => {
           self.postMessage({ type: 'progress', data: prog });
-        });
-        self.postMessage({ type: 'loadModel_result', success: true });
+        }, data?.expected);
+        const { dim_vit, num_heads, num_blocks, total_params } = engine.meta;
+        self.postMessage({ type: 'loadModel_result', success: true, data: { dim_vit, num_heads, num_blocks, total_params } });
       } catch (err) {
         self.postMessage({
           type: 'loadModel_result',

@@ -126,10 +126,48 @@ try {
   });
   assert.equal(await page.locator('#move-ply-80').count(), 1, 'A long game retains its complete notation');
   assert.equal(await page.locator('#move-notation-table').evaluate(el => el.clientHeight <= 260 && el.scrollHeight > el.clientHeight), true, 'Long notation scrolls within its section');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    app.renderBlunderCards(Array.from({ length: 40 }, (_, i) => ({
+      ply: i * 2 + 2, san: app.positions[i * 2 + 2].san, turn: 'b', moveNumber: i + 1,
+      fenBefore: app.positions[i * 2 + 1].fen, divergenceType: 'intuition_trap',
+      maiaTopSan: 'e5', maiaTopProb: 38, maiaTop1Loss: 1.2, lossPawns: 1.2
+    })));
+    document.activeElement?.blur();
+  });
+  const boardBox = await page.locator('#board-container').boundingBox();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('End');
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.currentPly), 80);
+  assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBox, 'Keyboard navigation must leave board position and size unchanged');
+  assert.equal(await page.evaluate(() => scrollY), 0);
+  assert.equal(await page.locator('.analysis-column').evaluate(el => el.scrollTop > 0), true, 'Current key move scrolls only the right review column');
+  await page.locator('.analysis-column').hover();
+  await page.mouse.wheel(0, -650);
+  await page.waitForTimeout(200);
+  assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBox, 'Scrolling the right column must not move the board');
+  await page.keyboard.press('Home');
+  assert.equal(await page.locator('#move-notation-table').evaluate(el => el.scrollTop), 0);
+  await page.locator('#btn-settings').click();
+  assert.equal(await page.locator('#engine-edition option[value="standard"]').textContent(), 'SF19 Standard');
+  assert.equal(await page.locator('#intuition-edition option[value="79m"]').textContent(), 'Maia-3 79M');
+  await page.keyboard.press('Escape');
   for (const width of [320, 390, 736, 1024]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `No horizontal overflow at ${width}px`);
   }
+  assert.equal(await page.evaluate(async () => {
+    const { ModelCache } = await import('../engine/model-cache.js');
+    const buffer = new Uint8Array(64 * 1024 * 1024 + 7);
+    for (const index of [0, 32 * 1024 * 1024 - 1, 32 * 1024 * 1024, buffer.length - 1]) buffer[index] = 71;
+    await ModelCache.saveModel('small-fixture', new Uint8Array([8, 9]).buffer);
+    if (!await ModelCache.saveModel('chunked-fixture', buffer.buffer)) return false;
+    const restored = new Uint8Array(await ModelCache.getModel('chunked-fixture'));
+    if (restored.length !== buffer.length || [0, 32 * 1024 * 1024 - 1, 32 * 1024 * 1024, buffer.length - 1].some(index => restored[index] !== 71)) return false;
+    await ModelCache.clearCache('chunked-fixture');
+    return await ModelCache.getModel('chunked-fixture') === null && (await ModelCache.getModel('small-fixture')).byteLength === 2;
+  }), true, 'Chunked IndexedDB weights round-trip across boundaries; clearing one model preserves another');
   assert.deepEqual(errors, []);
   assert.equal(staleRequests, 0, 'Versioned style and shared translations bypass the deliberately stale four-hour responses');
   console.log('✅ Browser UI passed: real Stockfish, bilingual layout, original controls, before/after positions, candidate rehearsal, settings, heatmap, sound, key filters, stale-game isolation and responsive widths. Maia uses a deterministic fixture in this regression.');

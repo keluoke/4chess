@@ -8,6 +8,12 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    engineEdition: "引擎版本",
+    intuitionEdition: "直觉版本",
+    sfLiteEdition: "SF19 轻量版",
+    sfStandardEdition: "SF19 标准版",
+    largeModelNote: "标准版约 95 MB，79M 版约 159 MB；首次下载后保存在浏览器，切换版本会重新分析。",
+    standardWebOnly: "SF19 标准版请在网页版使用",
     // Compact two-column review studio
     reviewSettings: "复盘设置",
     btnClose: "关闭",
@@ -224,6 +230,12 @@ export const DICTIONARY = {
   },
 
   en: {
+    engineEdition: "Engine version",
+    intuitionEdition: "Intuition model",
+    sfLiteEdition: "SF19 Lite",
+    sfStandardEdition: "SF19 Standard",
+    largeModelNote: "Standard: about 95 MB; 79M: about 159 MB. Cached in your browser after download. Switching versions starts a new review.",
+    standardWebOnly: "Use SF19 Standard in the web studio",
     // Compact two-column review studio
     reviewSettings: "Review settings",
     btnClose: "Close",

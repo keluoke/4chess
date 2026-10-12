@@ -7,6 +7,8 @@
 const DB_NAME = 'Maia3ModelCache';
 const STORE_NAME = 'model_binaries';
 const DB_VERSION = 1;
+// Chrome caps a single serialized IndexedDB value. Keep 79M weights below it.
+const CHUNK_BYTES = 32 * 1024 * 1024;
 
 export class ModelCache {
   static openDB() {
@@ -56,6 +58,21 @@ export class ModelCache {
             resolve(buf);
           } else if (res.buffer instanceof ArrayBuffer) {
             resolve(res.buffer);
+          } else if (Number.isInteger(res.chunks) && res.chunks > 0 && res.chunks <= 128 && Number.isInteger(res.byteLength) && res.byteLength > 0) {
+            const reads = Array.from({ length: res.chunks }, (_, index) => new Promise(done => {
+              const chunk = store.get(`${key}::chunk:${index}`);
+              chunk.onsuccess = () => done(chunk.result);
+              chunk.onerror = () => done(null);
+            }));
+            try {
+              const chunks = await Promise.all(reads);
+              if (chunks.some(chunk => !(chunk instanceof ArrayBuffer)) || chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0) !== res.byteLength) { resolve(null); return; }
+              const buffer = new Uint8Array(res.byteLength);
+              let offset = 0;
+              for (const chunk of chunks) { buffer.set(new Uint8Array(chunk), offset); offset += chunk.byteLength; }
+              console.log(`[ModelCache] Loaded chunked model (${(res.byteLength / 1024 / 1024).toFixed(1)} MB)`);
+              resolve(buffer.buffer);
+            } catch { resolve(null); }
           } else {
             resolve(null);
           }
@@ -77,14 +94,23 @@ export class ModelCache {
       return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const req = store.put(arrayBuffer, key);
-
-        req.onsuccess = () => {
-          console.log(`[ModelCache] 💾 模型已永久缓存至 IndexedDB，后续访问 0ms 秒开！`);
+        if (arrayBuffer.byteLength > CHUNK_BYTES) {
+          const count = Math.ceil(arrayBuffer.byteLength / CHUNK_BYTES);
+          for (let index = 0; index < count; index++) {
+            store.put(arrayBuffer.slice(index * CHUNK_BYTES, Math.min((index + 1) * CHUNK_BYTES, arrayBuffer.byteLength)), `${key}::chunk:${index}`);
+          }
+          store.put({ chunks: count, byteLength: arrayBuffer.byteLength }, key);
+        } else {
+          store.put(arrayBuffer, key);
+        }
+        tx.oncomplete = () => {
+          db.close();
+          console.log('[ModelCache] Model committed to IndexedDB');
           resolve(true);
         };
-        req.onerror = () => {
-          console.warn('[ModelCache] Failed to save to IndexedDB:', req.error);
+        tx.onabort = tx.onerror = () => {
+          db.close();
+          console.warn('[ModelCache] Failed to save to IndexedDB:', tx.error);
           resolve(false);
         };
       });
@@ -102,9 +128,15 @@ export class ModelCache {
       return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const req = store.delete(key);
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => resolve(false);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (Number.isInteger(req.result?.chunks)) {
+            for (let index = 0; index < req.result.chunks; index++) store.delete(`${key}::chunk:${index}`);
+          }
+          store.delete(key);
+        };
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onabort = tx.onerror = () => { db.close(); resolve(false); };
       });
     } catch (e) {
       return false;

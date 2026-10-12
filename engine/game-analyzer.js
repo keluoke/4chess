@@ -591,10 +591,10 @@ export class GameAnalyzer {
    * Generates a stable unique cache key for the current game
    */
   static getGameKey(moves, options = {}) {
-    const { depth = 6, elo = 1900 } = options;
+    const { depth = 6, elo = 1900, engineKey = 'sf19lite', modelKey = 'maia3-5m' } = options;
     const startFen = moves?.startFen || 'start';
     const moveSans = (moves || []).map(m => m.san || '').join(',');
-    const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|sf19lite`);
+    const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|${engineKey}|${modelKey}`);
 
     if (typeof window !== 'undefined') {
       const href = window.location.href;
@@ -735,6 +735,8 @@ export class GameAnalyzer {
         acplBlack: result.acplBlack,
         elo: result.elo,
         depth: result.depth,
+        engineKey: result.engineKey,
+        modelKey: result.modelKey,
         cachedAt: Date.now(),
         allMoves: (result.allMoves || []).map(m => ({
           ...m,
@@ -783,7 +785,7 @@ export class GameAnalyzer {
       onProgress = null
     } = options;
 
-    const cacheKey = GameAnalyzer.getGameKey(moves, { depth, elo });
+    const cacheKey = GameAnalyzer.getGameKey(moves, { depth, elo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
 
     // 1. Instant Cache Hit Check (0ms response)
     if (!forceRefresh && cacheKey) {
@@ -1319,6 +1321,8 @@ export class GameAnalyzer {
         gameKey: cacheKey,
         elo,
         depth,
+        engineKey: this.stockfish.engineKey || 'sf19lite',
+        modelKey: this.maiaEngine.modelKey || 'maia3-5m',
         totalMoves: positions.length - 1,
         isPartial: !!positions.isPartial,
         stoppedAtPly: positions.stoppedAtPly || null,

@@ -36,13 +36,14 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
   }
 
-  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null) {
+  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null) {
     if (this.isReady) return true;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
       try {
         let arrayBuffer = null;
+        let downloadedCacheKey = null;
 
       if (urlOrBuffer instanceof ArrayBuffer) {
         arrayBuffer = urlOrBuffer;
@@ -52,7 +53,7 @@ export class MaiaInBrowserEngine {
         // 1. Try loading from persistent IndexedDB cache (0ms instant)
         try {
           let cached = await ModelCache.getModel(cacheKey);
-          if (!cached) {
+          if (!cached && urlOrBuffer === 'https://weights.4chess.cc/maia3_model.bin') {
             // Check legacy fallback keys
             cached = (await ModelCache.getModel('maia3_model')) || (await ModelCache.getModel('maia3-5m'));
           }
@@ -128,17 +129,19 @@ export class MaiaInBrowserEngine {
               }
               arrayBuffer = allBytes.buffer;
             } catch (streamErr) {
-              console.warn('[Maia-3] ReadableStream read error, fallback to arrayBuffer():', streamErr);
-              arrayBuffer = await res.arrayBuffer();
+              // A partially consumed Response cannot be read a second time.
+              // Retry the download with a fresh response; never cache partial weights.
+              console.warn('[Maia-3] Stream interrupted, retrying model download:', streamErr);
+              const retry = await fetch(fetchUrl);
+              if (!retry.ok) throw new Error(`HTTP ${retry.status}: ${retry.statusText}`);
+              arrayBuffer = await retry.arrayBuffer();
             }
           } else {
             arrayBuffer = await res.arrayBuffer();
           }
 
           // 3. Save to IndexedDB cache for future instant offline loads
-          if (arrayBuffer) {
-            ModelCache.saveModel(cacheKey, arrayBuffer).catch(() => {});
-          }
+          downloadedCacheKey = cacheKey;
         }
       }
 
@@ -156,6 +159,9 @@ export class MaiaInBrowserEngine {
       const metaBytes = new Uint8Array(arrayBuffer, 8, metaLen);
       const metaStr = new TextDecoder().decode(metaBytes);
       this.meta = JSON.parse(metaStr);
+      for (const [key, value] of Object.entries(expected || {})) {
+        if (this.meta[key] !== value) throw new Error(`Unexpected Maia model ${key}: ${this.meta[key]}`);
+      }
 
       const payloadOffset = 8 + metaLen;
       const payloadBytes = new Uint8Array(arrayBuffer, payloadOffset);
@@ -207,6 +213,7 @@ export class MaiaInBrowserEngine {
       }
 
       this.initVocab();
+      if (downloadedCacheKey) await ModelCache.saveModel(downloadedCacheKey, arrayBuffer).catch(() => false);
       this.isReady = true;
       console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource})`);
       return true;

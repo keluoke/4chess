@@ -1,5 +1,5 @@
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-review4';
-import { t } from './i18n.js?v=20261012-review4';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-review5';
+import { t } from './i18n.js?v=20261012-review5';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -80,7 +80,7 @@ export class PositionAnalysis {
     if (!fen) return null;
     const history = app.isBranching ? (app.branchHistory || []) : app.positions.slice(Math.max(0, ply - 7), ply).map(p => p.fen);
     const depth = Number(app.el.positionDepth.value);
-    return { fen, ply, history, depth, elo: app.currentElo, epoch: app.gameEpoch, key: `${fen}|${app.currentElo}|${depth}|${history.join(';')}` };
+    return { fen, ply, history, depth, elo: app.currentElo, epoch: app.gameEpoch, key: `${fen}|${app.currentElo}|${depth}|${app.stockfish.engineKey}|${app.maiaEngine.modelKey}|${history.join(';')}` };
   }
 
   refresh({ calculate = true } = {}) {
@@ -198,8 +198,8 @@ export class PositionAnalysis {
     const app = this.app;
     const lines = engineLines(entry.sf, ctx.fen);
     const pending = app.analyzer.isAnalyzing ? 'candidatesAfterReview' : 'statusCalculating';
-    document.getElementById('candidate-engine-status').textContent = `Stockfish · ${entry.sf ? t('candidateDepth', { depth: entry.sf.depth }) : t(app.stockfish.isReady ? 'engineReady' : 'engineNotStarted')}`;
-    document.getElementById('candidate-maia-status').textContent = `Maia ${ctx.elo} · ${t('probLabel')}`;
+    document.getElementById('candidate-engine-status').textContent = `${app.stockfish.variant === 'standard' ? 'SF19' : 'SF19 Lite'} · ${entry.sf ? t('candidateDepth', { depth: entry.sf.depth }) : t(app.stockfish.isReady ? 'engineReady' : 'engineNotStarted')}`;
+    document.getElementById('candidate-maia-status').textContent = `${app.maiaEngine.modelName || 'Maia-3'} · ${ctx.elo} · ${t('probLabel')}`;
     const engineContainer = document.getElementById('engine-candidate-lines');
     const maiaContainer = document.getElementById('maia-candidate-lines');
     engineContainer.replaceChildren(); maiaContainer.replaceChildren();

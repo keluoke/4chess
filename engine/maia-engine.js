@@ -11,9 +11,13 @@ import { ChessBoard } from './chess-core.js';
 import { MaiaInBrowserEngine } from './maia-inbrowser.js';
 import { StockfishInBrowser } from './stockfish-inbrowser.js';
 import { ModelCache } from './model-cache.js';
+import { MAIA_VARIANTS } from './engine-variants.js';
 
 export class MaiaEngine {
-  constructor(onStatusChange = null, stockfishInstance = null) {
+  constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m' } = {}) {
+    this.variant = MAIA_VARIANTS[variant] ? variant : '5m';
+    this.modelKey = MAIA_VARIANTS[this.variant].key;
+    this.disposed = false;
     this.maiaInBrowser = new MaiaInBrowserEngine();
     this.stockfishInBrowser = stockfishInstance || new StockfishInBrowser();
     this.targetElo = 1900;
@@ -22,7 +26,7 @@ export class MaiaEngine {
     this.isLoading = false;
     this.initPromise = null;
     this.backendName = '浏览器端 Float32 JS + Stockfish WASM';
-    this.modelName = 'Maia-3 5M Chessformer';
+    this.modelName = MAIA_VARIANTS[this.variant].name;
     this.lruCache = new Map();
     this.MAX_CACHE_SIZE = 150;
 
@@ -101,6 +105,7 @@ export class MaiaEngine {
     } else if (type === 'loadModel_result') {
       if (this._workerLoadResolve) {
         if (success) {
+          this.modelMetadata = data;
           this._workerLoadResolve(true);
         } else {
           this._workerLoadReject(new Error(error || 'Worker model loading failed'));
@@ -119,9 +124,23 @@ export class MaiaEngine {
   }
 
   notifyStatus() {
-    if (this.onStatusChange) {
+    if (!this.disposed && this.onStatusChange) {
       this.onStatusChange({ ...this.status });
     }
+  }
+
+  dispose() {
+    this.disposed = true;
+    this.onStatusChange = null;
+    this.worker?.terminate();
+    this.worker = null;
+    this._workerLoadReject?.(new Error('Model selection changed'));
+    this._workerLoadResolve = this._workerLoadReject = null;
+    for (const pending of this.workerPending.values()) pending.resolve(null);
+    this.workerPending.clear();
+    this.lruCache.clear();
+    this.maiaInBrowser.reset();
+    this.isReady = false;
   }
 
   async reinitialize(overrideUrl = null) {
@@ -133,13 +152,12 @@ export class MaiaEngine {
       this.worker.postMessage({ type: 'reset' });
     }
     this.maiaInBrowser.reset();
-    if (overrideUrl) {
-      await ModelCache.clearAll();
-    }
+    if (overrideUrl) await ModelCache.clearAll();
     return this.initialize(overrideUrl);
   }
 
   async initialize(overrideUrl = null) {
+    if (this.disposed) throw new Error('Model selection changed');
     if (this.isReady) return this.backendName;
     if (this.initPromise) return this.initPromise;
 
@@ -180,7 +198,7 @@ export class MaiaEngine {
 
     // 2. Resolve Model Source: Dedicated Cloudflare CDN / R2 Bucket (with browser IndexedDB persistent cache)
     let customCdn = overrideUrl || '';
-    if (!customCdn && typeof chrome !== 'undefined' && chrome.storage?.local) {
+    if (!customCdn && this.variant === '5m' && typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
         const stored = await chrome.storage.local.get(['cloudflareCdnUrl']);
         if (stored?.cloudflareCdnUrl) customCdn = stored.cloudflareCdnUrl.trim();
@@ -192,7 +210,7 @@ export class MaiaEngine {
       candidates.push(customCdn);
     }
     // 1. Primary Default: Dedicated Cloudflare CDN bucket
-    candidates.push('https://weights.4chess.cc/maia3_model.bin');
+    if (!customCdn || this.variant === '5m') candidates.push(MAIA_VARIANTS[this.variant].url);
 
     let loaded = false;
     let lastErr = null;
@@ -216,12 +234,14 @@ export class MaiaEngine {
             this._workerLoadReject = reject;
             this.worker.postMessage({
               type: 'loadModel',
-              data: { url }
+              data: { url, expected: MAIA_VARIANTS[this.variant].expected }
             });
           });
         } else {
-          await this.maiaInBrowser.loadModel(url, onProgress);
+          await this.maiaInBrowser.loadModel(url, onProgress, MAIA_VARIANTS[this.variant].expected);
+          this.modelMetadata = this.maiaInBrowser.meta;
         }
+        if (this.disposed) throw new Error('Model selection changed');
         loaded = true;
         break;
       } catch (err) {
@@ -385,7 +405,7 @@ export class MaiaEngine {
           checkTimer = setInterval(() => {
             if (abortCheck()) {
               clearInterval(checkTimer);
-              this.worker.postMessage({ type: 'abort', id: reqId });
+              this.worker?.postMessage({ type: 'abort', id: reqId });
               this.workerPending.delete(reqId);
               resolve(null);
             }

@@ -3,16 +3,17 @@
  * High-performance, zero-latency, 100% self-contained chess analysis workstation.
  */
 
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-review4';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-review4';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-review4';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-review4';
-import { BoardUI } from './board-ui.js?v=20261012-review4';
-import { EvalChart } from './eval-chart.js?v=20261012-review4';
-import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-review4';
-import { PositionAnalysis } from './position-analysis.js?v=20261012-review4';
-import { soundEffects } from './sound-effects.js?v=20261012-review4';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-review4';
+import { ChessBoard } from '../engine/chess-core.js?v=20261012-review5';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-review5';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-review5';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-review5';
+import { BoardUI } from './board-ui.js?v=20261012-review5';
+import { EvalChart } from './eval-chart.js?v=20261012-review5';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-review5';
+import { PositionAnalysis } from './position-analysis.js?v=20261012-review5';
+import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261012-review5';
+import { soundEffects } from './sound-effects.js?v=20261012-review5';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-review5';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -46,6 +47,14 @@ class AnalysisStudioApp {
     this.analyzer = null;
 
     this.currentElo = 1900;
+    this.engineVariant = 'lite';
+    this.modelVariant = '5m';
+    try {
+      const saved = JSON.parse(localStorage.getItem('diverge_engine_versions') || '{}');
+      if (STOCKFISH_VARIANTS[saved.engine]) this.engineVariant = saved.engine;
+      if (MAIA_VARIANTS[saved.model]) this.modelVariant = saved.model;
+    } catch {}
+    if (location.protocol === 'chrome-extension:') this.engineVariant = 'lite';
     this.moves = [];
     this.positions = [];
     this.reviewResult = null;
@@ -70,6 +79,10 @@ class AnalysisStudioApp {
     this.initEngines();
     this.initUI();
     this.bindEvents();
+    this.headerObserver = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--studio-header-height', `${Math.ceil(document.querySelector('.studio-navbar').getBoundingClientRect().height)}px`);
+    });
+    this.headerObserver.observe(document.querySelector('.studio-navbar'));
     this.loadInitialGame();
   }
 
@@ -123,9 +136,16 @@ class AnalysisStudioApp {
   }
 
   initEngines() {
-    this.stockfish = new StockfishInBrowser();
-    this.maiaEngine = new MaiaEngine(() => this.updateEngineStatus(), this.stockfish);
+    this.stockfish = new StockfishInBrowser({ variant: this.engineVariant });
+    const maia = new MaiaEngine(() => { if (this.maiaEngine === maia) this.updateEngineStatus(); }, this.stockfish, { variant: this.modelVariant });
+    this.maiaEngine = maia;
     this.analyzer = new GameAnalyzer(this.stockfish, this.maiaEngine);
+    document.getElementById('engine-edition').value = this.engineVariant;
+    document.getElementById('intuition-edition').value = this.modelVariant;
+    if (location.protocol === 'chrome-extension:') {
+      document.querySelector('#engine-edition option[value="standard"]').disabled = true;
+      document.getElementById('extension-standard-note').hidden = false;
+    }
     // Empty visits stay idle; initialize only for an imported position or completed-game review.
     this.updateEngineStatus();
 
@@ -180,6 +200,8 @@ class AnalysisStudioApp {
   }
 
   updateEngineStatus() {
+    document.getElementById('name-status-sf').textContent = STOCKFISH_VARIANTS[this.engineVariant].name;
+    document.getElementById('name-status-maia').textContent = MAIA_VARIANTS[this.modelVariant].name;
     for (const [name, engine] of [['sf', this.stockfish], ['maia', this.maiaEngine]]) {
       const ready = engine?.isReady;
       const loading = name === 'maia' ? engine?.isLoading : !!engine?.initPromise && !ready;
@@ -199,6 +221,9 @@ class AnalysisStudioApp {
   }
 
   bindEvents() {
+    for (const id of ['engine-edition', 'intuition-edition']) {
+      document.getElementById(id).addEventListener('change', () => this.changeEngineVersions());
+    }
     // Language Toggle (if not already bound by i18n module)
     if (this.el.btnLangToggle && !this.el.btnLangToggle.__i18nBound) {
       this.el.btnLangToggle.__i18nBound = true;
@@ -219,7 +244,7 @@ class AnalysisStudioApp {
 
       this.positionAnalysis.cancel();
       this.positionAnalysis.cache.clear();
-      this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
+      this.currentGameKey = this.getReviewKey();
       // Invalidate review result so old Elo data is not mixed
       this.reviewResult = null;
       if (this.moves && this.moves.length > 0) {
@@ -1070,7 +1095,7 @@ class AnalysisStudioApp {
 
     this.positions = positions;
     this.el.btnReanalyze.disabled = false;
-    this.currentGameKey = GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo });
+    this.currentGameKey = this.getReviewKey();
 
     // Update metadata headers
     if (pgn) {
@@ -1097,9 +1122,13 @@ class AnalysisStudioApp {
     this.renderMoveList();
     this.goToPly(0, { silent: true });
 
-    if (cachedReview) {
+    const compatibleReview = cachedReview &&
+      (cachedReview.engineKey || 'sf19lite') === this.stockfish.engineKey &&
+      (cachedReview.modelKey || 'maia3-5m') === this.maiaEngine.modelKey &&
+      (cachedReview.elo == null || cachedReview.elo === this.currentElo);
+    if (compatibleReview) {
       this.applyReviewResult(cachedReview);
-    } else if (autoReview) {
+    } else if (autoReview || cachedReview) {
       this.runFullReview(false);
     }
     return true;
@@ -1124,6 +1153,50 @@ class AnalysisStudioApp {
       pgn: pgnText,
       autoReview
     });
+  }
+
+  getReviewKey() {
+    return GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
+  }
+
+  changeEngineVersions() {
+    const engine = document.getElementById('engine-edition').value;
+    const model = document.getElementById('intuition-edition').value;
+    if (engine === this.engineVariant && model === this.modelVariant) return;
+    if (this.isPlaying) this.toggleAutoPlay();
+    this.positionAnalysis.cancel();
+    this.analyzer.cancel();
+    this.reviewEpoch++;
+    this.gameEpoch++;
+    this.maiaEngine.dispose();
+    this.stockfish.reset();
+    this.engineVariant = engine;
+    this.modelVariant = model;
+    try { localStorage.setItem('diverge_engine_versions', JSON.stringify({ engine, model })); } catch {}
+    this.initEngines();
+    this.currentGameKey = this.getReviewKey();
+    this.reviewResult = null;
+    this.lastProgress = null;
+    this.positionAnalysis.cache.clear();
+    this.positionAnalysis.active = null;
+    this.positionAnalysis.render();
+    document.getElementById('review-summary').hidden = true;
+    this.el.progressCard.style.display = 'none';
+    this.el.blunderList.replaceChildren();
+    this.el.blunderCountBadge.textContent = '0';
+    for (const id of ['filter-count-all', 'filter-count-beyond', 'filter-count-trap']) document.getElementById(id).textContent = '0';
+    this.el.divergenceContent.hidden = true;
+    this.renderMoveList();
+    if (this.moves.length) this.runFullReview();
+    else this.updateActivePositionAnalysis();
+  }
+
+  scrollWithin(element, container) {
+    if (!element || !container) return;
+    const item = element.getBoundingClientRect();
+    const box = container.getBoundingClientRect();
+    const delta = item.top < box.top ? item.top - box.top : item.bottom > box.bottom ? item.bottom - box.bottom : 0;
+    if (delta) container.scrollTop += delta;
   }
 
   parsePgnHeaders(pgnText) {
@@ -1635,12 +1708,17 @@ class AnalysisStudioApp {
   highlightMoveRow(ply) {
     const all = this.el.moveNotationTable.querySelectorAll('.notation-move');
     all.forEach(el => el.classList.remove('active'));
+    if (ply === 0) {
+      this.el.moveNotationTable.scrollTop = 0;
+      document.querySelector('.analysis-column').scrollTop = 0;
+    }
 
     if (ply > 0) {
       const activeEl = document.getElementById(`move-ply-${ply}`);
       if (activeEl) {
         activeEl.classList.add('active');
-        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        this.scrollWithin(activeEl, this.el.moveNotationTable);
+        this.scrollWithin(activeEl, document.querySelector('.analysis-column'));
       }
     }
   }
@@ -1680,7 +1758,7 @@ class AnalysisStudioApp {
     blunderCards.forEach(c => {
       if (parseInt(c.dataset.ply, 10) === clampedPly) {
         c.classList.add('active');
-        c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        this.scrollWithin(c, document.querySelector('.analysis-column'));
       } else {
         c.classList.remove('active');
       }
