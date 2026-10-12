@@ -150,6 +150,7 @@ try {
   assert.match(await guide.locator('[data-copy="projectCredit"]').innerText(),/keluoke/);
   for (let i=0;i<5;i++) { const d=guide.locator('#license-documents details').nth(i); await d.locator('summary').click(); await guide.waitForFunction(index=>document.querySelectorAll('#license-documents details')[index].dataset.loaded==='true',i); assert((await d.locator('pre').innerText()).length>1000); }
   await guide.locator('#language-toggle').click(); assert.equal(await guide.locator('html').getAttribute('lang'),'en');
+  assert.match(await guide.locator('[data-theme-toggle]').innerText(),/Dark|Light/);
   for(const width of [1440,390,320]) { await guide.setViewportSize({width,height:900}); assert(await guide.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)); }
   await guide.screenshot({path:path.join(screenshots,'guide-mobile-en.png'),fullPage:true});
   await guide.setViewportSize({width:1440,height:1000}); await guide.goto(origin+'/guide/?lang=zh'); await guide.screenshot({path:path.join(screenshots,'guide-desktop-zh.png'),fullPage:true});

@@ -24,6 +24,7 @@ if (extensionStorage) {
   try { savedTheme = localStorage.getItem(themeKey); } catch {}
 }
 applyTheme(savedTheme);
+new MutationObserver(() => applyTheme(savedTheme)).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(savedTheme));
 document.querySelectorAll('[data-theme-toggle]').forEach(button => button.addEventListener('click', () => {
   savedTheme = (document.body.dataset.theme || systemTheme()) === 'dark' ? 'light' : 'dark';
