@@ -48,3 +48,7 @@ PLAYWRIGHT_MODULE=/Users/yan/.cache/codex-runtimes/codex-primary-runtime/depende
 - `/analysis/*`、`/engine/*`、`/ui/*` 等可变代码资源采用 `no-cache, must-revalidate`。
 - 删除行棋方、当前局面、回看此步整个工具行及其事件、样式和节点访问。记谱定位、关键步走前回看、候选试演及返回对局继续保留。
 - 浏览器回归服务故意为未版本化 CSS/i18n 返回上一版文件和 4 小时缓存；新版页面绕过这些旧资源，样式与中英文翻译正常，原交互回归通过。`npm test`、构建和差异检查通过。
+
+线上发布 `1f72e31`（Pages 部署 `1a46da03-5e6a-477e-9b69-3045655fafd7`）已成功，普通线上 URL 的七个页面资源与源文件一致；实际浏览器完成真实双引擎复盘，显示六条 grid 候选行，无原始翻译键，无工具行，刷新并由 Service Worker 接管后仍正常。
+
+随后确认 Pages 项目的构建命令原为空，虽然源代码更新已发布，`_headers` 仍未生成，线上响应头继续为四小时缓存。已把该项目的构建命令设置为现有 `npm run build`，输出目录保留 `.`，让后续 Git 发布生成 `_headers` / `_redirects`。此记录提交触发按修复后配置重新构建。
