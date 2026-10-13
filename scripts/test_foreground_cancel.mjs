@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {GameAnalyzer} from '../engine/game-analyzer.js';
+let release, started;
+const searching = new Promise(resolve => {started=resolve});
+let stops=0;
+const stockfish={isReady:true,engineKey:'cancellation-fixture',stop(){stops++},evaluate(){started();return new Promise(resolve=>{release=resolve})}};
+const analyzer=new GameAnalyzer(stockfish,{modelKey:"cancellation-fixture"});
+const task=analyzer.analyzeGame(GameAnalyzer.parsePgn('1. e4 e5'),{depth:6,forceRefresh:true});
+await searching;
+analyzer.cancel();assert.equal(stops,1);
+release(null);assert.equal(await task,null);assert.equal(stops,1,'A late cancelled result must not stop a newer foreground search');
+console.log('PASS cancelled full-game evaluation cannot stop the foreground engine request');

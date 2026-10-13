@@ -1,5 +1,5 @@
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-entries1';
-import { t } from './i18n.js?v=20261012-entries1';
+import { ChessBoard } from '../engine/chess-core.js?v=20261013-study1';
+import { t } from './i18n.js?v=20261013-study1';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -104,7 +104,7 @@ export class PositionAnalysis {
     this.render();
     if (!calculate || (!this.app.moves.length && !this.app.hasAnalysisInput)) return;
     if (this.app.analyzer.isAnalyzing) return; // Full-game review owns the engine until completion.
-    this.timer = setTimeout(() => this.compute(this.active), 140);
+    this.timer = setTimeout(() => { this.pending = this.compute(this.active); }, 140);
   }
 
   current(snapshot) {
@@ -198,8 +198,7 @@ export class PositionAnalysis {
     const app = this.app;
     const lines = engineLines(entry.sf, ctx.fen);
     const pending = app.analyzer.isAnalyzing ? 'candidatesAfterReview' : 'statusCalculating';
-    document.getElementById('candidate-engine-status').textContent = `${app.stockfish.variant === 'standard' ? 'SF19' : 'SF19 Lite'} · ${entry.sf ? t('candidateDepth', { depth: entry.sf.depth }) : t(app.stockfish.isReady ? 'engineReady' : 'engineNotStarted')}`;
-    document.getElementById('candidate-maia-status').textContent = `${app.maiaEngine.modelName || 'Maia-3'} · ${ctx.elo} · ${t('probLabel')}`;
+    this.renderLoadingStatuses();
     const engineContainer = document.getElementById('engine-candidate-lines');
     const maiaContainer = document.getElementById('maia-candidate-lines');
     engineContainer.replaceChildren(); maiaContainer.replaceChildren();
@@ -216,6 +215,17 @@ export class PositionAnalysis {
     this.renderOverlays(lines, moves);
   }
 
+  renderLoadingStatuses() {
+    if (!this.active) return;
+    const { ctx, entry } = this.active, app = this.app;
+    const sfLoading = app.stockfish.initPromise && !app.stockfish.isReady;
+    const sfStatus = entry.sf ? t('candidateDepth', { depth: entry.sf.depth }) : entry.sfFailed ? t('engineFailed') : sfLoading ? (app.stockfish.downloadProgress ? t('modelDownloading', { percent: app.stockfish.downloadProgress.percent }) : t('engineStarting')) : t(app.stockfish.isReady ? 'engineReady' : 'engineNotStarted');
+    document.getElementById('candidate-engine-status').textContent = `${app.stockfish.variant === 'standard' ? 'SF19' : 'SF19 Lite'} · ${sfStatus}`;
+    const progress = app.maiaEngine.status?.maia;
+    const maiaStatus = entry.prediction?.moves?.length ? t('probLabel') : entry.maiaFailed ? t('engineFailed') : app.maiaEngine.isLoading ? (progress?.state === 'downloading' ? t('modelDownloading', { percent: progress.percent || 0 }) : t('engineStarting')) : t(app.maiaEngine.isReady ? 'engineReady' : 'engineNotStarted');
+    document.getElementById('candidate-maia-status').textContent = `${app.maiaEngine.modelName || 'Maia-3'} · ${ctx.elo} · ${maiaStatus}`;
+  }
+
   renderRow(container, evaluation, variation, probability, color) {
     if (!variation.length) return;
     const row = document.createElement('div'); row.className = 'candidate-line';
@@ -227,7 +237,7 @@ export class PositionAnalysis {
       button.onclick = () => this.app.previewCandidate(this.active.ctx, variation.slice(0, index + 1));
       moves.append(button);
     });
-    moves.onmouseenter = () => { if (this.app.settings.arrows) this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color }]); };
+    moves.onmouseenter = () => { if (this.app.settings.arrows && (color === 'gold' ? this.app.settings.maiaArrows !== false : this.app.settings.sfArrows !== false)) this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color }]); };
     moves.onmouseleave = () => this.renderOverlays();
     row.append(moves);
     if (probability) { const prob = document.createElement('span'); prob.className = 'candidate-probability'; prob.textContent = probability; row.append(prob); }
@@ -243,8 +253,8 @@ export class PositionAnalysis {
     moves ||= (entry.prediction?.moves || []).slice(0, 3);
     if (this.app.settings.arrows) {
       const arrows = [];
-      if (lines[0]) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'blue' });
-      if (moves[0]?.uci && moves[0].uci !== lines[0]?.uci) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
+      if (lines[0] && this.app.settings.sfArrows !== false) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'blue' });
+      if (this.app.settings.maiaArrows !== false && moves[0]?.uci && (moves[0].uci !== lines[0]?.uci || this.app.settings.sfArrows === false)) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
       this.app.boardUI.setArrows(arrows);
     }
     if (this.app.settings.heatmap && entry.prediction?.heatmap) {

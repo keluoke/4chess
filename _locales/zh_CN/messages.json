@@ -147,5 +147,8 @@
   },
   "invalidModelUrl": {
     "message": "请输入 HTTPS 模型地址。"
+  },
+  "uiLanguage": {
+    "message": "界面语言"
   }
 }

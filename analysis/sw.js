@@ -4,21 +4,21 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261012-entries1';
+const CACHE_NAME = '4chess-review-20261013-study1';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261012-entries1',
-  './analysis.css?v=20261012-entries1',
-  './i18n.js?v=20261012-entries1',
-  '../ui/theme.css?v=20261012-entries1',
-  '../ui/theme.js?v=20261012-entries1',
+  './analysis.js?v=20261013-study1',
+  './analysis.css?v=20261013-study1',
+  './i18n.js?v=20261013-study1',
+  '../ui/theme.css?v=20261013-study1',
+  '../ui/theme.js?v=20261013-study1',
   './board-ui.js',
-  './position-analysis.js?v=20261012-entries1',
+  './position-analysis.js?v=20261013-study1',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js?v=20261012-entries1',
+  './eval-chart.js?v=20261013-study1',
   './manifest.webmanifest',
   './favicon.svg',
   '../engine/chess-core.js',
@@ -28,6 +28,7 @@ const STATIC_ASSETS = [
   '../engine/game-analyzer.js',
   '../engine/model-cache.js',
   '../engine/engine-variants.js',
+  '../engine/engine-preferences.js',
   '../engine/stockfish-standard-web.js',
   '../lib/stockfish-19-standard.js',
   '../engine/opening-book.js',
@@ -39,7 +40,7 @@ const STATIC_ASSETS = [
 ];
 
 // Cache both legacy nested imports and this release's versioned entry dependencies.
-STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261012-entries1`));
+STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261013-study1`));
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

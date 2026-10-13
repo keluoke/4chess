@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-entries-'));
 const extension = path.join(scratch, 'extension'); fs.mkdirSync(extension);
 execFileSync(process.execPath, ['scripts/package_extension.mjs'], { cwd: root });
-execFileSync('unzip', ['-q', path.join(root, 'releases/diverge-extension-v1.0.5.zip'), '-d', extension]);
+execFileSync('unzip', ['-q', path.join(root, 'releases/diverge-extension-v1.0.6.zip'), '-d', extension]);
 for (const file of ['LICENSE', 'LICENSES/GPL-2.0.txt', 'LICENSES/GPL-3.0.txt', 'LICENSES/AGPL-3.0.txt', 'THIRD_PARTY_NOTICES.md', 'guide/index.html']) assert(fs.existsSync(path.join(extension, file)));
 assert(!fs.existsSync(path.join(extension, 'engine/stockfish-standard-web.js')));
 assert(!fs.existsSync(path.join(extension, 'lib/stockfish-19-standard.js')));
@@ -77,6 +77,9 @@ try {
   }
   await popup.setViewportSize({width:368,height:600});
   await popup.screenshot({path:path.join(screenshots,'popup-default-zh.png')});
+  assert.equal(await popup.locator('#ui-language').inputValue(),'en');
+  await popup.locator('#ui-language').selectOption('zh');
+  await popup.waitForFunction(()=>document.documentElement.lang==='zh-CN');
   assert.equal(await popup.locator('#guide-link').getAttribute('href'),'https://4chess.cc/guide/?lang=zh');
   await popup.locator('.advanced-settings > summary').click();
   assert.equal(await popup.locator('#model-preset-select option').count(),3);

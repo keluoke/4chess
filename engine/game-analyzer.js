@@ -833,7 +833,7 @@ export class GameAnalyzer {
       // Step 1: Evaluate each position with Stockfish 19
       for (let i = 0; i < totalPositions; i++) {
         if (this.isCancelled || this._currentRunId !== runId) {
-          this.isAnalyzing = false;
+          if (this._currentRunId === runId) this.isAnalyzing = false;
           return null;
         }
 
@@ -856,6 +856,8 @@ export class GameAnalyzer {
 
         // Fast evaluation with depth 6, 3500ms timeout, and multipv 1
         const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 3500, 1);
+        // A cancelled review must not stop a newer foreground position search.
+        if (this.isCancelled || this._currentRunId !== runId) return null;
         if (!evalRes) {
           evalFailures++;
           consecutiveFailures++;
@@ -1311,7 +1313,7 @@ export class GameAnalyzer {
       const bookMovesCount = analyzedMoves.filter(m => m.isBookMove).length;
 
       if (this.isCancelled || this._currentRunId !== runId) {
-        this.isAnalyzing = false;
+        if (this._currentRunId === runId) this.isAnalyzing = false;
         return null;
       }
 

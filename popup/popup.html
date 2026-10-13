@@ -29,6 +29,7 @@
       </div>
     </nav>
     <section class="popup-preferences" aria-label="复盘偏好">
+      <label class="setting-row" for="ui-language"><strong data-i18n="uiLanguage">界面语言</strong><select id="ui-language"><option value="zh">简体中文</option><option value="en">English</option></select></label>
       <label class="setting-row" for="toggle-panel-switch"><span><strong data-i18n="floatingPanelTitle">棋盘悬浮窗</strong><small data-i18n="floatingPanelDesc">分析时随手查看当前局面</small></span><input type="checkbox" id="toggle-panel-switch" class="weui-switch" checked></label>
       <label class="setting-row" for="toggle-live-eval-switch"><span><strong data-i18n="liveEvalTitle">实时评估</strong><small data-i18n="liveEvalDesc">棋盘走法建议与直觉热力图</small></span><input type="checkbox" id="toggle-live-eval-switch" class="weui-switch" checked></label>
       <label class="setting-row" for="default-elo"><span><strong data-i18n="defaultEloLabel">人类直觉等级</strong><small data-i18n="eloHelp">用于 Maia 候选着法预测</small></span><select id="default-elo"><option value="1100" data-i18n="eloBeginner">1100 · 初阶</option><option value="1500" data-i18n="eloIntermediate">1500 · 中阶</option><option value="1900" selected data-i18n="eloClub">1900 · 进阶</option><option value="2200" data-i18n="eloMaster">2200 · 大师</option></select></label>
@@ -42,7 +43,7 @@
       <select id="model-preset-select"><option value="5m">5M · 28 MB</option><option value="23m">23M · 104 MB</option><option value="79m">79M · 159 MB (FP16)</option></select>
       <details class="custom-cdn"><summary data-i18n="modelCustomOption">自定义 CDN 地址</summary><input type="url" id="cdn-url" aria-label="模型 CDN URL" placeholder="https://weights.4chess.cc/maia3_model.bin"><small data-i18n="customModelHelp">地址须对应上方所选的 Maia 版本。</small></details>
       <p data-i18n="modelCacheHelp">首次使用下载模型，完成后缓存在浏览器中。</p>
-      <p id="preference-feedback" role="status"></p>
+      <p id="engine-experience-hint" role="note" aria-live="polite" hidden></p><p id="preference-feedback" role="status"></p>
     </details>
     <aside class="fair-play-note"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m12 3 8 3v6c0 5-8 9-8 9S4 17 4 12V6z"/><path d="m8 12 3 3 5-6"/></svg><p data-i18n="fairPlayNote">对局进行中自动锁定，结束后立即解锁复盘。</p></aside>
     <footer class="popup-footer"><a href="https://4chess.cc/guide/#about" target="_blank" rel="noopener" data-i18n="aboutCredits">关于 · 署名与许可</a><button type="button" data-theme-toggle>深色</button></footer>

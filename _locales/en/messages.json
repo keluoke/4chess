@@ -147,5 +147,8 @@
   },
   "invalidModelUrl": {
     "message": "Enter an HTTPS model URL."
+  },
+  "uiLanguage": {
+    "message": "Interface language"
   }
 }

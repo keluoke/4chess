@@ -72,10 +72,10 @@ export class StockfishInBrowser {
         try {
           const wasmUrl = isExtensionPage
             ? chrome.runtime.getURL('lib/stockfish.wasm')
-            : (window.location.pathname.includes('/analysis/') ? '../lib/stockfish.wasm' : 'lib/stockfish.wasm');
+            : (typeof import.meta !== 'undefined' && import.meta.url ? new URL('../lib/stockfish.wasm', import.meta.url).href : (window.location.pathname.includes('/analysis') ? '../lib/stockfish.wasm' : 'lib/stockfish.wasm'));
           const sf19Url = isExtensionPage
             ? chrome.runtime.getURL('lib/stockfish-19.js#' + encodeURIComponent(wasmUrl))
-            : (window.location.pathname.includes('/analysis/') ? `../lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}` : `lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}`);
+            : (typeof import.meta !== 'undefined' && import.meta.url ? new URL('../lib/stockfish-19.js', import.meta.url).href + '#' + encodeURIComponent(wasmUrl) : (window.location.pathname.includes('/analysis') ? `../lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}` : `lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}`));
 
           this.initDirectWorker(sf19Url);
           return;

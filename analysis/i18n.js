@@ -8,6 +8,16 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    userBranches: '我的分支',
+    reviewPausedForPosition: '全盘分析暂缓 · 优先分析当前局面',
+    reviewResumeHint: '返回对局并停止回看后继续全盘分析。',
+    choosePromotion: '选择升变棋子',
+    clearThoughtArrows: '清除当前局面的思考箭头',
+    boardInteractionHelp: '左键点击或拖动走棋；右键拖动画思考箭头，右键单击标记格子。← / → 在全页面回看，输入框与弹窗除外。',
+    preferencesConnected: '设置已与插件同步；修改会应用到其他已打开入口。',
+    preferencesBrowserOnly: '设置保存在此浏览器；安装新版插件后，可与 popup 和悬浮窗同步。',
+    modelDownloading: '下载中 {percent}%',
+
     guideAndCredits: "使用指南 · 双引擎图例 · 关于与许可 ↗",
     engineEdition: "引擎版本",
     intuitionEdition: "直觉版本",
@@ -231,6 +241,16 @@ export const DICTIONARY = {
   },
 
   en: {
+    userBranches: 'My variations',
+    reviewPausedForPosition: 'Game review paused · Analysing this position first',
+    reviewResumeHint: 'Return to the game and pause navigation to resume its review.',
+    choosePromotion: 'Choose promotion piece',
+    clearThoughtArrows: 'Clear thought arrows for this position',
+    boardInteractionHelp: 'Click or drag to move. Right-drag draws a thought arrow; right-click marks a square. ← / → navigates across the page, except in inputs and dialogs.',
+    preferencesConnected: 'Preferences sync with your extension and other open entry points.',
+    preferencesBrowserOnly: 'Saved in this browser. Install the updated extension to sync with its popup and floating panel.',
+    modelDownloading: 'Downloading {percent}%',
+
     guideAndCredits: "Guide · Dual-engine legend · Credits & licenses ↗",
     engineEdition: "Engine version",
     intuitionEdition: "Intuition model",

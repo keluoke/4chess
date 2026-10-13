@@ -25,6 +25,7 @@ export class BoardUI {
     this.dragFloatingEl = null;
 
     this.arrows = []; // [{ from, to, color, dashed, width, label }]
+    this.annotations = new Map();
     this.highlights = []; // [{ square, color }]
 
     this.initDOM();
@@ -63,6 +64,7 @@ export class BoardUI {
         </marker>
       </defs>
       <g id="maia-svg-arrows-group"></g>
+      <g class="study-annotations"></g>
     `;
 
     // 64 Squares Grid
@@ -111,6 +113,8 @@ export class BoardUI {
   }
 
   setPosition(fen, lastMove = null) {
+    this.cancelGesture();
+    this.closePromotion();
     this.chess.load(fen);
     if (lastMove && typeof lastMove === 'object') {
       const from = (typeof lastMove.from === 'number') ? ChessBoard.indexToSquare(lastMove.from) : lastMove.from;
@@ -127,6 +131,7 @@ export class BoardUI {
   setArrows(arrows) {
     this.arrows = arrows || [];
     this.renderArrows();
+    this.drawAnnotations();
   }
 
   clearArrows() {
@@ -231,6 +236,7 @@ export class BoardUI {
   }
 
   renderArrows() {
+    this.drawAnnotations();
     const group = this.svgOverlay.querySelector('#maia-svg-arrows-group');
     if (!group) return;
     group.innerHTML = '';
@@ -335,11 +341,122 @@ export class BoardUI {
 
   bindEvents() {
     this.boardEl.addEventListener('click', (e) => {
+      if (performance.now() < (this.suppressClickUntil || 0) && e.detail !== 0) return;
+      if (e.target.closest('.promotion-picker')) return;
       const sqEl = e.target.closest('.maia-square');
       if (!sqEl) return;
       const sq = sqEl.dataset.square;
       this.handleSquareClick(sq);
     });
+    this.boardEl.addEventListener('contextmenu', event => event.preventDefault());
+    this.boardEl.addEventListener('dragstart', event => event.preventDefault());
+    this.boardEl.addEventListener('pointerdown', event => {
+      if (event.target.closest('.promotion-picker') || this.promotionPicker || ![0, 2].includes(event.button)) return;
+      const square = this.squareAtPoint(event.clientX, event.clientY);
+      if (!square) return;
+      event.preventDefault();
+      this.gesture = { id: event.pointerId, button: event.button, from: square, x: event.clientX, y: event.clientY, moved: false };
+      this.boardEl.setPointerCapture(event.pointerId);
+    });
+    this.boardEl.addEventListener('pointermove', event => {
+      const gesture = this.gesture;
+      if (!gesture || gesture.id !== event.pointerId) return;
+      const to = this.squareAtPoint(event.clientX, event.clientY);
+      if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) gesture.moved = true;
+      if (gesture.button === 2) {
+        this.drawAnnotations(to ? { from: gesture.from, to } : null);
+      } else if (gesture.moved) {
+        const piece = this.chess.board[ChessBoard.squareToIndex(gesture.from)];
+        if (!piece || piece.color !== this.chess.turn) return;
+        if (!this.dragFloatingEl) {
+          this.selectedSq = gesture.from;
+          this.legalMovesForSelected = this.chess.getLegalMoves().filter(move => move.fromSq === gesture.from);
+          this.render();
+          this.dragFloatingEl = this.squareEls[gesture.from].querySelector('.maia-piece').cloneNode(true);
+          this.dragFloatingEl.classList.add('study-drag-piece');
+          this.dragFloatingEl.style.width = this.dragFloatingEl.style.height = `${this.boardEl.getBoundingClientRect().width / 8}px`;
+          document.body.append(this.dragFloatingEl);
+        }
+        this.dragFloatingEl.style.left = `${event.clientX}px`;
+        this.dragFloatingEl.style.top = `${event.clientY}px`;
+      }
+    });
+    this.boardEl.addEventListener('pointerup', event => {
+      const gesture = this.gesture;
+      if (!gesture || gesture.id !== event.pointerId) return;
+      const to = this.squareAtPoint(event.clientX, event.clientY);
+      this.suppressClickUntil = performance.now() + 300;
+      this.cancelGesture();
+      if (!to) { this.render(); return; }
+      if (gesture.button === 2) {
+        const annotations = this.annotations.get(this.chess.getFen()) || [];
+        const index = annotations.findIndex(arrow => arrow.from === gesture.from && arrow.to === to);
+        if (index >= 0) annotations.splice(index, 1); else annotations.push({ from: gesture.from, to });
+        this.annotations.set(this.chess.getFen(), annotations);
+        this.drawAnnotations();
+      } else if (gesture.moved) {
+        this.moveTo(gesture.from, to);
+      } else this.handleSquareClick(to);
+    });
+    this.boardEl.addEventListener('pointercancel', () => { this.cancelGesture(); this.drawAnnotations(); });
+    this.boardEl.addEventListener('lostpointercapture', () => { this.cancelGesture(); this.drawAnnotations(); });
+  }
+
+  squareAtPoint(x, y) {
+    const rect = this.boardEl.getBoundingClientRect();
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) return null;
+    let file = Math.floor((x - rect.left) / rect.width * 8);
+    let rank = 7 - Math.floor((y - rect.top) / rect.height * 8);
+    if (this.orientation === 'black') { file = 7 - file; rank = 7 - rank; }
+    return ChessBoard.indexToSquare(rank * 8 + file);
+  }
+
+  cancelGesture() {
+    this.gesture = null;
+    this.dragFloatingEl?.remove();
+    this.dragFloatingEl = null;
+  }
+
+  drawAnnotations(preview = null) {
+    const group = this.svgOverlay.querySelector('.study-annotations');
+    group.replaceChildren();
+    for (const annotation of [...(this.annotations.get(this.chess.getFen()) || []), ...(preview ? [preview] : [])]) {
+      const from = this.getSquareCenterPercent(annotation.from), to = this.getSquareCenterPercent(annotation.to);
+      const element = document.createElementNS('http://www.w3.org/2000/svg', annotation.from === annotation.to ? 'circle' : 'line');
+      if (annotation.from === annotation.to) {
+        for (const [key, val] of Object.entries({ cx: `${from.x}%`, cy: `${from.y}%`, r: '5%', fill: 'none' })) element.setAttribute(key, val);
+      } else {
+        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: `${to.x}%`, y2: `${to.y}%`, 'marker-end': 'url(#arrow-red)' })) element.setAttribute(key, val);
+      }
+      element.setAttribute('stroke', 'var(--brand-red)'); element.setAttribute('stroke-width', '3'); element.setAttribute('opacity', preview === annotation ? '.5' : '.8');
+      group.append(element);
+    }
+  }
+
+  clearAnnotations(all = false) {
+    if (all) this.annotations.clear(); else this.annotations.delete(this.chess.getFen());
+    this.drawAnnotations();
+  }
+
+  moveTo(from, to) {
+    const moves = this.chess.getLegalMoves().filter(move => move.fromSq === from && move.toSq === to);
+    if (moves.length > 1 && moves.some(move => move.promo)) this.choosePromotion(moves);
+    else if (moves[0]) this.executeMove(moves[0]);
+    else this.render();
+  }
+
+  closePromotion() { this.promotionPicker?.remove(); this.promotionPicker = null; }
+
+  choosePromotion(moves) {
+    this.closePromotion();
+    const picker = document.createElement('div'); picker.className = 'promotion-picker'; picker.setAttribute('role', 'dialog'); picker.setAttribute('aria-label', this.promotionLabel || 'Choose promotion');
+    for (const move of moves) {
+      const button = document.createElement('button'); button.type = 'button'; button.dataset.promotion = move.promo; button.setAttribute('aria-label', move.promo.toUpperCase());
+      button.innerHTML = CHESS_PIECES_SVG[this.chess.turn === 'w' ? move.promo.toUpperCase() : move.promo];
+      button.onclick = event => { event.stopPropagation(); this.closePromotion(); this.executeMove(move); };
+      picker.append(button);
+    }
+    this.boardEl.append(picker); this.promotionPicker = picker; picker.querySelector('button').focus();
   }
 
   handleSquareClick(sq) {
@@ -347,7 +464,7 @@ export class BoardUI {
     if (this.selectedSq) {
       const matchedMove = this.legalMovesForSelected.find(m => m.toSq === sq);
       if (matchedMove) {
-        this.executeMove(matchedMove);
+        this.moveTo(this.selectedSq, sq);
         return;
       }
     }

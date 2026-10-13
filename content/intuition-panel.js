@@ -8,7 +8,7 @@
  * 5. High Information Density & Zero Lag Experience
  */
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
-import { readEnginePreferences } from '../engine/engine-preferences.js';
+import { readEnginePreferences, engineExperienceHint } from '../engine/engine-preferences.js';
 
 let appearanceListenerInstalled = false;
 
@@ -484,6 +484,7 @@ export class IntuitionPanel {
             <button type="button" class="weui-preset-btn" data-model="79m">79M · 159 MB</button>
           </div>
           <p class="diverge-help" data-dg-text="modelHelp"></p>
+          <p class="diverge-help" id="engine-experience-hint" role="note" aria-live="polite"></p>
           <div id="model-switch-hint" role="status" class="diverge-help"></div>
           <a class="diverge-guide-link" href="https://4chess.cc/guide/" target="_blank" rel="noopener" data-dg-text="guide"></a>
           <a class="diverge-guide-link" href="https://4chess.cc/guide/#about" target="_blank" rel="noopener" data-dg-text="about"></a>
@@ -664,6 +665,8 @@ export class IntuitionPanel {
 
   syncStudyChrome() {
     if (!this.container) return;
+    const experience = this.container.querySelector('#engine-experience-hint');
+    if (experience) { experience.textContent = engineExperienceHint(this.enginePreferences, this.lang, true); experience.hidden = !experience.textContent; }
     this.container.querySelectorAll('[data-dg-text]').forEach(el => { el.textContent = this.t(el.dataset.dgText); });
     const title = this.container.querySelector('#compact-title');
     if (title) title.textContent = this.t(this.isFairPlayLocked ? 'fairPlayTitle' : 'collapsedTitle');

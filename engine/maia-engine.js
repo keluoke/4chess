@@ -199,10 +199,24 @@ export class MaiaEngine {
 
     // 2. Resolve Model Source: Dedicated Cloudflare CDN / R2 Bucket (with browser IndexedDB persistent cache)
     let customCdn = overrideUrl || '';
-    if (!customCdn && this.variant === '5m' && typeof chrome !== 'undefined' && chrome.storage?.local) {
+    if (!customCdn && typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
         const stored = await chrome.storage.local.get(['cloudflareCdnUrl']);
-        if (stored?.cloudflareCdnUrl) customCdn = stored.cloudflareCdnUrl.trim();
+        if (stored?.cloudflareCdnUrl) {
+          const rawCdn = stored.cloudflareCdnUrl.trim();
+          if (rawCdn) {
+            const defaultUrl = MAIA_VARIANTS[this.variant].url;
+            const fileName = defaultUrl.split('/').pop();
+            if (rawCdn.endsWith('.bin')) {
+              if (rawCdn.endsWith(fileName) || this.variant === '5m') {
+                customCdn = rawCdn;
+              }
+            } else {
+              // Base directory or CDN URL prefix
+              customCdn = `${rawCdn.replace(/\/+$/, '')}/${fileName}`;
+            }
+          }
+        }
       } catch (e) {}
     }
 
@@ -210,8 +224,10 @@ export class MaiaEngine {
     if (customCdn) {
       candidates.push(customCdn);
     }
-    // 1. Primary Default: Dedicated Cloudflare CDN bucket
-    if (!customCdn || this.variant === '5m') candidates.push(MAIA_VARIANTS[this.variant].url);
+    // Primary Default: Dedicated Cloudflare CDN bucket fallback
+    if (!customCdn || customCdn !== MAIA_VARIANTS[this.variant].url) {
+      candidates.push(MAIA_VARIANTS[this.variant].url);
+    }
 
     let loaded = false;
     let lastErr = null;

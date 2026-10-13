@@ -1,5 +1,5 @@
 const english = {
-  navStart: 'Get started', navDual: 'Visual legend', navAbout: 'About & licenses',
+  studyControls: 'Free exploration & shared preferences', studyControlsBody: 'Arrow keys navigate across the page; inputs, settings and promotion dialogs keep their own keyboard controls. Click or drag pieces to create a personal variation, then reopen it from My variations. Right-drag draws a thought arrow and right-click marks a square. Marks stay with their position; the clear button clears only the current position.', independentLoading: 'SF and Maia download and present results independently. Explore with whichever engine becomes ready first. Variations take priority; returning to the game and pausing navigation resumes an unfinished full-game review.', sharedPreferences: 'With the updated extension installed in the same Chrome browser, its popup, floating panel and web studio share engine versions, Maia, language, rating and other preferences. Open pages update together. Without the extension, preferences stay in this browser; there is no automatic cross-device sync. Model caches still belong to each site, so a first visit to another site may download the weights again.', navStart: 'Get started', navDual: 'Visual legend', navAbout: 'About & licenses',
   title: 'Two engines. A clearer view of every move.',
   intro: 'Stockfish evaluates move quality. Maia predicts how players at a chosen rating are likely to move. Diverge puts both perspectives together.',
   openStudio: 'Open full-game analysis ↗', source: 'Project source ↗', quickStart: 'First time? Start in three steps',
@@ -56,7 +56,7 @@ for (const [label, file] of [['LICENSE', '../LICENSE'], ['THIRD-PARTY NOTICES', 
   details.addEventListener('toggle', async () => {
     if (!details.open || details.dataset.loaded) return;
     try {
-      const response = await fetch(file + '?v=20261012-entries1');
+      const response = await fetch(file + '?v=20261013-study1');
       if (!response.ok) throw new Error(String(response.status));
       pre.textContent = await response.text(); details.dataset.loaded = 'true';
     } catch { pre.textContent = lang === 'en' ? 'Unable to load this document. Use the source link above.' : '文档暂时无法加载，请使用上方的原文链接。'; }

@@ -1490,3 +1490,16 @@ body{font-size:14px;user-select:auto}
   .analysis-column { height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding-right: 8px; }
   .analysis-column > * { flex: 0 0 auto; }
 }
+
+/* Personal study interactions share the original board and piece visuals. */
+.maia-chessboard { touch-action:none; user-select:none; }
+.study-drag-piece { position:fixed!important; pointer-events:none; z-index:9999; transform:translate(-50%,-50%); }
+.promotion-picker { position:absolute; inset:35% 8%; z-index:30; display:flex; justify-content:center; background:var(--dg-surface); border:1px solid var(--dg-line); border-radius:12px; box-shadow:0 8px 30px #0003; }
+.promotion-picker button { width:25%; padding:8px; background:none; border:0; cursor:pointer; }
+.promotion-picker button:focus-visible { outline:2px solid var(--dg-green); }
+.promotion-picker svg { width:100%; height:100%; }
+.study-branches { display:grid; gap:6px; padding:12px 0 0; border-top:1px solid var(--dg-line); font-size:11px; }
+.study-branches:empty { display:none; }
+.study-branch { text-align:left; border:1px solid var(--dg-line); border-radius:6px; padding:7px 9px; background:var(--dg-surface); color:var(--dg-ink); cursor:pointer; white-space:normal; overflow-wrap:anywhere; }
+@media (max-width:420px) { .btn-nav-group { flex-wrap:wrap; max-width:100%; justify-content:center; } }
+#board-status-text { min-width:0; max-width:100%; overflow-wrap:anywhere; }

@@ -526,6 +526,15 @@ export async function initMaiaExtension() {
   // Synchronize live evaluation toggle from chrome.storage changes
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local') {
+        if (changes.maia3_lang && changes.maia3_lang.newValue !== panel.lang) panel.setLanguage(changes.maia3_lang.newValue);
+        if (changes.defaultElo && changes.defaultElo.newValue !== panel.currentElo) panel.setElo(changes.defaultElo.newValue);
+        if (changes.showHeatmap || changes.showArrows || changes.showStockfishArrows) {
+          for (const key of ['showHeatmap', 'showArrows', 'showStockfishArrows']) if (changes[key]) panel[key] = changes[key].newValue;
+          panel.syncStudyChrome();
+          overlay.setToggles({ showHeatmap: panel.showHeatmap, showArrows: panel.showArrows, showStockfishArrows: panel.showStockfishArrows });
+        }
+      }
       if (area === 'local' && (changes.maiaVariant || changes.stockfishVariant || changes.cloudflareCdnUrl)) applyEnginePreferences();
       if (area === 'local' && changes.liveEvaluation) {
         liveEvaluationEnabled = Boolean(changes.liveEvaluation.newValue);

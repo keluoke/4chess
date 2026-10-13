@@ -80,7 +80,13 @@ export class MaiaInBrowserEngine {
           let fetchUrl = urlOrBuffer;
           if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://') && !fetchUrl.startsWith('chrome-extension://')) {
             if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-              fetchUrl = chrome.runtime.getURL(fetchUrl);
+              fetchUrl = chrome.runtime.getURL(fetchUrl.replace(/^\/+/, ''));
+            } else {
+              try {
+                if (typeof import.meta !== 'undefined' && import.meta.url) {
+                  fetchUrl = new URL(fetchUrl.startsWith('/') ? fetchUrl : (fetchUrl.startsWith('models/') ? `../${fetchUrl}` : fetchUrl), import.meta.url).href;
+                }
+              } catch (_) {}
             }
           }
 

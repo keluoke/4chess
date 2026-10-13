@@ -11,8 +11,8 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
-  <link rel="stylesheet" href="../ui/theme.css?v=20261012-entries1">
-  <link rel="stylesheet" href="analysis.css?v=20261012-entries1">
+  <link rel="stylesheet" href="../ui/theme.css?v=20261013-study1">
+  <link rel="stylesheet" href="analysis.css?v=20261013-study1">
 </head>
 <body class="diverge-ui">
   <script>
@@ -99,6 +99,7 @@
               <path d="M17 4v16m0 0 4-4m-4 4-4-4"/>
             </svg>
           </button>
+          <button type="button" class="btn-nav" id="btn-clear-thought-arrows" data-i18n-title="clearThoughtArrows" aria-label="清除思考箭头"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 3h4M6 7l1 14h10l1-14M10 10v7m4-7v7"/></svg></button>
           <button type="button" class="btn-nav" id="btn-sound" data-i18n-title="btnSound" title="行棋音效开关 (快捷键: M)" aria-label="行棋音效开关">
             <svg id="icon-sound-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
@@ -180,6 +181,8 @@
       <label><span data-i18n="engineEdition">引擎版本</span><select id="engine-edition" class="btn-header"><option value="lite" data-i18n="sfLiteEdition">SF19 轻量版</option><option value="standard" data-i18n="sfStandardEdition">SF19 标准版</option></select></label>
       <label><span data-i18n="intuitionEdition">直觉版本</span><select id="intuition-edition" class="btn-header"><option value="5m">Maia-3 5M</option><option value="23m">Maia-3 23M</option><option value="79m">Maia-3 79M</option></select></label>
       <p class="settings-model-note" data-i18n="largeModelNote">SF19 标准版约 95 MB；Maia 5M / 23M / 79M 约 28 / 104 / 159 MB。首次下载后保存在浏览器，切换版本会重新分析。</p>
+      <p class="settings-model-note" id="studio-engine-experience" role="note" aria-live="polite" hidden></p><p class="settings-model-note" id="preference-sync-status"></p>
+      <p class="settings-model-note" data-i18n="boardInteractionHelp"></p>
       <p class="settings-model-note" id="extension-standard-note" hidden><a href="https://4chess.cc/analysis/" target="_blank" rel="noopener" data-i18n="standardWebOnly">SF19 标准版请在网页版使用</a></p>
       <label><span data-i18n="eloLabel">直觉 ELO</span><select id="elo-selector" class="btn-header"><option value="1100" data-i18n="eloBeginner">1100 (初学)</option><option value="1500" data-i18n="eloIntermediate">1500 (进阶)</option><option value="1900" selected data-i18n="eloClub">1900 (俱乐部)</option><option value="2200" data-i18n="eloMaster">2200 (大师)</option></select></label>
       <label><span data-i18n="positionStrength">局面分析强度</span><select id="position-depth" class="btn-header"><option value="10" data-i18n="strengthStandard">标准</option><option value="14" data-i18n="strengthDeep">深入</option></select></label>
@@ -230,12 +233,12 @@
     </div>
   </div>
 
-  <script type="module" src="../ui/theme.js?v=20261012-entries1"></script>
-  <script type="module" src="analysis.js?v=20261012-entries1"></script>
+  <script type="module" src="../ui/theme.js?v=20261013-study1"></script>
+  <script type="module" src="analysis.js?v=20261013-study1"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261012-entries1').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261013-study1').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

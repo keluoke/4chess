@@ -1,4 +1,5 @@
 /* Appearance preference only; no engine or game state is touched. */
+import { savePreferences, subscribePreferences } from '../engine/engine-preferences.js';
 const themeKey = 'diverge_ui_theme';
 const validThemes = new Set(['light', 'dark']);
 const systemTheme = () => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -24,11 +25,13 @@ if (extensionStorage) {
   try { savedTheme = localStorage.getItem(themeKey); } catch {}
 }
 applyTheme(savedTheme);
+subscribePreferences(prefs => { if (prefs.diverge_ui_theme) { savedTheme = prefs.diverge_ui_theme; applyTheme(savedTheme); } });
 new MutationObserver(() => applyTheme(savedTheme)).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(savedTheme));
 document.querySelectorAll('[data-theme-toggle]').forEach(button => button.addEventListener('click', () => {
   savedTheme = (document.body.dataset.theme || systemTheme()) === 'dark' ? 'light' : 'dark';
   applyTheme(savedTheme);
+  savePreferences({ diverge_ui_theme: savedTheme });
   if (extensionStorage) extensionStorage.set({ [themeKey]: savedTheme });
   else { try { localStorage.setItem(themeKey, savedTheme); } catch {} }
 }));

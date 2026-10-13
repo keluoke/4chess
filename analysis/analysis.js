@@ -3,17 +3,18 @@
  * High-performance, zero-latency, 100% self-contained chess analysis workstation.
  */
 
-import { ChessBoard } from '../engine/chess-core.js?v=20261012-entries1';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261012-entries1';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261012-entries1';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261012-entries1';
-import { BoardUI } from './board-ui.js?v=20261012-entries1';
-import { EvalChart } from './eval-chart.js?v=20261012-entries1';
-import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261012-entries1';
-import { PositionAnalysis } from './position-analysis.js?v=20261012-entries1';
-import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261012-entries1';
-import { soundEffects } from './sound-effects.js?v=20261012-entries1';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261012-entries1';
+import { ChessBoard } from '../engine/chess-core.js?v=20261013-study1';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261013-study1';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261013-study1';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261013-study1';
+import { BoardUI } from './board-ui.js?v=20261013-study1';
+import { EvalChart } from './eval-chart.js?v=20261013-study1';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261013-study1';
+import { PositionAnalysis } from './position-analysis.js?v=20261013-study1';
+import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261013-study1';
+import { soundEffects } from './sound-effects.js?v=20261013-study1';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261013-study1';
+import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
@@ -46,17 +47,10 @@ class AnalysisStudioApp {
     this.maiaEngine = null;
     this.analyzer = null;
 
-    this.currentElo = 1900;
-    this.engineVariant = 'lite';
-    this.modelVariant = '5m';
-    try {
-      const saved = JSON.parse(localStorage.getItem('diverge_engine_versions') || '{}');
-      if (STOCKFISH_VARIANTS[saved.engine]) this.engineVariant = saved.engine;
-      if (MAIA_VARIANTS[saved.model]) this.modelVariant = saved.model;
-    } catch {}
-    const versionParams = new URLSearchParams(location.search || location.hash.slice(1));
-    if (STOCKFISH_VARIANTS[versionParams.get('sf')]) this.engineVariant = versionParams.get('sf');
-    if (MAIA_VARIANTS[versionParams.get('maia')]) this.modelVariant = versionParams.get('maia');
+    const preferences = getPreferences();
+    this.currentElo = preferences.defaultElo;
+    this.engineVariant = preferences.stockfishVariant;
+    this.modelVariant = preferences.maiaVariant;
     if (location.protocol === 'chrome-extension:') this.engineVariant = 'lite';
     this.moves = [];
     this.positions = [];
@@ -67,21 +61,24 @@ class AnalysisStudioApp {
     this.currentGameKey = '';
 
     this.isBranching = false;
+    this.savedBranches = [];
     this.branchFen = null;
     this.isPlaying = false;
     this.playTimer = null;
     this.currentDivergenceFilter = 'all';
     this.isReviewingMove = false;
     this.hasAnalysisInput = false;
-    this.settings = { arrows: true, heatmap: false, probability: true };
+    this.settings = { arrows: preferences.showArrows || preferences.showStockfishArrows, maiaArrows: preferences.showArrows, sfArrows: preferences.showStockfishArrows, heatmap: preferences.showHeatmap, probability: preferences.showProbability };
 
     this.initElements();
     initI18n();
-    onLanguageChange(() => this.refreshAfterLanguageChange());
+    onLanguageChange(() => { this.refreshAfterLanguageChange(); if (!this.applyingPreferences) savePreferences({ maia3_lang: getLang() }); });
 
     this.initEngines();
     this.initUI();
     this.bindEvents();
+    this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
+    subscribePreferences(next => this.applyPreferences(next));
     this.headerObserver = new ResizeObserver(() => {
       document.documentElement.style.setProperty('--studio-header-height', `${Math.ceil(document.querySelector('.studio-navbar').getBoundingClientRect().height)}px`);
     });
@@ -138,8 +135,10 @@ class AnalysisStudioApp {
     };
   }
 
-  initEngines() {
-    this.stockfish = new StockfishInBrowser({ variant: this.engineVariant });
+  initEngines({ keepStockfish = false } = {}) {
+    if (!keepStockfish) this.stockfish = new StockfishInBrowser({ variant: this.engineVariant });
+    const stockfish = this.stockfish;
+    stockfish.onDownloadProgress = () => { if (this.stockfish === stockfish) this.updateEngineStatus(); };
     const maia = new MaiaEngine(() => { if (this.maiaEngine === maia) this.updateEngineStatus(); }, this.stockfish, { variant: this.modelVariant });
     this.maiaEngine = maia;
     this.analyzer = new GameAnalyzer(this.stockfish, this.maiaEngine);
@@ -213,14 +212,19 @@ class AnalysisStudioApp {
       const dot = document.getElementById(`dot-${name}`);
       if (dot) dot.className = `status-dot${ready ? ' ready' : failed ? ' error' : loading ? ' loading' : ''}`;
       const text = document.getElementById(`text-status-${name}`);
-      if (text) text.textContent = t(status);
+      if (text) {
+        const progress = name === 'maia' ? this.maiaEngine?.status?.maia : this.stockfish?.downloadProgress;
+        text.textContent = loading && progress && (name === 'sf' || progress.state === 'downloading') ? t('modelDownloading', { percent: progress.percent || 0 }) : t(status);
+      }
     }
+    this.positionAnalysis?.renderLoadingStatuses();
   }
 
   flipBoard() {
     this.boardUI.flip();
     document.getElementById('setting-orientation').value = this.boardUI.orientation;
     this.positionAnalysis.render();
+    savePreferences({ studio_orientation: this.boardUI.orientation });
   }
 
   bindEvents() {
@@ -238,6 +242,7 @@ class AnalysisStudioApp {
     // Elo selector
     this.el.eloSelector.addEventListener('change', (e) => {
       this.currentElo = parseInt(e.target.value, 10);
+      savePreferences({ defaultElo: this.currentElo });
       try {
         localStorage.setItem('maia3_target_elo', String(this.currentElo));
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -250,7 +255,7 @@ class AnalysisStudioApp {
       this.currentGameKey = this.getReviewKey();
       // Invalidate review result so old Elo data is not mixed
       this.reviewResult = null;
-      if (this.moves && this.moves.length > 0) {
+      if (this.moves && this.moves.length > 0 && !this.isBranching) {
         this.runFullReview(false);
       } else {
         this.updateActivePositionAnalysis();
@@ -258,14 +263,16 @@ class AnalysisStudioApp {
     });
 
     // Board controls
-    this.el.btnFirst.addEventListener('click', () => this.goToPly(0));
-    this.el.btnPrev.addEventListener('click', () => this.goToPly(this.currentPly - 1));
-    this.el.btnNext.addEventListener('click', () => this.goToPly(this.currentPly + 1));
-    this.el.btnLast.addEventListener('click', () => this.goToPly(this.positions.length - 1));
+    this.el.btnFirst.addEventListener('click', () => this.isBranching ? this.showBranchPosition(0) : this.goToPly(0));
+    this.el.btnPrev.addEventListener('click', () => this.navigateStudy(-1));
+    this.el.btnNext.addEventListener('click', () => this.navigateStudy(1));
+    this.el.btnLast.addEventListener('click', () => this.isBranching ? this.showBranchPosition(this.activeBranch.moves.length) : this.goToPly(this.positions.length - 1));
+    document.getElementById('btn-clear-thought-arrows').addEventListener('click', () => this.boardUI.clearAnnotations());
     this.el.btnFlip.addEventListener('click', () => this.flipBoard());
     if (this.el.btnSound) {
       this.el.btnSound.addEventListener('click', () => {
         const enabled = soundEffects.toggle();
+        savePreferences({ diverge_sound_enabled: enabled });
         this.updateSoundToggleUI();
         if (enabled) {
           soundEffects.playMove();
@@ -291,16 +298,19 @@ class AnalysisStudioApp {
       }
     });
     this.el.settingsDialog.addEventListener('close', () => this.el.btnSettings.focus());
-    this.el.positionDepth.addEventListener('change', () => this.positionAnalysis.refresh());
+    this.el.positionDepth.addEventListener('change', () => { savePreferences({ studio_depth: Number(this.el.positionDepth.value) }); this.positionAnalysis.refresh(); });
     for (const [id, key] of [['setting-arrows', 'arrows'], ['setting-heatmap', 'heatmap'], ['setting-probability', 'probability']]) {
       document.getElementById(id).addEventListener('change', event => {
         this.settings[key] = event.target.checked;
+        if (key === 'arrows') this.settings.maiaArrows = this.settings.sfArrows = event.target.checked;
+        savePreferences(key === 'arrows' ? { showArrows: event.target.checked, showStockfishArrows: event.target.checked } : { [key === 'heatmap' ? 'showHeatmap' : 'showProbability']: event.target.checked });
         if (key === 'heatmap') this.positionAnalysis.refresh();
         else this.positionAnalysis.render();
       });
     }
     document.getElementById('setting-orientation').addEventListener('change', event => {
       this.boardUI.setOrientation(event.target.value);
+      savePreferences({ studio_orientation: event.target.value });
       this.positionAnalysis.render();
     });
 
@@ -417,21 +427,25 @@ class AnalysisStudioApp {
         }
         return;
       }
-      if (['input', 'textarea', 'select', 'button', 'a'].includes(document.activeElement?.tagName?.toLowerCase())) return;
+      if (this.boardUI.promotionPicker) {
+        if (e.key === 'Escape') { e.preventDefault(); this.boardUI.closePromotion(); }
+        return;
+      }
+      if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey || document.activeElement?.isContentEditable || document.activeElement?.closest('input, textarea, select, [role="textbox"]')) return;
 
       if (e.key === 'ArrowLeft' || e.key === 'j') {
         e.preventDefault();
-        this.goToPly(this.currentPly - 1);
+        this.navigateStudy(-1);
       } else if (e.key === 'ArrowRight' || e.key === 'k') {
         e.preventDefault();
-        this.goToPly(this.currentPly + 1);
+        this.navigateStudy(1);
       } else if (e.key === 'Home') {
         e.preventDefault();
-        this.goToPly(0);
+        if (this.isBranching) this.showBranchPosition(0); else this.goToPly(0);
       } else if (e.key === 'End') {
         e.preventDefault();
-        this.goToPly(this.positions.length - 1);
-      } else if (e.key === ' ' || e.code === 'Space') {
+        if (this.isBranching) this.showBranchPosition(this.activeBranch.moves.length); else this.goToPly(this.positions.length - 1);
+      } else if ((e.key === ' ' || e.code === 'Space') && !document.activeElement?.closest('button, a')) {
         e.preventDefault();
         this.toggleAutoPlay();
       } else if (e.key === 'f' || e.key === 'F') {
@@ -446,6 +460,8 @@ class AnalysisStudioApp {
 
   refreshAfterLanguageChange() {
     if (!this.el) return;
+    this.updatePreferenceNotes();
+    this.renderStudyBranches();
 
     // 1. Meta player names if default
     if (this.el.metaWhite) {
@@ -498,7 +514,10 @@ class AnalysisStudioApp {
       const detailEl = document.getElementById('blunder-loading-detail');
       const titleEl = detailEl?.previousElementSibling;
       if (titleEl) titleEl.textContent = t('launchingEngines');
-      if (this.lastProgress) {
+      if (this.reviewPendingResume) {
+        this.el.phaseText.textContent = t('reviewPausedForPosition');
+        if (detailEl) detailEl.textContent = t('reviewResumeHint');
+      } else if (this.lastProgress) {
         const prog = this.lastProgress;
         const txt = prog.phase === 'intuition'
           ? t('analyzingIntuition', { current: prog.current, total: prog.total, move: prog.currentMove || '' })
@@ -550,8 +569,8 @@ class AnalysisStudioApp {
       this.el.btnPlay.textContent = '⏸';
       this.el.btnPlay.title = t('btnPlayPause');
       this.playTimer = setInterval(() => {
-        if (this.currentPly < this.positions.length - 1) {
-          this.goToPly(this.currentPly + 1);
+        if ((this.isBranching ? this.activeBranch.cursor : this.currentPly) < (this.isBranching ? this.activeBranch.moves.length : this.positions.length - 1)) {
+          this.navigateStudy(1);
         } else {
           this.toggleAutoPlay();
         }
@@ -1003,6 +1022,12 @@ class AnalysisStudioApp {
     autoReview = true
   } = {}) {
     // 1. Immediately abort running tasks and advance session epochs
+    clearTimeout(this.resumeReviewTimer);
+    this.fullReviewRunning = this.reviewPendingResume = false;
+    this.savedBranches = [];
+    this.activeBranch = null;
+    this.boardUI.clearAnnotations(true);
+    this.renderStudyBranches();
     this.positionAnalysis.cancel();
     this.positionAnalysis.active = null;
     this.positionAnalysis.cache.clear();
@@ -1162,19 +1187,22 @@ class AnalysisStudioApp {
     return GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
   }
 
-  changeEngineVersions() {
+  changeEngineVersions({ persist = true } = {}) {
     const engine = document.getElementById('engine-edition').value;
     const model = document.getElementById('intuition-edition').value;
     if (engine === this.engineVariant && model === this.modelVariant) return;
+    const engineChanged = engine !== this.engineVariant;
     if (this.isPlaying) this.toggleAutoPlay();
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
     this.reviewEpoch++;
     this.gameEpoch++;
     this.maiaEngine.dispose();
-    this.stockfish.reset();
+    if (engineChanged) this.stockfish.reset();
     this.engineVariant = engine;
     this.modelVariant = model;
+    if (persist) savePreferences({ maiaVariant: model, ...(location.protocol === 'chrome-extension:' ? {} : { stockfishVariant: engine }) });
+    this.updatePreferenceNotes();
     try { localStorage.setItem('diverge_engine_versions', JSON.stringify({ engine, model })); } catch {}
     const url = new URL(location.href);
     if (url.searchParams.has('sf') || url.searchParams.has('maia')) {
@@ -1182,7 +1210,7 @@ class AnalysisStudioApp {
       url.searchParams.set('maia', model);
       history.replaceState(null, '', url);
     }
-    this.initEngines();
+    this.initEngines({ keepStockfish: !engineChanged });
     this.currentGameKey = this.getReviewKey();
     this.reviewResult = null;
     this.lastProgress = null;
@@ -1196,7 +1224,7 @@ class AnalysisStudioApp {
     for (const id of ['filter-count-all', 'filter-count-beyond', 'filter-count-trap']) document.getElementById(id).textContent = '0';
     this.el.divergenceContent.hidden = true;
     this.renderMoveList();
-    if (this.moves.length) this.runFullReview();
+    if (this.moves.length && !this.isBranching) this.runFullReview();
     else this.updateActivePositionAnalysis();
   }
 
@@ -1236,12 +1264,15 @@ class AnalysisStudioApp {
     const targetReviewEpoch = ++this.reviewEpoch;
     const targetGameKey = this.currentGameKey;
     const targetElo = this.currentElo;
+    clearTimeout(this.resumeReviewTimer);
+    this.fullReviewRunning = true;
+    this.reviewPendingResume = false;
 
     this.el.progressCard.style.display = 'flex';
     this.el.progressBar.style.width = '0%';
     this.el.percentText.textContent = '0%';
     this.el.phaseText.textContent = t('preparingEngine');
-    setTimeout(() => { this.updateEngineStatus(); this.positionAnalysis.refresh({ calculate: false }); }, 0);
+    setTimeout(() => this.updateEngineStatus(), 0);
 
     this.el.blunderList.replaceChildren();
     const loadingCard = document.createElement('div');
@@ -1258,6 +1289,12 @@ class AnalysisStudioApp {
     this.el.blunderList.appendChild(loadingCard);
 
     try {
+      // Present the current position independently while each engine downloads/prepares.
+      this.positionAnalysis.refresh({ calculate: false });
+      this.positionAnalysis.pending = this.positionAnalysis.compute(this.positionAnalysis.active);
+      await this.positionAnalysis.pending;
+      if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch || this.isBranching) return;
+      this.positionAnalysis.cancel();
       const result = await this.analyzer.analyzeGame(this.moves, {
         depth: 6,
         elo: targetElo,
@@ -1324,6 +1361,8 @@ class AnalysisStudioApp {
       errBox.appendChild(retryBtn);
 
       this.el.blunderList.appendChild(errBox);
+    } finally {
+      if (this.reviewEpoch === targetReviewEpoch) this.fullReviewRunning = false;
     }
   }
 
@@ -1733,6 +1772,7 @@ class AnalysisStudioApp {
   }
 
   goToPly(ply, options = {}) {
+    if (!options.silent) this.pauseWholeReview();
     this.exitBranchMode();
 
     if (this.positions.length === 0) return;
@@ -1780,10 +1820,52 @@ class AnalysisStudioApp {
       this.el.boardStatusText.textContent = this.isReviewingMove ? t('reviewMoveBefore', { move: currentPos.san, number: currentPos.moveNumber }) : t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
     }
     this.updateActivePositionAnalysis();
+    if (!options.silent) this.scheduleReviewResume();
   }
 
   updateActivePositionAnalysis() {
     this.positionAnalysis.refresh();
+  }
+
+  updatePreferenceNotes() {
+    const experience = document.getElementById('studio-engine-experience');
+    if (experience) { experience.textContent = engineExperienceHint(getPreferences(), getLang(), location.protocol === 'chrome-extension:'); experience.hidden = !experience.textContent; }
+    const sync = document.getElementById('preference-sync-status');
+    if (sync) sync.textContent = t(preferencesLinked() ? 'preferencesConnected' : 'preferencesBrowserOnly');
+    if (this.boardUI) this.boardUI.promotionLabel = t('choosePromotion');
+  }
+
+  applyPreferences(prefs) {
+    this.applyingPreferences = true;
+    try {
+      const engine = location.protocol === 'chrome-extension:' ? 'lite' : prefs.stockfishVariant;
+      const versionsChanged = engine !== this.engineVariant || prefs.maiaVariant !== this.modelVariant;
+      const eloChanged = this.currentElo !== prefs.defaultElo;
+      const calculate = eloChanged || this.settings.heatmap !== prefs.showHeatmap || Number(this.el.positionDepth.value) !== prefs.studio_depth;
+      if (getLang() !== prefs.maia3_lang) setLanguage(prefs.maia3_lang);
+      this.currentElo = prefs.defaultElo;
+      if (![...this.el.eloSelector.options].some(option => option.value === String(prefs.defaultElo))) this.el.eloSelector.add(new Option(String(prefs.defaultElo), String(prefs.defaultElo)));
+      this.el.eloSelector.value = String(prefs.defaultElo);
+      this.settings = { arrows: prefs.showArrows || prefs.showStockfishArrows, maiaArrows: prefs.showArrows, sfArrows: prefs.showStockfishArrows, heatmap: prefs.showHeatmap, probability: prefs.showProbability };
+      document.getElementById('setting-arrows').checked = this.settings.arrows;
+      document.getElementById('setting-heatmap').checked = prefs.showHeatmap;
+      document.getElementById('setting-probability').checked = prefs.showProbability;
+      this.el.positionDepth.value = String(prefs.studio_depth);
+      this.boardUI.setOrientation(prefs.studio_orientation);
+      document.getElementById('setting-orientation').value = prefs.studio_orientation;
+      soundEffects.enabled = prefs.diverge_sound_enabled;
+      this.updateSoundToggleUI();
+      this.updatePreferenceNotes();
+      if (versionsChanged) {
+        document.getElementById('engine-edition').value = engine; document.getElementById('intuition-edition').value = prefs.maiaVariant;
+        this.changeEngineVersions({ persist: false });
+      } else if (eloChanged) {
+        this.pauseWholeReview(); this.analyzer.cancel(); this.reviewEpoch++; this.currentGameKey = this.getReviewKey(); this.reviewResult = null;
+        if (this.moves.length && !this.isBranching) this.runFullReview(); else this.positionAnalysis.refresh();
+      } else if (this.positions.length) {
+        if (calculate) this.positionAnalysis.refresh(); else this.positionAnalysis.render();
+      }
+    } finally { this.applyingPreferences = false; }
   }
 
   resetPositionPanel() {
@@ -1794,15 +1876,76 @@ class AnalysisStudioApp {
 
   previewCandidate(context, variation) {
     if (this.isPlaying) this.toggleAutoPlay();
+    this.pauseWholeReview();
     this.hasAnalysisInput = true;
+    if (!this.isBranching) {
+      this.activeBranch = { base: { ...context, history: [...context.history] }, anchor: this.currentPly, moves: [], cursor: 0 };
+      this.savedBranches.push(this.activeBranch);
+    }
+    this.activeBranch.moves = [...this.activeBranch.moves.slice(0, this.activeBranch.cursor), ...variation];
+    this.showBranchPosition(this.activeBranch.moves.length);
+  }
+
+  showBranchPosition(cursor) {
+    const branch = this.activeBranch;
+    branch.cursor = Math.max(0, Math.min(cursor, branch.moves.length));
     this.isBranching = true;
-    this.branchFen = variation.at(-1).fen;
-    this.branchHistory = [...context.history, context.fen, ...variation.slice(0, -1).map(move => move.fen)].slice(-7);
+    const moves = branch.moves.slice(0, branch.cursor);
+    this.branchFen = moves.at(-1)?.fen || branch.base.fen;
+    this.branchHistory = [...branch.base.history, ...[branch.base.fen, ...moves.map(move => move.fen)].slice(0, -1)].slice(-7);
     this.el.branchBanner.style.display = 'flex';
-    this.boardUI.setPosition(this.branchFen, { from: variation.at(-1).uci.slice(0, 2), to: variation.at(-1).uci.slice(2, 4) });
-    this.el.boardStatusText.textContent = t('branchMoveIndicator', { move: variation.map(move => move.label).join(' ') });
-    soundEffects.playSoundForMove(variation.at(-1).san);
+    const last = moves.at(-1);
+    this.boardUI.setPosition(this.branchFen, last ? { from: last.uci.slice(0, 2), to: last.uci.slice(2, 4) } : null);
+    this.el.boardStatusText.textContent = t('branchMoveIndicator', { move: moves.map(move => move.label).join(' ') || t('startingPosition') });
+    this.renderStudyBranches();
+    if (last) soundEffects.playSoundForMove(last.san);
     this.updateActivePositionAnalysis();
+  }
+
+  navigateStudy(delta) {
+    if (this.isBranching) {
+      if (this.activeBranch.cursor + delta < 0) this.goToPly(this.activeBranch.anchor);
+      else this.showBranchPosition(this.activeBranch.cursor + delta);
+    } else this.goToPly(this.currentPly + delta);
+  }
+
+  renderStudyBranches() {
+    let list = document.getElementById('study-branches');
+    if (!list) { list = document.createElement('div'); list.id = 'study-branches'; list.className = 'study-branches'; this.el.moveNotationTable.parentElement.append(list); }
+    list.replaceChildren();
+    if (!this.savedBranches.length) return;
+    const heading = document.createElement('strong'); heading.textContent = t('userBranches'); list.append(heading);
+    for (const branch of this.savedBranches) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'study-branch';
+      const base = new ChessBoard(branch.base.fen);
+      const origin = branch.base.fen === ChessBoard.INITIAL_FEN ? t('startingPosition') : `${base.fullMoves}${base.turn === 'w' ? '.' : '…'}`;
+      button.textContent = `${origin} · ${branch.moves.map(move => move.label).join(' ')}`;
+      button.onclick = () => { this.pauseWholeReview(); this.activeBranch = branch; this.currentPly = branch.anchor; this.showBranchPosition(branch.moves.length); };
+      list.append(button);
+    }
+  }
+
+  pauseWholeReview() {
+    clearTimeout(this.resumeReviewTimer);
+    if (!this.fullReviewRunning && !this.analyzer.isAnalyzing) return;
+    this.reviewEpoch++;
+    this.analyzer.cancel();
+    this.analyzer = new GameAnalyzer(this.stockfish, this.maiaEngine);
+    this.fullReviewRunning = false;
+    this.reviewPendingResume = !this.reviewResult && !!this.moves.length;
+    this.lastProgress = null;
+    this.el.phaseText.textContent = t('reviewPausedForPosition');
+    const detail = document.getElementById('blunder-loading-detail');
+    if (detail) { detail.textContent = t('reviewResumeHint'); if (detail.previousElementSibling) detail.previousElementSibling.textContent = t('reviewPausedForPosition'); }
+  }
+
+  scheduleReviewResume() {
+    if (!this.reviewPendingResume || this.isBranching) return;
+    clearTimeout(this.resumeReviewTimer);
+    this.resumeReviewTimer = setTimeout(async () => {
+      await this.positionAnalysis.pending;
+      if (this.reviewPendingResume && !this.isBranching && !this.fullReviewRunning) this.runFullReview();
+    }, 1800);
   }
 
   handleUserBoardMove(move, newFen) {
@@ -1825,7 +1968,22 @@ class AnalysisStudioApp {
 }
 
 // Safe instantiation for both pre-loaded and deferred execution
-function initApp() {
+async function initApp() {
+  if (window.__maiaStudioBooting) return;
+  window.__maiaStudioBooting = true;
+  await initializePreferences();
+  const url = new URL(location.href), hash = new URLSearchParams(url.hash.slice(1));
+  const value = key => hash.get(key) || url.searchParams.get(key);
+  const intent = {};
+  if (value('sf')) intent.stockfishVariant = value('sf');
+  if (value('maia')) intent.maiaVariant = value('maia');
+  if (value('lang')) intent.maia3_lang = value('lang');
+  if (value('elo')) intent.defaultElo = Number(value('elo'));
+  if (Object.keys(intent).length) {
+    await savePreferences(intent);
+    for (const key of ['sf', 'maia', 'lang', 'elo']) { url.searchParams.delete(key); hash.delete(key); }
+    url.hash = hash.toString(); history.replaceState(null, '', url);
+  }
   if (!window.__maiaStudioApp) {
     window.__maiaStudioApp = new AnalysisStudioApp();
   }
