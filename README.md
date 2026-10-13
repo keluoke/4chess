@@ -114,7 +114,7 @@ diverge-extension/
    ```
 2. 在页面右上角开启 **开发者模式 (Developer mode)**。
 3. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
-4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.0.6.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
+4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.0.7.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
 5. 看到 `歧路 Diverge · 人类直觉与双引擎研判` 图标亮起即安装成功。
 
 ### 第二步：首次加载与模型缓存

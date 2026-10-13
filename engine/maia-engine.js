@@ -13,6 +13,26 @@ import { StockfishInBrowser } from './stockfish-inbrowser.js';
 import { ModelCache } from './model-cache.js';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
+export function modelSourceCandidates(variant, input = '') {
+  const spec = MAIA_VARIANTS[variant];
+  const fileName = new URL(spec.url).pathname.split('/').pop();
+  const candidates = [];
+  try {
+    const url = new URL(input.trim());
+    if (['https:', 'http:'].includes(url.protocol)) {
+      if (/\.bin$/i.test(url.pathname)) {
+        const name = url.pathname.split('/').pop();
+        const known = Object.values(MAIA_VARIANTS).some(model => new URL(model.url).pathname.split('/').pop() === name);
+        if (!known || name === fileName) candidates.push(url.href);
+      } else {
+        url.pathname = `${url.pathname.replace(/\/+$/, '')}/${fileName}`;
+        candidates.push(url.href);
+      }
+    }
+  } catch { /* Invalid or relative URLs fall back to the external official CDN. */ }
+  return [...new Set([...candidates, spec.url])];
+}
+
 export class MaiaEngine {
   constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m' } = {}) {
     this.variant = MAIA_VARIANTS[variant] ? variant : '5m';
@@ -202,32 +222,12 @@ export class MaiaEngine {
     if (!customCdn && typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
         const stored = await chrome.storage.local.get(['cloudflareCdnUrl']);
-        if (stored?.cloudflareCdnUrl) {
-          const rawCdn = stored.cloudflareCdnUrl.trim();
-          if (rawCdn) {
-            const defaultUrl = MAIA_VARIANTS[this.variant].url;
-            const fileName = defaultUrl.split('/').pop();
-            if (rawCdn.endsWith('.bin')) {
-              if (rawCdn.endsWith(fileName) || this.variant === '5m') {
-                customCdn = rawCdn;
-              }
-            } else {
-              // Base directory or CDN URL prefix
-              customCdn = `${rawCdn.replace(/\/+$/, '')}/${fileName}`;
-            }
-          }
-        }
+        customCdn = stored?.cloudflareCdnUrl || '';
       } catch (e) {}
     }
 
-    const candidates = [];
-    if (customCdn) {
-      candidates.push(customCdn);
-    }
-    // Primary Default: Dedicated Cloudflare CDN bucket fallback
-    if (!customCdn || customCdn !== MAIA_VARIANTS[this.variant].url) {
-      candidates.push(MAIA_VARIANTS[this.variant].url);
-    }
+    // The floating panel supplies an override, so normalize it just like stored preferences.
+    const candidates = modelSourceCandidates(this.variant, customCdn);
 
     let loaded = false;
     let lastErr = null;

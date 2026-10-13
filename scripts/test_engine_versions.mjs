@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
-import { MaiaEngine } from '../engine/maia-engine.js';
+import { MaiaEngine, modelSourceCandidates } from '../engine/maia-engine.js';
 import { MaiaInBrowserEngine } from '../engine/maia-inbrowser.js';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
 import { ModelCache } from '../engine/model-cache.js';
@@ -58,4 +58,25 @@ maia.workerPending.set(1, { resolve: () => { pendingSettled = true; } });
 maia.dispose();
 assert.equal(pendingSettled, true);
 await assert.rejects(maia.initialize(), /selection changed/);
+
+// Stored official URLs must remain candidates, including after a popup preset selection.
+const previousChrome = globalThis.chrome;
+try {
+  for (const variant of Object.keys(MAIA_VARIANTS)) {
+    for (const storedUrl of [MAIA_VARIANTS[variant].url, 'https://weights.4chess.cc/']) {
+      globalThis.chrome = { storage: { local: { get: async () => ({ cloudflareCdnUrl: storedUrl }) } } };
+      const coordinator = new MaiaEngine(null, { isReady: true, initialize: async () => true }, { variant });
+      const urls = [];
+      coordinator.maiaInBrowser.loadModel = async url => { urls.push(url); };
+      await coordinator.initialize(storedUrl);
+      assert.deepEqual(urls, [MAIA_VARIANTS[variant].url]);
+      assert.equal(coordinator.isReady, true);
+      coordinator.dispose();
+    }
+  }
+} finally { if (previousChrome === undefined) delete globalThis.chrome; else globalThis.chrome = previousChrome; }
+assert.deepEqual(modelSourceCandidates('79m', 'https://cdn.example.test/models/?token=abc'), ['https://cdn.example.test/models/maia3_79m_fp16_v1.bin?token=abc', MAIA_VARIANTS['79m'].url]);
+assert.deepEqual(modelSourceCandidates('23m', 'https://cdn.example.test/maia3_23m.bin?version=1'), ['https://cdn.example.test/maia3_23m.bin?version=1', MAIA_VARIANTS['23m'].url]);
+assert.deepEqual(modelSourceCandidates('5m', MAIA_VARIANTS['79m'].url), [MAIA_VARIANTS['5m'].url]);
+assert.deepEqual(modelSourceCandidates('5m', 'models/maia3_model.bin'), [MAIA_VARIANTS['5m'].url]);
 console.log('✅ Engine versions: distinct review caches, no legacy model substitution, metadata checks and switch cancellation.');
