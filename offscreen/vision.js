@@ -9,16 +9,67 @@ function cancelActive() {
 }
 let capture = null;
 let expiry;
+async function maskImages(dataUrl, regions) {
+  if (
+    !Array.isArray(regions) ||
+    !regions.length ||
+    regions.length > 32 ||
+    regions.some(
+      (r) =>
+        !r ||
+        ["x", "y", "width", "height"].some((k) => !Number.isFinite(r[k])) ||
+        r.x < 0 ||
+        r.y < 0 ||
+        r.width <= 0 ||
+        r.height <= 0 ||
+        r.x + r.width > 1.001 ||
+        r.y + r.height > 1.001,
+    )
+  )
+    throw Error("Invalid image regions");
+  const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  try {
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (const r of regions) {
+      const x = Math.ceil(r.x * bitmap.width),
+        y = Math.ceil(r.y * bitmap.height);
+      const w = Math.floor((r.x + r.width) * bitmap.width) - x;
+      const h = Math.floor((r.y + r.height) * bitmap.height) - y;
+      if (w > 0 && h > 0) ctx.drawImage(bitmap, x, y, w, h, x, y, w, h);
+    }
+    const blob = await canvas.convertToBlob({ type: "image/png" });
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(Error("Image preparation failed"));
+      reader.readAsDataURL(blob);
+    });
+  } finally {
+    bitmap.close();
+  }
+}
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || !msg.type?.startsWith("VISION_"))
     return;
   if (msg.type === "VISION_CAPTURE") {
     cancelActive();
-    capture = { id: msg.id, dataUrl: msg.dataUrl };
+    const version = generation;
+    capture = { id: msg.id, dataUrl: null };
     clearTimeout(expiry);
-    expiry = setTimeout(() => (capture = null), 120000);
-    reply({ ok: true });
-    return;
+    (async () => {
+      const dataUrl = msg.regions
+        ? await maskImages(msg.dataUrl, msg.regions)
+        : msg.dataUrl;
+      if (version !== generation || capture?.id !== msg.id)
+        throw Error("Task cancelled");
+      capture.dataUrl = dataUrl;
+      expiry = setTimeout(() => (capture = null), 120000);
+      reply({ ok: true, dataUrl });
+    })().catch((error) => reply({ ok: false, error: error.message }));
+    return true;
   }
   if (msg.type === "VISION_CLEAR") {
     if (msg.id && msg.id !== capture?.id && msg.id !== active?.id) {
@@ -33,7 +84,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   }
   if (msg.type !== "VISION_RECOGNIZE") return;
   (async () => {
-    if (!capture || capture.id !== msg.id)
+    if (!capture?.dataUrl || capture.id !== msg.id)
       throw Error("Screenshot expired; scan again");
     const dataUrl = capture.dataUrl;
     capture = null;

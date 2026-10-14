@@ -5,7 +5,8 @@ export const scanMessages = {
     retry: "Scan again",
     settings: "Settings",
     back: "Back to scan",
-    select: "Drag over a board, or detect the whole screenshot.",
+    select:
+      "Drag over a board, or detect automatically. Ordinary pages show only visible static images.",
     detect: "Detect board",
     crop: "Recognize selection",
     capturing: "Reading the page…",
@@ -33,10 +34,12 @@ export const scanMessages = {
     finished: "SF19 Lite · Depth",
     terminal: "No legal moves in this position.",
     error:
-      "Could not scan this page. Try selecting the board on a supported study page.",
+      "Could not scan this page. Try opening the diagram image and scanning again.",
     liveLocked: "Game in progress · Fair-play protection",
     unsupportedSource:
-      "Scan supports Chess.com / Lichess analysis, puzzles and finished games, Wikipedia study diagrams, and static image pages. Unknown game pages stay locked.",
+      "Scan supports study boards and static diagram images in posts or articles. Interactive games and live broadcasts stay locked.",
+    noImage:
+      "No visible static image found. Scroll the diagram into view or open its image, then scan again.",
     sourceChanged:
       "The source page changed or closed. Scan again on an allowed page.",
     scanAgain: "Scan again to restore the screenshot.",
@@ -57,7 +60,7 @@ export const scanMessages = {
     retry: "重新扫描",
     settings: "设置",
     back: "返回扫描棋盘",
-    select: "拖动框选棋盘，也可自动寻找整张截图中的棋盘。",
+    select: "拖动框选棋盘，也可自动寻找。普通网页仅保留当前可见的静态图片。",
     detect: "自动寻找棋盘",
     crop: "识别选区",
     capturing: "读取页面中…",
@@ -84,10 +87,12 @@ export const scanMessages = {
     calculating: "SF19 Lite · 计算中…",
     finished: "SF19 Lite · 深度",
     terminal: "此局面没有合法着法。",
-    error: "未能扫描页面。请在支持的学习页面上框选棋盘重试。",
+    error: "未能扫描页面。可打开棋图原图后重新扫描。",
     liveLocked: "对局进行中 · 公平竞技保护",
     unsupportedSource:
-      "支持 Chess.com / Lichess 分析台、习题与已完赛棋局、维基百科学习棋图及静态图片页。无法确认安全的对局页面保持锁定。",
+      "支持学习棋盘，以及帖子、文章中的静态棋图。互动对局与实时直播保持锁定。",
+    noImage:
+      "未找到可见的静态图片。请将棋图滚动到屏幕内，或打开原图后重新扫描。",
     sourceChanged: "来源页面已变化或关闭，请在允许的页面重新扫描。",
     scanAgain: "请重新扫描以恢复截图。",
     invalidPosition: "局面不合法，请检查双王、将军、行棋方和 FEN 字段。",

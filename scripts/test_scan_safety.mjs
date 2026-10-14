@@ -34,6 +34,46 @@ const cases = [
     false,
   ],
   ["https://unknown.example/analysis", "<article>study</article>", false],
+  [
+    "https://x.com/home",
+    '<article data-testid="tweet"><p>White to move and win</p><img src="https://pbs.twimg.com/media/board.jpg"></article><article><video></video></article>',
+    true,
+  ],
+  [
+    "https://blog.example/chess",
+    '<article><h1>A study</h1><img src="https://blog.example/diagram.png"></article>',
+    true,
+  ],
+  [
+    "https://x.com/home",
+    '<article data-testid="tweet"><p>Live chess broadcast</p><img src="https://pbs.twimg.com/media/board.jpg"></article>',
+    false,
+  ],
+  [
+    "https://x.com/home",
+    '<article data-testid="tweet"><video></video><img src="https://pbs.twimg.com/media/board.jpg"></article>',
+    false,
+  ],
+  [
+    "https://game.example/play",
+    '<div class="clock-running">1:00</div><img src="https://game.example/board.png">',
+    false,
+  ],
+  [
+    "https://game.example/game/123",
+    '<article><img src="https://game.example/board.png"></article>',
+    false,
+  ],
+  [
+    "https://game.example/play",
+    '<chess-board></chess-board><img src="https://game.example/board.png">',
+    false,
+  ],
+  [
+    "https://blog.example/chess",
+    '<article><iframe></iframe><img src="https://blog.example/diagram.png"></article>',
+    false,
+  ],
   ["https://en.wikipedia.org/wiki/Chess", "<article><img></article>", true],
   [
     "https://en.wikipedia.org/wiki/Chess",
@@ -48,11 +88,28 @@ for (const [url, html, allowed] of cases) {
   globalThis.location = dom.window.location;
   globalThis.MutationObserver = dom.window.MutationObserver;
   globalThis.getComputedStyle = dom.window.getComputedStyle;
+  globalThis.innerWidth = 1000;
+  globalThis.innerHeight = 800;
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
   dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({
     width: 100,
     height: 30,
   });
+  for (const image of document.images) {
+    Object.defineProperties(image, {
+      naturalWidth: { value: 400 },
+      naturalHeight: { value: 400 },
+      complete: { value: true },
+    });
+    image.getBoundingClientRect = () => ({
+      left: 200,
+      top: 100,
+      right: 600,
+      bottom: 500,
+      width: 400,
+      height: 400,
+    });
+  }
   let listener;
   const sent = [];
   globalThis.chrome = {
@@ -72,6 +129,46 @@ for (const [url, html, allowed] of cases) {
   let result;
   listener({ type: "SCAN_SOURCE_CHECK" }, {}, (value) => (result = value));
   assert.equal(result.allowed, allowed, url + " " + html);
+  if (result.allowed && result.imageOnly) {
+    assert.equal(result.regions.length, 1);
+    assert.deepEqual(result.regions[0], {
+      x: 0.2,
+      y: 0.125,
+      width: 0.4,
+      height: 0.5,
+    });
+    assert.equal(
+      result.candidates,
+      undefined,
+      "Never send DOM nodes outside the source document",
+    );
+    const image = document.images[0];
+    image.src += "?changed";
+    await new Promise((r) => setTimeout(r, 20));
+    assert(
+      sent.some(
+        (m) => m.type === "SCAN_REVOKED" && m.reason === "sourceChanged",
+      ),
+      "Replacing a timeline image must revoke analysis",
+    );
+    listener(
+      { type: "SCAN_SOURCE_CHECK", resetImages: true },
+      {},
+      (value) => (result = value),
+    );
+    assert.equal(
+      result.allowed,
+      true,
+      "Explicit rescan can bind the new image",
+    );
+    const clock = document.createElement("div");
+    clock.className = "clock-running";
+    document.body.append(clock);
+    await new Promise((r) => setTimeout(r, 20));
+    assert(
+      sent.some((m) => m.type === "SCAN_REVOKED" && m.reason === "liveLocked"),
+    );
+  }
   if (url.includes("chess.com/analysis") && allowed) {
     const start = Date.now();
     const clock = document.createElement("div");
@@ -107,7 +204,7 @@ assert.equal(
   "Review preserves raw labels, correctly rotates black perspective",
 );
 console.log(
-  "PASS scan source allow-list, guard precedence, completion persistence, unknown/embedded source lock, live revocation and raw-label/FEN protocol",
+  "PASS static post/article images, image identity and live revocation, guard precedence, completion persistence, unknown/embedded source lock and raw-label/FEN protocol",
 );
 
 assert(

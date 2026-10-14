@@ -135,6 +135,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         try {
           gate = await chrome.tabs.sendMessage(tab.id, {
             type: "SCAN_SOURCE_CHECK",
+            resetImages: true,
           });
           if (gate) break;
         } catch {}
@@ -162,14 +163,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await save(s, true);
       if (gate.fen) return { ok: true, state: s };
       await offscreen();
-      let dataUrl;
+      let dataUrl, captureGate;
       try {
         await chrome.tabs.sendMessage(tab.id, {
           type: "SCAN_OVERLAY",
           hide: true,
         });
         await new Promise((r) => setTimeout(r, 80));
-        await check(source);
+        captureGate = await check(source);
         const [active] = await chrome.tabs.query({
           active: true,
           windowId: tab.windowId,
@@ -183,13 +184,29 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           .sendMessage(tab.id, { type: "SCAN_OVERLAY", hide: false })
           .catch(() => {});
       }
-      await check(source);
+      const afterCapture = await check(source);
+      const [stillActive] = await chrome.tabs.query({
+        active: true,
+        windowId: tab.windowId,
+      });
+      if (
+        stillActive?.id !== tab.id ||
+        JSON.stringify(captureGate.regions) !==
+          JSON.stringify(afterCapture.regions)
+      )
+        throw Error("sourceChanged");
       if ((await state())?.id !== s.id) throw Error("sourceChanged");
-      await chrome.runtime.sendMessage({
+      const prepared = await chrome.runtime.sendMessage({
         type: "VISION_CAPTURE",
         id: s.id,
         dataUrl,
+        regions: captureGate.imageOnly ? captureGate.regions : undefined,
       });
+      if (!prepared?.ok) throw Error(prepared?.error || "recognitionFailed");
+      await check(source);
+      if ((await state())?.id !== s.id || (await state())?.locked)
+        throw Error("sourceChanged");
+      dataUrl = prepared.dataUrl || dataUrl;
       return { ok: true, state: s, dataUrl };
     }
     if (!s || s.locked) throw Error(s?.reason || "scanAgain");
