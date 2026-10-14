@@ -36,9 +36,9 @@
     </section>
     <details class="advanced-settings">
       <summary data-i18n="sectionEnginePrefs">模型与下载设置</summary>
-      <label for="sf-preset-select">Stockfish</label>
-      <select id="sf-preset-select"><option value="lite" data-i18n="sfLite">SF19 Lite · 插件内</option><option value="standard" data-i18n="sfStandardWeb">SF19 标准版 · 网页版</option></select>
-      <p data-i18n="sfWebHelp">插件内使用 Lite；标准版在全盘分析网页版使用。</p>
+      <label for="sf-preset-select" data-i18n="sfWebLabel">网页版复盘引擎</label>
+      <select id="sf-preset-select"><option value="lite" data-i18n="sfLite">SF19 Lite</option><option value="standard" data-i18n="sfStandardWeb">SF19 标准版</option></select>
+      <p data-i18n="sfWebHelp">此选项只影响网页版全盘复盘。悬浮窗始终使用 SF19 Lite。</p>
       <label for="model-preset-select">Maia-3</label>
       <select id="model-preset-select"><option value="5m">5M · 28 MB</option><option value="23m">23M · 104 MB</option><option value="79m">79M · 159 MB (FP16)</option></select>
       <details class="custom-cdn"><summary data-i18n="modelCustomOption">自定义 CDN 地址</summary><input type="url" id="cdn-url" aria-label="模型 CDN URL" placeholder="https://weights.4chess.cc/maia3_model.bin"><small data-i18n="customModelHelp">地址须对应上方所选的 Maia 版本。</small></details>

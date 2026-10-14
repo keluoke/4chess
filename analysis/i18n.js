@@ -24,7 +24,7 @@ export const DICTIONARY = {
     sfLiteEdition: "SF19 轻量版",
     sfStandardEdition: "SF19 标准版",
     largeModelNote: "SF19 标准版约 95 MB；Maia 5M / 23M / 79M 约 28 / 104 / 159 MB。首次下载后保存在浏览器，切换版本会重新分析。",
-    standardWebOnly: "SF19 标准版请在网页版使用",
+    standardWebOnly: "本地扩展页面使用 SF19 Lite；标准版请打开网页版复盘",
     // Compact two-column review studio
     reviewSettings: "复盘设置",
     btnClose: "关闭",
@@ -257,7 +257,7 @@ export const DICTIONARY = {
     sfLiteEdition: "SF19 Lite",
     sfStandardEdition: "SF19 Standard",
     largeModelNote: "SF19 Standard: about 95 MB. Maia 5M / 23M / 79M: about 28 / 104 / 159 MB. Cached in your browser after download. Switching versions starts a new review.",
-    standardWebOnly: "Use SF19 Standard in the web studio",
+    standardWebOnly: "Local extension pages use SF19 Lite; open the web studio for Standard",
     // Compact two-column review studio
     reviewSettings: "Review settings",
     btnClose: "Close",

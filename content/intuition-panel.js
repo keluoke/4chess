@@ -25,7 +25,7 @@ const I18N = {
     lblLang: '界面语言',
     lblModelSpec: 'Maia 模型',
     maiaEngine: 'Maia 3',
-    sfEngine: 'Stockfish 19',
+    sfEngine: 'SF19 Lite · 悬浮窗',
     notStarted: '未启动',
     connecting: '正在连接...',
     starting: '启动中...',
@@ -43,7 +43,7 @@ const I18N = {
     heatmap: 'Maia 落点偏好热力图',
     arrows: 'Maia 候选箭头',
     sfArrows: 'Stockfish 最佳箭头',
-    dualIntro: 'Stockfish 看好不好，Maia 看常不常见',
+    dualIntro: '引擎看质量，Maia 看人类偏好',
     maiaLegend: '金色实线 · Maia 预测',
     sfLegend: '绿色虚线 · 引擎最佳',
     consensusLegend: '青色 · 两者首选一致',
@@ -53,7 +53,9 @@ const I18N = {
     collapsedTitle: '悬浮窗已收起',
     collapsedHelp: '保留侧栏覆盖。展开后查看双引擎对比。',
     expand: '展开分析',
-    sfWebOnly: '插件内运行 SF19 Lite；标准版在全盘分析网页版使用。',
+    sfWebPreference: '网页版复盘引擎',
+    visualLegend: '箭头与热力图说明',
+    sfWebOnly: '此选项只影响网页版全盘复盘。悬浮窗始终使用 SF19 Lite。',
     modelHelp: '首次使用下载所选模型，各版本缓存独立；对局中只保存选择，结束后加载。',
     modelSaved: '已保存；允许分析时加载所选模型。',
     candidates: '人类直觉候选着法',
@@ -88,7 +90,7 @@ const I18N = {
     lblLang: 'Language:',
     lblModelSpec: 'Maia model',
     maiaEngine: 'Maia 3',
-    sfEngine: 'Stockfish 19',
+    sfEngine: 'SF19 Lite · Panel',
     notStarted: 'Not Started',
     connecting: 'Connecting...',
     starting: 'Starting...',
@@ -106,7 +108,7 @@ const I18N = {
     heatmap: 'Maia destination heatmap',
     arrows: 'Maia candidate arrows',
     sfArrows: 'Stockfish best-move arrow',
-    dualIntro: 'Stockfish: move quality · Maia: human likelihood',
+    dualIntro: 'Stockfish quality · Maia likelihood',
     maiaLegend: 'Gold solid · Maia prediction',
     sfLegend: 'Green dashed · Engine best',
     consensusLegend: 'Cyan · Both favor the same move',
@@ -116,7 +118,9 @@ const I18N = {
     collapsedTitle: 'Panel collapsed',
     collapsedHelp: 'Sidebar cover remains. Expand to compare both engines.',
     expand: 'Expand analysis',
-    sfWebOnly: 'The extension runs SF19 Lite. Standard runs in the web review studio.',
+    sfWebPreference: 'Web review engine',
+    visualLegend: 'Arrow & heatmap guide',
+    sfWebOnly: 'This choice applies to the web review studio. The floating panel always uses SF19 Lite.',
     modelHelp: 'Downloads on first use; each model is cached separately. During a live game, selection is saved and loading waits until it ends.',
     modelSaved: 'Saved; the selected model loads when analysis is permitted.',
     candidates: 'Candidate Moves',
@@ -474,14 +478,14 @@ export class IntuitionPanel {
           <p class="diverge-help" data-dg-text="heatmapHelp"></p>
         </div>
 
-        <div class="weui-drawer-item"><label for="maia-sf-select">Stockfish</label><select id="maia-sf-select"><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard · Web</option></select><p class="diverge-help" data-dg-text="sfWebOnly"></p></div>
+        <div class="weui-drawer-item"><label for="maia-sf-select" data-dg-text="sfWebPreference"></label><select id="maia-sf-select"><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard</option></select><p class="diverge-help" data-dg-text="sfWebOnly"></p></div>
         <!-- Maia model variants -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
           <div class="diverge-model-options">
-            <button type="button" class="weui-preset-btn" data-model="5m">5M · 28 MB</button>
-            <button type="button" class="weui-preset-btn" data-model="23m">23M · 104 MB</button>
-            <button type="button" class="weui-preset-btn" data-model="79m">79M · 159 MB</button>
+            <button type="button" class="weui-preset-btn" data-model="5m"><strong>5M</strong><small>28 MiB</small></button>
+            <button type="button" class="weui-preset-btn" data-model="23m"><strong>23M</strong><small>104 MiB</small></button>
+            <button type="button" class="weui-preset-btn" data-model="79m"><strong>79M</strong><small>159 MiB</small></button>
           </div>
           <p class="diverge-help" data-dg-text="modelHelp"></p>
           <p class="diverge-help" id="engine-experience-hint" role="note" aria-live="polite"></p>
@@ -526,7 +530,7 @@ export class IntuitionPanel {
           </div>
         </div>
 
-        <section class="diverge-visual-legend"><strong data-dg-text="dualIntro"></strong><span class="legend-maia" data-dg-text="maiaLegend"></span><span class="legend-sf" data-dg-text="sfLegend"></span><span class="legend-consensus" data-dg-text="consensusLegend"></span><p data-dg-text="heatmapHelp"></p><a href="https://4chess.cc/guide/#dual-engines" target="_blank" rel="noopener" data-dg-text="guide"></a></section>
+        <section class="diverge-visual-legend"><strong data-dg-text="dualIntro"></strong><details><summary data-dg-text="visualLegend"></summary><div class="diverge-legend-detail"><span class="legend-maia" data-dg-text="maiaLegend"></span><span class="legend-sf" data-dg-text="sfLegend"></span><span class="legend-consensus" data-dg-text="consensusLegend"></span><p data-dg-text="heatmapHelp"></p><a href="https://4chess.cc/guide/#dual-engines" target="_blank" rel="noopener" data-dg-text="guide"></a></div></details></section>
         <!-- Candidate Moves List Group -->
         <div class="diverge-candidates">
           <div class="weui-cells__title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -564,6 +568,8 @@ export class IntuitionPanel {
       </div>
     `;
 
+    // Keep actual engine status visible while the analysis body scrolls.
+    this.container.append(this.container.querySelector('.weui-review-entry'), this.container.querySelector('.diverge-engine-status'));
     this.bindEvents();
     this.syncStudyChrome();
   }
@@ -675,11 +681,11 @@ export class IntuitionPanel {
     const name = this.container.querySelector('#lbl-engine-maia');
     if (name) name.textContent = MAIA_VARIANTS[this.enginePreferences.maiaVariant]?.name || 'Maia-3';
     const sf = this.container.querySelector('#lbl-engine-sf');
-    if (sf) sf.textContent = 'Stockfish 19 Lite';
+    if (sf) sf.textContent = this.t('sfEngine');
     const modelHint = this.container.querySelector('#model-switch-hint');
     if (modelHint?.dataset.saved) modelHint.textContent = this.t('modelSaved');
     const standardOption = this.container.querySelector('#maia-sf-select option[value="standard"]');
-    if (standardOption) standardOption.textContent = this.lang === 'zh' ? 'SF19 标准版 · 网页版' : 'SF19 Standard · Web';
+    if (standardOption) standardOption.textContent = this.lang === 'zh' ? 'SF19 标准版' : 'SF19 Standard';
     for (const [id, key] of [['maia-chk-heatmap', 'showHeatmap'], ['maia-chk-arrows', 'showArrows'], ['maia-chk-sf-arrows', 'showStockfishArrows']]) {
       const field = this.container.querySelector('#' + id); if (field) field.checked = this[key];
     }
@@ -1329,7 +1335,7 @@ export class IntuitionPanel {
       if (sf && sf.bestMove) {
         if (timeEl) timeEl.textContent = `${latencyMs.toFixed(0)} ms · Stockfish`;
         if (movesHeader) movesHeader.textContent = isWhite ? (this.lang === 'zh' ? '白方最佳 (Stockfish WASM)' : 'White Best (Stockfish WASM)') : (this.lang === 'zh' ? '黑方最佳 (Stockfish WASM)' : 'Black Best (Stockfish WASM)');
-        
+
         if (movesContainer) {
           movesContainer.innerHTML = `
             <div class="weui-move-item top-pick">
@@ -1416,7 +1422,8 @@ export class IntuitionPanel {
 
     if (timeEl) {
       const backendText = this.lang === 'zh' ? '浏览器 CPU' : 'Browser CPU';
-      timeEl.textContent = `${latencyMs.toFixed(0)} ms (${backendText})`;
+      timeEl.textContent = `${latencyMs.toFixed(0)} ms`;
+      timeEl.title = backendText;
     }
 
     // Human vs Stockfish Comparative Insight Banner
@@ -1435,12 +1442,12 @@ export class IntuitionPanel {
 
       if (predictionData.stockfish && predictionData.stockfish.bestMove) {
         const sf = predictionData.stockfish;
-        const sfLabel = this.lang === 'zh' ? '🐟 顶级引擎建议' : '🐟 Engine Best';
+        const sfLabel = 'SF19 Lite';
         const evalPrefix = this.lang === 'zh' ? '局面' : 'Eval';
 
         const miniRow = document.createElement('div');
         miniRow.className = 'weui-sf-mini-row';
-        miniRow.style.cssText = 'margin-top: 6px; padding-top: 4px; border-top: 0.5px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; font-size: 11px;';
+
 
         const leftSpan = document.createElement('span');
         leftSpan.textContent = `${sfLabel}: `;
@@ -1587,7 +1594,7 @@ export class IntuitionPanel {
       sideEl.textContent = sideText;
       const labelMid = document.createTextNode(isZh ? '走棋: ' : ': ');
       const playedEl = document.createElement('strong');
-      playedEl.style.color = '#FA5151';
+      playedEl.style.color = 'var(--dg-red)';
       playedEl.textContent = blunderInfo.san || '';
 
       line1.append(label1, sideEl, labelMid, playedEl);
@@ -1616,7 +1623,7 @@ export class IntuitionPanel {
 
       const lossLabel = document.createTextNode(isZh ? '局面损耗: ' : 'Centipawn loss: ');
       const lossEl = document.createElement('strong');
-      lossEl.style.color = '#FA5151';
+      lossEl.style.color = 'var(--dg-red)';
       lossEl.textContent = `${blunderInfo.lossPawns || 0}`;
 
       const evalBeforeStr = this.formatWhiteScore({ score: blunderInfo.evalBefore, scoreCp: blunderInfo.evalBeforeCp }, blunderInfo.turn);

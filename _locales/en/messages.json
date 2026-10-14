@@ -131,13 +131,13 @@
     "message": "About · Credits & licenses"
   },
   "sfLite": {
-    "message": "SF19 Lite · In extension"
+    "message": "SF19 Lite"
   },
   "sfStandardWeb": {
-    "message": "SF19 Standard · Web studio"
+    "message": "SF19 Standard"
   },
   "sfWebHelp": {
-    "message": "The extension uses Lite. Standard runs in the web review studio."
+    "message": "This choice applies to the web review studio. The floating panel always uses SF19 Lite."
   },
   "customModelHelp": {
     "message": "The URL must match the selected Maia version."
@@ -150,5 +150,8 @@
   },
   "uiLanguage": {
     "message": "Interface language"
+  },
+  "sfWebLabel": {
+    "message": "Web review engine"
   }
 }

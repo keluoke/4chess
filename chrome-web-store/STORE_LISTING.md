@@ -64,7 +64,7 @@ Standard chess engines calculate like cold supercomputers, leaving you wondering
 
 Diverge brings two powerhouse engines together right inside your browser:
 1. Maia 3 (Chessformer Neural Network): Models real human chess intuition, predicting the most natural candidate moves and their probabilities at calibrated Elo rating levels.
-2. Stockfish 19 (WebAssembly): The world's strongest open-source engine, delivering objective tactical evaluations and optimal computer moves.
+2. Stockfish 19 Lite in the floating panel (WebAssembly; Standard is available in the separate web review studio): The world's strongest open-source engine, delivering objective tactical evaluations and optimal computer moves.
 
 Both engines run 100% locally on your machine via WebAssembly. No game data or positions are ever uploaded to any server.
 
@@ -202,7 +202,7 @@ Standard chess engines calculate like cold supercomputers, leaving you wondering
 
 Diverge brings two powerhouse engines together right inside your browser:
 1. Maia 3 (Chessformer Neural Network): Models real human chess intuition, predicting the most natural candidate moves and their probabilities at calibrated Elo rating levels.
-2. Stockfish 19 (WebAssembly): The world's strongest open-source engine, delivering objective tactical evaluations and optimal computer moves.
+2. Stockfish 19 Lite in the floating panel (WebAssembly; Standard is available in the separate web review studio): The world's strongest open-source engine, delivering objective tactical evaluations and optimal computer moves.
 
 Both engines run 100% locally on your machine via WebAssembly. No game data or positions are ever uploaded to any server.
 

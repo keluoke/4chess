@@ -113,6 +113,6 @@ export function engineExperienceHint(prefs, lang = 'zh', extension = false) {
   const notes = [];
   if (prefs.maiaVariant === '79m') notes.push(lang === 'zh' ? 'Maia 79M：首次约 159 MiB，内存占用更高，单步可能需要数秒或更久。想轻快一些可先用 5M；缓存后免重复下载。' : 'Maia 79M: about 159 MiB initially, with higher memory use. A move may take several seconds or longer. Choose 5M for a quicker response; downloads are cached.');
   else if (prefs.maiaVariant === '23m') notes.push(lang === 'zh' ? 'Maia 23M：首次约 104 MiB，响应通常慢于 5M；后续复用缓存。' : 'Maia 23M: about 104 MiB initially, usually slower than 5M. Later visits reuse the cache.');
-  if (prefs.stockfishVariant === 'standard') notes.push(lang === 'zh' ? `SF19 标准版：使用完整评估网络，首次约 95 MiB，启动与计算更耗时。${extension ? '插件内仍用 Lite；标准版在网页版运行。' : 'Lite 更适合快速浏览。'}` : `SF19 Standard uses the full evaluation network: about 95 MiB initially, with longer startup and computation. ${extension ? 'The extension runs Lite; Standard runs in the web studio.' : 'Choose Lite for quicker browsing.'}`);
-  return notes.join(' ');
+  if (prefs.stockfishVariant === 'standard') notes.push(lang === 'zh' ? `SF19 标准版：使用完整评估网络，首次约 95 MiB，启动与计算更耗时。${extension ? '这个选择不改变悬浮窗的 SF19 Lite，仅在网页复盘使用。' : 'Lite 更适合快速浏览。'}` : `SF19 Standard uses the full evaluation network: about 95 MiB initially, with longer startup and computation. ${extension ? 'This choice applies only to web review; the floating panel stays on SF19 Lite.' : 'Choose Lite for quicker browsing.'}`);
+  return notes.join('\n\n');
 }

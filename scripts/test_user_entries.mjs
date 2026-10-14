@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-entries-'));
 const extension = path.join(scratch, 'extension'); fs.mkdirSync(extension);
 execFileSync(process.execPath, ['scripts/package_extension.mjs'], { cwd: root });
-execFileSync('unzip', ['-q', path.join(root, 'releases/diverge-extension-v1.0.7.zip'), '-d', extension]);
+execFileSync('unzip', ['-q', path.join(root, 'releases/diverge-extension-v1.0.8.zip'), '-d', extension]);
 for (const file of ['LICENSE', 'LICENSES/GPL-2.0.txt', 'LICENSES/GPL-3.0.txt', 'LICENSES/AGPL-3.0.txt', 'THIRD_PARTY_NOTICES.md', 'guide/index.html']) assert(fs.existsSync(path.join(extension, file)));
 assert(!fs.existsSync(path.join(extension, 'engine/stockfish-standard-web.js')));
 assert(!fs.existsSync(path.join(extension, 'lib/stockfish-19-standard.js')));

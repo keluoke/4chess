@@ -131,13 +131,13 @@
     "message": "关于 · 署名与许可"
   },
   "sfLite": {
-    "message": "SF19 Lite · 插件内"
+    "message": "SF19 Lite"
   },
   "sfStandardWeb": {
-    "message": "SF19 标准版 · 网页版"
+    "message": "SF19 标准版"
   },
   "sfWebHelp": {
-    "message": "插件内使用 Lite；标准版在全盘分析网页版使用。"
+    "message": "此选项只影响网页版全盘复盘。悬浮窗始终使用 SF19 Lite。"
   },
   "customModelHelp": {
     "message": "地址须对应上方所选的 Maia 版本。"
@@ -150,5 +150,8 @@
   },
   "uiLanguage": {
     "message": "界面语言"
+  },
+  "sfWebLabel": {
+    "message": "网页版复盘引擎"
   }
 }
