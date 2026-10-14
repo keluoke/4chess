@@ -90,24 +90,13 @@ try {
     const popup = await nativePopup(context, sw, host);
     await popup.run("document.querySelector('#scan-launch').click()");
     await popup.wait(
-      "!document.querySelector('#scan-capture').hidden || document.querySelector('#scan-status').textContent.includes('No visible')",
+      "!document.querySelector('#scan-position').hidden || (!document.querySelector('#scan-capture').hidden && document.querySelector('#scan-status').textContent.includes('No reliable'))",
+      30000,
     );
     assert.equal(
       await popup.run("document.querySelector('#scan-capture').hidden"),
-      false,
-      url,
-    );
-    assert.deepEqual(
-      await popup.run(
-        "[...document.querySelector('#scan-preview').getContext('2d').getImageData(5,5,1,1).data]",
-      ),
-      [255, 255, 255, 255],
-      "Non-image page content is masked",
-    );
-    await popup.run("document.querySelector('#scan-detect').click()");
-    await popup.wait(
-      "!document.querySelector('#scan-position').hidden || document.querySelector('#scan-status').textContent.includes('No reliable')",
-      30000,
+      true,
+      "Automatic recognition skips the crop step",
     );
     assert.equal(
       await popup.run("document.querySelector('#scan-position').hidden"),
@@ -121,6 +110,123 @@ try {
       process.env.SCAN_SAMPLE_FEN ||
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
     );
+    if (url === urls[0] && !process.env.SCAN_SAMPLE_IMAGE) {
+      const originalFen = await popup.run(
+        "document.querySelector('#scan-fen').value",
+      );
+      assert.equal(
+        await popup.run(
+          "document.querySelector('#scan-rotate').getClientRects().length",
+        ),
+        0,
+        "Direction correction lives only in the editor",
+      );
+      await popup.run("document.querySelector('#scan-flip').click()");
+      assert.equal(
+        await popup.run("document.querySelector('#scan-fen').value"),
+        originalFen,
+        "Viewing angle keeps the FEN",
+      );
+      await popup.run(
+        "document.querySelector('#scan-flip').click();document.querySelector('#scan-edit').click()",
+      );
+      await popup.run(
+        "document.querySelector('#scan-rotate').click();document.querySelector('#scan-rotate').click()",
+      );
+      assert.equal(
+        await popup.run("document.querySelector('#scan-fen').value"),
+        originalFen,
+        "Direction correction remaps the pieces, and repeating restores them",
+      );
+      await popup.run(
+        "document.querySelector('#scan-palette button:last-child').click()",
+      );
+      const square = await popup.run(
+        "(()=>{const r=document.querySelector('#scan-board [data-square=\"a2\"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()",
+      );
+      await popup.rpc("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        ...square,
+        button: "left",
+        clickCount: 1,
+      });
+      await popup.rpc("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        ...square,
+        button: "left",
+        clickCount: 1,
+      });
+      const draftFen = await popup.run(
+        "document.querySelector('#scan-fen').value",
+      );
+      assert.notEqual(
+        draftFen,
+        originalFen,
+        "Direct board correction changes the draft",
+      );
+      await popup.run("document.querySelector('#scan-settings').click()");
+      assert.equal(
+        await popup.run("document.querySelector('#popup-settings').hidden"),
+        false,
+      );
+      assert.equal(
+        await popup.run("document.querySelector('#scan-view').inert"),
+        true,
+      );
+      await popup.run(
+        "document.querySelector('#model-preset-select').value='79m';document.querySelector('#model-preset-select').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('.advanced-settings').open=true;document.querySelector('.custom-cdn').open=true",
+      );
+      assert.equal(
+        (await popup.run("chrome.storage.local.get('maiaVariant')"))
+          .maiaVariant,
+        "79m",
+      );
+      await popup.run(
+        "document.querySelector('.settings-content').scrollTop=9999",
+      );
+      const bounds = await popup.run(
+        "(()=>{const s=document.querySelector('.settings-content'),f=document.querySelector('.popup-footer').getBoundingClientRect();return{scrollable:s.scrollHeight>s.clientHeight,bottom:f.bottom,height:innerHeight}})()",
+      );
+      assert.equal(bounds.scrollable, true);
+      assert(
+        bounds.bottom <= bounds.height + 1,
+        "Settings footer remains reachable in the native popup",
+      );
+      fs.mkdirSync(root + "/artifacts/scan", { recursive: true });
+      const settingsShot = await popup.rpc("Page.captureScreenshot");
+      fs.writeFileSync(
+        root + "/artifacts/scan/settings-screen-en.png",
+        Buffer.from(settingsShot.data, "base64"),
+      );
+      await popup.run("document.querySelector('#scan-settings-back').click()");
+      assert.equal(
+        await popup.run("document.querySelector('#scan-fen').value"),
+        draftFen,
+      );
+      assert.equal(
+        await popup.run("document.querySelector('#scan-editor').hidden"),
+        false,
+        "Returning from settings preserves edit mode",
+      );
+      await popup.run(
+        "document.querySelector('#scan-settings').click();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))",
+      );
+      assert.equal(
+        await popup.run("document.querySelector('#popup-settings').hidden"),
+        true,
+      );
+      await popup.run(
+        `document.querySelector('#scan-fen').value=${JSON.stringify(originalFen)};document.querySelector('#scan-fen').dispatchEvent(new Event('change',{bubbles:true}))`,
+      );
+      await popup.run("document.querySelector('#scan-edit').click()");
+      assert.equal(
+        await popup.run("document.querySelector('#scan-editor').hidden"),
+        true,
+      );
+      console.log(
+        "PASS viewing/correction semantics, dedicated scrollable settings, explicit Back/Escape and edit draft preservation",
+      );
+    }
     if (process.env.SCAN_SAMPLE_IMAGE) {
       const s = await popup.run(
         "chrome.storage.session.get('divergeScan').then(r=>r.divergeScan)",

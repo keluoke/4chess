@@ -121,21 +121,10 @@ try {
   await wait("document.querySelector('#scan-launch')");
   await new Promise((r) => setTimeout(r, 300));
   await run("document.querySelector('#scan-launch').click()");
-  await wait(
-    "!document.querySelector('#scan-capture').hidden || !document.querySelector('#scan-status').textContent.includes('Reading')",
-  );
-  console.log(
-    "capture",
-    await run("document.querySelector('#scan-status').textContent"),
-  );
+  await wait("!document.querySelector('#scan-position').hidden", 45000);
   assert.equal(
     await run("document.querySelector('#scan-capture').hidden"),
-    false,
-  );
-  await run("document.querySelector('#scan-detect').click()");
-  await wait(
-    "!document.querySelector('#scan-position').hidden || document.querySelector('#scan-status').textContent.includes('found')",
-    45000,
+    true,
   );
   console.log(
     "recognition",
@@ -235,7 +224,7 @@ try {
     "document.querySelector('#scan-settings').click();document.querySelector('#ui-language').value='zh';document.querySelector('#ui-language').dispatchEvent(new Event('change',{bubbles:true}))",
   );
   await wait("document.documentElement.lang==='zh-CN'");
-  await run("document.querySelector('#scan-settings').click()");
+  await run("document.querySelector('#scan-settings-back').click()");
   await wait("document.querySelectorAll('#scan-lines button').length===3");
   shot = await rpc("Page.captureScreenshot");
   fs.writeFileSync(

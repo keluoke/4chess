@@ -242,6 +242,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         recognitionContext: context,
         orientation: context.orientation,
       });
+      await chrome.runtime.sendMessage({ type: "VISION_CLEAR", id: s.id });
       return { ok: true, state: s };
     }
     if (msg.type === "SCAN_SAVE" || msg.type === "SCAN_OPEN") {
@@ -264,6 +265,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         orientation: msg.orientation === "black" ? "black" : "white",
         confirmed: msg.confirmed === true,
         turnChosen: msg.turnChosen === true,
+        directionCorrected: msg.directionCorrected === true,
         history: Array.isArray(msg.history)
           ? msg.history
               .filter((f) => typeof f === "string" && f.length < 150)

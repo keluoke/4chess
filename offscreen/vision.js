@@ -87,8 +87,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (!capture?.dataUrl || capture.id !== msg.id)
       throw Error("Screenshot expired; scan again");
     const dataUrl = capture.dataUrl;
-    capture = null;
-    clearTimeout(expiry);
     cancelActive();
     const job = {
       id: msg.id,

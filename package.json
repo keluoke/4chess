@@ -1,6 +1,6 @@
 {
   "name": "diverge-chess-analysis",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "歧路 Diverge · Standalone Deep Analysis Studio",
   "type": "module",
   "scripts": {

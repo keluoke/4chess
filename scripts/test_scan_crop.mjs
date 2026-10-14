@@ -79,10 +79,36 @@ try {
   );
   const host = await c.newPage();
   await host.goto(url);
-  console.log("host probe",await host.evaluate(()=>({url:location.href,article:!!document.querySelector("article"),blocked:!!document.querySelector('iframe,canvas,video,[class*=clock],button[aria-label*=resign i]'),type:document.contentType,body:document.body.textContent.slice(0,80)})));
+  console.log(
+    "host probe",
+    await host.evaluate(() => ({
+      url: location.href,
+      article: !!document.querySelector("article"),
+      blocked: !!document.querySelector(
+        "iframe,canvas,video,[class*=clock],button[aria-label*=resign i]",
+      ),
+      type: document.contentType,
+      body: document.body.textContent.slice(0, 80),
+    })),
+  );
   let popup = await nativePopup(c, sw, host);
-  console.log("active tabs",await popup.run("chrome.tabs.query({active:true,currentWindow:true}).then(t=>t.map(x=>({id:x.id,url:x.url})))"));
+  console.log(
+    "active tabs",
+    await popup.run(
+      "chrome.tabs.query({active:true,currentWindow:true}).then(t=>t.map(x=>({id:x.id,url:x.url})))",
+    ),
+  );
   await popup.run("document.querySelector('#scan-launch').click()");
+  await popup.wait(
+    "!document.querySelector('#scan-position').hidden || !document.querySelector('#scan-capture').hidden",
+    30000,
+  );
+  if (await popup.run("document.querySelector('#scan-capture').hidden")) {
+    await popup.run(
+      "document.querySelector('#scan-edit').click();document.querySelector('#scan-reselect').click()",
+    );
+  }
+
   await popup.wait(
     "!document.querySelector('#scan-capture').hidden || document.querySelector('#scan-status').textContent.includes('supports') || document.querySelector('#scan-status').textContent.includes('Could not')",
   );
@@ -188,7 +214,7 @@ try {
     );
     throw Error("Scan did not reach preview");
   }
-  await popup.run("document.querySelector('#scan-detect').click()");
+
   await popup.wait(
     "!document.querySelector('#scan-position').hidden || !document.querySelector('#scan-status').textContent.includes('Recognizing')",
     30000,

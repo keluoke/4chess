@@ -9,11 +9,15 @@ import {
   getPreferences,
   subscribePreferences,
 } from "../engine/engine-preferences.js";
+import { rotateFen } from "../lib/vision/image-context.js";
 import { scanMessages } from "./scan-i18n.js";
 const $ = (id) => document.getElementById(id);
 const send = (payload) => chrome.runtime.sendMessage(payload);
 export function initScanView() {
-  let busy = false;
+  let busy = false,
+    settingsOpen = false,
+    previousFocus = null,
+    previousScroll = 0;
   let state = null,
     epoch = 0,
     engine = null,
@@ -30,7 +34,7 @@ export function initScanView() {
   const view = document.createElement("section");
   view.id = "scan-view";
   view.hidden = true;
-  view.innerHTML = `<div class="scan-top"><button id="scan-retry" data-scan-text="retry"></button><small id="scan-source"></small></div><p id="scan-status" role="status" aria-live="polite"></p><div id="scan-capture" hidden><p data-scan-text="select"></p><canvas id="scan-preview" aria-label="Screenshot selection"></canvas><div class="scan-row"><button id="scan-detect" data-scan-text="detect"></button><button id="scan-crop" data-scan-text="crop" disabled></button></div></div><div id="scan-position" hidden><div class="scan-row"><select id="scan-turn" aria-label="Side to move"><option value="w" data-scan-text="white"></option><option value="b" data-scan-text="black"></option></select><button id="scan-edit" data-scan-text="edit"></button></div><div class="scan-board-row"><div id="scan-gauge" aria-label="White evaluation"><div id="scan-gauge-white"></div><span id="scan-score"></span></div><div id="scan-board"></div></div><div class="scan-toolbar"><button id="scan-flip" data-scan-title="flip"><svg viewBox="0 0 24 24"><path d="m7 3-4 4 4 4M3 7h14v5m0 9 4-4-4-4m4 4H7v-5"/></svg></button><button id="scan-undo" data-scan-title="undo"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><button id="scan-original" data-scan-title="original"><svg viewBox="0 0 24 24"><path d="M5 5v14m14-14-9 7 9 7z"/></svg></button><button id="scan-copy" data-scan-title="copy"><svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM4 16V3h11"/></svg></button><button id="scan-rotate" data-scan-title="rotate"><svg viewBox="0 0 24 24"><path d="M5 7a8 8 0 1 1-1 9M5 2v6h6"/></svg></button></div><div id="scan-editor" hidden><p data-scan-text="palette"></p><div id="scan-palette"></div><label data-scan-text="fen" for="scan-fen"></label><textarea id="scan-fen" rows="2" spellcheck="false"></textarea></div><p id="scan-assumed" data-scan-text="assumed"></p><button id="scan-confirm" class="action-primary" data-scan-text="confirm"></button><div id="scan-results" hidden><p id="scan-engine-status" role="status"></p><div id="scan-lines"></div><button id="scan-web" class="action-primary" data-scan-text="web"></button><p class="scan-help" data-scan-text="help"></p></div></div>`;
+  view.innerHTML = `<div class="scan-top"><button id="scan-retry" data-scan-text="retry"></button><small id="scan-source"></small></div><p id="scan-status" role="status" aria-live="polite"></p><div id="scan-capture" hidden><p data-scan-text="select"></p><canvas id="scan-preview" aria-label="Screenshot selection"></canvas><div class="scan-row"><button id="scan-detect" data-scan-text="detect"></button><button id="scan-crop" data-scan-text="crop" disabled></button></div></div><div id="scan-position" hidden><div class="scan-row"><select id="scan-turn" aria-label="Side to move"><option value="w" data-scan-text="white"></option><option value="b" data-scan-text="black"></option></select><button id="scan-edit" data-scan-text="edit"></button></div><div class="scan-board-row"><div id="scan-gauge" aria-label="White evaluation"><div id="scan-gauge-white"></div><span id="scan-score"></span></div><div id="scan-board"></div></div><div class="scan-toolbar"><button id="scan-flip" data-scan-title="flip"><svg viewBox="0 0 24 24"><path d="m7 3-4 4 4 4M3 7h14v5m0 9 4-4-4-4m4 4H7v-5"/></svg><span data-scan-text="view"></span></button><button id="scan-undo" data-scan-title="undo"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><button id="scan-original" data-scan-title="original"><svg viewBox="0 0 24 24"><path d="M5 5v14m14-14-9 7 9 7z"/></svg></button><button id="scan-copy" data-scan-title="copy"><svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM4 16V3h11"/></svg></button></div><div id="scan-editor" hidden><div class="scan-correction"><button id="scan-rotate" data-scan-text="rotate" data-scan-title="rotateHelp"></button><p data-scan-text="rotateHelp"></p><button id="scan-reselect" data-scan-text="reselect"></button></div><p data-scan-text="palette"></p><div id="scan-palette"></div><label data-scan-text="fen" for="scan-fen"></label><textarea id="scan-fen" rows="2" spellcheck="false"></textarea></div><p id="scan-assumed" data-scan-text="assumed"></p><button id="scan-confirm" class="action-primary" data-scan-text="confirm"></button><div id="scan-results" hidden><p id="scan-engine-status" role="status"></p><div id="scan-lines"></div><button id="scan-web" class="action-primary" data-scan-text="web"></button><p class="scan-help" data-scan-text="help"></p></div></div>`;
   document.querySelector(".popup-header").after(view);
   const launch = document.createElement("button");
   launch.id = "scan-launch";
@@ -42,8 +46,57 @@ export function initScanView() {
   gear.className = "scan-icon";
   gear.dataset.scanTitle = "settings";
   gear.innerHTML =
-    '<svg viewBox="0 0 24 24"><path d="m9 3-1 3-3 1 1 4-2 2 2 3 3-1 2 3 3-1 1-3 3-1-1-4 2-2-2-3-3 1-2-3z"/><circle cx="12" cy="12" r="3"/></svg>';
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3h5l.6 2.6 2.2 1.3 2.6-.8 2.5 4.3-2 1.8v2.6l2 1.8-2.5 4.3-2.6-.8-2.2 1.3-.6 2.6h-5l-.6-2.6-2.2-1.3-2.6.8L1.6 16l2-1.8v-2.6l-2-1.8 2.5-4.3 2.6.8 2.2-1.3z" transform="translate(0 -1) scale(1 .95)"/><circle cx="12" cy="12" r="3"/></svg>';
   document.querySelector(".popup-header").append(gear);
+  const settings = document.createElement("section");
+  settings.id = "popup-settings";
+  settings.hidden = true;
+  settings.innerHTML =
+    '<div class="settings-heading"><button id="scan-settings-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg><span></span></button><h2 data-scan-text="settings"></h2></div><div class="settings-content"></div>';
+  for (const selector of [
+    ".popup-preferences",
+    ".advanced-settings",
+    ".fair-play-note",
+    ".popup-footer",
+  ])
+    settings
+      .querySelector(".settings-content")
+      .append(document.querySelector(selector));
+  document.querySelector(".popup-page").append(settings);
+  function openSettings() {
+    if (settingsOpen) return;
+    settingsOpen = true;
+    $("scan-settings-back").querySelector("span").textContent = text(
+      view.hidden ? "backHome" : "back",
+    );
+    previousFocus = document.activeElement;
+    previousScroll = window.scrollY;
+    window.scrollTo(0, 0);
+    ++epoch;
+    engine?.stop();
+    view.inert = true;
+    settings.hidden = false;
+    document.body.classList.add("settings-open");
+    settings.querySelector(".settings-content").scrollTop = 0;
+    $("scan-settings-back").focus();
+  }
+  function closeSettings() {
+    settingsOpen = false;
+    settings.hidden = true;
+    view.inert = false;
+    document.body.classList.remove("settings-open");
+    previousFocus?.focus({ preventScroll: true });
+    window.scrollTo(0, previousScroll);
+    if (state?.confirmed && !state.locked) analyze();
+  }
+  $("scan-settings-back").onclick = closeSettings;
+  document.addEventListener("keydown", (event) => {
+    if (settingsOpen && event.key === "Escape") {
+      event.preventDefault();
+      closeSettings();
+    }
+  });
+
   const headerRetry = document.createElement("button");
   headerRetry.className = "scan-icon scan-header-retry";
   headerRetry.dataset.scanTitle = "retry";
@@ -60,14 +113,18 @@ export function initScanView() {
     },
   });
   function locale() {
-    view
+    document
       .querySelectorAll("[data-scan-text]")
       .forEach((el) => (el.textContent = text(el.dataset.scanText)));
     document.querySelectorAll("[data-scan-title]").forEach((el) => {
       el.title = text(el.dataset.scanTitle);
       el.setAttribute("aria-label", el.title);
     });
-    launch.textContent = view.hidden && state ? text("back") : text("scan");
+    launch.textContent = text("scan");
+    $("scan-settings-back").querySelector("span").textContent = text(
+      view.hidden ? "backHome" : "back",
+    );
+    $("scan-edit").textContent = text(editing ? "doneEdit" : "edit");
     if (lastStatus) $("scan-status").textContent = statusText(lastStatus);
     if (state?.fen)
       $("scan-source").textContent = text(state.recognition ? "image" : "dom");
@@ -88,6 +145,7 @@ export function initScanView() {
   function statusText(key) {
     const context = state?.recognitionContext;
     if (key !== "review" || !context) return text(key);
+    if (state.directionCorrected) return text("directionCorrected");
     const view = text(
       context.orientation === "black" ? "viewBlack" : "viewWhite",
     );
@@ -120,6 +178,9 @@ export function initScanView() {
     board.clearArrows();
   }
   function lock(key) {
+    capture = null;
+    $("scan-preview").width = 1;
+    $("scan-preview").height = 1;
     clear();
     board.clearAnnotations(true);
     if (state) {
@@ -148,6 +209,7 @@ export function initScanView() {
       history: state.history,
       originalFen: state.originalFen,
       turnChosen: state.turnChosen === true,
+      directionCorrected: state.directionCorrected === true,
     });
   }
   async function changed() {
@@ -224,7 +286,7 @@ export function initScanView() {
     status(s.confirmed ? "help" : "review");
     if (s.confirmed) analyze();
   }
-  async function scan() {
+  async function scan({ manual = false } = {}) {
     if (busy) return;
     busy = true;
     show();
@@ -252,9 +314,11 @@ export function initScanView() {
         capture = new Image();
         capture.src = r.dataUrl;
         await capture.decode();
-        $("scan-capture").hidden = false;
-        draw();
-        status("select");
+        if (manual) {
+          $("scan-capture").hidden = false;
+          draw();
+          status("select");
+        } else await recognize(null, true);
       } else showPosition(r.state);
     } catch (e) {
       lock(e.message);
@@ -262,8 +326,8 @@ export function initScanView() {
       busy = false;
     }
   }
-  async function recognize(selected) {
-    if (busy) return;
+  async function recognize(selected, automatic = false) {
+    if (busy && !automatic) return;
     busy = true;
     status("recognizing");
     $("scan-capture").hidden = true;
@@ -273,13 +337,31 @@ export function initScanView() {
         id: state.id,
         crop: selected,
       });
-      capture = null;
       if (!r?.ok || !r.state?.fen || r.state.recognition?.hasBoard === false)
-        throw Error("recognitionFailed");
+        throw Error(r?.error || "recognitionFailed");
+      capture = null;
+      $("scan-preview").width = 1;
+      $("scan-preview").height = 1;
       showPosition(r.state);
     } catch (e) {
       if (state?.locked) return;
-      lock(e.message);
+      if (e.message?.includes("Screenshot expired")) {
+        lock("scanAgain");
+        return;
+      }
+      if (
+        capture &&
+        ![
+          "sourceChanged",
+          "liveLocked",
+          "unsupportedSource",
+          "noImage",
+        ].includes(e.message)
+      ) {
+        $("scan-capture").hidden = false;
+        draw();
+        status("recognitionFailed");
+      } else lock(e.message);
     } finally {
       busy = false;
     }
@@ -289,6 +371,7 @@ export function initScanView() {
       fen = state.fen;
     engine?.stop();
     if (
+      settingsOpen ||
       !state.confirmed ||
       state.locked ||
       !(await valid()) ||
@@ -408,25 +491,8 @@ export function initScanView() {
   $("scan-retry").onclick = scan;
   $("scan-detect").onclick = () => recognize(null);
   $("scan-crop").onclick = () => recognize(crop);
-  gear.onclick = () => {
-    if (view.hidden && state) {
-      show();
-      if (state.locked) lock(state.reason || "sourceChanged");
-      else showPosition(state);
-    } else {
-      clear();
-      view.hidden = true;
-      document.body.classList.remove("scanning");
-      launch.textContent = state ? text("back") : text("scan");
-      launch.onclick = state
-        ? () => {
-            show();
-            state.locked ? lock("sourceChanged") : showPosition(state);
-          }
-        : scan;
-      document.querySelector(".popup-preferences").scrollIntoView();
-    }
-  };
+  gear.onclick = openSettings;
+  $("scan-reselect").onclick = () => scan({ manual: true });
   $("scan-confirm").onclick = async () => {
     const fen = $("scan-fen").value.trim();
     const boardTest = new ChessBoard();
@@ -446,6 +512,7 @@ export function initScanView() {
     original = state.fen;
     state.originalFen = state.fen;
     editing = false;
+    $("scan-edit").textContent = text("edit");
     $("scan-editor").hidden = true;
     board.setPosition(state.fen);
     const saved = await persist();
@@ -470,8 +537,9 @@ export function initScanView() {
   $("scan-edit").onclick = () => {
     clear();
     state.confirmed = false;
-    editing = true;
-    $("scan-editor").hidden = false;
+    editing = !editing;
+    $("scan-editor").hidden = !editing;
+    $("scan-edit").textContent = text(editing ? "doneEdit" : "edit");
     $("scan-confirm").hidden = false;
     persist();
     status("review");
@@ -521,6 +589,7 @@ export function initScanView() {
             board.render();
             state.fen = board.chess.getFen();
             $("scan-fen").value = state.fen;
+            persist();
           }
         }
       }
@@ -554,10 +623,10 @@ export function initScanView() {
   $("scan-rotate").onclick = () => {
     clear();
     state.confirmed = false;
-    const copy = [...board.chess.board];
-    board.chess.board = copy.reverse();
-    board.render();
-    state.fen = board.chess.getFen();
+    state.fen = rotateFen(state.fen);
+    state.directionCorrected = true;
+    previewPosition(state.fen);
+    board.clearAnnotations(true);
     $("scan-fen").value = state.fen;
     $("scan-confirm").hidden = false;
     status("review");

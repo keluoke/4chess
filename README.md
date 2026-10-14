@@ -114,7 +114,7 @@ diverge-extension/
    ```
 2. 在页面右上角开启 **开发者模式 (Developer mode)**。
 3. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
-4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.2.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
+4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.3.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
 5. 看到 `歧路 Diverge · 人类直觉与双引擎研判` 图标亮起即安装成功。
 
 ### 第二步：首次加载与模型缓存
@@ -152,11 +152,11 @@ diverge-extension/
 - **Cburnett 棋子 SVG**：Colin M. L. Burnett，GPL-2.0-or-later；许可全文见 [LICENSES/GPL-2.0.txt](LICENSES/GPL-2.0.txt)。
 
 
-### Scan page (1.1.2)
+### Scan page (1.1.3)
 
-Click **Scan page** in the toolbar popup on a permitted study page. Supported Chess.com/Lichess analysis or completed-game boards use DOM position reading when available; static image documents and Wikipedia diagrams use a local screenshot and packaged recognition WASM. Ordinary pages, including Twitter/X timelines, forums and articles, scan only visible static images: other page pixels are masked before recognition and preview. Scroll the complete diagram into view; if there are several images, crop the desired board. Replacing/removing the captured image revokes analysis. Unknown interactive game pages and live broadcasts remain locked. Drag a crop in the screenshot preview or detect the entire image. Verify pieces, orientation and side to move, correct with the piece palette or complete FEN, then confirm. Image-derived positions default to no castling/en passant rights. Raw model labels are shown for correction rather than silently accepting rule-based piece replacements.
+Click **Scan page** in the toolbar popup on a permitted study page. Supported Chess.com/Lichess analysis or completed-game boards use DOM position reading when available; static image documents and Wikipedia diagrams use a local screenshot and packaged recognition WASM. Ordinary pages, including Twitter/X timelines, forums and articles, scan only visible static images: other page pixels are masked before recognition and preview. Scroll the complete diagram into view; if there are several images, crop the desired board. Replacing/removing the captured image revokes analysis. Unknown interactive game pages and live broadcasts remain locked. Scan automatically finds the diagram and opens the interactive board. If detection fails, crop the screenshot and retry. Edit position corrects pieces and recognized direction; View changes only the viewing angle. Settings opens a dedicated scrollable screen with an explicit Back button and Escape support, preserving the position and edit draft. Verify pieces, orientation and side to move, correct with the piece palette or complete FEN, then confirm. Image-derived positions default to no castling/en passant rights. Raw model labels are shown for correction rather than silently accepting rule-based piece replacements.
 
-The popup runs packaged SF19 Lite only, with White-perspective scores and up to three legal lines. Click/drag pieces to explore, right-drag to annotate, undo or return to the original. **Analyze on 4chess** opens the current confirmed FEN (including your branch), using saved web engine/model/language preferences. Single-position analysis hides full-game accuracy, chart and key-move statistics. A scan link stays bound to its source tab/document; a live game, navigation or closed source stops and clears analysis. A copied source-bound scan URL cannot run without the original extension session. A manual study FEN URL uses `https://4chess.cc/analysis/#fen=<encoded-FEN>&orientation=white&mode=position`.
+The popup runs packaged SF19 Lite only, with White-perspective scores and up to three legal lines. Click/drag pieces to explore, right-drag to annotate, undo or return to the original. **Explore engine vs intuition** opens the current confirmed FEN (including your branch), using saved web engine/model/language preferences. Single-position analysis hides full-game accuracy, chart and key-move statistics. A scan link stays bound to its source tab/document; a live game, navigation or closed source stops and clears analysis. A copied source-bound scan URL cannot run without the original extension session. A manual study FEN URL uses `https://4chess.cc/analysis/#fen=<encoded-FEN>&orientation=white&mode=position`.
 
 Screenshots stay transient in the offscreen document and are never uploaded. Lightweight source/FEN/branch state uses `chrome.storage.session`; reopening rechecks the source and recomputes SF. `scripting` checks the user-selected source; `offscreen` hosts the local recognition worker. No permanent all-site permission is added.
 

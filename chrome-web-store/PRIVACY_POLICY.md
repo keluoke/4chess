@@ -27,12 +27,12 @@ We do not sell user data or use it for advertising, credit decisions or unrelate
 不出售用户数据，不用于广告、信用评估或与复盘无关的用途。卸载扩展可移除扩展配置数据；网页缓存还需分别在浏览器中清理 4chess.cc、Chess.com、Lichess 的站点数据，卸载扩展不会清空所有网站存储。清理站点数据也可能删除这些网站保存的其他数据。模型缓存按来源分别保存，清理后可能需要重新下载。
 
 ## Contact and changes / 联系与更新
-Questions and requests: https://github.com/keluoke/4chess/issues. This policy describes release 1.1.2, updated 2026-10-14. Material changes will be reflected on this page.
+Questions and requests: https://github.com/keluoke/4chess/issues. This policy describes release 1.1.3, updated 2026-10-14. Material changes will be reflected on this page.
 
-问题与请求请通过 https://github.com/keluoke/4chess/issues 联系。本政策对应 1.1.2，更新于 2026-10-14；重大变化将在本页更新。
+问题与请求请通过 https://github.com/keluoke/4chess/issues 联系。本政策对应 1.1.3，更新于 2026-10-14；重大变化将在本页更新。
 
 ### User-requested Scan / 用户主动扫描
 
-Scan uses activeTab, scripting and an offscreen local worker. Ordinary pages, including timelines and articles, retain only visible static image regions; other pixels are masked locally before preview and recognition. Replacing or removing a captured image stops analysis. Screenshot pixels are transient, never uploaded, and expire after two minutes or recognition. Lightweight FEN/source/branch state uses chrome.storage.session. The current confirmed FEN is passed to 4chess in a URL fragment with source-bound authorization; live play, source navigation or closure revokes it. No permanent all-site access is requested.
+Scan uses activeTab, scripting and an offscreen local worker. Ordinary pages, including timelines and articles, retain only visible static image regions; other pixels are masked locally before preview and recognition. Replacing or removing a captured image stops analysis. Screenshot pixels are transient and never uploaded. The offscreen screenshot cache supports crop retries and expires after two minutes or an accepted recognition result; popup preview memory clears when recognition succeeds or the popup closes. Lightweight FEN/source/branch state uses chrome.storage.session. The current confirmed FEN is passed to 4chess in a URL fragment with source-bound authorization; live play, source navigation or closure revokes it. No permanent all-site access is requested.
 
-用户点击扫描后临时读取当前允许的页面，在 offscreen 文档中本地识别；普通网页包括信息流与文章，仅保留可见静态图片，其他区域在本地遮罩后不进入预览或识别，来源图片变化会停止分析；截图不上传，识别开始或两分钟后释放。chrome.storage.session 保存局面与来源绑定。网页只接收当前确认 FEN 和许可，不接收截图；来源实时对局、导航或关闭会停止分析。
+用户点击扫描后临时读取当前允许的页面，在 offscreen 文档中本地识别；普通网页包括信息流与文章，仅保留可见静态图片，其他区域在本地遮罩后不进入预览或识别，来源图片变化会停止分析；截图不上传。offscreen 截图缓存支持框选重试，识别结果被接受或两分钟后释放；弹窗预览内存于识别成功或弹窗关闭时清除。chrome.storage.session 保存局面与来源绑定。网页只接收当前确认 FEN 和许可，不接收截图；来源实时对局、导航或关闭会停止分析。

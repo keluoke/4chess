@@ -1,7 +1,9 @@
 [hidden] {
   display: none !important;
 }
-.scanning .popup-page > :not(.popup-header):not(#scan-view) {
+.scanning
+  .popup-page
+  > :not(.popup-header):not(#scan-view):not(#popup-settings) {
   display: none;
 }
 #scan-view {
@@ -137,7 +139,9 @@
   display: block;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 #scan-engine-status {
   font-size: 10px;
@@ -206,9 +210,112 @@
   cursor: pointer;
 }
 .scan-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   padding: 5px;
+  flex: none;
+  background: var(--dg-raised);
+  border: 1px solid var(--dg-line);
+  color: var(--dg-ink);
+}
+.scan-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.scan-icon:hover,
+.scan-icon:focus-visible {
+  background: var(--dg-green-soft);
+  outline: 2px solid var(--dg-green);
+  outline-offset: 1px;
+}
+.scan-toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.scan-toolbar {
+  gap: 6px;
+}
+.scan-correction {
+  padding: 10px;
+  background: var(--dg-green-soft);
+  border-radius: 6px;
+  margin: 8px 0;
+}
+#scan-editor .scan-correction p {
+  color: var(--dg-ink);
+  margin: 7px 0;
+}
+.settings-open .popup-page > :not(.popup-header):not(#popup-settings) {
+  display: none !important;
+}
+.settings-open .popup-page {
+  height: 600px;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+}
+.settings-open .popup-header {
+  flex: none;
+}
+.settings-open #scan-settings,
+.settings-open .popup-header .scan-header-retry {
+  display: none;
+}
+#popup-settings {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding-top: 12px;
+}
+.settings-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--dg-line);
+  flex: none;
+}
+.settings-heading h2 {
+  font-size: 14px;
+}
+#scan-settings-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: transparent;
   border: 0;
+  color: var(--dg-green);
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+#scan-settings-back svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.settings-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 12px 0;
+}
+.settings-content .popup-preferences {
+  margin-top: 0;
+}
+.settings-content .popup-footer {
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.settings-open #status-pill,
+.settings-open .popup-brand p {
+  display: none;
 }
 .scanning .popup-page {
   padding: 12px 20px;
@@ -263,4 +370,6 @@
 .scanning .popup-header h1 {
   font-size: 14px;
 }
-.scanning:not(.scan-confirmed) #scan-gauge{visibility:hidden}
+.scanning:not(.scan-confirmed) #scan-gauge {
+  visibility: hidden;
+}

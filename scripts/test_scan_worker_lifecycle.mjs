@@ -141,3 +141,29 @@ workers
   .onmessage({ data: { ok: true, result: { maskedCapturePreserved: true } } });
 assert.equal((await current).ok, true);
 console.log("PASS asynchronous image masking cannot overwrite a newer capture");
+
+const failed = message({ type: "VISION_RECOGNIZE", id: "new-mask" });
+await turn();
+workers.at(-1).onmessage({ data: { ok: false, error: "No board" } });
+assert.equal((await failed).ok, false);
+const retried = message({
+  type: "VISION_RECOGNIZE",
+  id: "new-mask",
+  crop: { x: 0, y: 0, width: 0.5, height: 0.5 },
+});
+await turn();
+workers.at(-1).onmessage({ data: { ok: true, result: { retry: true } } });
+assert.equal(
+  (await retried).ok,
+  true,
+  "Failure preserves screenshot for a manual crop retry",
+);
+await message({ type: "VISION_CLEAR", id: "new-mask" });
+assert.equal(
+  (await message({ type: "VISION_RECOGNIZE", id: "new-mask" })).ok,
+  false,
+  "Accepted results release the screenshot",
+);
+console.log(
+  "PASS failed automatic detection supports manual retry; acceptance releases screenshot",
+);
