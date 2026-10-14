@@ -32,13 +32,23 @@
 | 邻项目识别回归 | core / phase2 / phase3 / Qimi pieces / screenshot arrows 共 24/24 通过 |
 | 原生 `test_scan_browser.mjs` | 实际扩展 action popup，DPR 2 截图 → offscreen → 真实识别 → 确认 → 真实 SF 三分支；原生拖棋与右键箭头、翻转、退步、双语；棋盘与候选可在 600px 内看到 |
 | 原生 `test_scan_crop.mjs` | 同一截图两个棋盘，原生鼠标框选第二个得到正确 FEN；无棋盘页明确失败，未启动 SF |
-| 原生 `test_scan_handoff.mjs` | DOM 读盘、升变到马、关闭 / 重开、当前分支网页交接、单局面 UI；来源新棋钟出现后 5–9ms 停机与清空；锁定后不能启动新会话 |
+| 原生 `test_scan_handoff.mjs` | DOM 读盘、升变到马、关闭 / 重开、当前分支网页交接、单局面 UI；来源新棋钟出现后 4–21ms 停机与清空；锁定后不能启动新会话 |
 | 全盘原有交互回归 | `test_study_interactions.mjs` 与 `test_review_ui.mjs` 通过；该复盘 UI 回归的 Maia 使用固定样例，Stockfish 为真实运行 |
 
 原生测试使用 Chrome for Testing 的 action popup 与 CDP 输入，页面是可复现的来源 fixtures；不把这些结果宣称为所有真实网站 DOM、所有棋子主题、照片或手机识别率证明。此版本保留确认 / 校正，定位质量不够时要求重新选区。本次 Scan 不自动下载或运行 Maia，也未重复声称大模型新性能测量。
+
+实际生产交接补验：`SCAN_PRODUCTION=1 node scripts/test_scan_handoff.mjs` 已通过。来源 Chess.com 页面仍为受控 fixture，4chess 为真实线上页面；同样验证当前分支、黑方视图、设置同步、复制链接拒绝授权、来源新棋钟后的停机。该次实测停机与清空为 4ms，Maia 网络请求在冒烟验证中阻断，Stockfish 为真实运行。
 
 原生扩展触发测试依据：https://chromedevtools.github.io/devtools-protocol/tot/Extensions/#method-triggerAction 。
 
 ## 发布校验
 
 上线版本需核对 GitHub Verify、Cloudflare 生产部署的 commit 与普通 URL 文件 SHA-256；安装包不包含 Maia 大权重或 SF19 标准版运行文件。最终部署记录和包 SHA-256 随交付消息提供。
+
+## 已核验发布记录
+
+- 运行代码 commit：`c986adde25cf001f32cf424293250d1435b8743b`。
+- GitHub Verify：[38516173229](https://github.com/keluoke/4chess/actions/runs/38516173229)，completed / success。
+- 生产普通 URL 的 8 个文件 SHA-256 与本地一致；真实 SF 三分支、FEN 导入、黑方视图及单局面隐藏统计通过。详情在本地 `artifacts/scan/production-verification.json`。
+- ZIP：2141036 bytes；SHA-256 `90d6a9b1b3755df308ab4e555ec6fc18bb889bd23fbcb2f7becc9b8a992b4962`。ZIP 中每个文件均与交付目录逐字节核对，无重复 manifest、无 Maia 大权重、无 SF 标准版运行文件。
+- 更新已加载的扩展时，将新包内容更新到原有目录并点击重新加载，保持原扩展 ID 以保留设置；随后刷新来源页。网页上线不会替换本地旧扩展。
