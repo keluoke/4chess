@@ -42,7 +42,7 @@ try {
       body: '<!doctype html><body><wc-chess-board style="display:block;width:400px;height:400px"><div class="piece wk square-11"></div><div class="piece wp square-17"></div><div class="piece bk square-88"></div></wc-chess-board></body>',
     }),
   );
-  await c.route("https://4chess.cc/**", (r) => {
+  if(!process.env.SCAN_PRODUCTION) await c.route("https://4chess.cc/**", (r) => {
     let file = path.join(root, new URL(r.request().url()).pathname);
     if (fs.existsSync(file) && fs.statSync(file).isDirectory())
       file = path.join(file, "index.html");
@@ -84,6 +84,7 @@ try {
   await popup.run("document.querySelector('[data-promotion=n]').click()");
   const current = await popup.run("document.querySelector('#scan-fen').value");
   assert(current.startsWith("N6k/"));
+  await popup.run("document.querySelector('#scan-flip').click()");
   // Popup close/reopen: current confirmed branch and original survive; engine recomputes.
   await host.bringToFront();
   popup = await nativePopup(c, sw, host);
@@ -98,6 +99,8 @@ try {
   const web = await created;
   await web.waitForURL("https://4chess.cc/analysis/**");
   await web.waitForFunction(() => window.__maiaStudioApp?.positions[0]?.fen);
+  assert.equal(await web.evaluate(()=>window.__maiaStudioApp.boardUI.orientation),"black");
+  assert.equal(await web.locator("#setting-orientation").inputValue(),"black");
   assert.equal(
     await web.evaluate(() => window.__maiaStudioApp.positions[0].fen),
     current,

@@ -833,8 +833,9 @@ class AnalysisStudioApp {
         if (!validBoard.load(fenParam)) throw new Error('Invalid FEN');
         this.startNewSession({ fen: validBoard.getFen(), white: t('freeAnalysisBoard'), black: 'FEN', result: '*', autoReview: false, positionInput: true });
         const orientation = hashParams.get('orientation') || searchParams.get('orientation');
-        this.boardUI.setOrientation(orientation === 'black' ? 'black' : 'white');
-        this.updateEvaluationGauge?.();
+        if (['white', 'black'].includes(orientation)) this.boardUI.setOrientation(orientation);
+        document.getElementById('setting-orientation').value = this.boardUI.orientation;
+        this.positionAnalysis.renderGauge(null);
         return;
       }
       const textParam = hashParams.get('text') || searchParams.get('text');
@@ -1994,6 +1995,7 @@ async function initApp() {
   if (value('maia')) intent.maiaVariant = value('maia');
   if (value('lang')) intent.maia3_lang = value('lang');
   if (value('elo')) intent.defaultElo = Number(value('elo'));
+  if (['white', 'black'].includes(value('orientation'))) intent.studio_orientation = value('orientation');
   if (Object.keys(intent).length) {
     await savePreferences(intent);
     for (const key of ['sf', 'maia', 'lang', 'elo']) { url.searchParams.delete(key); hash.delete(key); }
