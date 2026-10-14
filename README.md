@@ -1,15 +1,16 @@
-# 歧路 Diverge · 人类直觉与双引擎研判 (Chrome 扩展 & 独立复盘工作台)
+# 歧路 Diverge · 引擎与人类直觉的分歧，来自棋图或棋局
 
-基于 **纯前端浏览器端推理**（JavaScript Float32 神经网络引擎 + **Stockfish 19 WebAssembly**），将 **Maia 3 (Chessformer)** 神经网络与顶级开源国际象棋引擎无缝整合，提供 Chrome 扩展与独立 PWA 复盘工作台双形态支持。
+Diverge 把 **Stockfish 引擎建议**与 **Maia 人类走法预测**并排呈现，帮助你探索两种选择的分歧。既可以扫描网页上看到的静态棋图，分析当前局面；也可以在 Chess.com、Lichess 的分析台或完赛棋局中比较候选，并导入 PGN 进行整局复盘。
 
-在 **Lichess** 与 **Chess.com** 分析面板及 **4chess.cc** 独立复盘大屏中，实时三方对比：“**实战着法**” vs “**人类直觉候选 (Maia 3)**” vs “**客观最优解 (Stockfish 19)**”。
+Diverge compares engine recommendations with human move predictions. Scan a webpage chess diagram or review a completed game, then explore variations and compare Stockfish with Maia in the analysis studio.
 
-> ⚡ **纯前端独立架构特性**：
-> - **100% 浏览器原生执行**：零本地 Python 依赖，零后台推理服务器，零终端命令行。
-> - **可选模型**：Maia-3 5M / 23M / 79M（79M 采用 FP16 存储）；插件内运行 SF19 Lite，网页版另可选 SF19 标准版。
-> - **按需分发与持久缓存**：遵循轻量代码包与 Cloudflare 单文件 25MB 限制，大模型二进制文件不入 Git 仓库，由专用 CDN 首次按需流式拉取并自动持久化于浏览器客户端 `IndexedDB`，后续使用秒开且支持断网离线复用。
-> - **本地推理**：棋盘与走法在浏览器中计算；模型从 CDN 下载，导入平台网址会向对应平台请求棋谱。
-> - **双形态部署**：兼具浏览器扩展插件与具备 Service Worker 离线能力的独立 PWA 网页。
+- **网页棋图扫描**：点击 Scan 自动识别并进入互动棋盘；失败可框选重试，棋子、识别方向和行棋方可修正。确认后弹窗提供 SF19 Lite 三分支，再将当前局面送到工作台比较 Maia 候选。
+- **完赛复盘与局面探索**：支持 PGN、FEN 和受支持的公开对局链接。完整棋局提供精度、走势、实战记谱与关键步；单一局面提供候选对比和自由分支，不显示整局精度或棋局走势图。
+- **模型与界面**：Maia-3 5M / 23M / 79M（79M 以 FP16 存储）；扩展使用 SF19 Lite，网页版另可选 SF19 Standard。支持中英文、浅深主题、直觉等级与同一浏览器内的共享偏好。
+- **本地计算**：Maia 使用 JavaScript Float32 推理，Stockfish 使用 WebAssembly。识别小模型随包，本地处理截图；大权重按需从 CDN 下载并缓存。缓存省去重复下载，仍需初始化和计算。
+- **数据与公平竞技**：截图不上传；导入公开棋局会请求平台，网页交接在浏览器内传递所选局面或棋谱。实时对局关闭分析、候选、箭头和热力图，无法确认安全的互动来源保持锁定。
+
+使用指南：[4chess.cc/guide](https://4chess.cc/guide/) · 工作台：[4chess.cc/analysis](https://4chess.cc/analysis/) · 隐私：[4chess.cc/privacy](https://4chess.cc/privacy/)
 
 ---
 
@@ -25,6 +26,7 @@
 1. **分析台 (Analysis Board)**：`/analysis`、`/study`、`/editor`、`/practice`
 2. **残局与战术题 (Puzzles & Lessons)**：`/puzzles`、`/lessons`、`/classroom`
 3. **已完赛对局复盘 (Post-Game Review & Archives)**：已产生明确终局胜负裁定（如 `1-0`, `0-1`, `1/2-1/2`）或已弹出结算控件的对局。
+4. **学习用网页静态棋图 (Static Study Diagrams)**：由用户主动扫描当前可见图片；排除实时直播、未知互动棋局与活跃棋钟场景，确认局面后才允许分析。
 
 ### 防误用客户端守卫边界说明
 - 扩展内置 `FairPlayGuard` 状态机，在检测到活跃时钟（`.clock-running`）或投降/认输/和棋/放弃按钮时，立即终止引擎搜索并彻底抹除所有视觉箭头与热力图。
@@ -36,7 +38,7 @@
 ## 🌟 核心特性
 
 1. **🧠 Maia 3 Chessformer 神经网络推理 (ICLR 2026)**
-   - **纯前端原生推理**: Float32 矩阵计算内核，高精度执行 Chessformer 8 层 Transformer + GAB 几何注意力偏置。
+   - **纯前端原生推理**: Float32 矩阵计算内核，按所选模型参数执行 Transformer 与 GAB 几何注意力结构。
    - **历史感知与 FEN 模式**: 支持基于实战半回合走法历史的输入通道编码，无历史时自动按规范回退。
    - **Elo 等级分动态调节**: 支持 `1100 (初阶)`、`1500 (中阶)`、`1900 (进阶)`、`2200 (大师)` 连续动态调节。
 
@@ -55,9 +57,14 @@
 
 4. **🖥️ 独立大屏深度复盘工作台 (Analysis Studio & PWA)**
    - 一键提取整盘对局 PGN 并在独立标签页打开大屏复盘工作台 (`analysis/index.html` 或 `https://4chess.cc`)。
-   - 支持 PWA 离线安装，具备 Service Worker 离线缓存、网络优先策略与局势走向评测折线图 (`eval-chart.js`)。
+   - 支持 PWA 安装和已缓存资源的离线复用；首次模型下载和公开棋谱导入需要网络。PGN 整局复盘具备局势走势图 (`eval-chart.js`)；FEN 单局面直接进入候选对比。
 
 ---
+
+5. **棋图识别与互动局面 (Chessboard Scanner)**
+   - 图片识别与本地 Worker、方向证据、行棋方默认值及源绑定撤销。
+   - 弹窗支持修正棋子、观看视角、修正识别方向、三条引擎分支和独立设置页面。
+   - 网页交接当前确认局面，在工作台探索 Stockfish 与 Maia 的分歧。
 
 ## 📁 目录结构
 
@@ -90,7 +97,10 @@ diverge-extension/
 ├── lib/
 │   ├── stockfish-19.js        # Stockfish 19 Emscripten 胶水脚本 (GPLv3)
 │   └── stockfish.wasm         # Stockfish 19 WebAssembly 二进制文件 (GPLv3)
-├── popup/                     # 插件工具栏面板与配置
+├── popup/                     # 工具栏入口、棋图扫描、互动分析棋盘与设置
+├── scan/                      # 来源绑定、识别局面与网页交接
+├── offscreen/                 # 本地截图解码、识别 Worker 与取消
+├── chrome-web-store/          # 双语商品文案、元数据与提交说明
 ├── scripts/                   # 自动化测试、基准对照与权重转换脚本
 │   ├── test_fair_play.mjs     # 公平竞技守卫自动化场景测试
 │   ├── test_game_analyzer.mjs # 全局复盘分析器测试
@@ -114,7 +124,7 @@ diverge-extension/
    ```
 2. 在页面右上角开启 **开发者模式 (Developer mode)**。
 3. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
-4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.3.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
+4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.4.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
 5. 看到 `歧路 Diverge · 人类直觉与双引擎研判` 图标亮起即安装成功。
 
 ### 第二步：首次加载与模型缓存
@@ -152,7 +162,7 @@ diverge-extension/
 - **Cburnett 棋子 SVG**：Colin M. L. Burnett，GPL-2.0-or-later；许可全文见 [LICENSES/GPL-2.0.txt](LICENSES/GPL-2.0.txt)。
 
 
-### Scan page (1.1.3)
+### Scan page (1.1.4)
 
 Click **Scan page** in the toolbar popup on a permitted study page. Supported Chess.com/Lichess analysis or completed-game boards use DOM position reading when available; static image documents and Wikipedia diagrams use a local screenshot and packaged recognition WASM. Ordinary pages, including Twitter/X timelines, forums and articles, scan only visible static images: other page pixels are masked before recognition and preview. Scroll the complete diagram into view; if there are several images, crop the desired board. Replacing/removing the captured image revokes analysis. Unknown interactive game pages and live broadcasts remain locked. Scan automatically finds the diagram and opens the interactive board. If detection fails, crop the screenshot and retry. Edit position corrects pieces and recognized direction; View changes only the viewing angle. Settings opens a dedicated scrollable screen with an explicit Back button and Escape support, preserving the position and edit draft. Verify pieces, orientation and side to move, correct with the piece palette or complete FEN, then confirm. Image-derived positions default to no castling/en passant rights. Raw model labels are shown for correction rather than silently accepting rule-based piece replacements.
 
@@ -165,3 +175,7 @@ Screenshots stay transient in the offscreen document and are never uploaded. Lig
 `chesspuzzle/services/vision/core` is the sole algorithm source. `npm run vision:check` checks the upstream tree and generated browser outputs; `npm run vision:sync` rebuilds static module factories byte-for-byte, preserving local browser adapters and worker code. Both sides record `2026.10.14.1` and source tree hashes. The sibling command `node scripts/sync-vision-to-extension.cjs` is read-only by default; use `--update` explicitly to rebuild. `node scripts/test_vision_parity.mjs --source` compares real raw-pixel outputs, including raw/corrected labels, geometry-independent evidence, orientation, turn and unknown FEN fields. CI rejects modified generated files/model bytes and runs the checked-in golden fixture; a sibling checkout is required for the full upstream comparison. Installed older releases require their own update; this does not publish the mini-program automatically.
 
 Image context uses the same shared post-processing as chesspuzzle: reliable coordinates determine orientation; otherwise piece distribution supplies an editable default. Check or explicit turn evidence takes priority. Without turn evidence, side to move defaults to the viewed side and is marked unconfirmed before analysis. Both context helpers are included in the vision source/output hash lock.
+
+### 商品文案与本地化元数据
+
+`chrome-web-store/listing-copy.json` 是 English / 简体中文标题、摘要及详细说明的共同来源。`npm run store:sync` 更新本地化元数据与商店纯文本；`npm run store:check` 检查一致性及 75 / 132 字符限制。详见 `chrome-web-store/STORE_LISTING.md`。安装包不会替你提交商店后台的详细说明。

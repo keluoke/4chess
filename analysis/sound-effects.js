@@ -1,6 +1,6 @@
 /**
  * Synthesized Chess Sound Effects for Diverge Studio
- * 100% Web Audio API based - zero external assets, zero latency, offline-ready.
+ * Synthesized with the Web Audio API; no external sound files are required.
  * Generates natural wooden chess piece acoustics: move, capture, castle, check, promote.
  */
 

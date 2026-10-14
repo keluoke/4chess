@@ -1,279 +1,107 @@
-# 歧路 Diverge · Chrome Web Store 上架文案 (Store Listing Copy)
+# Diverge · Chrome Web Store 双语商品文案
 
-> **当前配置指南**：针对 Chrome 开发者控制台商品详情页（[Dashboard Listing Edit](https://chrome.google.com/webstore/devconsole/6c7445bd-661a-43f4-adc7-c9415dddb75b/egiimjkekgiaimaagaljiclacljmdkmo/edit/listing)）。
-> **核心策略**：**英语为主（Primary English），中文为辅（Secondary Chinese）**。
-> **🎉 原生 i18n 已就绪**：安装包已内置 `_locales/en` 与 `_locales/zh_CN`。上传 `diverge-extension-v1.0.4.zip` 时，控制台会自动识别并填充英语为默认语言，同时自动挂载简体中文语言槽！
-> 本文档提供两种填报方案：
-> - **方案 A（推荐 · 国际化双语言）**：默认语言设为 **English (United States)**，另通过「+ 添加语言」增加 **简体中文 (zh-CN)**（上传带 `_locales` 的包后通常会自动激活）。
-> - **方案 B（单页双语混合）**：若开发者控制台维持单一 listing 页面，直接使用「英文在上、中文在下」的中英一体排版。
+以 listing-copy.json 为文案来源；修改后执行 node scripts/sync_store_copy.mjs --write。默认检查不会改文件。
 
----
+默认语言 English，另填写简体中文商品详情。安装包包含本地化标题与摘要；详细说明仍需分别在商店后台填写。标题不超过 75 字符，摘要不超过 132 字符，以下长度自动核对。
 
-## 快速速填卡（Quick Dashboard Copy-Paste Card）
+## English
 
-| Dashboard 字段 | 方案 A：主要 Listing (English) | 方案 A：附加语言 (简体中文) | 方案 B：单页双语混合 (Bilingual) |
-|---|---|---|---|
-| **名称 / Title** (≤75字) | `Diverge: Chess AI Review & Intuition (Maia + Stockfish)` (55字) | `歧路 Diverge · 人类直觉与双引擎国际象棋复盘` (23字) | `Diverge: Chess AI Review (Maia & Stockfish) · 歧路复盘` (53字) |
-| **摘要 / Summary** (≤132字) | `Post-game chess review with Maia human intuition vs Stockfish engine best moves. Move heatmaps & 100% private local analysis.` (126字) | `纯本地双引擎国际象棋赛后复盘：人类直觉 (Maia) vs 算力最优 (Stockfish)，走法热力图与分歧研判，零数据上传。` (60字) | `Chess review: Maia human intuition vs Stockfish engine moves. 纯本地双引擎国际象棋赛后复盘：人类直觉 vs 算力最优。` (126字) |
-| **类别 / Category** | **Sports**（体育）或 **Productivity**（生产力工具） | 同左 | 同左 |
-| **隐私政策 URL** | `https://4chess.cc/privacy` | 同左 | 同左 |
-
----
-
-# 方案 A：英文主 Listing（English Primary Listing）
-
-### 1. Title（名称，55 / 75 字符）
-```text
-Diverge: Chess AI Review & Intuition (Maia + Stockfish)
-```
-
-*(备选 1 - 强调赛后与热力图)*:
-```text
-Diverge · Post-Game Chess Review & Human Intuition Heatmaps
-```
-
-*(备选 2 - 极简高辨识度)*:
-```text
-Diverge: Chess AI Review with Maia & Stockfish
-```
-
-### 2. Summary / Short Description（摘要，126 / 132 字符）
-```text
-Post-game chess review with Maia human intuition vs Stockfish engine best moves. Move heatmaps & 100% private local analysis.
-```
-
-*(备选 - 突出平台支持，131 / 132 字符)*:
-```text
-Compare Maia human intuition with Stockfish precision. Post-game review, move heatmaps & blunder analysis for Lichess & Chess.com.
-```
-
-### 3. Detailed Description（详细说明）
-*直接全选复制以下纯文本内容至 Description 输入框（格式已针对 Chrome 商店排版深度适配，无无效 markdown 标记）：*
+名称（50/75）：
 
 ```text
-⚖️ FAIR PLAY FIRST · STRICT ANTI-CHEAT COMPLIANCE
-Diverge strictly adheres to the Fair Play and Anti-Cheat regulations of Chess.com and Lichess.org.
-• Zero Live Assistance: During live timed games, Diverge automatically engages a fail-safe lock. Engine computation completely halts (0% CPU), and all visual overlays are cleared immediately.
-• Legitimate Post-Game Use Only: Diverge unlocks exclusively when games are concluded, on analysis boards (/analysis, /study), and in tactical puzzles (/puzzles).
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Understand how humans think, how engines calculate, and where the gap lies.
-
-Standard chess engines calculate like cold supercomputers, leaving you wondering: "Why did I play that move? What would another human at my rating play?" 
-
-Diverge brings two powerhouse engines together right inside your browser:
-1. Maia 3 (Chessformer Neural Network): Models real human chess intuition, predicting the most natural candidate moves and their probabilities at calibrated Elo rating levels.
-2. Stockfish 19 Lite in the floating panel (WebAssembly; Standard is available in the separate web review studio): The world's strongest open-source engine, delivering objective tactical evaluations and optimal computer moves.
-
-Both engines run 100% locally on your machine via WebAssembly. No game data or positions are ever uploaded to any server.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ KEY FEATURES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏹 Side-by-Side Visual Comparison
-• Gold Solid Arrow: Human intuition candidate & probability (e.g., e4 64.3% at your Elo).
-• Emerald Dashed Arrow: Stockfish objective best move and position score (e.g., d4 +0.35).
-• Consensus Glow: Automatically highlights when human instinct matches engine perfection.
-• Target Heatmap: Aggregated human probability heatmap across all legal destination squares.
-
-🎯 Calibrated Intuition Ratings
-Fine-tune Maia to mirror real human play at any skill level:
-• Quick presets: 1100 (Beginner), 1500 (Intermediate), 1900 (Club), and 2200+ (Master).
-• Continuous slider (600–2600) to benchmark against your exact rating bracket.
-
-📊 Standalone Deep Review Studio (PWA)
-Take your post-game analysis to a dedicated full-screen workspace:
-• Win-rate & advantage momentum charts.
-• Divergence breakdown: identify human blunders, subtle inaccuracies, and clever traps.
-• Import via PGN string, .pgn file, or direct Lichess / Chess.com game links.
-• Installable as a standalone PWA for offline post-game study.
-
-🔒 100% Local, Private & Fast
-• True Edge Computing: WebAssembly and Float32 neural network inference execute entirely in your local browser memory.
-• Zero Telemetry: No board positions, FEN strings, or browsing history leave your device.
-• Instant Cache: Model weights are cached securely in browser IndexedDB after the first load for offline zero-latency use.
-• Clean & Respectful: No ads, no analytics, no third-party tracking.
-
-🌐 WHERE IT WORKS
-• Lichess.org: Finished game review, Analysis Board, Studies, Puzzles.
-• Chess.com: Finished game review, Analysis Board, Puzzles, Classroom.
-• Standalone Studio: Built-in analysis workspace or 4chess.cc.
-
-Make post-game review a bridge to genuine chess understanding.
+Diverge: Chess Analysis, Scanner & Human Intuition
 ```
 
----
-
-# 方案 A：中文附加 Listing（Chinese Secondary Listing）
-
-> 在 Chrome 开发者控制台点击「语言」添加「中文 (简体)」时填入：
-
-### 1. 名称（Title，23 / 75 字符）
-```text
-歧路 Diverge · 人类直觉与双引擎国际象棋复盘
-```
-
-### 2. 摘要（Summary，60 / 132 字符）
-```text
-纯本地双引擎国际象棋赛后复盘：人类直觉 (Maia) vs 算力最优 (Stockfish)，走法热力图与分歧研判，零数据上传。
-```
-
-### 3. 详细说明（Detailed Description）
-```text
-⚖️ 公平竞技优先 · 绝不辅助作弊
-歧路 Diverge 严格遵守 Chess.com 与 Lichess.org 的公平竞技与反作弊守则。
-• 实时对局绝对禁算：在正在进行的倒计时对局中，扩展毫秒级自动死锁，彻底停止引擎计算（CPU 归零），并清空所有视觉提示。
-• 仅限赛后与研判：仅在比赛正式结束结算后、分析台（/analysis、/study）及残局战术题（/puzzles）中自动解锁。
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-理解人类怎么想，机器怎么走，差距在哪里。
-
-传统国际象棋引擎只会输出冰冷的算力评分，无法解释人类为何会走出看似合理的疑问手。歧路 Diverge 把「人类直觉」与「引擎最优解」并排呈现在你已结束的对局与训练页面上：
-1. Maia 3（Chessformer 神经网络）：模拟真实人类棋手直觉，给出最符合某一段位人类的第一候选着法与概率。
-2. Stockfish 19（WebAssembly）：顶级开源引擎，给出客观最优解与局面评分。
-
-双引擎均在你的设备本地推理，无需上传任何棋谱。
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ 核心功能亮点
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏹 三方走法对比，一目了然
-• 金色实线箭头：人类直觉候选着法及概率（如 e4 64.3%）
-• 翡翠绿虚线箭头：Stockfish 客观最优解与评分（如 d4 +0.35）
-• 共识高亮：当人机意见高度一致时自动合体高亮提示
-• 落点热力图：所有合法着法目标方格的人类行棋概率聚合
-
-🎯 直觉等级分自由调节
-支持 1100（初学）/ 1500（进阶）/ 1900（俱乐部）/ 2200（大师）预设，亦可连续滑杆微调（600–2600），让直觉预测贴合你的真实水平。
-
-📊 独立大屏全盘复盘工作台（PWA）
-• 优势/胜率走向折线图与走法分歧列表
-• 人机分歧点剖析（妙手/俗手/盲点陷阱）
-• 支持粘贴 PGN、导入 .pgn 文件或 Lichess / Chess.com 对局链接，支持离线安装。
-
-🔒 纯本地隐私安全
-• 100% 浏览器本地推理，棋谱与局面数据绝不上传第三方服务器。
-• 模型权重本地 IndexedDB 持久化缓存，秒开且支持断网离线复用。
-• 仅使用 chrome.storage 保存本地偏好（等级分、语言、面板位置等）。
-• 无广告、无埋点、无第三方追踪。
-
-🌐 适用场景
-• Lichess.org / Chess.com 已完赛对局复盘（结算后）
-• 棋局分析台（/analysis）、研究室（/study）、残局练习（/puzzles）
-• 独立大屏全盘分析工作台（4chess.cc）
-
-让复盘成为理解棋局的窗口，而不是辅助作弊的工具。
-```
-
----
-
-# 方案 B：单页双语混合 Listing（Unified Bilingual Listing）
-
-> 若控制台未开启多语言，直接使用一个 Listing 兼顾全球玩家（英语在前 70%，中文在后 30%）：
-
-### 1. Title（名称，53 / 75 字符）
-```text
-Diverge: Chess AI Review (Maia & Stockfish) · 歧路复盘
-```
-
-### 2. Summary（摘要，126 / 132 字符）
-```text
-Chess review: Maia human intuition vs Stockfish engine moves. 纯本地双引擎国际象棋赛后复盘：人类直觉 vs 算力最优。
-```
-
-### 3. Detailed Description（详细说明）
-*直接复制以下全文填入说明框：*
+摘要（111/132）：
 
 ```text
-⚖️ FAIR PLAY FIRST · STRICT ANTI-CHEAT COMPLIANCE
-Diverge strictly adheres to the Fair Play and Anti-Cheat regulations of Chess.com and Lichess.org.
-• Zero Live Assistance: During live timed games, Diverge automatically engages a fail-safe lock. Engine computation completely halts (0% CPU), and all visual overlays are cleared immediately.
-• Legitimate Post-Game Use Only: Diverge unlocks exclusively when games are concluded, on analysis boards (/analysis, /study), and in tactical puzzles (/puzzles).
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Understand how humans think, how engines calculate, and where the gap lies.
-
-Standard chess engines calculate like cold supercomputers, leaving you wondering: "Why did I play that move? What would another human at my rating play?" 
-
-Diverge brings two powerhouse engines together right inside your browser:
-1. Maia 3 (Chessformer Neural Network): Models real human chess intuition, predicting the most natural candidate moves and their probabilities at calibrated Elo rating levels.
-2. Stockfish 19 Lite in the floating panel (WebAssembly; Standard is available in the separate web review studio): The world's strongest open-source engine, delivering objective tactical evaluations and optimal computer moves.
-
-Both engines run 100% locally on your machine via WebAssembly. No game data or positions are ever uploaded to any server.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ KEY FEATURES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏹 Side-by-Side Visual Comparison
-• Gold Solid Arrow: Human intuition candidate & probability (e.g., e4 64.3% at your Elo).
-• Emerald Dashed Arrow: Stockfish objective best move and position score (e.g., d4 +0.35).
-• Consensus Glow: Automatically highlights when human instinct matches engine perfection.
-• Target Heatmap: Aggregated human probability heatmap across all legal destination squares.
-
-🎯 Calibrated Intuition Ratings
-Fine-tune Maia to mirror real human play at any skill level:
-• Quick presets: 1100 (Beginner), 1500 (Intermediate), 1900 (Club), and 2200+ (Master).
-• Continuous slider (600–2600) to benchmark against your exact rating bracket.
-
-📊 Standalone Deep Review Studio (PWA)
-Take your post-game analysis to a dedicated full-screen workspace:
-• Win-rate & advantage momentum charts.
-• Divergence breakdown: identify human blunders, subtle inaccuracies, and clever traps.
-• Import via PGN string, .pgn file, or direct Lichess / Chess.com game links.
-• Installable as a standalone PWA for offline post-game study.
-
-🔒 100% Local, Private & Fast
-• True Edge Computing: WebAssembly and Float32 neural network inference execute entirely in your local browser memory.
-• Zero Telemetry: No board positions, FEN strings, or browsing history leave your device.
-• Instant Cache: Model weights are cached securely in browser IndexedDB after the first load for offline zero-latency use.
-• Clean & Respectful: No ads, no analytics, no third-party tracking.
-
-🌐 WHERE IT WORKS
-• Lichess.org: Finished game review, Analysis Board, Studies, Puzzles.
-• Chess.com: Finished game review, Analysis Board, Puzzles, Classroom.
-• Standalone Studio: Built-in analysis workspace or 4chess.cc.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🇨🇳 中文说明（Chinese Summary）
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-【核心理念】
-传统引擎只会输出冰冷的算力评分，无法解释人类为何会犯错。歧路 Diverge 将「人类直觉 (Maia 3)」与「算力最优 (Stockfish 19)」并排呈现，帮您看清差距所在。
-
-【功能亮点】
-• 🏹 三方走法对比：金色箭头（人类直觉走法与概率）+ 翡翠绿箭头（引擎最佳着法与评分）+ 共识合体高亮。
-• 🎯 直觉等级分可调：1100–2200+ Elo 快速切换与微调滑杆，匹配真实对弈段位。
-• 📊 独立复盘工作台：全盘胜率走势图、人机分歧点（妙手/漏着/陷阱）、支持 PGN 与对局链接导入。
-• 🔒 严格公平竞技锁：对局中毫秒级死锁，停止一切计算；仅在赛后和分析台中解锁，绝不辅助作弊。
-• 🛡️ 纯本地零上传：WebAssembly 本地推理，不向任何服务器传输棋谱或隐私数据。
+Compare Stockfish with Maia human intuition. Scan webpage chess diagrams and review Chess.com or Lichess games.
 ```
 
----
+详细说明（可直接粘贴；同 listing-en.txt）：
 
-## 附加合规申报信息（Dashboard 隐私与权限速查）
+```text
+Diverge is a chess analysis and chessboard scanner extension that shows where Stockfish engine recommendations and Maia human move predictions disagree. Explore positions found in webpage images, or review completed Chess.com and Lichess games.
 
-### 1. 单一用途说明（Single Purpose Description）
-> *The extension provides post-game chess review and comparative analysis between human intuition (Maia) and objective engine evaluation (Stockfish) exclusively on completed games and analysis boards.*
+ENGINE ANALYSIS AND HUMAN INTUITION
+See which moves the engine recommends and which moves people at a selected rating are likely to choose. Compare position scores, candidate variations and move probabilities. Maia probabilities describe predicted human choices, not winning chances or a personal rating assessment.
 
-### 2. 权限声明（Permission Justifications）
-- `storage`: *Used to store user preferences locally (selected Elo rating, theme, UI position, language). Settings are shared with the first-party studio in the same browser profile; review caches remain local.*
-- `activeTab`: *Temporary access to read and capture the visible page when the user invokes Scan on a permitted study source.*
-- `scripting`: *Injects source safety checks and observes changes on the user-selected tab; live games and uncertain interactive sources remain locked.*
-- `offscreen`: *Hosts a local dedicated worker for screenshot decoding and packaged WASM chess-diagram recognition; no pixels are uploaded.*
-- `host_permissions` (`*.lichess.org/*`, `*.chess.com/*`): *Required to inject the review interface and read board notations on supported chess websites.*
-- `host_permissions` (`4chess.cc/*`): *Used for the user-triggered web studio and whitelisted UI preference synchronization.*
-- `host_permissions` (`weights.4chess.cc/*`): *Used strictly to download neural network model weights into browser IndexedDB cache for local inference.*
+SCAN A CHESS DIAGRAM ON A WEBPAGE
+Find a position in a post, article, forum or study image? Click Scan page in the toolbar popup. A packaged local recognition model automatically finds the board and opens an interactive position. If detection fails or you want a different board, select a crop. Check the pieces, orientation and side to move; correct the board before confirming.
 
-### 3. 用户数据披露（User Data Disclosure）
-- 数据类型勾选：**Website Content（网页内容）**
-- 理由填写：
-  > *“Diverge reads chess positions, notation, public player labels and game-state evidence on supported analysis and completed-game pages. Engine inference runs locally. Preferences, model weights and review results may be cached on the device. UI preferences are shared with the first-party 4chess.cc web studio in the same Chrome profile. User-triggered public game imports contact the chess platform and may use our open-source edge proxy. Infrastructure providers receive normal network request metadata. Live games lock all analysis. See the privacy policy for retention and deletion details.”*
-- 勾选全部 3 项合规保证（不转售、不用作广告/征信、不挪作他用）。
+The popup then provides SF19 Lite analysis with up to three legal engine lines. Click or drag pieces to explore a variation, draw thought arrows, switch the viewing angle and copy the FEN. Choose Explore engine vs intuition to open the current position in the 4chess web studio and compare it with Maia candidates. The scanner reads visible static images; images cannot recover a complete game history, and the side to move may need confirmation.
 
-Scan page recognizes static study diagrams in Twitter/X timelines, forums and articles locally, retaining only visible static image regions on ordinary pages. It automatically opens the recognized board, with manual cropping if detection fails, and lets you correct and confirm the position, and shows an interactive board with SF19 Lite lines. Explore engine vs intuition opens the current confirmed position, including your variation. Source-bound scan analysis stops if a live game starts or the source changes/closes.
+REVIEW COMPLETED GAMES
+On supported analysis boards and finished games, the floating panel compares human candidates with engine recommendations. Optional move arrows and a destination heatmap make the difference easier to see. Import a PGN file, paste PGN or FEN, or open a supported public game link in the studio. Full-game review adds accuracy scores, an evaluation chart, notation and key moves. A single diagram has no full-game accuracy score or game chart.
+
+EXPLORE YOUR OWN IDEAS
+Play moves on the analysis board to create variations. Navigate with the keyboard, annotate with right-drag arrows and compare concise candidate lines. Settings include English and Simplified Chinese, light and dark themes, an intuition rating, and Maia-3 5M, 23M or 79M. The popup and floating panel use SF19 Lite; SF19 Standard is a separate web-studio option. Larger models need larger initial downloads and more computation time. Saved preferences are shared with the first-party studio in the same Chrome profile.
+
+LOCAL COMPUTATION AND FAIR PLAY
+Recognition and engine inference run in your browser. Screenshots are not uploaded. Model weights download when needed and can be cached locally. Public game imports contact the chess platform, and opening the studio passes your chosen game or position in the browser. See the privacy policy for storage and network details.
+
+For study and post-game review. Active games lock engine analysis, candidate moves, arrows and heatmaps. Unknown interactive game pages and live broadcasts stay locked. This is an independent project, with no official affiliation to the chess platforms or engine authors.
+
+Guide and credits: https://4chess.cc/guide/
+Analysis studio: https://4chess.cc/analysis/
+Privacy policy: https://4chess.cc/privacy/
+Open source and support: https://github.com/keluoke/4chess
+Maintainer: keluoke
+```
+
+## 简体中文
+
+名称（29/75）：
+
+```text
+歧路 Diverge · 国际象棋分析、棋图扫描与人类直觉
+```
+
+摘要（77/132）：
+
+```text
+对比 Stockfish 引擎建议与 Maia 人类直觉。扫描网页棋图，分析当前局面，或复盘 Chess.com、Lichess 完赛棋局，探索人机分歧。
+```
+
+详细说明（可直接粘贴；同 listing-zh-CN.txt）：
+
+```text
+歧路 Diverge 是一款国际象棋分析与棋图扫描插件，核心是呈现机器引擎与人类直觉的差异：Stockfish 推荐怎样走，Maia 预测所选等级分的人类棋手更可能怎样走。你可以探索浏览网页时看到的静态棋图，也可以复盘 Chess.com、Lichess 上已结束的棋局。
+
+引擎建议与人类直觉，并排比较
+结合局面评分、候选变化和走法概率，寻找两种选择的分歧。Maia 的百分比表示人类走法预测概率，不是获胜概率，也不能用来认定个人棋力。常见的走法可能存在问题，引擎推荐的走法也可能违背第一直觉。
+
+扫描网页中的棋盘局面
+在信息流、文章、论坛或学习图片里看到棋图，点击工具栏弹窗中的“扫描当前页面”即可自动识别并进入互动棋盘。识别失败或需要换一张棋盘时，可以框选重试。检查棋子、方向与行棋方，需要时直接修正局面，再确认分析。
+
+弹窗使用 SF19 Lite 给出最多三条合法引擎分支。你可以点击或拖动棋子探索变化、绘制思考箭头、切换观看视角并复制 FEN。点击“深入探索引擎与直觉的分歧”，把当前局面或个人分支交给 4chess 网页分析工作台，进一步比较 Maia 候选。扫描读取当前可见的静态图片；单张棋图无法恢复完整对局历史，也未必能确定轮到谁走。
+
+复盘已结束的棋局
+在受支持的分析台和完赛棋局中，悬浮窗对比人类候选与引擎建议，可用走法箭头和落点概率热力图辅助理解。工作台支持导入 PGN 文件、粘贴 PGN 或 FEN，以及受支持的公开对局链接。整局复盘提供精度得分、优劣走势图、记谱与妙手／俗手等关键步；只有一个局面时不显示整局精度或棋局走势图。
+
+自由探索与统一设置
+在分析棋盘上走棋形成个人分支，用键盘回看、右键拖动画箭头，查看简洁的候选谱。支持中英文、浅深主题、直觉等级分，以及 Maia-3 5M、23M、79M 三档模型。弹窗和悬浮窗使用 SF19 Lite；SF19 标准版是独立网页版的可选项。大模型首次下载更大、计算更慢。设置可保存，并与同一 Chrome 配置中的4chess 分析工作台同步。
+
+本地计算与公平竞技
+识别和引擎推理在浏览器中完成，截图不上传。模型按需下载并可本地缓存；导入公开对局会请求相应棋类平台，进入工作台时会在浏览器内传递所选棋谱或局面。具体存储和网络行为见隐私政策。
+
+用于学习与赛后复盘。实时对局期间锁定引擎分析、候选走法、箭头与热力图；无法确认安全的互动棋局和实时直播保持锁定。本项目独立开发，与棋类平台或引擎原作者无官方隶属关系。
+
+使用指南与署名：https://4chess.cc/guide/
+分析工作台：https://4chess.cc/analysis/
+隐私政策：https://4chess.cc/privacy/
+开源与问题反馈：https://github.com/keluoke/4chess
+维护者：keluoke
+```
+
+## 搜索展示与提交
+
+标题保留品牌、Chess Analysis、Scanner、Human Intuition；摘要补充 Stockfish、Maia、网页棋图和支持的平台。详细说明将 chessboard scanner、PGN、FEN、game review、heatmap 等词放在实际功能中，避免重复关键词列表、竞品名或排名承诺。搜索展示还受使用体验、评价和留存等因素影响，文案不能保证名次。
+
+- English 与简体中文分别填写；不把两个长说明拼成同一语言页面。
+- 截图应与实际功能相符；旧版全盘复盘示例仍是其中一个场景。
+- 单一用途说明、权限理由与 Website Content 数据披露使用 [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md)。
+- 隐私政策：https://4chess.cc/privacy/；指南：https://4chess.cc/guide/。
+- 本地文件更新不等于后台商品详情已提交或通过审核。
+
+依据：[Chrome 商店文案指南](https://developer.chrome.com/docs/webstore/best-listing)、[商品信息与关键词规范](https://developer.chrome.com/docs/webstore/program-policies/listing-requirements/)、[Manifest 字段限制](https://developer.chrome.com/docs/extensions/reference/manifest)。

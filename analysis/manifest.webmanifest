@@ -1,14 +1,17 @@
 {
-  "name": "歧路 Diverge · 全盘分析",
+  "name": "歧路 Diverge · 局面分析与棋局复盘",
   "short_name": "歧路 Diverge",
-  "description": "基于 Maia-3 人类直觉模型与 Stockfish 双引擎的纯前端深度复盘工作台",
+  "description": "对比 Stockfish 引擎建议与 Maia 人类直觉，探索网页棋图、FEN 局面、个人分支与完赛棋局。",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f3f2ec",
   "theme_color": "#f3f2ec",
   "orientation": "any",
-  "categories": ["games", "utilities"],
+  "categories": [
+    "games",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "../icons/icon48.png",
@@ -35,8 +38,13 @@
       "action": "./index.html",
       "name": "Chess PGN File",
       "accept": {
-        "application/x-chess-pgn": [".pgn"],
-        "text/plain": [".pgn", ".txt"]
+        "application/x-chess-pgn": [
+          ".pgn"
+        ],
+        "text/plain": [
+          ".pgn",
+          ".txt"
+        ]
       }
     }
   ]

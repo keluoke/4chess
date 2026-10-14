@@ -1,0 +1,26 @@
+Diverge is a chess analysis and chessboard scanner extension that shows where Stockfish engine recommendations and Maia human move predictions disagree. Explore positions found in webpage images, or review completed Chess.com and Lichess games.
+
+ENGINE ANALYSIS AND HUMAN INTUITION
+See which moves the engine recommends and which moves people at a selected rating are likely to choose. Compare position scores, candidate variations and move probabilities. Maia probabilities describe predicted human choices, not winning chances or a personal rating assessment.
+
+SCAN A CHESS DIAGRAM ON A WEBPAGE
+Find a position in a post, article, forum or study image? Click Scan page in the toolbar popup. A packaged local recognition model automatically finds the board and opens an interactive position. If detection fails or you want a different board, select a crop. Check the pieces, orientation and side to move; correct the board before confirming.
+
+The popup then provides SF19 Lite analysis with up to three legal engine lines. Click or drag pieces to explore a variation, draw thought arrows, switch the viewing angle and copy the FEN. Choose Explore engine vs intuition to open the current position in the 4chess web studio and compare it with Maia candidates. The scanner reads visible static images; images cannot recover a complete game history, and the side to move may need confirmation.
+
+REVIEW COMPLETED GAMES
+On supported analysis boards and finished games, the floating panel compares human candidates with engine recommendations. Optional move arrows and a destination heatmap make the difference easier to see. Import a PGN file, paste PGN or FEN, or open a supported public game link in the studio. Full-game review adds accuracy scores, an evaluation chart, notation and key moves. A single diagram has no full-game accuracy score or game chart.
+
+EXPLORE YOUR OWN IDEAS
+Play moves on the analysis board to create variations. Navigate with the keyboard, annotate with right-drag arrows and compare concise candidate lines. Settings include English and Simplified Chinese, light and dark themes, an intuition rating, and Maia-3 5M, 23M or 79M. The popup and floating panel use SF19 Lite; SF19 Standard is a separate web-studio option. Larger models need larger initial downloads and more computation time. Saved preferences are shared with the first-party studio in the same Chrome profile.
+
+LOCAL COMPUTATION AND FAIR PLAY
+Recognition and engine inference run in your browser. Screenshots are not uploaded. Model weights download when needed and can be cached locally. Public game imports contact the chess platform, and opening the studio passes your chosen game or position in the browser. See the privacy policy for storage and network details.
+
+For study and post-game review. Active games lock engine analysis, candidate moves, arrows and heatmaps. Unknown interactive game pages and live broadcasts stay locked. This is an independent project, with no official affiliation to the chess platforms or engine authors.
+
+Guide and credits: https://4chess.cc/guide/
+Analysis studio: https://4chess.cc/analysis/
+Privacy policy: https://4chess.cc/privacy/
+Open source and support: https://github.com/keluoke/4chess
+Maintainer: keluoke

@@ -2,15 +2,15 @@ const english = {
   scanTitle: 'Scan a chess diagram', scanBody: 'Open a static diagram in a post or article, or a permitted study board, then click Scan page. Page boards use DOM reading when available; images use the packaged local vision model. Scan automatically opens the recognized board; if detection fails, crop the screenshot and retry. Edit position corrects pieces and recognized direction. View changes only the viewing angle. Settings opens a separate scrollable screen; use Back or Escape to return with your position and edit draft intact. Coordinates determine board orientation. Without turn evidence, side to move defaults to the viewed side and remains unconfirmed. Check pieces, orientation and side to move; correct with the piece palette or complete FEN, then confirm to start SF19 Lite. Images default to no castling or en passant rights.', scanHandoff: 'Click or drag pieces to explore variations, and right-drag to annotate. Explore engine vs intuition opens the current confirmed position with saved web engine/Maia preferences. A single position has no full-game accuracy or chart. Live play, source navigation or closure stops scan analysis. Supported sources include safe Chess.com/Lichess pages and static diagrams in Twitter/X timelines, forums, articles or image documents. Ordinary-page scans retain only visible static images; scroll the complete board into view and crop it if several images are present. Replacing a captured image stops analysis. Unknown interactive game pages and live broadcasts stay locked.',
   privacyPolicy: 'Privacy policy',
   studyControls: 'Free exploration & shared preferences', studyControlsBody: 'Arrow keys navigate across the page; inputs, settings and promotion dialogs keep their own keyboard controls. Click or drag pieces to create a personal variation, then reopen it from My variations. Right-drag draws a thought arrow and right-click marks a square. Marks stay with their position; the clear button clears only the current position.', independentLoading: 'SF and Maia download and present results independently. Explore with whichever engine becomes ready first. Variations take priority; returning to the game and pausing navigation resumes an unfinished full-game review.', sharedPreferences: 'With the updated extension installed in the same Chrome browser, its popup, floating panel and web studio share the web Stockfish edition, Maia, language, rating and other preferences. Open pages update together. Without the extension, preferences stay in this browser; there is no automatic cross-device sync. The Web review engine setting does not switch the floating panel, which always runs SF19 Lite. Model caches still belong to each site, so a first visit to another site may download the weights again.', navStart: 'Get started', navDual: 'Visual legend', navAbout: 'About & licenses',
-  title: 'Two engines. A clearer view of every move.',
-  intro: 'Stockfish evaluates move quality. Maia predicts how players at a chosen rating are likely to move. Diverge puts both perspectives together.',
-  openStudio: 'Open full-game analysis ↗', source: 'Project source ↗', quickStart: 'First time? Start in three steps',
-  step1: 'Open an analysis board or a completed game',
-  step1Body: 'Open analysis on Chess.com or Lichess, then click Diverge in your browser toolbar. Pin the extension icon so it is easy to find.',
+  title: 'Where do engine and intuition diverge?',
+  intro: 'Compare Stockfish recommendations with Maia human move predictions. Scan a webpage chess diagram or review a finished game, then explore where the two perspectives differ.',
+  openStudio: 'Open analysis studio ↗', source: 'Project source ↗', quickStart: 'First time? Start in three steps',
+  step1: 'Find a chess diagram or a completed game',
+  step1Body: 'For an image, show the complete static diagram and click Scan page. On Chess.com or Lichess, open an analysis board or a finished game. Pin the extension icon for easy access.',
   step2: 'Start with the lightweight model and wait for the first download',
   step2Body: 'The default is SF19 Lite + Maia 5M. Choose an intuition rating and inspect the current position. Maia weights download on first use, then reuse your browser cache. Analysis stays idle without a position or during a live game.',
-  step3: 'Compare the position or open a full-game review',
-  step3Body: 'The floating panel compares human candidates with the engine suggestion. Full Game Analysis imports the completed game into the web studio, with accuracy, the evaluation chart, notation, brilliant moves and intuition traps. You can also import a PGN or set up a FEN.',
+  step3: 'Explore engine and intuition, from a position or a game',
+  step3Body: 'After confirming a scanned position, the popup shows SF19 Lite lines. Explore engine vs intuition opens that position in the studio with Maia candidates. Platform boards use the floating panel; completed games can be reviewed with accuracy, an evaluation chart, notation and key moves. PGN and FEN imports are also available.',
   fairTitle: 'Live games automatically lock analysis',
   fairBody: 'Engine computation, candidate moves, arrows and heatmaps are disabled during a live game. Clear evidence of completion unlocks analysis; starting a new game locks it again. Model changes made while locked are saved and load only when analysis is permitted.',
   dualTitle: 'One position. Two different questions.', sfQuestion: 'How good is this move?',
@@ -30,7 +30,7 @@ const english = {
   troubleTitle: 'If something looks wrong', lockedQuestion: 'Still locked?',
   lockedAnswer: 'Confirm the game has finished. Analysis pages or pages with clear game-over evidence permit analysis; ambiguous game status stays locked.',
   loadingQuestion: 'Model not ready?', loadingAnswer: 'Check download progress, errors, network access and the model URL. Try 5M again if needed. Maia being ready does not imply Stockfish is ready.',
-  updateQuestion: 'Still seeing the old extension UI after an update?', updateAnswer: 'Reload the unpacked extension at chrome://extensions, then refresh the Chess.com or Lichess tab. The website and local extension are separate deployments: updating the website does not update an installed local extension.',
+  updateQuestion: 'Still seeing the old extension UI after an update?', updateAnswer: 'Reload the unpacked extension at chrome://extensions, then refresh the source webpage. The website and local extension are separate deployments: updating the website does not update an installed local extension.',
   maiaLicense: 'Code: AGPL-3.0. For weight terms, see each model card and upstream repository.', aboutTitle: 'About, credits & open-source licenses', projectCredit: 'Diverge · keluoke. Project source and maintenance history: keluoke/4chess.',
   independent: 'An independent project, with no official affiliation to Chess.com, Lichess, Maia or Stockfish. Each component retains its authorship and license.',
   licenseIntro: 'Expand the project license, third-party notices and full license texts below. They are also included in the extension package. Modification and redistribution must follow each component’s license, including applicable source-distribution obligations.'
@@ -42,7 +42,8 @@ function translate() {
   lang = lang === 'en' ? 'en' : 'zh';
   nodes.forEach(node => { node.textContent = (lang === 'en' ? english : chinese)[node.dataset.copy] || chinese[node.dataset.copy]; });
   document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
-  document.title = lang === 'en' ? 'Diverge · Guide, credits & licenses' : '歧路 Diverge · 使用指南与关于';
+  document.title = lang === 'en' ? 'Diverge · Chess Scanner & Analysis Guide' : '歧路 Diverge · 棋图扫描、分析指南与关于';
+  document.querySelector('meta[name=description]').content = lang === 'en' ? 'Learn to scan webpage chess diagrams and compare Stockfish engine analysis with Maia human intuition. Position study, game review, settings and credits.' : '学习扫描网页棋图，对比 Stockfish 引擎分析与 Maia 人类直觉；了解局面探索、完赛复盘、设置、署名与许可。';
   document.getElementById('language-toggle').textContent = lang === 'en' ? '中文' : 'English';
   document.querySelectorAll('a[href^="../analysis/"]').forEach(link => { link.href = '../analysis/?lang=' + lang; });
   localStorage.setItem('diverge_guide_lang', lang);

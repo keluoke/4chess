@@ -2,9 +2,9 @@
 Maintainer / 维护者：keluoke · Updated / 更新：2026-10-14
 
 ## Purpose and local analysis / 用途与本地分析
-Diverge, maintained by keluoke, compares Stockfish evaluation with Maia human-move probabilities on analysis boards and completed games. Live games lock analysis. No account, advertising, analytics SDK or developer-operated user database is provided.
+Diverge, maintained by keluoke, compares Stockfish evaluation with Maia human-move probabilities through webpage diagram scanning, analysis boards and completed-game review. Live games lock analysis. No account, advertising, analytics SDK or developer-operated user database is provided.
 
-Diverge 由 keluoke 维护，在分析台及完赛棋局中对比 Stockfish 评价与 Maia 人类走法概率。实时对局锁定分析。无需注册账号，不含广告或统计 SDK，不建立开发者运营的用户数据库。
+Diverge 由 keluoke 维护，通过网页静态棋图扫描、分析台及完赛棋局，对比 Stockfish 评价与 Maia 人类走法概率。实时对局锁定分析。无需注册账号，不含广告或统计 SDK，不建立开发者运营的用户数据库。
 
 ## Page content and local storage / 页面内容与本地存储
 Supported Chess.com and Lichess pages are inspected for board positions, notation, public player labels and ratings, clocks and game-over evidence. Inference runs on your device. Preferences, review results and model caches can persist in chrome.storage.local, localStorage and IndexedDB; they are not all discarded when a tab closes. Personal variations and hand-drawn marks currently remain in page-session memory.
@@ -27,9 +27,9 @@ We do not sell user data or use it for advertising, credit decisions or unrelate
 不出售用户数据，不用于广告、信用评估或与复盘无关的用途。卸载扩展可移除扩展配置数据；网页缓存还需分别在浏览器中清理 4chess.cc、Chess.com、Lichess 的站点数据，卸载扩展不会清空所有网站存储。清理站点数据也可能删除这些网站保存的其他数据。模型缓存按来源分别保存，清理后可能需要重新下载。
 
 ## Contact and changes / 联系与更新
-Questions and requests: https://github.com/keluoke/4chess/issues. This policy describes release 1.1.3, updated 2026-10-14. Material changes will be reflected on this page.
+Questions and requests: https://github.com/keluoke/4chess/issues. This policy describes release 1.1.4, updated 2026-10-14. Material changes will be reflected on this page.
 
-问题与请求请通过 https://github.com/keluoke/4chess/issues 联系。本政策对应 1.1.3，更新于 2026-10-14；重大变化将在本页更新。
+问题与请求请通过 https://github.com/keluoke/4chess/issues 联系。本政策对应 1.1.4，更新于 2026-10-14；重大变化将在本页更新。
 
 ### User-requested Scan / 用户主动扫描
 

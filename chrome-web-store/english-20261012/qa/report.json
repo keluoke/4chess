@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "assets": [
+    {
+      "file": "screenshot-1-two-perspectives-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "hasAlpha": false,
+      "englishOnly": true,
+      "errors": [],
+      "visibleText": "Diverge 01 / TWO PERSPECTIVES CHESS POSITION STUDY See both sides of a move. Compare Maia's human move predictions with Stockfish's engine choices. Maia 3 Human intuition · Move probability Stockfish 19 Engine search · Position evaluation MORPHY · THE OPERA GAME FINISHED · 1–0 8 7 6 5 4 3 2 1 a b c d e f g h Position before 10. Nxb5 White to move Diverge ⚪ White White Candidates 232 ms 1 Be2 28.83% 2 Bd3 26.6% 3 Nxb5 (Best) 0.00 23.74% ⚠️ Engine Divergence ~ 28.83% of 1900 players favor Be2 , while Stockfish advises Nxb5 (Eval: +3.51). SF19 Lite: Nxb5 Eval +3.51 Full Game Analysis Maia-3 5M Ready (Cloudflare CDN) SF19 Lite · Panel Ready (WASM) DIVERGE · ON-BOARD ANALYSIS PANEL Local analysis · Two engines · One clearer perspective WEB DIAGRAMS · GAME REVIEW",
+      "locked": false,
+      "reviewDisabled": false,
+      "candidates": 3
+    },
+    {
+      "file": "screenshot-2-review-studio-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "hasAlpha": false,
+      "englishOnly": true,
+      "errors": [],
+      "visibleText": "Diverge 02 / WHOLE-GAME REVIEW Find the turning points. Explore the evaluation trend, candidate moves and key moments in one review workspace."
+    },
+    {
+      "file": "screenshot-3-fair-play-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "hasAlpha": false,
+      "englishOnly": true,
+      "errors": [],
+      "visibleText": "Diverge 03 / FAIR PLAY FIRST BUILT FOR STUDY Play fair. Study deeper. Analysis pauses during live games. Return to your decisions after the result. No move suggestions No analysis overlays Diverge Live Fair Play Guard Live Match · Locked Live Game Active · Fair Play Guard Per Fair Play Anti-Cheat rules, engine assistance, candidate arrows, and attention heatmaps are strictly disabled during live matches. ✓ Unlocks automatically upon game conclusion Full Game Analysis Maia-3 5M Not Started SF19 Lite · Panel Not Started DIVERGE · FAIR PLAY GUARD Ready to study → Live game · Locked → Post-game review Analysis boards · Puzzles · Completed games WEB DIAGRAMS · GAME REVIEW",
+      "locked": true,
+      "reviewDisabled": true,
+      "candidates": 0
+    },
+    {
+      "file": "promo-small-440x280.png",
+      "width": 440,
+      "height": 280,
+      "channels": 3,
+      "hasAlpha": false,
+      "englishOnly": true,
+      "errors": [],
+      "visibleText": "Diverge Chess analysis, with perspective. MAIA 3 + STOCKFISH 19"
+    },
+    {
+      "file": "promo-marquee-1400x560.png",
+      "width": 1400,
+      "height": 560,
+      "channels": 3,
+      "hasAlpha": false,
+      "englishOnly": true,
+      "errors": [],
+      "visibleText": "Diverge Human instinct. Engine insight. See where the paths diverge. Study positions and games with Maia & Stockfish. WEB DIAGRAMS & GAME REVIEW FAIR PLAY FIRST HUMAN INTUITION ENGINE SEARCH"
+    }
+  ]
+}

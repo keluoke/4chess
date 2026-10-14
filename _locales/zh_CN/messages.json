@@ -1,14 +1,14 @@
 {
   "extensionName": {
-    "message": "歧路 Diverge · 人类直觉与双引擎国际象棋复盘",
+    "message": "歧路 Diverge · 国际象棋分析、棋图扫描与人类直觉",
     "description": "扩展标题"
   },
   "extensionDescription": {
-    "message": "纯本地双引擎国际象棋赛后复盘：人类直觉 (Maia) vs 算力最优 (Stockfish)，走法热力图与分歧研判，零数据上传。",
+    "message": "对比 Stockfish 引擎建议与 Maia 人类直觉。扫描网页棋图，分析当前局面，或复盘 Chess.com、Lichess 完赛棋局，探索人机分歧。",
     "description": "扩展描述"
   },
   "actionTitle": {
-    "message": "歧路 Diverge 设置",
+    "message": "歧路 Diverge · 扫描与分析棋盘局面",
     "description": "扩展图标悬停提示"
   },
   "popupSubtitle": {
@@ -34,7 +34,7 @@
     "message": "在分析或完赛棋盘上对比 Maia 与 Stockfish"
   },
   "btnReviewStudio": {
-    "message": "进入全盘分析",
+    "message": "进入分析工作台",
     "description": "打开工作台按钮"
   },
   "btnLichess": {
@@ -90,21 +90,21 @@
     "description": "Chessformer 特性"
   },
   "featureSliced": {
-    "message": "毫秒级分片释放，棋盘走子 60FPS 丝滑不卡顿",
+    "message": "计算分段执行，保持棋盘交互响应",
     "description": "切片计算特性"
   },
   "featureLru": {
-    "message": "上一步/下一步回看 0ms 秒开",
+    "message": "回看时复用可用的分析缓存",
     "description": "LRU 缓存特性"
   },
   "reviewOnly": {
-    "message": "仅供复盘"
+    "message": "仅供学习"
   },
   "popupHeadline": {
-    "message": "每一步，都有另一种可能。"
+    "message": "引擎与直觉，会选同一步吗？"
   },
   "popupIntro": {
-    "message": "回看你的选择，发现直觉之外的好棋。"
+    "message": "扫描网页棋图，或复盘完赛棋局，探索两种选择的分歧。"
   },
   "eloHelp": {
     "message": "用于 Maia 候选着法预测"
@@ -125,7 +125,7 @@
     "message": "第一次使用？查看使用指南 ↗"
   },
   "firstUseSteps": {
-    "message": "打开分析板 → 选择模型 → 对比直觉与引擎"
+    "message": "扫描棋图或打开分析板 → 对比引擎与直觉"
   },
   "aboutCredits": {
     "message": "关于 · 署名与许可"

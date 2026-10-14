@@ -26,7 +26,7 @@ export const DICTIONARY = {
     largeModelNote: "SF19 标准版约 95 MB；Maia 5M / 23M / 79M 约 28 / 104 / 159 MB。首次下载后保存在浏览器，切换版本会重新分析。",
     standardWebOnly: "本地扩展页面使用 SF19 Lite；标准版请打开网页版复盘",
     // Compact two-column review studio
-    reviewSettings: "复盘设置",
+    reviewSettings: "分析设置",
     btnClose: "关闭",
     currentPosition: "当前局面",
     reviewThisMove: "回看此步",
@@ -63,9 +63,10 @@ export const DICTIONARY = {
     reviewMoveBefore: "回看第 {number} 步 {move} · 走前局面",
 
     // Header & Meta
-    appTitle: '歧路 Diverge · 全盘分析',
+    appTitle: '歧路 Diverge · 局面分析与棋局复盘',
+    appDescription: '对比 Stockfish 引擎建议与 Maia 人类直觉，探索网页棋图识别的局面、FEN、PGN 和完赛棋局中的分歧。',
     studioName: '歧路 Diverge',
-    studioBadge: '棋谱研究室',
+    studioBadge: '分析工作台',
     whitePlayer: '⚪ 白方',
     blackPlayer: '⚫ 黑方',
     btnImportPgn: '导入 PGN',
@@ -184,9 +185,9 @@ export const DICTIONARY = {
     coverageTooltip: '计算覆盖率: {pct}%',
 
     // Empty Hero View
-    heroTitle: '从一盘棋开始',
-    heroSubtitle: '回看实战选择，找到妙手与直觉容易错过的机会。',
-    btnImportCompleted: '导入已完赛对局',
+    heroTitle: '从一个局面或一盘棋开始',
+    heroSubtitle: '导入 FEN 局面或完赛棋谱，探索引擎与人类直觉。网页棋图可先用插件扫描。',
+    btnImportCompleted: '导入局面或完赛棋谱',
     btnTestSound: '试听行棋音效',
     chipFischer: '♟️ 菲舍尔世纪之局 (1956)',
     chipKasparov: '♟️ 卡斯帕罗夫不朽之局 (1999)',
@@ -197,8 +198,8 @@ export const DICTIONARY = {
     dragDropTitle: '释放以载入 PGN 棋谱',
     dragDropSubtitle: '支持 .pgn 棋谱文件与文本拖拽',
     modalEyebrow: 'A NEW PERSPECTIVE',
-    modalTitle: '从一盘棋开始',
-    modalDesc: '导入已完赛对局，回看直觉之外的选择。',
+    modalTitle: '从一个局面或一盘棋开始',
+    modalDesc: '导入 FEN 局面或已完赛棋谱，对比引擎与人类直觉。',
     modalPlaceholder: '在此粘贴：\n1. PGN 棋谱文本 或 FEN 局面\n2. Lichess 对局网址 (如 https://lichess.org/aBcDeFgH)\n3. Chess.com 对局网址 (如 https://www.chess.com/game/live/12345678)\n或直接将本地 .pgn 文件拖拽至窗口任意位置',
     modalSampleLabel: '示例:',
     sampleFischerBtn: '菲舍尔世纪之局',
@@ -219,7 +220,7 @@ export const DICTIONARY = {
     // Toasts & Alerts
     toastLoadedFen: '♟️ 已载入 FEN 局面',
     toastLoadedPgn: '♟️ 成功载入 PGN 棋谱{label}',
-    toastUnrecognizedInput: '⚠️ 未能识别该内容，请确认是否为有效 PGN 文本或对局链接',
+    toastUnrecognizedInput: '⚠️ 未能识别该内容，请确认是否为有效 FEN 局面、PGN 文本或完赛对局链接',
     toastFetchingLichess: '🔍 正在从 Lichess 获取对局 ({gameId})...',
     toastFairPlayReview: '🔒 公平竞技保护：{reason}。请在完赛后再行导入复盘。',
     toastFairPlay: '🔒 公平竞技保护：{reason}',
@@ -259,7 +260,7 @@ export const DICTIONARY = {
     largeModelNote: "SF19 Standard: about 95 MB. Maia 5M / 23M / 79M: about 28 / 104 / 159 MB. Cached in your browser after download. Switching versions starts a new review.",
     standardWebOnly: "Local extension pages use SF19 Lite; open the web studio for Standard",
     // Compact two-column review studio
-    reviewSettings: "Review settings",
+    reviewSettings: "Analysis settings",
     btnClose: "Close",
     currentPosition: "Position",
     reviewThisMove: "Review move",
@@ -296,9 +297,10 @@ export const DICTIONARY = {
     reviewMoveBefore: "Review {number}. {move} · Before the move",
 
     // Header & Meta
-    appTitle: 'Diverge · Game Review Studio',
+    appTitle: 'Diverge · Chess Analysis & Game Review',
+    appDescription: 'Compare Stockfish analysis with Maia human intuition across webpage chess diagrams, FEN positions, PGN games and personal variations.',
     studioName: 'Diverge',
-    studioBadge: 'Review Studio',
+    studioBadge: 'Analysis Studio',
     whitePlayer: '⚪ White',
     blackPlayer: '⚫ Black',
     btnImportPgn: 'Import PGN',
@@ -417,9 +419,9 @@ export const DICTIONARY = {
     coverageTooltip: 'Engine coverage: {pct}%',
 
     // Empty Hero View
-    heroTitle: 'Start with a Game',
-    heroSubtitle: 'Review your moves to uncover brilliant choices and missed opportunities.',
-    btnImportCompleted: 'Import Completed Game',
+    heroTitle: 'Start with a Position or Game',
+    heroSubtitle: 'Import a FEN position or finished game to explore engine and human choices. Scan webpage diagrams with the extension.',
+    btnImportCompleted: 'Import Position or Game',
     btnTestSound: 'Test Chess Sounds',
     chipFischer: '♟️ Fischer: Game of the Century (1956)',
     chipKasparov: '♟️ Kasparov: Pearl of Wijk aan Zee (1999)',
@@ -430,8 +432,8 @@ export const DICTIONARY = {
     dragDropTitle: 'Drop to Load PGN Game',
     dragDropSubtitle: 'Supports .pgn files and raw PGN text',
     modalEyebrow: 'A NEW PERSPECTIVE',
-    modalTitle: 'Start with a Game',
-    modalDesc: 'Import a completed game to explore moves beyond intuition.',
+    modalTitle: 'Start with a Position or Game',
+    modalDesc: 'Import a FEN position or completed game to compare engine analysis and human intuition.',
     modalPlaceholder: 'Paste here:\n1. PGN game text or FEN\n2. Lichess game URL (e.g. https://lichess.org/aBcDeFgH)\n3. Chess.com game URL (e.g. https://www.chess.com/game/live/12345678)\nOr drag & drop a local .pgn file anywhere onto the window',
     modalSampleLabel: 'Examples:',
     sampleFischerBtn: "Fischer's Century",
@@ -452,7 +454,7 @@ export const DICTIONARY = {
     // Toasts & Alerts
     toastLoadedFen: '♟️ Loaded FEN position',
     toastLoadedPgn: '♟️ Successfully loaded PGN game{label}',
-    toastUnrecognizedInput: '⚠️ Unrecognized input. Please provide valid PGN or game link.',
+    toastUnrecognizedInput: '⚠️ Unrecognized input. Please provide a valid FEN, PGN or completed-game link.',
     toastFetchingLichess: '🔍 Fetching game from Lichess ({gameId})...',
     toastFairPlayReview: '🔒 Fair Play Protection: {reason}. Please review after game conclusion.',
     toastFairPlay: '🔒 Fair Play Protection: {reason}',
@@ -531,6 +533,8 @@ export function applyTranslations() {
 
   // Update document title
   document.title = t('appTitle');
+  const description = document.querySelector('meta[name=description]');
+  if (description) description.content = t('appDescription');
 
   // Update language toggle button text and ensure click binding
   const langBtn = document.getElementById('btn-lang-toggle');

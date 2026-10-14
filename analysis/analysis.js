@@ -1,7 +1,7 @@
 import { authorizeScan, showScanLock } from './scan-authorization.js';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
- * High-performance, zero-latency, 100% self-contained chess analysis workstation.
+ * Browser-based engine and human-intuition comparison for positions and completed games.
  */
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261014-scan1';

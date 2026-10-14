@@ -1,14 +1,14 @@
 {
   "extensionName": {
-    "message": "Diverge: Chess AI Review (Maia & Stockfish)",
+    "message": "Diverge: Chess Analysis, Scanner & Human Intuition",
     "description": "Extension title"
   },
   "extensionDescription": {
-    "message": "In-browser chess review with Maia human intuition vs Stockfish engine best moves. Move heatmaps & 100% private local analysis.",
+    "message": "Compare Stockfish with Maia human intuition. Scan webpage chess diagrams and review Chess.com or Lichess games.",
     "description": "Short description"
   },
   "actionTitle": {
-    "message": "Diverge Chess Settings",
+    "message": "Diverge · Scan and compare chess positions",
     "description": "Action icon tooltip"
   },
   "popupSubtitle": {
@@ -34,7 +34,7 @@
     "message": "Compare Maia and Stockfish on permitted boards"
   },
   "btnReviewStudio": {
-    "message": "Open Review Studio",
+    "message": "Open Analysis Studio",
     "description": "Open review studio button"
   },
   "btnLichess": {
@@ -90,21 +90,21 @@
     "description": "Chessformer feature"
   },
   "featureSliced": {
-    "message": "Non-blocking sliced computing for smooth 60FPS board interaction",
+    "message": "Computation is split into tasks to keep the board responsive",
     "description": "Sliced computing feature"
   },
   "featureLru": {
-    "message": "LRU bidirectional memory cache: 0ms instant move replay",
+    "message": "Reuse available cached analysis results",
     "description": "LRU cache feature"
   },
   "reviewOnly": {
-    "message": "Review only"
+    "message": "Study only"
   },
   "popupHeadline": {
-    "message": "Every move. Another possibility."
+    "message": "Where do engine and intuition diverge?"
   },
   "popupIntro": {
-    "message": "Revisit your choices. Find moves beyond intuition."
+    "message": "Scan a webpage diagram or revisit a finished game. Compare both perspectives."
   },
   "eloHelp": {
     "message": "For Maia move predictions"
@@ -125,7 +125,7 @@
     "message": "First time? Read the guide ↗"
   },
   "firstUseSteps": {
-    "message": "Open an analysis board → Choose a model → Compare both engines"
+    "message": "Scan a diagram or open an analysis board → Compare both perspectives"
   },
   "aboutCredits": {
     "message": "About · Credits & licenses"

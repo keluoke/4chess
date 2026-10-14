@@ -1,7 +1,7 @@
 /**
  * Main Content Module for Maia-3 Chrome Extension (Scheme 0: Pure Standalone)
  * Coordinates BoardDetector, MaiaEngine, HeatmapOverlay, and IntuitionPanel.
- * 100% In-Browser execution without any external services or Python runtimes.
+ * Browser-based inference; model downloads and public-game imports use network services.
  */
 
 import { MaiaEngine } from '../engine/maia-engine.js';
