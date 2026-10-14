@@ -137,7 +137,7 @@
     "message": "SF19 标准版"
   },
   "sfWebHelp": {
-    "message": "此选项只影响网页版全盘复盘。悬浮窗始终使用 SF19 Lite。"
+    "message": "此选项只影响网页版复盘。悬浮窗与扫描始终使用 SF19 Lite。"
   },
   "customModelHelp": {
     "message": "地址须对应上方所选的 Maia 版本。"

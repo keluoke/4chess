@@ -4,7 +4,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const manifest = JSON.parse(readFileSync(join(root, 'manifest.json')));
-const entries = ['manifest.json', 'background.js', 'index.html', 'favicon.svg', '_locales', 'analysis', 'content', 'engine', 'lib', 'popup', 'icons', 'ui', 'models', 'guide', 'LICENSE', 'LICENSES', 'THIRD_PARTY_NOTICES.md', 'README.md'];
+const entries = ['manifest.json', 'background.js', 'index.html', 'favicon.svg', '_locales', 'analysis', 'content', 'engine', 'lib', 'popup', 'scan', 'offscreen', 'icons', 'ui', 'models', 'guide', 'LICENSE', 'LICENSES', 'THIRD_PARTY_NOTICES.md', 'README.md'];
 function check(file) {
   const stat = statSync(file);
   if (stat.isDirectory()) return readdirSync(file).forEach(name => check(join(file, name)));

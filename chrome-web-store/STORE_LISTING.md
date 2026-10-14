@@ -263,7 +263,9 @@ Take your post-game analysis to a dedicated full-screen workspace:
 
 ### 2. 权限声明（Permission Justifications）
 - `storage`: *Used to store user preferences locally (selected Elo rating, theme, UI position, language). Settings are shared with the first-party studio in the same browser profile; review caches remain local.*
-- `activeTab`: *Used to read the current board state (FEN) on Lichess and Chess.com tabs when invoked by the user for post-game review.*
+- `activeTab`: *Temporary access to read and capture the visible page when the user invokes Scan on a permitted study source.*
+- `scripting`: *Injects source safety checks and observes changes on the user-selected tab; live games and uncertain interactive sources remain locked.*
+- `offscreen`: *Hosts a local dedicated worker for screenshot decoding and packaged WASM chess-diagram recognition; no pixels are uploaded.*
 - `host_permissions` (`*.lichess.org/*`, `*.chess.com/*`): *Required to inject the review interface and read board notations on supported chess websites.*
 - `host_permissions` (`4chess.cc/*`): *Used for the user-triggered web studio and whitelisted UI preference synchronization.*
 - `host_permissions` (`weights.4chess.cc/*`): *Used strictly to download neural network model weights into browser IndexedDB cache for local inference.*
@@ -273,3 +275,5 @@ Take your post-game analysis to a dedicated full-screen workspace:
 - 理由填写：
   > *“Diverge reads chess positions, notation, public player labels and game-state evidence on supported analysis and completed-game pages. Engine inference runs locally. Preferences, model weights and review results may be cached on the device. UI preferences are shared with the first-party 4chess.cc web studio in the same Chrome profile. User-triggered public game imports contact the chess platform and may use our open-source edge proxy. Infrastructure providers receive normal network request metadata. Live games lock all analysis. See the privacy policy for retention and deletion details.”*
 - 勾选全部 3 项合规保证（不转售、不用作广告/征信、不挪作他用）。
+
+Scan page recognizes permitted study diagrams locally, lets you correct and confirm the position, and shows an interactive board with SF19 Lite lines. Analyze on 4chess opens the current confirmed position, including your variation. Source-bound scan analysis stops if a live game starts or the source changes/closes.

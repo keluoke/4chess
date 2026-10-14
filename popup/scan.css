@@ -1,0 +1,266 @@
+[hidden] {
+  display: none !important;
+}
+.scanning .popup-page > :not(.popup-header):not(#scan-view) {
+  display: none;
+}
+#scan-view {
+  --board-light: var(--dg-board-light);
+  --board-dark: var(--dg-board-dark);
+  --brand-green: var(--dg-green);
+  --brand-gold: var(--dg-gold);
+  --brand-red: var(--dg-red);
+  --brand-blue: var(--dg-blue);
+  margin-top: 12px;
+}
+#scan-view button,
+.scan-icon {
+  cursor: pointer;
+  border: 1px solid var(--dg-line);
+  border-radius: 6px;
+  background: var(--dg-raised);
+  color: var(--dg-ink);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+#scan-view .action-primary {
+  width: 100%;
+  background: var(--dg-green);
+  color: var(--dg-on-green);
+  justify-content: center;
+  margin: 8px 0;
+  min-height: 34px;
+}
+.scan-top,
+.scan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.scan-top small,
+#scan-status,
+#scan-assumed,
+.scan-help,
+#scan-capture p,
+#scan-editor p {
+  font-size: 10px;
+  color: var(--dg-muted);
+  line-height: 1.5;
+  margin: 6px 0;
+}
+#scan-status {
+  min-height: 15px;
+}
+#scan-preview {
+  width: 100%;
+  max-height: none;
+  height: auto;
+  margin-left: auto;
+  margin-right: auto;
+  touch-action: none;
+  border: 1px solid var(--dg-line);
+  display: block;
+  margin: 8px 0;
+}
+#scan-crop:disabled {
+  opacity: 0.5;
+}
+.scan-board-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+#scan-board {
+  width: 300px;
+  max-width: calc(100% - 23px);
+  flex: 1;
+  box-shadow: none;
+  border-radius: 5px;
+}
+.coord {
+  font-size: 8px;
+  left: 2px;
+  top: 1px;
+}
+.coord-file {
+  left: auto;
+  top: auto;
+  right: 2px;
+  bottom: 0;
+}
+.maia-piece {
+  z-index: 10;
+}
+#scan-gauge {
+  width: 17px;
+  flex: none;
+  background: #353535;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--dg-line);
+  border-radius: 3px;
+}
+#scan-gauge-white {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 50%;
+  background: #f8f8f2;
+  transition: height 0.2s;
+}
+#scan-score {
+  position: absolute;
+  bottom: 8px;
+  left: 2px;
+  font: bold 8px var(--dg-mono);
+  writing-mode: vertical-rl;
+  z-index: 2;
+}
+#scan-gauge.flipped {
+  transform: rotate(180deg);
+}
+#scan-gauge.flipped #scan-score {
+  transform: rotate(180deg);
+}
+.scan-toolbar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 7px 0;
+}
+.scan-toolbar svg,
+.scan-icon svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+#scan-engine-status {
+  font-size: 10px;
+  color: var(--dg-muted);
+  margin: 6px 0;
+}
+.scan-line {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1.5;
+  border: 0 !important;
+  padding: 4px 0 !important;
+  background: transparent !important;
+  text-align: left;
+}
+.scan-line strong {
+  flex: 0 0 46px;
+  font: 11px var(--dg-mono);
+}
+.scan-line span {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scan-suspicious:after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 2px solid var(--dg-gold);
+  z-index: 15;
+  pointer-events: none;
+}
+#scan-palette {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 8px 0;
+}
+#scan-palette button {
+  height: 34px;
+  padding: 3px;
+}
+#scan-palette button.active {
+  outline: 2px solid var(--dg-green);
+}
+#scan-palette svg {
+  width: 100%;
+  height: 100%;
+}
+#scan-fen {
+  width: 100%;
+  resize: vertical;
+  background: var(--dg-raised);
+  border: 1px solid var(--dg-line);
+  color: var(--dg-ink);
+  font: 10px/1.5 var(--dg-mono);
+  padding: 6px;
+}
+#scan-launch {
+  width: 100%;
+  margin-bottom: 8px;
+  border: 0;
+  cursor: pointer;
+}
+.scan-icon {
+  padding: 5px;
+  background: transparent;
+  border: 0;
+}
+.scanning .popup-page {
+  padding: 12px 20px;
+}
+.scanning .popup-brand p,
+.scanning #status-pill {
+  display: none;
+}
+.scanning .popup-header {
+  gap: 6px;
+}
+.scanning .popup-brand {
+  margin-right: auto;
+}
+.scan-header-retry {
+  display: none;
+}
+.scanning .scan-header-retry {
+  display: block;
+}
+.scanning #scan-view {
+  margin-top: 8px;
+}
+.scan-confirmed .scan-top,
+.scan-confirmed #scan-status,
+.scan-confirmed #scan-assumed,
+.scan-confirmed .scan-help {
+  display: none;
+}
+.scan-confirmed #scan-board {
+  width: 280px;
+  flex: none;
+}
+.scan-board-row {
+  justify-content: center;
+}
+.scan-confirmed .scan-row {
+  margin-bottom: 6px;
+}
+.scan-confirmed .scan-row select {
+  padding: 3px 6px;
+}
+.scan-confirmed .scan-toolbar {
+  margin: 6px 0;
+}
+.scan-confirmed #scan-engine-status {
+  margin: 4px 0;
+}
+.scan-confirmed #scan-web {
+  margin: 5px 0 0;
+}
+.scanning .popup-header h1 {
+  font-size: 14px;
+}
+.scanning:not(.scan-confirmed) #scan-gauge{visibility:hidden}

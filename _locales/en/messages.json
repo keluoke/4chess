@@ -137,7 +137,7 @@
     "message": "SF19 Standard"
   },
   "sfWebHelp": {
-    "message": "This choice applies to the web review studio. The floating panel always uses SF19 Lite."
+    "message": "This setting affects the web review studio. The floating panel and Scan always use SF19 Lite."
   },
   "customModelHelp": {
     "message": "The URL must match the selected Maia version."

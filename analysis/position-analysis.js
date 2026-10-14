@@ -1,5 +1,5 @@
-import { ChessBoard } from '../engine/chess-core.js?v=20261013-study1';
-import { t } from './i18n.js?v=20261013-study1';
+import { ChessBoard } from '../engine/chess-core.js?v=20261014-scan1';
+import { t } from './i18n.js?v=20261014-scan1';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -85,6 +85,7 @@ export class PositionAnalysis {
 
   refresh({ calculate = true } = {}) {
     this.cancel();
+    if (this.app.scanSourceLocked) return;
     const ctx = this.context();
     if (!ctx) return;
     const generation = this.generation;

@@ -1,3 +1,4 @@
+import { initScanView } from './scan-view.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, engineExperienceHint, readEnginePreferences, studioUrl } from '../engine/engine-preferences.js';
 
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
   const refreshCdn = async () => { const engines = await readEnginePreferences(); cdn.value = engines.cloudflareCdnUrl; };
   render(); await refreshCdn();
+  if (globalThis.chrome?.runtime?.id) initScanView();
   subscribePreferences(next => { prefs = next; render(); refreshCdn(); });
   if (!globalThis.chrome?.storage?.local) return;
   const saved = await chrome.storage.local.get('liveEvaluation'); overlays.checked = saved.liveEvaluation !== false;

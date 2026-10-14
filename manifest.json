@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_extensionName__",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "__MSG_extensionDescription__",
   "icons": {
     "16": "icons/icon16.png",
@@ -19,7 +19,9 @@
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "offscreen"
   ],
   "host_permissions": [
     "https://lichess.org/*",
@@ -65,7 +67,8 @@
         "https://4chess.cc/analysis/*"
       ],
       "js": [
-        "content/preferences-bridge.js"
+        "content/preferences-bridge.js",
+        "content/scan-handoff-bridge.js"
       ],
       "run_at": "document_start"
     }

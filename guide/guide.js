@@ -1,4 +1,5 @@
 const english = {
+  scanTitle: 'Scan a chess diagram', scanBody: 'Click Scan page on an allowed analysis or study page. Page boards use DOM reading when available; images use the packaged local vision model. Crop a board in the screenshot preview. Check pieces, orientation and side to move; correct with the piece palette or complete FEN, then confirm to start SF19 Lite. Images default to no castling or en passant rights.', scanHandoff: 'Click or drag pieces to explore variations, and right-drag to annotate. Analyze on 4chess opens the current confirmed position with saved web engine/Maia preferences. A single position has no full-game accuracy or chart. Live play, source navigation or closure stops scan analysis. Supported sources are safe Chess.com/Lichess pages, Wikipedia study diagrams and static image documents; unknown interactive game pages stay locked.',
   privacyPolicy: 'Privacy policy',
   studyControls: 'Free exploration & shared preferences', studyControlsBody: 'Arrow keys navigate across the page; inputs, settings and promotion dialogs keep their own keyboard controls. Click or drag pieces to create a personal variation, then reopen it from My variations. Right-drag draws a thought arrow and right-click marks a square. Marks stay with their position; the clear button clears only the current position.', independentLoading: 'SF and Maia download and present results independently. Explore with whichever engine becomes ready first. Variations take priority; returning to the game and pausing navigation resumes an unfinished full-game review.', sharedPreferences: 'With the updated extension installed in the same Chrome browser, its popup, floating panel and web studio share the web Stockfish edition, Maia, language, rating and other preferences. Open pages update together. Without the extension, preferences stay in this browser; there is no automatic cross-device sync. The Web review engine setting does not switch the floating panel, which always runs SF19 Lite. Model caches still belong to each site, so a first visit to another site may download the weights again.', navStart: 'Get started', navDual: 'Visual legend', navAbout: 'About & licenses',
   title: 'Two engines. A clearer view of every move.',
@@ -48,7 +49,7 @@ function translate() {
 }
 document.getElementById('language-toggle').addEventListener('click', () => { lang = lang === 'en' ? 'zh' : 'en'; translate(); });
 translate();
-for (const [label, file] of [['LICENSE', '../LICENSE'], ['THIRD-PARTY NOTICES', '../THIRD_PARTY_NOTICES.md'], ['AGPL-3.0', '../LICENSES/AGPL-3.0.txt'], ['GPL-3.0', '../LICENSES/GPL-3.0.txt'], ['GPL-2.0', '../LICENSES/GPL-2.0.txt']]) {
+for (const [label, file] of [['LICENSE', '../LICENSE'], ['THIRD-PARTY NOTICES', '../THIRD_PARTY_NOTICES.md'], ['AGPL-3.0', '../LICENSES/AGPL-3.0.txt'], ['GPL-3.0', '../LICENSES/GPL-3.0.txt'], ['GPL-2.0', '../LICENSES/GPL-2.0.txt'], ['chessimg2pos · MIT', '../LICENSES/chessimg2pos-MIT.txt'], ['chess.js · BSD-2-Clause', '../LICENSES/chess-js-BSD-2-Clause.txt']]) {
   const details = document.createElement('details');
   const summary = document.createElement('summary'); summary.textContent = label;
   const pre = document.createElement('pre'); pre.textContent = '…';
@@ -57,7 +58,7 @@ for (const [label, file] of [['LICENSE', '../LICENSE'], ['THIRD-PARTY NOTICES', 
   details.addEventListener('toggle', async () => {
     if (!details.open || details.dataset.loaded) return;
     try {
-      const response = await fetch(file + '?v=20261013-study1');
+      const response = await fetch(file + '?v=20261014-scan1');
       if (!response.ok) throw new Error(String(response.status));
       pre.textContent = await response.text(); details.dataset.loaded = 'true';
     } catch { pre.textContent = lang === 'en' ? 'Unable to load this document. Use the source link above.' : '文档暂时无法加载，请使用上方的原文链接。'; }

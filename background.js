@@ -1,3 +1,4 @@
+import './scan/controller.js';
 /**
  * Maia-3 Service Worker (Manifest V3)
  * Handles extension lifecycle, storage initialization, and secure background API requests.

@@ -1,19 +1,20 @@
+import { authorizeScan, showScanLock } from './scan-authorization.js';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * High-performance, zero-latency, 100% self-contained chess analysis workstation.
  */
 
-import { ChessBoard } from '../engine/chess-core.js?v=20261013-study1';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261013-study1';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261013-study1';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261013-study1';
-import { BoardUI } from './board-ui.js?v=20261013-study1';
-import { EvalChart } from './eval-chart.js?v=20261013-study1';
-import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261013-study1';
-import { PositionAnalysis } from './position-analysis.js?v=20261013-study1';
-import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261013-study1';
-import { soundEffects } from './sound-effects.js?v=20261013-study1';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261013-study1';
+import { ChessBoard } from '../engine/chess-core.js?v=20261014-scan1';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261014-scan1';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261014-scan1';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261014-scan1';
+import { BoardUI } from './board-ui.js?v=20261014-scan1';
+import { EvalChart } from './eval-chart.js?v=20261014-scan1';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261014-scan1';
+import { PositionAnalysis } from './position-analysis.js?v=20261014-scan1';
+import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261014-scan1';
+import { soundEffects } from './sound-effects.js?v=20261014-scan1';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261014-scan1';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -826,6 +827,16 @@ class AnalysisStudioApp {
         setLanguage(langParam);
       }
 
+      const fenParam = hashParams.get('fen') || searchParams.get('fen');
+      if (fenParam) {
+        const validBoard = new ChessBoard();
+        if (!validBoard.load(fenParam)) throw new Error('Invalid FEN');
+        this.startNewSession({ fen: validBoard.getFen(), white: t('freeAnalysisBoard'), black: 'FEN', result: '*', autoReview: false, positionInput: true });
+        const orientation = hashParams.get('orientation') || searchParams.get('orientation');
+        this.boardUI.setOrientation(orientation === 'black' ? 'black' : 'white');
+        this.updateEvaluationGauge?.();
+        return;
+      }
       const textParam = hashParams.get('text') || searchParams.get('text');
       const pgnParam = hashParams.get('pgn') || searchParams.get('pgn') || (textParam && (textParam.includes('1.') || textParam.includes('[Event')) ? textParam : null);
       const urlParam = hashParams.get('url') || searchParams.get('url') || (textParam && textParam.startsWith('http') ? textParam : null);
@@ -1019,8 +1030,10 @@ class AnalysisStudioApp {
     black = null,
     result = null,
     cachedReview = null,
-    autoReview = true
+    autoReview = true,
+    positionInput = false
   } = {}) {
+    if (this.scanSourceLocked) return false;
     // 1. Immediately abort running tasks and advance session epochs
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = this.reviewPendingResume = false;
@@ -1035,7 +1048,8 @@ class AnalysisStudioApp {
     this.gameEpoch++;
     this.reviewEpoch++;
     this.reviewResult = null;
-    this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && fen !== ChessBoard.INITIAL_FEN);
+    this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && (fen !== ChessBoard.INITIAL_FEN || positionInput));
+    document.body.classList.toggle('position-only', !!fen && !pgn && !moves?.length && this.hasAnalysisInput);
     this.isReviewingMove = false;
     this.isBranching = false;
     this.branchFen = null;
@@ -1255,6 +1269,7 @@ class AnalysisStudioApp {
   }
 
   async runFullReview(forceRefresh = false) {
+    if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
 
     this.positionAnalysis.cancel();
@@ -1984,6 +1999,10 @@ async function initApp() {
     for (const key of ['sf', 'maia', 'lang', 'elo']) { url.searchParams.delete(key); hash.delete(key); }
     url.hash = hash.toString(); history.replaceState(null, '', url);
   }
+  const scanToken = hash.get('scan');
+  if (scanToken) { setLanguage(getPreferences().maia3_lang); initI18n(); }
+  let scanRevoked = false;
+  if (!await authorizeScan(scanToken, () => { scanRevoked = true; showScanLock(window.__maiaStudioApp); }) || scanRevoked) return;
   if (!window.__maiaStudioApp) {
     window.__maiaStudioApp = new AnalysisStudioApp();
   }

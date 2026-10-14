@@ -202,146 +202,6 @@ body {
   gap: 14px;
 }
 
-.maia-board-wrapper {
-  width: 100%;
-  max-width: 600px;
-  aspect-ratio: 1 / 1;
-  background: #151515;
-  border-radius: 12px;
-  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  position: relative;
-  overflow: hidden;
-  border: none;
-}
-
-.maia-chessboard {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-.maia-square {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease;
-}
-
-.maia-square.light { background-color: var(--board-light); }
-.maia-square.dark { background-color: var(--board-dark); }
-
-.maia-square.selected {
-  background-color: rgba(20, 85, 30, 0.5) !important;
-}
-
-.maia-square.light.last-move-from,
-.maia-square.light.last-move-to {
-  background-color: #cdd26a !important;
-}
-.maia-square.dark.last-move-from,
-.maia-square.dark.last-move-to {
-  background-color: #829769 !important;
-}
-
-.maia-square.check {
-  background: radial-gradient(circle, rgba(250, 81, 81, 0.85) 0%, rgba(250, 81, 81, 0.35) 75%, transparent 100%) !important;
-  animation: check-pulse 1.8s ease-in-out infinite;
-}
-
-@keyframes check-pulse {
-  0% { filter: drop-shadow(0 0 2px rgba(250, 81, 81, 0.4)); }
-  50% { filter: drop-shadow(0 0 8px rgba(250, 81, 81, 0.8)); }
-  100% { filter: drop-shadow(0 0 2px rgba(250, 81, 81, 0.4)); }
-}
-
-.coord {
-  position: absolute;
-  font-size: 11px;
-  font-weight: 700;
-  pointer-events: none;
-  opacity: 0.75;
-}
-
-.coord-rank {
-  top: 3px;
-  left: 4px;
-}
-
-.coord-file {
-  bottom: 2px;
-  right: 4px;
-}
-
-.maia-square.light .coord { color: var(--board-dark); }
-.maia-square.dark .coord { color: var(--board-light); }
-
-.maia-piece {
-  width: 90%;
-  height: 90%;
-  cursor: grab;
-  position: relative;
-  z-index: 10;
-  transition: transform 0.12s cubic-bezier(0.2, 0, 0, 1);
-  will-change: transform;
-}
-
-.maia-piece svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: none;
-}
-
-.maia-piece:hover {
-  transform: scale(1.04);
-}
-
-.maia-piece:active {
-  cursor: grabbing;
-  transform: scale(1.12);
-}
-
-.legal-hint-dot {
-  width: 24%;
-  height: 24%;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.28);
-  pointer-events: none;
-  position: absolute;
-  z-index: 5;
-}
-
-.legal-hint-ring {
-  width: 82%;
-  height: 82%;
-  border-radius: 50%;
-  border: 4px solid rgba(0, 0, 0, 0.32);
-  pointer-events: none;
-  position: absolute;
-  z-index: 5;
-}
-
-.maia-board-svg-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 20;
-}
-
-.maia-board-svg-overlay line[stroke-dasharray] {
-  animation: dash-flow 1.2s linear infinite;
-}
-
-@keyframes dash-flow {
-  to {
-    stroke-dashoffset: -20;
-  }
-}
-
 /* Board Bottom Navigation Controls */
 .board-controls {
   width: 100%;
@@ -1493,13 +1353,10 @@ body{font-size:14px;user-select:auto}
 
 /* Personal study interactions share the original board and piece visuals. */
 .maia-chessboard { touch-action:none; user-select:none; }
-.study-drag-piece { position:fixed!important; pointer-events:none; z-index:9999; transform:translate(-50%,-50%); }
-.promotion-picker { position:absolute; inset:35% 8%; z-index:30; display:flex; justify-content:center; background:var(--dg-surface); border:1px solid var(--dg-line); border-radius:12px; box-shadow:0 8px 30px #0003; }
-.promotion-picker button { width:25%; padding:8px; background:none; border:0; cursor:pointer; }
-.promotion-picker button:focus-visible { outline:2px solid var(--dg-green); }
-.promotion-picker svg { width:100%; height:100%; }
 .study-branches { display:grid; gap:6px; padding:12px 0 0; border-top:1px solid var(--dg-line); font-size:11px; }
 .study-branches:empty { display:none; }
 .study-branch { text-align:left; border:1px solid var(--dg-line); border-radius:6px; padding:7px 9px; background:var(--dg-surface); color:var(--dg-ink); cursor:pointer; white-space:normal; overflow-wrap:anywhere; }
 @media (max-width:420px) { .btn-nav-group { flex-wrap:wrap; max-width:100%; justify-content:center; } }
 #board-status-text { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+
+.position-only .review-summary-section,.position-only #review-summary,.position-only .eval-chart-wrapper,.position-only .key-moves-section,.position-only #btn-reanalyze { display:none!important; }
