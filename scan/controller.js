@@ -1,6 +1,6 @@
 import { validateChessPosition } from "../lib/vision/fen-optimizer.js";
 import {
-  imagePosition,
+  imageContext,
   saneFenFields,
   validHistoricalFields,
   validBoardPlacement,
@@ -232,14 +232,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         result.metadata?.isVerifiedManifest !== true
       )
         throw Error("recognitionFailed");
+      const context = imageContext(result);
       s = await save({
         ...s,
         status: "review",
-        fen: imagePosition(result),
+        fen: context.fen,
         assumed: true,
         recognition: result,
-        orientation:
-          result.orientation?.perspective === "b" ? "black" : "white",
+        recognitionContext: context,
+        orientation: context.orientation,
       });
       return { ok: true, state: s };
     }
@@ -262,6 +263,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         fen: msg.fen,
         orientation: msg.orientation === "black" ? "black" : "white",
         confirmed: msg.confirmed === true,
+        turnChosen: msg.turnChosen === true,
         history: Array.isArray(msg.history)
           ? msg.history
               .filter((f) => typeof f === "string" && f.length < 150)

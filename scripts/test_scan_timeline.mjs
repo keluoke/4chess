@@ -54,7 +54,9 @@ try {
         .join("") +
       "</div>",
   );
-  const png = await raster.locator("#fixture").screenshot();
+  const png = process.env.SCAN_SAMPLE_IMAGE
+    ? fs.readFileSync(process.env.SCAN_SAMPLE_IMAGE)
+    : await raster.locator("#fixture").screenshot();
   await raster.close();
   await context.route("https://pbs.twimg.com/media/*", (r) =>
     r.fulfill({ contentType: "image/png", body: png }),
@@ -116,8 +118,47 @@ try {
       await popup.run(
         "document.querySelector('#scan-fen').value.split(' ')[0]",
       ),
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+      process.env.SCAN_SAMPLE_FEN ||
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
     );
+    if (process.env.SCAN_SAMPLE_IMAGE) {
+      const s = await popup.run(
+        "chrome.storage.session.get('divergeScan').then(r=>r.divergeScan)",
+      );
+      assert.equal(s.orientation, "black");
+      assert.equal(s.fen.split(" ")[1], "b");
+      assert.equal(s.recognitionContext.turnKnown, false);
+      assert.match(
+        await popup.run("document.querySelector('#scan-status').textContent"),
+        /default.*confirm/,
+      );
+      fs.mkdirSync(root + "/artifacts/scan", { recursive: true });
+      await popup.run("chrome.storage.local.set({maia3_lang:'zh'})");
+      await popup.wait(
+        "document.querySelector('#scan-status').textContent.includes('默认值')",
+      );
+      assert.match(
+        await popup.run("document.querySelector('#scan-status').textContent"),
+        /黑方视角.*坐标已识别.*黑方行棋.*默认值/,
+      );
+      const reviewShot = await popup.rpc("Page.captureScreenshot");
+      fs.writeFileSync(
+        root + "/artifacts/scan/user-coordinates-review-zh.png",
+        Buffer.from(reviewShot.data, "base64"),
+      );
+      await popup.run("chrome.storage.local.set({maia3_lang:'en'})");
+      await popup.wait(
+        "document.querySelector('#scan-status').textContent.includes('default')",
+      );
+      console.log(
+        "User sample context:",
+        JSON.stringify({
+          orientation: s.recognition.orientation,
+          turn: s.recognition.activeTurn,
+          context: s.recognitionContext,
+        }),
+      );
+    }
     await popup.run("document.querySelector('#scan-confirm').click()");
     await popup.wait(
       "document.querySelectorAll('#scan-lines button').length === 3",

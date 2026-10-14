@@ -114,7 +114,7 @@ diverge-extension/
    ```
 2. 在页面右上角开启 **开发者模式 (Developer mode)**。
 3. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
-4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.1.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
+4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.2.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
 5. 看到 `歧路 Diverge · 人类直觉与双引擎研判` 图标亮起即安装成功。
 
 ### 第二步：首次加载与模型缓存
@@ -152,7 +152,7 @@ diverge-extension/
 - **Cburnett 棋子 SVG**：Colin M. L. Burnett，GPL-2.0-or-later；许可全文见 [LICENSES/GPL-2.0.txt](LICENSES/GPL-2.0.txt)。
 
 
-### Scan page (1.1.1)
+### Scan page (1.1.2)
 
 Click **Scan page** in the toolbar popup on a permitted study page. Supported Chess.com/Lichess analysis or completed-game boards use DOM position reading when available; static image documents and Wikipedia diagrams use a local screenshot and packaged recognition WASM. Ordinary pages, including Twitter/X timelines, forums and articles, scan only visible static images: other page pixels are masked before recognition and preview. Scroll the complete diagram into view; if there are several images, crop the desired board. Replacing/removing the captured image revokes analysis. Unknown interactive game pages and live broadcasts remain locked. Drag a crop in the screenshot preview or detect the entire image. Verify pieces, orientation and side to move, correct with the piece palette or complete FEN, then confirm. Image-derived positions default to no castling/en passant rights. Raw model labels are shown for correction rather than silently accepting rule-based piece replacements.
 
@@ -163,3 +163,5 @@ Screenshots stay transient in the offscreen document and are never uploaded. Lig
 ### Shared recognition core
 
 `chesspuzzle/services/vision/core` is the sole algorithm source. `npm run vision:check` checks the upstream tree and generated browser outputs; `npm run vision:sync` rebuilds static module factories byte-for-byte, preserving local browser adapters and worker code. Both sides record `2026.10.14.1` and source tree hashes. The sibling command `node scripts/sync-vision-to-extension.cjs` is read-only by default; use `--update` explicitly to rebuild. `node scripts/test_vision_parity.mjs --source` compares real raw-pixel outputs, including raw/corrected labels, geometry-independent evidence, orientation, turn and unknown FEN fields. CI rejects modified generated files/model bytes and runs the checked-in golden fixture; a sibling checkout is required for the full upstream comparison. Installed older releases require their own update; this does not publish the mini-program automatically.
+
+Image context uses the same shared post-processing as chesspuzzle: reliable coordinates determine orientation; otherwise piece distribution supplies an editable default. Check or explicit turn evidence takes priority. Without turn evidence, side to move defaults to the viewed side and is marked unconfirmed before analysis. Both context helpers are included in the vision source/output hash lock.

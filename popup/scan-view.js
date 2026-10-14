@@ -68,7 +68,9 @@ export function initScanView() {
       el.setAttribute("aria-label", el.title);
     });
     launch.textContent = view.hidden && state ? text("back") : text("scan");
-    if (lastStatus) $("scan-status").textContent = text(lastStatus);
+    if (lastStatus) $("scan-status").textContent = statusText(lastStatus);
+    if (state?.fen)
+      $("scan-source").textContent = text(state.recognition ? "image" : "dom");
   }
   locale();
   subscribePreferences(locale);
@@ -81,7 +83,30 @@ export function initScanView() {
   }
   function status(key) {
     lastStatus = key;
-    $("scan-status").textContent = text(key);
+    $("scan-status").textContent = statusText(key);
+  }
+  function statusText(key) {
+    const context = state?.recognitionContext;
+    if (key !== "review" || !context) return text(key);
+    const view = text(
+      context.orientation === "black" ? "viewBlack" : "viewWhite",
+    );
+    const turn = text(state.fen.split(" ")[1] === "b" ? "black" : "white");
+    return (
+      text(
+        context.orientationKnown ? "reviewCoordinates" : "reviewDistribution",
+      ).replace("{view}", view) +
+      " " +
+      text(
+        state.turnChosen
+          ? "reviewTurnChosen"
+          : context.turnConflict
+            ? "reviewTurnConflict"
+            : context.turnKnown
+              ? "reviewTurnKnown"
+              : "reviewTurnDefault",
+      ).replace("{turn}", turn)
+    );
   }
   function clear() {
     document.body.classList.remove("scan-confirmed");
@@ -122,6 +147,7 @@ export function initScanView() {
       confirmed: state.confirmed,
       history: state.history,
       originalFen: state.originalFen,
+      turnChosen: state.turnChosen === true,
     });
   }
   async function changed() {
@@ -188,7 +214,9 @@ export function initScanView() {
     board.setOrientation(s.orientation);
     previewPosition(s.fen);
     $("scan-gauge").classList.toggle("flipped", board.orientation === "black");
-    for (const square of s.recognition?.suspiciousSquares || []) {
+    for (const square of s.recognitionContext?.suspiciousSquares ||
+      s.recognition?.suspiciousSquares ||
+      []) {
       const el =
         board.squareEls[typeof square === "string" ? square : square.square];
       el?.classList.add("scan-suspicious");
@@ -431,6 +459,7 @@ export function initScanView() {
   $("scan-turn").onchange = () => {
     clear();
     state.confirmed = false;
+    state.turnChosen = true;
     state.fen = state.fen.replace(/ [wb] /, " " + $("scan-turn").value + " ");
     $("scan-fen").value = state.fen;
     previewPosition(state.fen);
@@ -512,6 +541,7 @@ export function initScanView() {
     const b = new ChessBoard();
     if (b.load($("scan-fen").value.trim())) {
       state.fen = b.getFen();
+      state.turnChosen = true;
       board.setPosition(state.fen);
     } else status("invalidPosition");
   };

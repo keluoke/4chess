@@ -27,9 +27,9 @@ We do not sell user data or use it for advertising, credit decisions or unrelate
 不出售用户数据，不用于广告、信用评估或与复盘无关的用途。卸载扩展可移除扩展配置数据；网页缓存还需分别在浏览器中清理 4chess.cc、Chess.com、Lichess 的站点数据，卸载扩展不会清空所有网站存储。清理站点数据也可能删除这些网站保存的其他数据。模型缓存按来源分别保存，清理后可能需要重新下载。
 
 ## Contact and changes / 联系与更新
-Questions and requests: https://github.com/keluoke/4chess/issues. This policy describes release 1.1.1, updated 2026-10-14. Material changes will be reflected on this page.
+Questions and requests: https://github.com/keluoke/4chess/issues. This policy describes release 1.1.2, updated 2026-10-14. Material changes will be reflected on this page.
 
-问题与请求请通过 https://github.com/keluoke/4chess/issues 联系。本政策对应 1.1.1，更新于 2026-10-14；重大变化将在本页更新。
+问题与请求请通过 https://github.com/keluoke/4chess/issues 联系。本政策对应 1.1.2，更新于 2026-10-14；重大变化将在本页更新。
 
 ### User-requested Scan / 用户主动扫描
 

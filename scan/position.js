@@ -1,4 +1,44 @@
 // Preserve raw model labels for user review; the rule solver is evidence, not a new observation.
+import {
+  suggestPerspective,
+  rotateSquare,
+} from "../lib/vision/image-context.js";
+import { defaultTurn } from "../lib/vision/default-context.js";
+
+export function imageContext(result) {
+  const orientationKnown =
+    !!result.orientation && !result.orientation.requiresConfirmation;
+  const perspective = orientationKnown
+    ? result.orientation.perspective
+    : suggestPerspective(result.rawGrid || []).flip
+      ? "b"
+      : "w";
+  const oriented = imagePosition({
+    ...result,
+    orientation: { ...result.orientation, perspective },
+  });
+  let suggested;
+  try {
+    suggested = defaultTurn(oriented, result.activeTurn, { perspective });
+  } catch {
+    // Incomplete raw labels remain editable; they cannot be passed to an engine before validation.
+    suggested = { turn: perspective, known: false };
+  }
+  return {
+    fen: oriented.split(" ")[0] + " " + suggested.turn + " - - 0 1",
+    orientation: perspective === "b" ? "black" : "white",
+    orientationKnown,
+    turnKnown: suggested.known,
+    turnConflict: !!suggested.conflict,
+    suspiciousSquares: (result.suspiciousSquares || []).map((square) => {
+      if (perspective === result.orientation?.perspective) return square;
+      return typeof square === "string"
+        ? rotateSquare(square)
+        : { ...square, square: rotateSquare(square.square) };
+    }),
+  };
+}
+
 export function imagePosition(result) {
   const labels = result.rawGrid;
   if (

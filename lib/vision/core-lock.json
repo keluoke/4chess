@@ -1,9 +1,9 @@
 {
-  "coreVersion": "2026.10.14.1",
+  "coreVersion": "2026.10.14.2",
   "protocolVersion": 1,
-  "buildToolVersion": 1,
+  "buildToolVersion": 2,
   "sourceProject": "chesspuzzle",
-  "sourceTreeHash": "d865090f6184b8b06c726b38a4a83cc0ad448f63addfe58cbca98f0c809cccb5",
+  "sourceTreeHash": "e840c01048bb37a40c60dcd67262404daf3d81cbf6f5242536e8ff234bf91f99",
   "sources": {
     "recognizer-core": "84b69f0c58587266cfa8f3306193a4a1013f95c9e80467d40b0bf2d397591ab6",
     "task-controller": "b9b2084e905b9922bcfe4e57962402037f8dcae689b403c6676ba744ee658f90",
@@ -21,10 +21,12 @@
     "piece-classifier": "0750d20f7e80653ffe9902edb8fa462ff17beae0d63316181eeacce00f71b979",
     "fen-optimizer": "b7e6108377c420f0d095f5b03f4128b3d467f6a51edc3160dc2eed54cd7ccb5b",
     "consensus-engine": "0b7875b7f220502c57db36341e251a5918e8c3d5569517ceaea815632a22fce6",
+    "image-context": "b6e96c65a6a00e4d6f1e31fd0f1011f56ce48daa48148f97ec2e3707055a5203",
+    "default-context": "d7e98e8372d1c5d3cb0cc89704d18ebaecc5322b548d3a0ab35eca1700c623e2",
     "chess": "d9846dc03150a61cccf329e89c3f2103799482cd194e45103a19edf9f1e12e33"
   },
   "outputs": {
-    "lib/vision/core-generated.js": "6ba8a93772f1b060d7c0bd1cb3f28044d41629ac1d405d67224157af783cd72b",
+    "lib/vision/core-generated.js": "083f1d13ce7314d07f70312c53b451ea398c8ead8c33085b8d369e94ffbedea8",
     "lib/vision/recognizer-core.js": "27057271a4c17c6b37292fad7a4ed13d1d23ce08647ac3235ddc78f4981b3d2e",
     "lib/vision/task-controller.js": "0dc936596beb1c47c14cdb4cca748852fac9a2c5c8964997e6618237a2c993c9",
     "lib/vision/crypto-utils.js": "14460b90c5ce656189058c844d74b84a1f05e79a353bfeb4334cf1556aef0909",
@@ -41,6 +43,8 @@
     "lib/vision/piece-classifier.js": "d7b5b547d0b473ac9a2a94de4f41a5eed317b64dde5fbb2265c21e0d456718b5",
     "lib/vision/fen-optimizer.js": "f9fa19f15d81f8b8d458e6f69c35f8570b040f22befa63cc6b2906042ea56d7e",
     "lib/vision/consensus-engine.js": "21f338aee80c6370e4833b8127a830e33c13a00144a86f9d63356974d58412a2",
+    "lib/vision/image-context.js": "369f217684cf02a6f0e9ef04acfdaddb1cd152d9935848954f82f27079223025",
+    "lib/vision/default-context.js": "13d74347b619d6a8f43efad5d925384dcb289ea86ecab2dc49b0df2c3b6a654a",
     "lib/vision/chess.js": "3513887e410ddc81511b1f2540b12c6fa0d36d6614f9198ed2e1d893593ac5ec",
     "models/chess-cnn.wasm": "cd54b2122ed679eb5f935785a3db425131591f253d1e961c82ce516b456fe169",
     "models/chessimg2pos_weights.bin": "3911bad0cc0ec0e86b4688aab70e33ef59ddc77b805efbfa680dd02826059720"
