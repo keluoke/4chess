@@ -7,14 +7,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261025-v115';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261025-accuracy';
 import { BoardUI } from './board-ui.js?v=20261025-v115';
-import { EvalChart } from './eval-chart.js?v=20261025-v115';
+import { EvalChart } from './eval-chart.js?v=20261025-accuracy';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261025-v115';
+import { PositionAnalysis } from './position-analysis.js?v=20261025-accuracy';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261025-v115';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261025-accuracy';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -545,6 +545,7 @@ class AnalysisStudioApp {
     if (!this.moves || this.moves.length === 0) {
       this.renderEmptyHomeState();
     } else if (this.reviewResult) {
+      this.renderAccuracyDetails();
       const rawMoments = (this.reviewResult?.keyMoments || this.reviewResult?.allMoves || []);
       const validMoments = rawMoments.filter(
         m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
@@ -1223,7 +1224,7 @@ class AnalysisStudioApp {
   }
 
   getReviewKey() {
-    return GameAnalyzer.getGameKey(this.moves, { depth: 6, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
+    return GameAnalyzer.getGameKey(this.moves, { depth: GameAnalyzer.DEFAULT_DEPTH, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
   }
 
   changeEngineVersions({ persist = true } = {}) {
@@ -1336,7 +1337,7 @@ class AnalysisStudioApp {
       if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch || this.isBranching) return;
       this.positionAnalysis.cancel();
       const result = await this.analyzer.analyzeGame(this.moves, {
-        depth: 6,
+        depth: GameAnalyzer.DEFAULT_DEPTH,
         elo: targetElo,
         forceRefresh,
         onProgress: (prog) => {
@@ -1406,8 +1407,26 @@ class AnalysisStudioApp {
     }
   }
 
+  renderAccuracyDetails() {
+    const result = this.reviewResult;
+    if (!result) return;
+    for (const [side, turn] of [['white', 'w'], ['black', 'b']]) {
+      const decisions = result.allMoves.filter(m => m.turn === turn && !m.isOnlyLegalMove);
+      const valid = decisions.filter(m => Number.isFinite(m.accuracy)).length;
+      const detail = document.getElementById(`accuracy-detail-${side}`);
+      if (detail) detail.textContent = t('accuracySamples', { valid, total: decisions.length });
+    }
+    const depth = result.depthMin == null ? t('accuracyTargetDepth', { depth: result.depth })
+      : `D${result.depthMin}${result.depthMax > result.depthMin ? '–' + result.depthMax : ''}`;
+    document.getElementById('accuracy-analysis-detail').textContent = t('accuracyAnalysisDetail', {
+      engine: result.engineKey?.startsWith('sf19standard') ? 'SF19 Standard' : 'SF19 Lite', depth
+    });
+  }
+
   applyReviewResult(result) {
     this.reviewResult = result;
+
+    this.renderAccuracyDetails();
 
     // 0. Update Metrics Summary Card (Engine Accuracy)
     const metricsCard = document.getElementById('review-metrics-card');

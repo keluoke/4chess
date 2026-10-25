@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
   <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
-  <link rel="stylesheet" href="analysis.css?v=20261025-v115">
+  <link rel="stylesheet" href="analysis.css?v=20261025-accuracy">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
 </head>
 <body class="diverge-ui">
@@ -127,25 +127,31 @@
     </section>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <section class="review-summary" id="review-summary" hidden>
+      <div class="accuracy-heading"><strong data-i18n="accuracyLabel">引擎精度</strong><span data-i18n="accuracyScale">0–100 分</span></div>
       <!-- Engine Accuracy Summary Card -->
       <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
         <div class="metric-player-row">
           <div class="metric-side-label"><span class="side-badge side-white" id="metric-side-white" data-i18n="whitePlayer">⚪ 白方</span></div>
           <div class="metric-group metric-accuracy-group">
-            <span class="metric-title" data-i18n="accuracyLabel" data-i18n-title="accuracyTooltip" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
             <span class="metric-value" id="val-accuracy-white">—</span>
+            <small class="accuracy-samples" id="accuracy-detail-white"></small>
           </div>
         </div>
         <div class="metric-divider"></div>
         <div class="metric-player-row">
           <div class="metric-side-label"><span class="side-badge side-black" id="metric-side-black" data-i18n="blackPlayer">⚫ 黑方</span></div>
           <div class="metric-group metric-accuracy-group">
-            <span class="metric-title" data-i18n="accuracyLabel" data-i18n-title="accuracyTooltip" title="基于预期得分损失的指数精度映射：单步精度 A_i = 100 * exp(-5.11 * ΔQ)，反映局面损失严重程度">引擎精度</span>
             <span class="metric-value" id="val-accuracy-black">—</span>
+            <small class="accuracy-samples" id="accuracy-detail-black"></small>
           </div>
         </div>
       </div>
 
+        <details class="accuracy-method">
+          <summary data-i18n="accuracyMethodTitle">精度怎么算？</summary>
+          <p data-i18n="accuracyTooltip"></p>
+          <p id="accuracy-analysis-detail"></p>
+        </details>
         <div class="eval-chart-wrapper" id="eval-chart-container"></div>
       </section>
       <!-- Review Progress Banner (shown during analysis) -->
@@ -240,7 +246,7 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261025-v115"></script>
+  <script type="module" src="analysis.js?v=20261025-accuracy"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {

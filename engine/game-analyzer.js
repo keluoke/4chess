@@ -483,7 +483,48 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 7;
+  static SCHEMA_VERSION = 8;
+  static DEFAULT_DEPTH = 12;
+
+  static winScore(cp) {
+    if (!Number.isFinite(cp)) return null;
+    return 1 / (1 + Math.exp(-0.00368208 * Math.max(-1000, Math.min(1000, cp))));
+  }
+
+  static moveAccuracy(cpBefore, cpAfterMover, isBest = false) {
+    const before = GameAnalyzer.winScore(cpBefore), after = GameAnalyzer.winScore(cpAfterMover);
+    if (before === null || after === null) return null;
+    const loss = isBest ? 0 : Math.max(0, before - after);
+    return { accuracy: 100 * Math.exp(-5.11 * loss), expectedScoreLoss: loss * 100 };
+  }
+
+  // Inspired by Lichess's documented volatility + harmonic aggregation:
+  // https://lichess.org/page/accuracy . Diverge retains its own per-move mapping.
+  // Use one White-perspective timeline, including forced moves, for volatility.
+  static accuracyWeights(whiteScores) {
+    const size = Math.max(2, Math.min(8, Math.floor((whiteScores.length - 1) / 10)));
+    return whiteScores.slice(1).map((_, index) => {
+      const start = Math.max(0, index + 2 - size);
+      const window = whiteScores.slice(start, start + size);
+      if (window.some(q => q === null || !Number.isFinite(q))) return 0.5;
+      const mean = window.reduce((sum, q) => sum + q, 0) / window.length;
+      const deviation = Math.sqrt(window.reduce((sum, q) => sum + (q - mean) ** 2, 0) / window.length);
+      return Math.max(0.5, Math.min(12, deviation * 100));
+    });
+  }
+
+  static aggregateAccuracy(moves) {
+    const valid = moves.filter(m => Number.isFinite(m.accuracy));
+    if (!valid.length) return null;
+    let sum = 0, weights = 0, reciprocal = 0;
+    for (const move of valid) {
+      const weight = Number.isFinite(move.accuracyWeight) && move.accuracyWeight > 0 ? move.accuracyWeight : 0.5;
+      sum += move.accuracy * weight;
+      weights += weight;
+      reciprocal += move.accuracy === 0 ? Infinity : 1 / move.accuracy;
+    }
+    return Math.round((sum / weights + valid.length / reciprocal) / 2 * 10) / 10;
+  }
   static memoryCache = new Map();
 
   static hashString(str) {
@@ -504,7 +545,7 @@ export class GameAnalyzer {
    * Generates a stable unique cache key for the current game
    */
   static getGameKey(moves, options = {}) {
-    const { depth = 6, elo = 1900, engineKey = 'sf19lite', modelKey = 'maia3-5m' } = options;
+    const { depth = GameAnalyzer.DEFAULT_DEPTH, elo = 1900, engineKey = 'sf19lite', modelKey = 'maia3-5m' } = options;
     const startFen = moves?.startFen || 'start';
     const moveSans = (moves || []).map(m => m.san || '').join(',');
     const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|${engineKey}|${modelKey}`);
@@ -648,6 +689,8 @@ export class GameAnalyzer {
         acplBlack: result.acplBlack,
         elo: result.elo,
         depth: result.depth,
+        depthMin: result.depthMin,
+        depthMax: result.depthMax,
         engineKey: result.engineKey,
         modelKey: result.modelKey,
         cachedAt: Date.now(),
@@ -697,7 +740,7 @@ export class GameAnalyzer {
     };
 
     const {
-      depth = 6,
+      depth = GameAnalyzer.DEFAULT_DEPTH,
       elo = 1900,
       forceRefresh = false,
       onProgress = null
@@ -774,8 +817,9 @@ export class GameAnalyzer {
           });
         }
 
-        // Fast evaluation with depth 6, 3500ms timeout, and multipv 1
-        const evalRes = await evaluate(positions[i].fen, depth, 3500, 1);
+        // Full-game evaluation with the requested depth, bounded time and one principal variation.
+        let evalRes = await evaluate(positions[i].fen, depth, 3500, 1);
+        if (!Number.isFinite(evalRes?.scoreCp)) evalRes = null;
         // A cancelled review must not stop a newer foreground position search.
         if (invalid()) return null;
         if (!evalRes) {
@@ -815,12 +859,11 @@ export class GameAnalyzer {
 
       const analyzedMoves = [];
 
-      // Helper: convert centipawns to expected win score Q in [0, 1]
-      // Standard logistic sigmoid: Q(cp) = 1 / (1 + exp(-0.00368208 * cp))
-      const cpToWinScore = (cp) => {
-        const clamped = Math.max(-1000, Math.min(1000, cp || 0));
-        return 1 / (1 + Math.exp(-0.00368208 * clamped));
-      };
+      const accuracyWeights = GameAnalyzer.accuracyWeights(evals.map((evaluation, i) => {
+        if (!evaluation) return null;
+        const whiteCp = positions[i].fen.split(' ')[1] === 'w' ? evaluation.scoreCp : -evaluation.scoreCp;
+        return GameAnalyzer.winScore(whiteCp);
+      }));
 
       for (let i = 1; i < positions.length; i++) {
         const posBefore = positions[i - 1];
@@ -846,9 +889,11 @@ export class GameAnalyzer {
 
         let lossCp = 0;
         let severity = 'good';
+        const isBest = evalBefore?.bestMove?.uci && posAfter.uci
+          ? evalBefore.bestMove.uci === posAfter.uci
+          : bestSan !== '?' && playedSan.replace(/[+#?!]/g, '') === bestSan.replace(/[+#?!]/g, '');
 
         if (evalBefore && evalAfter) {
-          const isBest = (bestSan !== '?') && (playedSan.replace(/[+#?!]/g, '') === bestSan.replace(/[+#?!]/g, ''));
           if (!isBest) {
             // Clamp scores to [-1000, 1000] to handle checkmates smoothly
             const cpBefore = Math.max(-1000, Math.min(1000, evalBefore.scoreCp || 0));
@@ -883,21 +928,12 @@ export class GameAnalyzer {
         // Query opening book for theoretical status and known traps
         const bookLookup = OpeningBook.lookup(posBefore.fen, playedSan, lossCp);
 
-        // Compute per-move engine accuracy A_i = 100 * exp(-k * d_i)
-        // where d_i = max(0, Q_best - Q_played), and k = 5.11 (10% score loss -> 60 score)
-        let moveAccuracy = null;
-        let expectedScoreLoss = null;
-        if (evalBefore && evalAfter) {
-          const cpBefore = Math.max(-1000, Math.min(1000, evalBefore.scoreCp || 0));
-          // evalAfter is from opponent's perspective, so from mover's perspective it's -evalAfter.scoreCp
-          const cpAfterMover = Math.max(-1000, Math.min(1000, -(evalAfter.scoreCp || 0)));
-          const qBest = cpToWinScore(cpBefore);
-          const qPlayed = cpToWinScore(cpAfterMover);
-          const d_i = Math.max(0, qBest - qPlayed);
-          expectedScoreLoss = Math.round(d_i * 1000) / 10; // in %
-          const k = 5.11;
-          moveAccuracy = Math.min(100, Math.max(0, Math.round(100 * Math.exp(-k * d_i) * 10) / 10));
-        }
+        // Best-move identity avoids penalizing the engine's own choice due to search noise.
+        const quality = evalBefore && evalAfter
+          ? GameAnalyzer.moveAccuracy(evalBefore.scoreCp, -evalAfter.scoreCp, isBest)
+          : null;
+        const moveAccuracy = quality?.accuracy ?? null;
+        const expectedScoreLoss = quality ? Math.round(quality.expectedScoreLoss * 10) / 10 : null;
 
         const lossPawns = (lossCp / 100).toFixed(2);
 
@@ -916,6 +952,7 @@ export class GameAnalyzer {
           lossPawns: `-${lossPawns}`,
           severity,
           accuracy: moveAccuracy,
+          accuracyWeight: accuracyWeights[i - 1],
           expectedScoreLoss,
           legalMovesCount,
           isOnlyLegalMove,
@@ -1193,12 +1230,8 @@ export class GameAnalyzer {
       const validAccWhite = whiteDecisionMoves.filter(m => typeof m.accuracy === 'number' && !isNaN(m.accuracy));
       const validAccBlack = blackDecisionMoves.filter(m => typeof m.accuracy === 'number' && !isNaN(m.accuracy));
 
-      const accuracyWhite = validAccWhite.length > 0 
-        ? Math.round((validAccWhite.reduce((acc, m) => acc + m.accuracy, 0) / validAccWhite.length) * 10) / 10 
-        : null;
-      const accuracyBlack = validAccBlack.length > 0 
-        ? Math.round((validAccBlack.reduce((acc, m) => acc + m.accuracy, 0) / validAccBlack.length) * 10) / 10 
-        : null;
+      const accuracyWhite = GameAnalyzer.aggregateAccuracy(validAccWhite);
+      const accuracyBlack = GameAnalyzer.aggregateAccuracy(validAccBlack);
 
       const coverageRateWhite = whiteDecisionMoves.length > 0
         ? Math.round((validAccWhite.length / whiteDecisionMoves.length) * 1000) / 10
@@ -1213,12 +1246,8 @@ export class GameAnalyzer {
       const validPostWhite = postBookWhite.filter(m => typeof m.accuracy === 'number' && !isNaN(m.accuracy));
       const validPostBlack = postBookBlack.filter(m => typeof m.accuracy === 'number' && !isNaN(m.accuracy));
 
-      const postBookAccuracyWhite = validPostWhite.length > 0
-        ? Math.round((validPostWhite.reduce((acc, m) => acc + m.accuracy, 0) / validPostWhite.length) * 10) / 10
-        : null;
-      const postBookAccuracyBlack = validPostBlack.length > 0
-        ? Math.round((validPostBlack.reduce((acc, m) => acc + m.accuracy, 0) / validPostBlack.length) * 10) / 10
-        : null;
+      const postBookAccuracyWhite = GameAnalyzer.aggregateAccuracy(validPostWhite);
+      const postBookAccuracyBlack = GameAnalyzer.aggregateAccuracy(validPostBlack);
 
       // 2. Confirmed Key Moments (✨ 妙手 & 🫤 俗手)
       const keyMoments = analyzedMoves
@@ -1238,7 +1267,10 @@ export class GameAnalyzer {
         return null;
       }
 
+      const depths = evals.filter(e => e && !e.terminal && Number.isFinite(e.depth)).map(e => e.depth);
       const result = {
+        depthMin: depths.length ? Math.min(...depths) : null,
+        depthMax: depths.length ? Math.max(...depths) : null,
         schemaVersion: GameAnalyzer.SCHEMA_VERSION,
         runId,
         gameKey: cacheKey,

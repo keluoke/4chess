@@ -1368,3 +1368,17 @@ body{font-size:14px;user-select:auto}
 .empty-study .studio-home-hero { max-width:800px; margin:30px auto; padding:28px; }
 .home-hero-actions a { text-decoration:none; }
 @media(max-width:700px){.empty-study .studio-home-hero{padding:16px;margin:8px auto}.home-hero-actions{flex-wrap:wrap}}
+
+/* Game scores lead the review; both sides use the same visual weight. */
+.accuracy-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 2px 0 12px; }
+.accuracy-heading strong { font-size: 14px; color: var(--text-main); }
+.accuracy-heading > span { font-size: 10px; color: var(--text-muted); }
+.review-summary .review-metrics-card { gap: 10px; }
+.review-summary .metric-player-row { min-width: 0; flex-direction: column; align-items: stretch; gap: 9px; padding: 14px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--dg-paper); }
+.review-summary .metric-group { flex-direction: column; align-items: flex-start; gap: 4px; }
+.review-summary .metric-value { font: 600 clamp(32px, 3.5vw, 46px)/1.15 var(--dg-mono); letter-spacing: -.055em; color: var(--brand-green); }
+.review-summary .side-badge { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.accuracy-samples { font-size: 10px; color: var(--text-muted); }
+.accuracy-method { font-size: 11px; color: var(--text-muted); margin-top: 12px; line-height: 1.7; }
+.accuracy-method summary { cursor: pointer; width: fit-content; }
+.accuracy-method p { margin: 7px 0; }

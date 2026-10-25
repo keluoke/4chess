@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { GameAnalyzer as G } from '../engine/game-analyzer.js';
+
+assert.equal(G.moveAccuracy(0, 0).accuracy, 100);
+assert.equal(G.moveAccuracy(200, 400).accuracy, 100, 'Search improvements are not losses');
+assert.equal(G.moveAccuracy(0, -300, true).accuracy, 100, 'Engine first choice must not lose points from adjacent-search noise');
+assert.equal(G.moveAccuracy(null, 0), null);
+assert.equal(G.moveAccuracy(0, NaN), null);
+assert(G.moveAccuracy(0, -300).accuracy < 30, 'A three-pawn loss in equality is severe');
+assert(G.moveAccuracy(-700, -1000).accuracy > G.moveAccuracy(0, -300).accuracy, 'Same pawn loss in a lost position changes expected score less');
+assert.equal(G.aggregateAccuracy([]), null);
+assert.equal(G.aggregateAccuracy([{ accuracy: null }, { accuracy: NaN }]), null);
+assert.equal(G.aggregateAccuracy([{ accuracy: 100 }, { accuracy: null }]), 100);
+assert.equal(G.aggregateAccuracy([{ accuracy: 0 }]), 0);
+assert.equal(G.aggregateAccuracy([{ accuracy: 100 }, { accuracy: 100 }]), 100);
+const quiet = Array.from({ length: 19 }, () => ({ accuracy: 100, accuracyWeight: .5 }));
+const critical = { accuracy: 10, accuracyWeight: 12 };
+assert(G.aggregateAccuracy([...quiet, critical]) < 65, 'A critical blunder cannot be diluted into 95.5 by quiet moves');
+assert(G.aggregateAccuracy([...quiet, critical]) < G.aggregateAccuracy([...quiet, { ...critical, accuracyWeight: .5 }]));
+assert.deepEqual(G.accuracyWeights([.5, .5, .5]), [.5, .5]);
+assert.deepEqual(G.accuracyWeights([null, .5, .5]), [.5, .5]);
+assert.deepEqual(G.accuracyWeights([.5, .9, .5]), [12, 12]);
+
+const moves = G.parsePgn('[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 1-0');
+let index = 0;
+const scores = [0, 0, 0, 0, 300], depths = [];
+const sf = { isReady: true, engineKey: 'scoring-fixture', async evaluate(fen, depth) {
+  depths.push(depth);
+  const scoreCp = scores[index++];
+  return { scoreCp, score: String(scoreCp / 100), depth: 12, bestMove: null };
+} };
+const result = await new G(sf, { isReady: true, modelKey: 'scoring-fixture', async predict() { return { moves: [] }; } }).analyzeGame(moves, { forceRefresh: true });
+assert(depths.every(d => d === 12), 'Default full review requests depth 12');
+assert.equal(result.coverageRateBlack, 100);
+assert.equal(result.depthMin, 12);
+assert.equal(result.depthMax, 12);
+assert(result.accuracyBlack < result.accuracyWhite);
+assert.equal(result.accuracyBlack, G.aggregateAccuracy(result.allMoves.filter(m => m.turn === 'b' && !m.isOnlyLegalMove)));
+assert.notEqual(G.getGameKey(moves), G.getGameKey(moves, { depth: 6 }));
+assert.equal(G.isValidReviewCache({ ...result, schemaVersion: 7 }), false, 'Old arithmetic-mean reports must be invalidated');
+console.log('PASS accuracy: real scorer, critical loss weighting, missing data, depth, side perspective and cache migration');

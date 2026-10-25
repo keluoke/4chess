@@ -4,26 +4,27 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261025-v115';
+const CACHE_NAME = '4chess-review-20261025-accuracy';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261025-v115',
-  './analysis.css?v=20261025-v115',
+  './analysis.js?v=20261025-accuracy',
+  './analysis.css?v=20261025-accuracy',
   '../ui/chessboard.css?v=20261025-v115',
-  './i18n.js?v=20261025-v115',
+  './i18n.js?v=20261025-accuracy',
   '../ui/theme.css?v=20261025-v115',
   '../ui/theme.js?v=20261025-v115',
   './board-ui.js',
   './scan-authorization.js',
   '../engine/maia-worker.js',
-  './position-analysis.js?v=20261025-v115',
+  './position-analysis.js?v=20261025-accuracy',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js?v=20261025-v115',
+  './eval-chart.js?v=20261025-accuracy',
   './manifest.webmanifest',
   './favicon.svg',
+  '../engine/game-analyzer.js?v=20261025-accuracy',
   '../engine/chess-core.js',
   '../engine/chess-notation.js',
   '../engine/stockfish-inbrowser.js',

@@ -62,7 +62,7 @@ const reviewSf={isReady:true,engineKey:'regression',stop(){},async evaluate(fen,
  return {scoreCp:0,score:'0.00',bestMove:{uci:'e7e5',san:'e5'}};
 }};
 const analyzer = new GameAnalyzer(reviewSf,{isReady:true,modelKey:'regression',async predict(){return {moves:[{uci:'h2h3',san:'h3',prob:60,rawProb:.6},{uci:'a2a3',san:'a3',prob:30,rawProb:.3}]};}});
-const work=analyzer.analyzeGame(GameAnalyzer.parsePgn('1. a3'),{forceRefresh:true});
+const work=analyzer.analyzeGame(GameAnalyzer.parsePgn('1. a3'),{depth:6,forceRefresh:true});
 await searching; document.body.innerHTML='<div class="clock-running"></div>'; analyzer.cancel(); releasePlayed(null);
 assert.equal(await work,null); assert.equal(calls.filter(c=>c.locked).length,0,'No search may start after fair-play lock');
 document.body.innerHTML='<div class="move-list-result">1-0</div>';
