@@ -297,13 +297,13 @@ console.log('5.1 Cached review schemaVersion:', loadedCache?.schemaVersion);
 console.log('5.1 Cached review beyondWhiteCount:', loadedCache?.beyondWhiteCount);
 console.log('5.1 Cached review trapWhiteCount:', loadedCache?.trapWhiteCount);
 
-if (!loadedCache || loadedCache.schemaVersion !== 6 || loadedCache.accuracyWhite === undefined || loadedCache.beyondWhiteCount === undefined) {
+if (!loadedCache || loadedCache.schemaVersion !== GameAnalyzer.SCHEMA_VERSION || loadedCache.accuracyWhite === undefined || loadedCache.beyondWhiteCount === undefined) {
   throw new Error('Failed to properly serialize and deserialize v6 review cache');
 }
 
 // Test 5.2: Invalidation of stale v5 cache
 const staleKey = 'test_game_stale_v5';
-const staleStorageKey = `maia3_review_v6_${staleKey}`;
+const staleStorageKey = `maia3_review_${staleKey}`;
 localStorage.setItem(staleStorageKey, JSON.stringify({
   result: {
     totalMoves: 10,

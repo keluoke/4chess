@@ -4,7 +4,7 @@
     "description": "Extension title"
   },
   "extensionDescription": {
-    "message": "Compare Stockfish with Maia human intuition. Scan webpage chess diagrams and review Chess.com or Lichess games.",
+    "message": "Scan chess diagrams and compare Stockfish analysis with Maia human moves. Study positions and review finished games.",
     "description": "Short description"
   },
   "actionTitle": {
@@ -153,5 +153,8 @@
   },
   "sfWebLabel": {
     "message": "Web review engine"
+  },
+  "popupBrand": {
+    "message": "Diverge"
   }
 }

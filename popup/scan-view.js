@@ -183,6 +183,7 @@ export function initScanView() {
     $("scan-preview").height = 1;
     clear();
     board.clearAnnotations(true);
+    window.dispatchEvent(new CustomEvent('scan-lock'));
     if (state) {
       state.locked = true;
       state.reason = key;
@@ -660,6 +661,36 @@ export function initScanView() {
     });
     if (!r.ok) lock(r.error);
   };
+
+  /* LOCAL_FEATURE_START: PUZZLE_POSTER */
+  const localTokenLabel = document.createElement('label');
+  localTokenLabel.textContent = '本地分享服务令牌（仅保存在此扩展）';
+  const localTokenInput = document.createElement('input');
+  localTokenInput.type = 'password';
+  localTokenInput.autocomplete = 'off';
+  localTokenInput.placeholder = '与 .env.local 的 LOCAL_TOKEN 一致';
+  localTokenLabel.append(localTokenInput);
+  settings.querySelector('.settings-content').append(localTokenLabel);
+  chrome.storage.local.get(['miniProgramCodeToken']).then(values => { localTokenInput.value = values.miniProgramCodeToken || ''; });
+  localTokenInput.onchange = () => chrome.storage.local.set({ miniProgramCodeToken: localTokenInput.value.trim() });
+  import('./puzzle-poster.js')
+    .then(({ openPosterModal }) => {
+      const posterBtn = document.createElement('button');
+      posterBtn.id = 'scan-poster';
+      posterBtn.type = 'button';
+      posterBtn.textContent = '📸 生成棋谜海报 (含小程序码)';
+      posterBtn.onclick = async () => {
+        if (!state?.fen) return;
+        if (!(await valid())) return;
+        openPosterModal({
+          fen: state.fen,
+          orientation: board.orientation
+        });
+      };
+      $("scan-web").after(posterBtn);
+    })
+    .catch(() => {});
+  /* LOCAL_FEATURE_END: PUZZLE_POSTER */
   chrome.storage.onChanged.addListener((changes, area) => {
     if (
       area === "session" &&

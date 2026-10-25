@@ -1,21 +1,29 @@
 {
   "name": "diverge-chess-analysis",
-  "version": "1.1.4",
-  "description": "Diverge · Compare chess engine analysis and human intuition across webpage diagrams and completed games",
+  "version": "1.1.5",
+  "description": "Diverge \u00b7 Compare chess engine analysis and human intuition across webpage diagrams and completed games",
   "type": "module",
   "scripts": {
     "build": "node scripts/prepare_cloudflare.mjs",
     "clean": "node scripts/clean_cloudflare.mjs",
     "package": "node scripts/package_extension.mjs",
-    "test": "node --check functions/api/vision.js && node scripts/test_fair_play.mjs && node scripts/test_dom_fixtures.mjs && node scripts/test_security_audit.mjs && node scripts/test_position_analysis.mjs && node scripts/test_engine_versions.mjs && node scripts/test_sound_effects.mjs && node scripts/test_sandbox_handshake.mjs && node scripts/test_vision_extension.mjs && node scripts/sync_vision_core.mjs && node scripts/test_vision_parity.mjs && node scripts/test_scan_safety.mjs && node scripts/test_scan_worker_lifecycle.mjs && node scripts/sync_store_copy.mjs",
+    "test": "node --check functions/api/vision.js && node scripts/test_fair_play.mjs && node scripts/test_dom_fixtures.mjs && node scripts/test_security_audit.mjs && node scripts/test_position_analysis.mjs && node scripts/test_engine_versions.mjs && node scripts/test_sound_effects.mjs && node scripts/test_sandbox_handshake.mjs && node scripts/test_vision_extension.mjs && node scripts/sync_vision_core.mjs && node scripts/test_vision_parity.mjs && node scripts/test_scan_safety.mjs && node scripts/test_scan_worker_lifecycle.mjs && node scripts/sync_store_copy.mjs && node scripts/test_review_regressions.mjs && node scripts/test_foreground_cancel.mjs && node scripts/test_terminal_evaluation.mjs && node scripts/test_review_cache_ownership.mjs && node scripts/test_sandbox_token_concurrency.mjs",
     "test:baseline": "python3 scripts/verify_official_baseline.py",
     "vision:sync": "node scripts/sync_vision_core.mjs --update",
     "vision:check": "node scripts/sync_vision_core.mjs --source",
     "store:sync": "node scripts/sync_store_copy.mjs --write",
-    "store:check": "node scripts/sync_store_copy.mjs"
+    "store:check": "node scripts/sync_store_copy.mjs",
+    "test:browser": "node scripts/test_release_browser.mjs",
+    "test:release": "npm run package && node scripts/test_package_integrity.mjs && npm run test:browser",
+    "test:local-share": "node scripts/test_local_share_boundary.mjs",
+    "package:local": "node scripts/package_extension.mjs --local"
   },
   "private": true,
   "devDependencies": {
-    "jsdom": "^29.1.1"
+    "jsdom": "^29.1.1",
+    "playwright": "1.62.1"
+  },
+  "dependencies": {
+    "qrcode-generator": "^2.0.4"
   }
 }

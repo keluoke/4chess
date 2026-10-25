@@ -4,25 +4,28 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261014-scan1';
+const CACHE_NAME = '4chess-review-20261025-v115';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261014-scan1',
-  './analysis.css?v=20261014-scan1',
-  '../ui/chessboard.css?v=20261014-scan1',
-  './i18n.js?v=20261014-scan1',
-  '../ui/theme.css?v=20261014-scan1',
-  '../ui/theme.js?v=20261014-scan1',
+  './analysis.js?v=20261025-v115',
+  './analysis.css?v=20261025-v115',
+  '../ui/chessboard.css?v=20261025-v115',
+  './i18n.js?v=20261025-v115',
+  '../ui/theme.css?v=20261025-v115',
+  '../ui/theme.js?v=20261025-v115',
   './board-ui.js',
-  './position-analysis.js?v=20261014-scan1',
+  './scan-authorization.js',
+  '../engine/maia-worker.js',
+  './position-analysis.js?v=20261025-v115',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js?v=20261014-scan1',
+  './eval-chart.js?v=20261025-v115',
   './manifest.webmanifest',
   './favicon.svg',
   '../engine/chess-core.js',
+  '../engine/chess-notation.js',
   '../engine/stockfish-inbrowser.js',
   '../engine/maia-engine.js',
   '../engine/maia-inbrowser.js',
@@ -40,8 +43,10 @@ const STATIC_ASSETS = [
   '../icons/icon128.png'
 ];
 
+// GENERATED_MODULES
+
 // Cache both legacy nested imports and this release's versioned entry dependencies.
-STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261014-scan1`));
+STATIC_ASSETS.push(...STATIC_ASSETS.filter(url => /\.(js|css)$/.test(url) && !url.startsWith('../lib/')).map(url => `${url}?v=20261025-v115`));
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -78,7 +83,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
 
   // Bypass non-GET requests or external dynamic APIs (e.g. Lichess API / CDN model weights which use IndexedDB)
-  if (req.method !== 'GET') return;
+  if (req.method !== 'GET' || url.pathname.startsWith('/api/')) return;
   if (url.hostname.includes('lichess.org') || url.hostname.includes('chess.com') || url.pathname.endsWith('.bin')) {
     return;
   }

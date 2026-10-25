@@ -35,6 +35,17 @@ export class FairPlayGuard {
     return true;
   }
 
+  static phase() {
+    if (!this.isLiveGameInProgress()) return 'study';
+    if (this.visibleMatch('.clock-running, .rclock-running, .rclock .running, .rclock.running, button.resign, button[aria-label="Resign" i], [data-cy="resign-button"], button[aria-label="Abort" i], button[data-action="resign"]')) return 'live';
+    return document.querySelector('wc-chess-board, chess-board, cg-board, .main-board') ? 'unknown' : 'lobby';
+  }
+
+  static visibleMatch(selector) {
+    const elements = document.querySelectorAll ? [...document.querySelectorAll(selector)] : [document.querySelector(selector)];
+    return elements.find(el => this.isVisibleAndActive(el)) || null;
+  }
+
   /**
    * Returns true if an active live game is currently being played
    */
@@ -51,10 +62,10 @@ export class FairPlayGuard {
     // Under NO circumstances may whitelist or completion indicators override active game controls!
     // ------------------------------------------------------------------
     if (host.includes('lichess.org')) {
-      const resignBtn = document.querySelector(
+      const resignBtn = FairPlayGuard.visibleMatch(
         'button.resign, .game__controls .resign, button[data-action="resign"], [data-hint*="Resign" i], [data-hint*="认输" i]'
       );
-      const drawBtn = document.querySelector(
+      const drawBtn = FairPlayGuard.visibleMatch(
         'button.draw-yes, .game__controls .draw-yes, button[data-action="draw-yes"]'
       );
       const hasRunningClock = document.querySelector('.rclock-running, .rclock .running, .clock-running, .rclock.running');
@@ -68,17 +79,17 @@ export class FairPlayGuard {
     }
 
     if (host.includes('chess.com')) {
-      const abortBtn = document.querySelector(
+      const abortBtn = FairPlayGuard.visibleMatch(
         'button[aria-label="Abort" i], button[aria-label="放弃" i], button[aria-label="取消" i], ' +
         '[data-cy="abort-button"], button.game-controls-abort, .abort-button-component, ' +
         '.game-controls-button[aria-label="Abort" i], .game-controls-button[aria-label="放弃" i]'
       );
-      const resignBtn = document.querySelector(
+      const resignBtn = FairPlayGuard.visibleMatch(
         'button[aria-label="Resign" i], button[aria-label="认输" i], .resign-button-component, ' +
         'button.game-controls-resign, [data-cy="resign-button"], .game-controls-button[aria-label="Resign" i], ' +
         '.game-controls-button[aria-label="认输" i], button.resign'
       );
-      const drawBtn = document.querySelector(
+      const drawBtn = FairPlayGuard.visibleMatch(
         'button[aria-label="Draw" i], button[aria-label="和棋" i], button[aria-label="Offer Draw" i], ' +
         'button[aria-label="提议和棋" i], button[aria-label*="Offer draw" i], .draw-button-component, [data-cy="draw-button"], ' +
         '.game-controls-button[aria-label="Draw" i], .game-controls-button[aria-label="和棋" i], button.draw-yes'
@@ -137,11 +148,11 @@ export class FairPlayGuard {
       }
 
       // 1. Result elements or match status text
-      const resultEl = document.querySelector('.result-wrap .result, .result-wrap');
-      const statusEl = document.querySelector('.game__meta .status, .game__meta');
+      const resultEl = FairPlayGuard.visibleMatch('.result-wrap .result, .result-wrap');
+      const statusEl = FairPlayGuard.visibleMatch('.game__meta .status');
       const statusText = ((statusEl?.textContent || '') + ' ' + (resultEl?.textContent || '')).trim();
 
-      const isStatusConcluded = /checkmate|mate|time\s*out|timeout|time\s*forfeit|resign|drawn?|stalemate|abandoned|left the game|rules infraction|cheat|victor|defeat|won|lost|获胜|胜出|胜|赢|负|败|认输|超时|将死|和棋|离开对局|违规|1-0|0-1|1\/2/i.test(statusText);
+      const isStatusConcluded = /\bcheckmate\b|\bmate\b|time\s*out|timeout|time\s*forfeit|resign|drawn?|stalemate|abandoned|left the game|rules infraction|cheat|victor|defeat|\bwon\b|\blost\b|获胜|胜出|认输|超时|将死|和棋|离开对局|违规|1-0|0-1|1\/2/i.test(statusText);
 
       // 2. Dedicated Computer analysis container (only after game conclusion)
       const hasComputerAnalysis = document.querySelector('.computer-analysis');
@@ -169,7 +180,7 @@ export class FairPlayGuard {
 
       // 1. Specific Game over modals and player result banners (must be visible and active!)
       // Excludes generic .board-dialog-component to avoid false-unlocks on promotion/settings dialogs
-      const gameOverEl = document.querySelector(
+      const gameOverEl = FairPlayGuard.visibleMatch(
         '.game-over-modal, [data-cy="game-over-modal"], ' +
         '.game-over-dialog, [data-cy="game-over-dialog"], ' +
         '.game-over-header-component, [class*="game-over-header"], ' +
@@ -181,16 +192,16 @@ export class FairPlayGuard {
       const isGameOverVisible = FairPlayGuard.isVisibleAndActive(gameOverEl);
 
       // 2. Move list termination result node (e.g. 1-0, 0-1, 1/2-1/2, ½-½)
-      const moveListResult = document.querySelector(
+      const moveListResult = FairPlayGuard.visibleMatch(
         '.move-list-result, [class*="move-list-result"], ' +
         '.vertical-move-list-result, [class*="vertical-move-list"] [class*="result"], ' +
-        '.game-result, [class*="game-result"]'
+        '.game-result, [class*="game-result"], .vertical-move-list'
       );
       const isMoveListConcluded = moveListResult && FairPlayGuard.isVisibleAndActive(moveListResult) &&
-        /1-0|0-1|1\/2|½-½/i.test(moveListResult.textContent || '');
+        /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|½-½)\s*$/i.test(moveListResult.textContent || '');
 
       // 3. Post-game action controls (Game Review, Rematch, Play Again - present only after match concludes)
-      const postGameActionBtn = document.querySelector(
+      const postGameActionBtn = FairPlayGuard.visibleMatch(
         '[data-cy="game-review-button"], button.game-review-buttons-review, ' +
         'button.game-review-button-component, [class*="game-review-button"], ' +
         'button[aria-label*="Game Review" i], button[aria-label*="对局复盘" i], button[aria-label*="复盘" i], ' +
@@ -271,22 +282,15 @@ export class FairPlayGuard {
       }
     };
 
-    const throttledCheck = () => {
-      if (this._throttleTimer) return;
-      this._throttleTimer = setTimeout(() => {
-        this._throttleTimer = null;
-        runCheck();
-      }, 150);
-    };
-
-    this._observer = new MutationObserver(throttledCheck);
+    this._observer = new MutationObserver(runCheck);
     const target = document.body || document.documentElement;
     if (target) {
       this._observer.observe(target, {
+        characterData: true,
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['class', 'style', 'aria-label', 'data-cy']
+        attributeFilter: ['class', 'style', 'aria-label', 'data-cy', 'disabled', 'aria-disabled', 'hidden']
       });
     }
 
@@ -300,78 +304,32 @@ export class FairPlayGuard {
    * Fail-Safe Principle: If conclusion cannot be verified beyond 100% doubt, returns { ok: false, isLive: true, reason: '...' }.
    */
   static verifyConcludedGame(data) {
-    if (!data) {
-      return { ok: false, isLive: false, reason: '对局数据为空，无法验证完赛状态' };
+    const denied = reason => ({ ok: false, isLive: true, reason });
+    if (!data) return denied('对局数据为空，无法验证完赛状态');
+    const record = typeof data === 'object' ? (data.game || data) : {};
+    if (record.isFinished === false) return denied('对局尚未结束 (isFinished: false)');
+    const status = String(record.status?.name || record.status || '').toLowerCase();
+    if (['started', 'created', 'in_progress', 'live', 'playing', 'unknown'].includes(status)) {
+      return denied(`对局仍在进行或状态未知 (${status})`);
     }
-
-    // 1. Explicit boolean isFinished flag (e.g. Chess.com callback / API)
-    if (typeof data.isFinished === 'boolean' && !data.isFinished) {
-      return {
-        ok: false,
-        isLive: true,
-        reason: '该对局仍在进行中 (isFinished: false)，恪守公平竞技守则，严禁对局中计算'
-      };
+    const pgn = typeof data === 'string' ? data : (record.pgn || '');
+    const results = [record.result, record.pgnHeaders?.Result, record.headers?.Result].filter(v => v !== undefined && v !== null);
+    if (pgn) {
+      const result = pgn.match(/\[Result\s+"([^"]+)"\]/i)?.[1];
+      if (result !== undefined) results.push(result);
+      const termination = pgn.match(/\[Termination\s+"([^"]+)"\]/i)?.[1] || '';
+      if (/unterminated|live|ongoing/i.test(termination)) return denied('终局描述为未完赛');
+      // Movetext may provide the outcome when a PGN omits the Result header.
+      const end = pgn.replace(/\{[^}]*\}/g, '').trim().match(/(?:^|\s)(1-0|0-1|1\/2-1\/2|\*)\s*$/)?.[1];
+      if (end) results.push(end);
     }
-
-    // 2. Explicit status check (Lichess & Chess.com JSON)
-    if (data.status) {
-      const liveStatuses = new Set(['started', 'created', 'in_progress', 'live', 'playing']);
-      const s = String(data.status).toLowerCase();
-      if (liveStatuses.has(s)) {
-        return {
-          ok: false,
-          isLive: true,
-          reason: `平台对局处于进行中状态 (${data.status})，公平竞技保护已激活`
-        };
-      }
+    const outcomes = results.map(v => String(v).trim());
+    if (!outcomes.length || outcomes.some(v => !['1-0', '0-1', '1/2-1/2'].includes(v)) || new Set(outcomes).size !== 1) {
+      return denied('缺少明确且一致的完赛结果');
     }
-
-    // 3. PGN text or PGN headers check
-    const pgnText = typeof data === 'string' ? data : (data.pgn || '');
-    if (pgnText && typeof pgnText === 'string') {
-      const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
-      const terminationMatch = pgnText.match(/\[Termination\s+"([^"]+)"\]/i);
-      const result = resultMatch ? resultMatch[1].trim() : (data.result || '');
-      const termination = terminationMatch ? terminationMatch[1].trim() : '';
-
-      // Standard PGN specification: '*' signifies game in progress or unfinished
-      if (result === '*' || result === '') {
-        return {
-          ok: false,
-          isLive: true,
-          reason: '对局结果为未定 (*)，判定为进行中或未完赛对局'
-        };
-      }
-
-      // Check for unterminated live marker
-      if (/unterminated|live|ongoing/i.test(termination)) {
-        return {
-          ok: false,
-          isLive: true,
-          reason: `对局终局描述为未完赛 (${termination})`
-        };
-      }
-
-      // Result must be a recognized legitimate outcome
-      if (!['1-0', '0-1', '1/2-1/2'].includes(result)) {
-        return {
-          ok: false,
-          isLive: false,
-          reason: `未知对局结果格式 (${result})，无法确认终局`
-        };
-      }
-    } else if (data.result) {
-      if (data.result === '*' || !['1-0', '0-1', '1/2-1/2'].includes(data.result)) {
-        return {
-          ok: false,
-          isLive: true,
-          reason: '无法从对局结果确认完赛状态'
-        };
-      }
-    }
-
-    return { ok: true, isLive: false, reason: null };
+    return { ok: true, isLive: false, reason: null, result: outcomes[0] };
   }
+
 }
 
 if (typeof window !== 'undefined') {

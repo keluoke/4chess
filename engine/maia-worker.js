@@ -1,7 +1,7 @@
 /**
  * Maia-3 Dedicated Web Worker
  * Offloads Chessformer neural network inference from the main UI thread.
- * Guarantees 60FPS fluid animations, seamless scrolling, and zero UI stuttering
+ * Keeps neural inference off the main UI thread
  * during full-game blunder review and position analysis.
  */
 

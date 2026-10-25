@@ -5,7 +5,7 @@ import path from 'path';
 
 const PORT_HTTP = 8790;
 const PORT_CDP = 9447;
-const EXT_PATH = '/Volumes/AI/coding/simoextension';
+const EXT_PATH = process.cwd();
 
 const mimeTypes = {
   '.html': 'text/html',

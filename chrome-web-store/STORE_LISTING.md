@@ -12,10 +12,10 @@
 Diverge: Chess Analysis, Scanner & Human Intuition
 ```
 
-摘要（111/132）：
+摘要（116/132）：
 
 ```text
-Compare Stockfish with Maia human intuition. Scan webpage chess diagrams and review Chess.com or Lichess games.
+Scan chess diagrams and compare Stockfish analysis with Maia human moves. Study positions and review finished games.
 ```
 
 详细说明（可直接粘贴；同 listing-en.txt）：
@@ -57,10 +57,10 @@ Maintainer: keluoke
 歧路 Diverge · 国际象棋分析、棋图扫描与人类直觉
 ```
 
-摘要（77/132）：
+摘要（55/132）：
 
 ```text
-对比 Stockfish 引擎建议与 Maia 人类直觉。扫描网页棋图，分析当前局面，或复盘 Chess.com、Lichess 完赛棋局，探索人机分歧。
+扫描网页棋图，对比 Stockfish 好棋与 Maia 人类常见走法；探索局面、导入棋谱，复盘已结束的对局。
 ```
 
 详细说明（可直接粘贴；同 listing-zh-CN.txt）：

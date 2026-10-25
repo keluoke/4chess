@@ -7,6 +7,7 @@
  * 4. Zero-Overflow Segmented Tabs & Native WeChat Switches (weui-switch)
  * 5. High Information Density & Zero Lag Experience
  */
+import { FairPlayGuard } from './fair-play-guard.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { readEnginePreferences, engineExperienceHint } from '../engine/engine-preferences.js';
 
@@ -1147,7 +1148,10 @@ export class IntuitionPanel {
   }
 
   setFairPlayLocked(isLocked) {
-    if (this.isFairPlayLocked === isLocked) return;
+    const detected = isLocked ? FairPlayGuard.phase() : 'study';
+    const phase = isLocked && detected === 'study' ? 'live' : detected;
+    if (this.isFairPlayLocked === isLocked && this.fairPlayPhase === phase) return;
+    this.fairPlayPhase = phase;
     this.isFairPlayLocked = isLocked;
     if (this.container) this.container.dataset.fairPlayLocked = String(isLocked);
 
@@ -1179,7 +1183,7 @@ export class IntuitionPanel {
         lockSvg.style.cssText = 'display: inline-block; vertical-align: -1px; margin-right: 3px;';
         lockSvg.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
         turnPill.appendChild(lockSvg);
-        turnPill.appendChild(document.createTextNode(this.lang === 'zh' ? '对局中' : 'Live'));
+        turnPill.appendChild(document.createTextNode(phase === 'live' ? (this.lang === 'zh' ? '对局中' : 'Live') : (this.lang === 'zh' ? '未启动' : 'Not started')));
         turnPill.className = 'weui-turn-tag';
       }
 
@@ -1203,7 +1207,7 @@ export class IntuitionPanel {
               </div>
             </div>
             <div style="font-size: 13.5px; font-weight: 700; color: var(--weui-FG-0); margin-bottom: 6px;">
-              ${this.t('fairPlayTitle')}
+              ${phase === 'live' ? this.t('fairPlayTitle') : (this.lang === 'zh' ? '等待允许分析的局面 · 未启动' : 'Waiting for a verified study position · Not started')}
             </div>
             <div style="font-size: 11px; color: var(--weui-FG-HALF); line-height: 1.5; margin-bottom: 12px;">
               ${this.t('fairPlayDesc')}

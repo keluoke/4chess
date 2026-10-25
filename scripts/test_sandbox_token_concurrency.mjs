@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const listeners=[];
+let session={active_tokens:{'single-use-test-token':Date.now()+120000}};
+const pause=()=>new Promise(resolve=>setTimeout(resolve,1));
+const chrome={runtime:{onInstalled:{addListener(){}},onMessage:{addListener(fn){listeners.push(fn);}}},storage:{local:{},session:{setAccessLevel(){},async get(keys){await pause();return structuredClone(session)},async set(value){await pause();session={...session,...structuredClone(value)}}}}};
+const code=fs.readFileSync('background.js','utf8').replace(/^import .*?;\n/gm,'');
+vm.runInNewContext(code,{chrome,Date,Map,console,crypto,structuredClone,setTimeout,clearTimeout});
+const verify=()=>new Promise(resolve=>listeners[0]({type:'VERIFY_SANDBOX_TOKEN',token:'single-use-test-token'},{id:'trusted-extension'},resolve));
+const concurrent=await Promise.all([verify(),verify()]);
+const replay=await verify();
+const evidence={scenario:'Real background.js with asynchronous chrome.storage.session adapter; two concurrent verifications of the same persisted token',concurrent,replay,remaining:session.active_tokens};
+assert.equal(concurrent.filter(x=>x.ok).length,1);assert.equal(replay.ok,false);
+console.log(JSON.stringify(evidence,null,2));

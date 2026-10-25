@@ -27,7 +27,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   context.on('request', req => { if (req.url().includes('weights.4chess.cc')) downloads.push(req.url()); });
   page.on('console', message => { if (/成功就绪|已就绪|下载模型/.test(message.text())) console.log(message.text()); });
-  await page.goto(process.env.STUDIO_URL || `http://127.0.0.1:${server.address().port}/analysis/?lang=zh`);
+  await page.goto(process.env.STUDIO_URL || `http://127.0.0.1:${server.address().port}/analysis/?lang=${process.env.STUDIO_LANG || 'zh'}`);
   await page.waitForFunction(() => window.__maiaStudioApp?.positions.length);
   await page.locator('#btn-settings').click();
   await page.selectOption('#engine-edition', engineVariant);
@@ -61,6 +61,7 @@ try {
   await page.keyboard.press('End');
   assert.deepEqual(await page.locator('#board-container').boundingBox(), rect);
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3 && document.querySelectorAll('#maia-candidate-lines .candidate-line').length === 3, null, { timeout: 60000 });
+  if ((process.env.STUDIO_LANG || 'zh') === 'en') assert(!/全部|妙手|俗手/.test(await page.locator('.divergence-filters').innerText()));
   if (process.env.STUDIO_SCREENSHOT) await page.screenshot({ path: process.env.STUDIO_SCREENSHOT });
   const count = downloads.length;
   await page.reload();

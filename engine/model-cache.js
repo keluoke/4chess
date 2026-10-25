@@ -1,7 +1,7 @@
 /**
  * IndexedDB High-Speed Model Cache for Maia-3
  * Ensures the 27.97 MB model is downloaded only ONCE from Cloudflare CDN,
- * and loads in 0ms on all subsequent page visits.
+ * and reuses downloaded bytes on subsequent page visits.
  */
 
 const DB_NAME = 'Maia3ModelCache';
@@ -39,6 +39,7 @@ export class ModelCache {
       if (!db) return null;
 
       return new Promise((resolve) => {
+        const done = value => { db.close(); resolve(value); };
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
         const req = store.get(key);
@@ -46,18 +47,18 @@ export class ModelCache {
         req.onsuccess = async () => {
           const res = req.result;
           if (!res) {
-            resolve(null);
+            done(null);
             return;
           }
           if (res instanceof ArrayBuffer) {
             console.log(`[ModelCache] ⚡ 从浏览器 IndexedDB 极速装载缓存模型 (${(res.byteLength / 1024 / 1024).toFixed(1)} MB)!`);
-            resolve(res);
+            done(res);
           } else if (typeof Blob !== 'undefined' && res instanceof Blob) {
             const buf = await res.arrayBuffer();
             console.log(`[ModelCache] ⚡ 从浏览器 IndexedDB 极速装载缓存模型 (${(buf.byteLength / 1024 / 1024).toFixed(1)} MB)!`);
-            resolve(buf);
+            done(buf);
           } else if (res.buffer instanceof ArrayBuffer) {
-            resolve(res.buffer);
+            done(res.buffer);
           } else if (Number.isInteger(res.chunks) && res.chunks > 0 && res.chunks <= 128 && Number.isInteger(res.byteLength) && res.byteLength > 0) {
             const reads = Array.from({ length: res.chunks }, (_, index) => new Promise(done => {
               const chunk = store.get(`${key}::chunk:${index}`);
@@ -66,19 +67,19 @@ export class ModelCache {
             }));
             try {
               const chunks = await Promise.all(reads);
-              if (chunks.some(chunk => !(chunk instanceof ArrayBuffer)) || chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0) !== res.byteLength) { resolve(null); return; }
+              if (chunks.some(chunk => !(chunk instanceof ArrayBuffer)) || chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0) !== res.byteLength) { done(null); return; }
               const buffer = new Uint8Array(res.byteLength);
               let offset = 0;
               for (const chunk of chunks) { buffer.set(new Uint8Array(chunk), offset); offset += chunk.byteLength; }
               console.log(`[ModelCache] Loaded chunked model (${(res.byteLength / 1024 / 1024).toFixed(1)} MB)`);
-              resolve(buffer.buffer);
-            } catch { resolve(null); }
+              done(buffer.buffer);
+            } catch { done(null); }
           } else {
-            resolve(null);
+            done(null);
           }
         };
 
-        req.onerror = () => resolve(null);
+        req.onerror = () => done(null);
       });
     } catch (e) {
       console.warn('[ModelCache] getModel failed:', e);

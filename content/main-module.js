@@ -199,7 +199,7 @@ export async function initMaiaExtension() {
         depth: review.depth,
         engineKey: review.engineKey,
         modelKey: review.modelKey,
-        schemaVersion: analyzer.lastReviewResult.schemaVersion || 5,
+        schemaVersion: analyzer.lastReviewResult.schemaVersion || GameAnalyzer.SCHEMA_VERSION,
         totalMoves: analyzer.lastReviewResult.totalMoves,
         blundersCount: analyzer.lastReviewResult.blundersCount,
         mistakesCount: analyzer.lastReviewResult.mistakesCount,
@@ -261,9 +261,8 @@ export async function initMaiaExtension() {
       panel.setFairPlayLocked(true);
       predictionEpoch++;
       analyzer.cancel();
-      if (engine.stockfishInBrowser?.isReady) {
-        engine.stockfishInBrowser.stop();
-      }
+      engine.suspendForFairPlay();
+      engineInitStarted = false;
       return;
     } else {
       panel.setFairPlayLocked(false);
@@ -444,9 +443,8 @@ export async function initMaiaExtension() {
       panel.setFairPlayLocked(true);
       predictionEpoch++;
       analyzer.cancel();
-      if (engine.stockfishInBrowser?.isReady) {
-        engine.stockfishInBrowser.stop();
-      }
+      engine.suspendForFairPlay();
+      engineInitStarted = false;
       return;
     } else {
       panel.setFairPlayLocked(false);
@@ -475,9 +473,8 @@ export async function initMaiaExtension() {
         // Immediately clear board visuals
         overlay.clear();
         // Immediately stop Stockfish engine
-        if (engine.stockfishInBrowser?.isReady) {
-          engine.stockfishInBrowser.stop();
-        }
+        engine.suspendForFairPlay();
+        engineInitStarted = false;
       } else {
         // Game concluded! Re-enable evaluation and ensure engine is initialized for post-game review
         ensureEngineInitialized();
@@ -486,6 +483,7 @@ export async function initMaiaExtension() {
         }
       }
     }
+    panel.setFairPlayLocked(isLive);
   };
 
   FairPlayGuard.startObserver(handleFairPlayChange);

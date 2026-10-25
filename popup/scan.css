@@ -373,3 +373,150 @@
 .scanning:not(.scan-confirmed) #scan-gauge {
   visibility: hidden;
 }
+
+/* LOCAL_FEATURE_START: PUZZLE_POSTER_CSS */
+#scan-poster {
+  width: 100%;
+  margin: 6px 0 0;
+  background: var(--dg-raised);
+  border: 1px solid var(--dg-line);
+  color: var(--dg-ink);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+#scan-poster:hover {
+  background: var(--dg-line);
+  border-color: var(--dg-muted);
+}
+.poster-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  animation: fadeIn 0.15s ease-out;
+}
+.poster-modal-dialog {
+  background: var(--dg-raised, #ffffff);
+  border: 1px solid var(--dg-line, #e2e8f0);
+  border-radius: 12px;
+  max-width: 340px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+}
+.poster-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.poster-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dg-ink);
+}
+#poster-close-btn {
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--dg-muted);
+}
+#poster-close-btn:hover {
+  color: var(--dg-ink);
+}
+.poster-modal-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  min-height: 240px;
+  background: #f8f6f0;
+  border-radius: 8px;
+  padding: 6px;
+  border: 1px solid var(--dg-line);
+}
+.poster-loading {
+  font-size: 12px;
+  color: #72816b;
+  padding: 30px 10px;
+  text-align: center;
+}
+.poster-error-box {
+  text-align: center;
+  padding: 24px 12px;
+  max-width: 280px;
+}
+.poster-error-box p {
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  word-break: break-word;
+}
+.poster-error-box button {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#poster-preview-img {
+  width: 100%;
+  height: auto;
+  max-height: 380px;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.poster-modal-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.poster-modal-footer button {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.poster-modal-footer .action-primary {
+  background: var(--dg-green);
+  color: var(--dg-on-green);
+  border: none;
+}
+.poster-modal-footer .action-secondary {
+  background: var(--dg-raised);
+  border: 1px solid var(--dg-line);
+  color: var(--dg-ink);
+}
+.poster-hint {
+  font-size: 10px;
+  color: var(--dg-muted);
+  text-align: center;
+  margin: 8px 0 0;
+  line-height: 1.4;
+}
+/* LOCAL_FEATURE_END: PUZZLE_POSTER_CSS */

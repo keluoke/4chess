@@ -62,7 +62,7 @@
    - **Chrome MV3 离线识别资产例外**：根据 Chrome 应用商店关于禁止加载远程托管可执行代码/模型的合规政策，仅局限于极轻量级局面识别小模型资产允许随扩展本地打包：
      - `models/chess-cnn.wasm` (~6.2 KiB)
      - `models/chessimg2pos_weights.bin` (~606 KiB，体积远远小于 25MB 限制)
-     - `models/manifest.json` (~1 KiB，记录 SHA-256 校验清单)
+     - `models/chessimg2pos_manifest.json` (~1 KiB，记录 SHA-256 校验清单)
    - `.gitignore` 明确允许跟踪 `!models/chessimg2pos_weights.bin`。任何大于 1MB 的模型资产仍严格禁止入库。
 3. **版本控制防线 (Git Protection)**：
    - `.gitignore` 必须永久严格屏蔽 `*.pt`、`*.onnx`、`models/maia*` 等所有大文件及未授权的 `.bin` 文件。

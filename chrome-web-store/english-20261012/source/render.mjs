@@ -21,14 +21,18 @@ try {
   const audit=await page.evaluate(()=>{
    const text=[];const walker=document.createTreeWalker(document.getElementById('art'),NodeFilter.SHOW_TEXT);let n;
    while(n=walker.nextNode()){const range=document.createRange();range.selectNode(n);const rect=range.getBoundingClientRect();if(rect.width&&rect.height&&getComputedStyle(n.parentElement).visibility!=='hidden'&&getComputedStyle(n.parentElement).display!=='none')text.push(n.textContent.trim());}
-   const panel=window.__panel;return {visibleText:text.join(' '),locked:panel?.isFairPlayLocked,reviewDisabled:panel?.container.querySelector('#btn-trigger-standalone')?.disabled,candidates:panel?.container.querySelectorAll('.weui-move-item').length};
+   const board=document.querySelector('.maia-chessboard');
+   const rect=board?.getBoundingClientRect();
+   const squares=[...document.querySelectorAll('.maia-square')];
+   const boardGeometry=!board || (squares.length===64 && squares.every(el=>{const r=el.getBoundingClientRect();return Math.abs(r.width-rect.width/8)<2 && Math.abs(r.height-rect.height/8)<2 && r.left>=rect.left-1 && r.right<=rect.right+1 && r.top>=rect.top-1 && r.bottom<=rect.bottom+1;}));
+   const panel=window.__panel;return {boardGeometry,visibleText:text.join(' '),locked:panel?.isFairPlayLocked,reviewDisabled:panel?.container.querySelector('#btn-trigger-standalone')?.disabled,candidates:panel?.container.querySelectorAll('.weui-move-item').length};
   });
   const raw=await page.screenshot();
   await sharp(raw).removeAlpha().png().toFile(path.join(dir,'images',name));
   const meta=await sharp(path.join(dir,'images',name)).metadata();
   const englishOnly=!/[\u3400-\u9fff]/u.test(audit.visibleText);
   report.push({file:name,width:meta.width,height:meta.height,channels:meta.channels,hasAlpha:meta.hasAlpha,englishOnly,errors,...audit});
-  if(meta.width!==width||meta.height!==height||!englishOnly||errors.length)throw new Error(`Asset QA failed: ${name}`);
+  if(meta.width!==width||meta.height!==height||!englishOnly||errors.length||!audit.boardGeometry)throw new Error(`Asset QA failed: ${name}`);
   if(kind==='locked'&&(!audit.locked||!audit.reviewDisabled))throw new Error('Locked UI is not disabled');
   console.log(`${name}: ${width}×${height}, English only, RGB`);await page.close();
  }

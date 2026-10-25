@@ -22,12 +22,24 @@ node_modules/
 .DS_Store
 .wrangler/
 .workbuddy/
+.env.local
+*.local.json
+scripts/local-config.json
 
 # Extension packages
 *.zip
 
-
-
-
 # Local browser acceptance captures
 artifacts/
+
+
+# Isolated generated products; load releases/diverge-extension-vVERSION in Chrome
+releases/
+dist/
+.build_staging/
+.env*
+!.env.local.example
+
+# Historical duplicate artwork exports and unused optional local QR source
+chrome-web-store/english-20261012/diverge-store-assets-en/
+popup/qrcode.mjs

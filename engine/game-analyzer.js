@@ -7,6 +7,7 @@
 
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
+import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
 import { OpeningBook } from './opening-book.js';
 
 export class GameAnalyzer {
@@ -49,13 +50,19 @@ export class GameAnalyzer {
     const blackEloMatch = pgnText.match(/\[BlackElo\s+"([^"]+)"\]/i);
     const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
 
-    // Strip comments {...}
-    let clean = pgnText.replace(/\{[^}]*\}/g, '');
-    // Strip metadata headers [...]
-    clean = clean.replace(/\[[^\]]*\]/g, '');
-    // Strip variations (...)
-    clean = clean.replace(/\([^)]*\)/g, '');
-    // Strip game termination markers
+    // Keep the main line while skipping nested RAVs and both PGN comment forms.
+    let clean = '', variation = 0, brace = false, lineComment = false, header = false, quoted = false;
+    for (const char of pgnText) {
+      if (lineComment) { if (char === '\n' || char === '\r') { lineComment = false; clean += ' '; } continue; }
+      if (brace) { if (char === '}') brace = false; continue; }
+      if (header) { if (char === '"') quoted = !quoted; if (char === ']' && !quoted) header = false; continue; }
+      if (char === '{') { brace = true; clean += ' '; continue; }
+      if (char === ';') { lineComment = true; continue; }
+      if (char === '[') { header = true; continue; }
+      if (char === '(') { variation++; clean += ' '; continue; }
+      if (char === ')') { variation = Math.max(0, variation - 1); continue; }
+      if (!variation) clean += char;
+    }
     clean = clean.replace(/(1-0|0-1|1\/2-1\/2|\*)/g, '');
 
     const tokens = clean.trim().split(/\s+/);
@@ -88,7 +95,7 @@ export class GameAnalyzer {
     if (blackMatch) moves.black = blackMatch[1].trim();
     if (whiteEloMatch) moves.whiteElo = whiteEloMatch[1].trim();
     if (blackEloMatch) moves.blackElo = blackEloMatch[1].trim();
-    if (resultMatch) moves.result = resultMatch[1].trim();
+    moves.result = resultMatch?.[1]?.trim() || pgnText.trim().match(/(?:^|\s)(1-0|0-1|1\/2-1\/2|\*)\s*$/)?.[1] || '*';
     moves.rawPgn = pgnText;
 
     return moves;
@@ -97,103 +104,9 @@ export class GameAnalyzer {
   /**
    * Decode Chess.com TCN (Trickle Chess Notation) string into move coordinates
    */
-  static decodeTcn(tcnString) {
-    if (!tcnString || typeof tcnString !== 'string') return [];
-    const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=";
-    const PROMO_PIECES = "qnrbkp";
-    const moves = [];
-
-    for (let i = 0; i < tcnString.length; i += 2) {
-      const code1 = ALPHABET.indexOf(tcnString[i]);
-      let code2 = ALPHABET.indexOf(tcnString[i + 1]);
-      if (code1 === -1 || code2 === -1) continue;
-
-      const move = {};
-      if (code2 > 63) {
-        const promoIndex = Math.floor((code2 - 64) / 3);
-        move.promotion = PROMO_PIECES[promoIndex];
-        const offset = ((code2 - 1) % 3) - 1;
-        code2 = code1 + (code1 < 16 ? -8 : 8) + offset;
-      }
-      if (code1 > 75) {
-        const dropIndex = code1 - 79;
-        move.drop = PROMO_PIECES[dropIndex];
-      } else {
-        const file = code1 % 8;
-        const rank = Math.floor(code1 / 8) + 1;
-        move.from = 'abcdefgh'[file] + rank;
-      }
-      const file = code2 % 8;
-      const rank = Math.floor(code2 / 8) + 1;
-      move.to = 'abcdefgh'[file] + rank;
-
-      moves.push(move);
-    }
-    return moves;
-  }
-
-  /**
-   * Converts Chess.com TCN string into array of validated SAN moves using ChessBoard
-   */
-  static tcnToSanMoves(tcnString) {
-    const tcnMoves = GameAnalyzer.decodeTcn(tcnString);
-    if (!tcnMoves || tcnMoves.length === 0) return [];
-
-    const chess = new ChessBoard();
-    const moves = [];
-
-    for (let i = 0; i < tcnMoves.length; i++) {
-      const mv = tcnMoves[i];
-      const uci = mv.from + mv.to + (mv.promotion || '');
-      const legals = chess.getLegalMoves();
-      const found = legals.find(m => m.uci === uci || (m.fromSq === mv.from && m.toSq === mv.to));
-      if (!found) {
-        console.warn(`[GameAnalyzer] TCN replay stopped at ply ${i + 1}: ${uci}`);
-        break;
-      }
-      chess.makeMove(found);
-      moves.push({
-        ply: i + 1,
-        moveNumber: Math.floor(i / 2) + 1,
-        turn: (i % 2 === 0) ? 'w' : 'b',
-        san: found.san,
-        element: null
-      });
-    }
-
-    return moves;
-  }
-
-  /**
-   * Reconstructs standard PGN text from array of move objects and headers
-   */
-  static movesToPgn(moves, headers = {}) {
-    if (!moves || moves.length === 0) return '';
-    let pgn = '';
-    const defHeaders = {
-      Event: 'Live Chess',
-      Site: 'Chess.com',
-      Date: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
-      White: 'White',
-      Black: 'Black',
-      Result: '*',
-      ...headers
-    };
-    for (const [k, v] of Object.entries(defHeaders)) {
-      if (v !== undefined && v !== null) {
-        pgn += `[${k} "${v}"]\n`;
-      }
-    }
-    pgn += '\n';
-    for (let i = 0; i < moves.length; i++) {
-      if (i % 2 === 0) {
-        pgn += `${Math.floor(i / 2) + 1}. `;
-      }
-      pgn += `${moves[i].san} `;
-    }
-    pgn += defHeaders.Result || '*';
-    return pgn.trim();
-  }
+  static decodeTcn(text) { return decodeTcn(text); }
+  static tcnToSanMoves(text) { return tcnToSanMoves(text); }
+  static movesToPgn(moves, headers) { return movesToPgn(moves, headers); }
 
   /**
    * Multi-tiered move extraction from Lichess / Chess.com:
@@ -570,7 +483,7 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 6;
+  static SCHEMA_VERSION = 7;
   static memoryCache = new Map();
 
   static hashString(str) {
@@ -601,18 +514,18 @@ export class GameAnalyzer {
       // Lichess game ID: 8 characters (e.g. lichess.org/38uTqNdksSRF -> lichess_38uTqNdk)
       if (href.includes('lichess.org')) {
         const m = window.location.pathname.match(/^\/([a-zA-Z0-9]{8})/);
-        if (m && m[1]) return `v6_lichess_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v${GameAnalyzer.SCHEMA_VERSION}_lichess_${m[1]}_${hash.slice(0, 10)}`;
       }
       // Chess.com game ID (e.g. /game/live/184446398482 or /analysis/game/live/184446398482)
       if (href.includes('chess.com')) {
         const m = window.location.pathname.match(/\b(\d{8,15})\b/);
-        if (m && m[1]) return `v6_chesscom_${m[1]}_${hash.slice(0, 10)}`;
+        if (m && m[1]) return `v${GameAnalyzer.SCHEMA_VERSION}_chesscom_${m[1]}_${hash.slice(0, 10)}`;
       }
     }
 
     // Universal fallback: deterministic 64-bit hash over moves sequence & params
     if (moves && moves.length > 0) {
-      return `v6_game_${moves.length}_${hash.slice(0, 12)}`;
+      return `v${GameAnalyzer.SCHEMA_VERSION}_game_${moves.length}_${hash.slice(0, 12)}`;
     }
 
     return null;
@@ -623,7 +536,7 @@ export class GameAnalyzer {
    */
   static isValidReviewCache(res) {
     if (!res || typeof res !== 'object') return false;
-    if ((res.schemaVersion || 0) < GameAnalyzer.SCHEMA_VERSION) return false;
+    if (res.schemaVersion !== GameAnalyzer.SCHEMA_VERSION) return false;
     if (res.accuracyWhite === undefined || res.accuracyBlack === undefined) return false;
     if (res.beyondIntuitionCount === undefined || res.intuitionTrapsCount === undefined) return false;
     const hasMaia = res.allMoves && res.allMoves.some(m => m.maiaTopSan != null);
@@ -771,12 +684,17 @@ export class GameAnalyzer {
   async analyzeGame(moves, options = {}) {
     if (this.isAnalyzing) {
       this.cancel();
-      await new Promise(r => setTimeout(r, 20));
     }
     const runId = ++this._runCounter;
     this._currentRunId = runId;
     this.isAnalyzing = true;
     this.isCancelled = false;
+    const invalid = () => this.isCancelled || this._currentRunId !== runId || FairPlayGuard.isLiveGameInProgress();
+    const evaluate = async (...args) => {
+      if (invalid()) return null;
+      const result = await this.stockfish.evaluate(...args);
+      return invalid() ? null : result;
+    };
 
     const {
       depth = 6,
@@ -790,6 +708,7 @@ export class GameAnalyzer {
     // 1. Instant Cache Hit Check (0ms response)
     if (!forceRefresh && cacheKey) {
       const cached = await GameAnalyzer.getCachedReview(cacheKey);
+      if (invalid()) return null;
       if (cached) {
         this.lastReviewResult = cached;
         this.isAnalyzing = false;
@@ -825,6 +744,7 @@ export class GameAnalyzer {
       if (this.stockfish && !this.stockfish.isReady) {
         console.log('[GameAnalyzer] Awaiting Stockfish engine initialization before review...');
         const ready = await this.stockfish.initialize();
+        if (invalid()) return null;
         if (!ready || !this.stockfish.isReady) {
           throw new Error('Stockfish WebAssembly 引擎初始化超时或未就绪，无法开始复盘分析');
         }
@@ -832,7 +752,7 @@ export class GameAnalyzer {
 
       // Step 1: Evaluate each position with Stockfish 19
       for (let i = 0; i < totalPositions; i++) {
-        if (this.isCancelled || this._currentRunId !== runId) {
+        if (invalid()) {
           if (this._currentRunId === runId) this.isAnalyzing = false;
           return null;
         }
@@ -855,9 +775,9 @@ export class GameAnalyzer {
         }
 
         // Fast evaluation with depth 6, 3500ms timeout, and multipv 1
-        const evalRes = await this.stockfish.evaluate(positions[i].fen, depth, 3500, 1);
+        const evalRes = await evaluate(positions[i].fen, depth, 3500, 1);
         // A cancelled review must not stop a newer foreground position search.
-        if (this.isCancelled || this._currentRunId !== runId) return null;
+        if (invalid()) return null;
         if (!evalRes) {
           evalFailures++;
           consecutiveFailures++;
@@ -1053,7 +973,7 @@ export class GameAnalyzer {
 
         const totalToPredict = analyzedMoves.length;
         for (let j = 0; j < totalToPredict; j++) {
-          if (this.isCancelled || this._currentRunId !== runId) break;
+          if (invalid()) break;
           const mv = analyzedMoves[j];
 
           if (onProgress && j % 2 === 0) {
@@ -1068,7 +988,8 @@ export class GameAnalyzer {
 
           try {
             const historyFens = positions.slice(Math.max(0, j - 7), j).map(p => p.fen);
-            const pred = await this.maiaEngine.predict(mv.fenBefore, elo, null, null, historyFens);
+            const pred = await this.maiaEngine.predict(mv.fenBefore, elo, null, invalid, historyFens);
+            if (invalid()) return null;
             if (pred && pred.moves && pred.moves.length > 0) {
               mv._predMoves = pred.moves;
               const top1 = pred.moves[0];
@@ -1138,10 +1059,10 @@ export class GameAnalyzer {
         .sort((a, b) => a.ply - b.ply);
 
       for (const cm of candidateList) {
-        if (this.isCancelled || this._currentRunId !== runId) break;
+        if (invalid()) break;
         try {
           // Deeper evaluation with depth 12 and multipv 4
-          const deepEval = await this.stockfish.evaluate(cm.fenBefore, 12, 3500, 4);
+          const deepEval = await evaluate(cm.fenBefore, 12, 3500, 4);
           if (deepEval && deepEval.bestMove) {
             const deepBestSan = (deepEval.bestMove.san || '').replace(/[+#?!]/g, '');
             const deepBestUci = deepEval.bestMove.uci;
@@ -1179,7 +1100,7 @@ export class GameAnalyzer {
                   }
                 }
                 if (targetFen && targetUci) {
-                  const subEval = await this.stockfish.evaluate(targetFen, 10, 2500, 1);
+                  const subEval = await evaluate(targetFen, 10, 2500, 1);
                   if (subEval) {
                     const loss = Math.max(0, deepBestScoreCp + (subEval.scoreCp || 0));
                     deepLossMap.set(targetUci, loss);
@@ -1195,7 +1116,7 @@ export class GameAnalyzer {
             // 1. 实打实确保实战走法已评估
             if (!deepLossMap.has(cm.uci)) {
               if (cm.fenAfter) {
-                const playedEval = await this.stockfish.evaluate(cm.fenAfter, 10, 2500, 1);
+                const playedEval = await evaluate(cm.fenAfter, 10, 2500, 1);
                 if (playedEval) {
                   deepLossMap.set(cm.uci, Math.max(0, deepBestScoreCp + (playedEval.scoreCp || 0)));
                 } else if (cm.lossCp !== null) {
@@ -1312,7 +1233,7 @@ export class GameAnalyzer {
       const trapBlackCount = analyzedMoves.filter(m => m.turn === 'b' && m.divergenceType === 'intuition_trap').length;
       const bookMovesCount = analyzedMoves.filter(m => m.isBookMove).length;
 
-      if (this.isCancelled || this._currentRunId !== runId) {
+      if (invalid()) {
         if (this._currentRunId === runId) this.isAnalyzing = false;
         return null;
       }

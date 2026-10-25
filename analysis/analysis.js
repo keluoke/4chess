@@ -4,17 +4,17 @@ import { authorizeScan, showScanLock } from './scan-authorization.js';
  * Browser-based engine and human-intuition comparison for positions and completed games.
  */
 
-import { ChessBoard } from '../engine/chess-core.js?v=20261014-scan1';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261014-scan1';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261014-scan1';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261014-scan1';
-import { BoardUI } from './board-ui.js?v=20261014-scan1';
-import { EvalChart } from './eval-chart.js?v=20261014-scan1';
-import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261014-scan1';
-import { PositionAnalysis } from './position-analysis.js?v=20261014-scan1';
-import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261014-scan1';
-import { soundEffects } from './sound-effects.js?v=20261014-scan1';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261014-scan1';
+import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261025-v115';
+import { BoardUI } from './board-ui.js?v=20261025-v115';
+import { EvalChart } from './eval-chart.js?v=20261025-v115';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
+import { PositionAnalysis } from './position-analysis.js?v=20261025-v115';
+import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
+import { soundEffects } from './sound-effects.js?v=20261025-v115';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261025-v115';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -462,6 +462,10 @@ class AnalysisStudioApp {
   refreshAfterLanguageChange() {
     if (!this.el) return;
     this.updatePreferenceNotes();
+    for (const [id, key] of [['lbl-filter-all', 'filterAll'], ['lbl-filter-beyond', 'filterBeyond'], ['lbl-filter-trap', 'filterTrap']]) {
+      const label = document.getElementById(id);
+      if (label) label.textContent = t(key, { count: '' }).replace(/\(\s*\)/, '').trim();
+    }
     this.renderStudyBranches();
 
     // 1. Meta player names if default
@@ -632,8 +636,47 @@ class AnalysisStudioApp {
 
   async smartLoadInput(input, sourceName = '') {
     if (!input || typeof input !== 'string') return false;
+    const generation = this.importGeneration = (this.importGeneration || 0) + 1;
+    this.importController?.abort();
+    const controller = this.importController = new AbortController();
+    const current = () => generation === this.importGeneration && !controller.signal.aborted;
+    const commit = data => current() && this.startNewSession(data);
     const text = input.trim();
     if (!text) return false;
+
+    // 3. Detect FEN Position string (Single position / puzzle)
+    const fenParts = text.split(/\s+/);
+    if (fenParts.length >= 2 && fenParts[0].split('/').length === 8) {
+      const ok = commit({
+        fen: text,
+        white: t('freeAnalysisBoard'),
+        black: 'FEN',
+        result: '*',
+        autoReview: false
+      });
+      if (ok) {
+        this.showToast(t('toastLoadedFen'));
+        return true;
+      }
+    }
+
+    // 4. Default: Standard PGN text
+    if (text.includes('1.') || text.includes('[Event')) {
+      const v = FairPlayGuard.verifyConcludedGame(text);
+      if (!v.ok) {
+        this.analyzer.cancel();
+        this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
+        return false;
+      }
+      const label = sourceName ? ` (${sourceName})` : '';
+      const ok = commit({ pgn: text, autoReview: true });
+      if (ok) {
+        this.showToast(t('toastLoadedPgn', { label }));
+        return true;
+      }
+      return false;
+    }
+
 
     // 1. Detect Lichess Game URL
     // e.g. https://lichess.org/aBcDeFgH or lichess.org/aBcDeFgH/white
@@ -643,10 +686,11 @@ class AnalysisStudioApp {
       this.showToast(t('toastFetchingLichess', { gameId }), 5000);
       try {
         const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true&clocks=true`, {
-          headers: { 'Accept': 'application/json' }
+          headers: { 'Accept': 'application/json' }, signal: controller.signal
         });
         if (resp.ok) {
           const data = await resp.json();
+          if (!current()) return false;
           // Boundary Fair Play Verification: strictly refuse active matches!
           const v = FairPlayGuard.verifyConcludedGame(data);
           if (!v.ok) {
@@ -656,7 +700,7 @@ class AnalysisStudioApp {
           }
           if (data.pgn && data.pgn.includes('1.')) {
             this.showToast(t('toastLoadedLichess', { gameId }));
-            this.startNewSession({ pgn: data.pgn, autoReview: true });
+            commit({ pgn: data.pgn, autoReview: true });
             return true;
           }
         }
@@ -714,9 +758,10 @@ class AnalysisStudioApp {
         ];
         for (const proxyUrl of candidateProxies) {
           try {
-            const resp = await fetch(proxyUrl);
+            const resp = await fetch(proxyUrl, { signal: controller.signal, cache: 'no-store' });
             if (resp.ok) {
               const data = await resp.json();
+          if (!current()) return false;
               if (data && (data.game || data.moveList || data.pgn)) {
                 fetchedData = data;
                 break;
@@ -726,6 +771,7 @@ class AnalysisStudioApp {
         }
       }
 
+      if (!current()) return false;
       if (fetchedData) {
         const gameObj = fetchedData.game || fetchedData;
         const v = FairPlayGuard.verifyConcludedGame(gameObj);
@@ -739,7 +785,7 @@ class AnalysisStudioApp {
         let pgn = gameObj.pgn || fetchedData.pgn;
         if (pgn && typeof pgn === 'string' && pgn.includes('1.')) {
           this.showToast(t('toastLoadedChesscom', { gameId }));
-          this.startNewSession({ pgn, autoReview: true });
+          commit({ pgn, autoReview: true });
           return true;
         }
 
@@ -751,7 +797,7 @@ class AnalysisStudioApp {
             const headers = gameObj.pgnHeaders || fetchedData.pgnHeaders || {};
             const white = headers.White || fetchedData.players?.bottom?.username || gameObj.whiteUser || 'White';
             const black = headers.Black || fetchedData.players?.top?.username || gameObj.blackUser || 'Black';
-            const result = headers.Result || (gameObj.colorOfWinner === 'white' ? '1-0' : (gameObj.colorOfWinner === 'black' ? '0-1' : '1/2-1/2'));
+            const result = v.result;
             const generatedPgn = GameAnalyzer.movesToPgn(moves, {
               ...headers,
               White: white,
@@ -759,7 +805,7 @@ class AnalysisStudioApp {
               Result: result
             });
             this.showToast(t('toastLoadedChesscom', { gameId }));
-            this.startNewSession({
+            commit({
               pgn: generatedPgn,
               moves,
               white,
@@ -773,39 +819,6 @@ class AnalysisStudioApp {
       }
 
       this.showToast(t('toastFailedChesscom'));
-      return false;
-    }
-
-    // 3. Detect FEN Position string (Single position / puzzle)
-    const fenParts = text.split(/\s+/);
-    if (fenParts.length >= 2 && fenParts[0].split('/').length === 8) {
-      const ok = this.startNewSession({
-        fen: text,
-        white: t('freeAnalysisBoard'),
-        black: 'FEN',
-        result: '*',
-        autoReview: false
-      });
-      if (ok) {
-        this.showToast(t('toastLoadedFen'));
-        return true;
-      }
-    }
-
-    // 4. Default: Standard PGN text
-    if (text.includes('1.') || text.includes('[Event')) {
-      const v = FairPlayGuard.verifyConcludedGame(text);
-      if (!v.ok && v.isLive) {
-        this.analyzer.cancel();
-        this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
-        return false;
-      }
-      const label = sourceName ? ` (${sourceName})` : '';
-      const ok = this.startNewSession({ pgn: text, autoReview: true });
-      if (ok) {
-        this.showToast(t('toastLoadedPgn', { label }));
-        return true;
-      }
       return false;
     }
 
@@ -960,6 +973,10 @@ class AnalysisStudioApp {
    */
   renderEmptyHomeState() {
     this.el.blunderList.replaceChildren();
+    const intro = document.getElementById('empty-study-intro');
+    intro.hidden = false;
+    intro.replaceChildren();
+    document.body.classList.add('empty-study');
 
     const heroCard = document.createElement('div');
     heroCard.className = 'studio-home-hero';
@@ -980,6 +997,7 @@ class AnalysisStudioApp {
       </div>
 
       <div class="home-hero-actions">
+        <a class="btn-home-primary" href="https://chromewebstore.google.com/detail/diverge-chess-analysis-sc/egiimjkekgiaimaagaljiclacljmdkmo">${getLang() === 'zh' ? '安装扩展，扫描网页棋图' : 'Install extension to scan a diagram'}</a>
         <button type="button" class="btn-home-primary" id="btn-home-import">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1016,7 +1034,7 @@ class AnalysisStudioApp {
       this.el.btnSubmitPgn?.click();
     });
 
-    this.el.blunderList.appendChild(heroCard);
+    intro.appendChild(heroCard);
   }
 
   /**
@@ -1035,6 +1053,10 @@ class AnalysisStudioApp {
     positionInput = false
   } = {}) {
     if (this.scanSourceLocked) return false;
+    this.importGeneration = (this.importGeneration || 0) + 1;
+    this.importController?.abort();
+    clearInterval(this.playTimer);
+    this.isPlaying = false;
     // 1. Immediately abort running tasks and advance session epochs
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = this.reviewPendingResume = false;
@@ -1050,6 +1072,8 @@ class AnalysisStudioApp {
     this.reviewEpoch++;
     this.reviewResult = null;
     this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && (fen !== ChessBoard.INITIAL_FEN || positionInput));
+    document.body.classList.toggle('empty-study', !this.hasAnalysisInput);
+    document.getElementById('empty-study-intro').hidden = this.hasAnalysisInput;
     document.body.classList.toggle('position-only', !!fen && !pgn && !moves?.length && this.hasAnalysisInput);
     this.isReviewingMove = false;
     this.isBranching = false;

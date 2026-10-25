@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {GameAnalyzer} from '../engine/game-analyzer.js';
+let cacheLookup,cacheReady,releaseSearch,searchReady;
+const awaitingCache=new Promise(resolve=>cacheReady=resolve),searching=new Promise(resolve=>searchReady=resolve);
+const stale={schemaVersion:GameAnalyzer.SCHEMA_VERSION,totalMoves:1,accuracyWhite:100,accuracyBlack:100,beyondIntuitionCount:0,intuitionTrapsCount:0,allMoves:[{maiaTopSan:'e4'}]};
+globalThis.chrome={storage:{local:{get(keys,callback){cacheLookup=()=>callback({[keys[0]]:{result:stale}});cacheReady();},set(_data,callback){callback?.()},remove(){}}}};
+const sf={isReady:true,engineKey:'cache-race-fixture',stop(){},evaluate(){searchReady();return new Promise(resolve=>releaseSearch=resolve)}};
+const analyzer=new GameAnalyzer(sf,{isReady:true,modelKey:'cache-race-fixture',async predict(){return {moves:[]}}});
+assert.equal(GameAnalyzer.isValidReviewCache({...stale,schemaVersion:6}),false,'Pre-fix reviews must not survive the scoring fix');
+const old=analyzer.analyzeGame(GameAnalyzer.parsePgn('1. e4'));
+await awaitingCache;analyzer.cancel();
+const newer=analyzer.analyzeGame(GameAnalyzer.parsePgn('1. d4'),{forceRefresh:true});await searching;
+const before=analyzer.isAnalyzing;cacheLookup();const staleReturn=await old;
+const result={newSearchPending:true,beforeStaleCacheCallback:before,afterStaleCacheCallback:analyzer.isAnalyzing,staleRunReturnedCachedResult:staleReturn===stale,staleLastReviewResult:analyzer.lastReviewResult===stale};
+assert.equal(result.afterStaleCacheCallback,true);assert.equal(result.staleRunReturnedCachedResult,false);assert.equal(result.staleLastReviewResult,false);
+analyzer.cancel();releaseSearch(null);await newer;
+console.log(JSON.stringify(result,null,2));

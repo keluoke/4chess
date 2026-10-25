@@ -1360,3 +1360,11 @@ body{font-size:14px;user-select:auto}
 #board-status-text { min-width:0; max-width:100%; overflow-wrap:anywhere; }
 
 .position-only .review-summary-section,.position-only #review-summary,.position-only .eval-chart-wrapper,.position-only .key-moves-section,.position-only #btn-reanalyze { display:none!important; }
+
+#empty-study-intro { grid-column:1/-1; }
+#empty-study-intro[hidden] { display:none; }
+.empty-study .studio-layout { display:block; overflow:auto; }
+.empty-study .board-column,.empty-study .analysis-column { display:none; }
+.empty-study .studio-home-hero { max-width:800px; margin:30px auto; padding:28px; }
+.home-hero-actions a { text-decoration:none; }
+@media(max-width:700px){.empty-study .studio-home-hero{padding:16px;margin:8px auto}.home-hero-actions{flex-wrap:wrap}}

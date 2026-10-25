@@ -38,6 +38,8 @@ export class MaiaEngine {
     this.variant = MAIA_VARIANTS[variant] ? variant : '5m';
     this.modelKey = MAIA_VARIANTS[this.variant].key;
     this.disposed = false;
+    this.lifecycleEpoch = 0;
+    this.fairPlaySuspended = false;
     this.maiaInBrowser = new MaiaInBrowserEngine();
     this.stockfishInBrowser = stockfishInstance || new StockfishInBrowser();
     this.targetElo = 1900;
@@ -103,11 +105,24 @@ export class MaiaEngine {
 
       this.worker = new Worker(workerUrl, { type: 'module' });
       this.backendName = '浏览器端 Web Worker + Stockfish WASM';
-      this.worker.onmessage = (e) => this.handleWorkerMessage(e.data);
+      const owner = this.worker;
+      this.worker.onmessage = (e) => { if (this.worker === owner) this.handleWorkerMessage(e.data); };
       this.worker.onerror = (err) => {
-        console.warn('[Maia Engine] Dedicated Worker error, falling back to direct in-thread:', err);
+        if (this.worker !== owner) return;
+        const failure = new Error(err?.message || 'Maia Worker failed; retry loading the model');
+        failure.name = 'MaiaWorkerError';
+        this.worker?.terminate();
         this.worker = null;
-        this.backendName = '浏览器端 Float32 JS + Stockfish WASM';
+        this._workerLoadReject?.(failure);
+        this._workerLoadResolve = this._workerLoadReject = null;
+        for (const pending of this.workerPending.values()) pending.reject(failure);
+        this.workerPending.clear();
+        this.isReady = false;
+        this.isLoading = false;
+        this.initPromise = null;
+        this.status.maia.state = 'error';
+        this.status.maia.error = failure.message;
+        this.notifyStatus();
       };
     } catch (err) {
       console.warn('[Maia Engine] Worker creation failed, using direct in-thread:', err);
@@ -149,7 +164,27 @@ export class MaiaEngine {
     }
   }
 
+  suspendForFairPlay() {
+    if (this.fairPlaySuspended) return;
+    this.fairPlaySuspended = true;
+    this.lifecycleEpoch++;
+    this.worker?.terminate();
+    this.worker = null;
+    this._workerLoadReject?.(new Error('Analysis suspended for fair play'));
+    this._workerLoadResolve = this._workerLoadReject = null;
+    for (const pending of this.workerPending.values()) pending.resolve(null);
+    this.workerPending.clear();
+    this.maiaInBrowser.reset();
+    this.stockfishInBrowser.reset?.();
+    this.isReady = this.isLoading = false;
+    this.initPromise = null;
+    this.status.maia = { ...this.status.maia, state: 'uninitialized', stage: 'idle', source: '未启动', error: null };
+    this.status.stockfish = { state: 'uninitialized', error: null };
+    this.notifyStatus();
+  }
+
   dispose() {
+    this.lifecycleEpoch++;
     this.disposed = true;
     this.onStatusChange = null;
     this.worker?.terminate();
@@ -180,12 +215,15 @@ export class MaiaEngine {
     if (this.disposed) throw new Error('Model selection changed');
     if (this.isReady) return this.backendName;
     if (this.initPromise) return this.initPromise;
+    this.fairPlaySuspended = false;
+    if (!this.worker) this.initWorker();
 
-    this.initPromise = this._doInitialize(overrideUrl);
+    this.initPromise = this._doInitialize(overrideUrl, this.lifecycleEpoch);
     return this.initPromise;
   }
 
-  async _doInitialize(overrideUrl = null) {
+  async _doInitialize(overrideUrl = null, epoch = this.lifecycleEpoch) {
+    const current = () => !this.disposed && epoch === this.lifecycleEpoch;
     this.isLoading = true;
     this.status.maia.state = 'loading';
     this.status.maia.stage = 'cache';
@@ -198,6 +236,7 @@ export class MaiaEngine {
 
     // 1. Initialize Stockfish WebAssembly in parallel
     this.stockfishInBrowser.initialize().then((isReady) => {
+      if (!current()) return;
       if (isReady || this.stockfishInBrowser.isReady) {
         this.status.stockfish.state = 'ready';
         this.status.stockfish.error = null;
@@ -209,6 +248,7 @@ export class MaiaEngine {
       }
       this.notifyStatus();
     }).catch(err => {
+      if (!current()) return;
       if (!this.stockfishInBrowser.isReady) {
         console.warn('[Maia Engine] Stockfish 初始化提示:', err);
         this.status.stockfish.state = 'error';
@@ -233,8 +273,10 @@ export class MaiaEngine {
     let lastErr = null;
 
     for (const url of candidates) {
+      if (!current()) throw new Error('Analysis session changed');
       try {
         const onProgress = (prog) => {
+          if (!current()) return;
           this.status.maia.state = prog.percent === 100 ? 'loading' : 'downloading';
           this.status.maia.stage = prog.percent === 100 ? 'preparing' : 'download';
           this.status.maia.percent = prog.percent;
@@ -259,15 +301,17 @@ export class MaiaEngine {
           await this.maiaInBrowser.loadModel(url, onProgress, MAIA_VARIANTS[this.variant].expected);
           this.modelMetadata = this.maiaInBrowser.meta;
         }
-        if (this.disposed) throw new Error('Model selection changed');
+        if (!current()) throw new Error('Analysis session changed');
         loaded = true;
         break;
       } catch (err) {
         lastErr = err;
+        if (err?.name === 'MaiaWorkerError' || !current()) break;
         console.warn(`[Maia Engine] Candidate source ${url} failed, trying next...:`, err);
       }
     }
 
+    if (!current()) throw lastErr || new Error('Analysis session changed');
     if (loaded) {
       this.isReady = true;
       this.isLoading = false;

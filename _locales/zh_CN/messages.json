@@ -4,7 +4,7 @@
     "description": "扩展标题"
   },
   "extensionDescription": {
-    "message": "对比 Stockfish 引擎建议与 Maia 人类直觉。扫描网页棋图，分析当前局面，或复盘 Chess.com、Lichess 完赛棋局，探索人机分歧。",
+    "message": "扫描网页棋图，对比 Stockfish 好棋与 Maia 人类常见走法；探索局面、导入棋谱，复盘已结束的对局。",
     "description": "扩展描述"
   },
   "actionTitle": {
@@ -153,5 +153,8 @@
   },
   "sfWebLabel": {
     "message": "网页版复盘引擎"
+  },
+  "popupBrand": {
+    "message": "歧路 Diverge"
   }
 }

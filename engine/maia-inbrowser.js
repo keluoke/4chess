@@ -36,10 +36,11 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
   }
 
-  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null) {
+  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null, cacheRetried = false) {
     if (this.isReady) return true;
     if (this.initPromise) return this.initPromise;
 
+    let cachedKey = null;
     this.initPromise = (async () => {
       try {
         let arrayBuffer = null;
@@ -52,12 +53,13 @@ export class MaiaInBrowserEngine {
         const cacheKey = getModelCacheKey(urlOrBuffer);
         // 1. Try loading from persistent IndexedDB cache (0ms instant)
         try {
-          let cached = await ModelCache.getModel(cacheKey);
-          if (!cached && urlOrBuffer === 'https://weights.4chess.cc/maia3_model.bin') {
+          let cached = cacheRetried ? null : await ModelCache.getModel(cacheKey);
+          if (!cached && !cacheRetried && urlOrBuffer === 'https://weights.4chess.cc/maia3_model.bin') {
             // Check legacy fallback keys
             cached = (await ModelCache.getModel('maia3_model')) || (await ModelCache.getModel('maia3-5m'));
           }
           if (cached && cached.byteLength > 1000000) {
+            cachedKey = cacheKey;
             arrayBuffer = cached;
             this.modelSource = 'cache';
             if (onProgress) {
@@ -66,7 +68,7 @@ export class MaiaInBrowserEngine {
                 speedMBps: '∞',
                 receivedMB: (cached.byteLength / (1024 * 1024)).toFixed(1),
                 totalMB: (cached.byteLength / (1024 * 1024)).toFixed(1),
-                status: '已从本地缓存秒级装载 (0ms)',
+                status: '已读取缓存，正在准备模型',
                 source: 'cache'
               });
             }
@@ -226,6 +228,15 @@ export class MaiaInBrowserEngine {
       return true;
     } catch (err) {
       this.initPromise = null;
+      if (cachedKey && !cacheRetried) {
+        await ModelCache.clearCache(cachedKey);
+        if (urlOrBuffer === 'https://weights.4chess.cc/maia3_model.bin') {
+          await ModelCache.clearCache('maia3_model');
+          await ModelCache.clearCache('maia3-5m');
+        }
+        this.reset();
+        return this.loadModel(urlOrBuffer, onProgress, expected, true);
+      }
       throw err;
     }
   })();

@@ -14,6 +14,7 @@ export class StockfishInBrowser {
     this.variant = STOCKFISH_VARIANTS[variant] ? variant : 'lite';
     this.engineKey = STOCKFISH_VARIANTS[this.variant].key;
     this.lifecycleEpoch = 0;
+    this.searchEpoch = 0;
     this.wasmBlobUrl = null;
     this.isReady = false;
     this.engineName = this.variant === 'standard' ? 'Stockfish 19 WASM' : 'Stockfish 19 Lite WASM';
@@ -101,7 +102,9 @@ export class StockfishInBrowser {
     try {
       this.worker = new Worker(scriptUrl);
 
+      const owner = this.worker;
       this.worker.onerror = (err) => {
+        if (this.worker !== owner) return;
         console.error('[Stockfish In-Browser] Direct Worker error:', err);
         if (!this.isReady && this._readyResolve) {
           const r = this._readyResolve;
@@ -111,6 +114,7 @@ export class StockfishInBrowser {
       };
 
       this.worker.onmessage = (e) => {
+        if (this.worker !== owner) return;
         const line = typeof e.data === 'string' ? e.data : '';
         if (!line) return;
 
@@ -508,14 +512,21 @@ export class StockfishInBrowser {
   }
 
   async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1) {
+    const epoch = this.searchEpoch;
     if (!this.isReady) {
       await this.initialize();
     }
+    if (epoch !== this.searchEpoch) return null;
 
     if (!this.isReady) {
       return null;
     }
 
+    const board = new ChessBoard(fen);
+    if (board.isValid && board.getLegalMoves().length === 0) {
+      const isMate = board.inCheck(board.turn);
+      return { available: true, terminal: true, bestMove: null, score: isMate ? 'M0' : '0.00', scoreCp: isMate ? -10000 : 0, isMate, depth: 0, pv: [], lines: [] };
+    }
     const reqId = ++this.reqCounter;
 
     return new Promise((resolve) => {
@@ -575,8 +586,12 @@ export class StockfishInBrowser {
         if (!this.isSearching && !this.isStopping) {
           this.executeDirectSearch(req);
         } else {
+          if (this.queuedRequest) {
+            this.pendingRequests.get(this.queuedRequest.id)?.resolve(null);
+            this.pendingRequests.delete(this.queuedRequest.id);
+          }
           this.queuedRequest = req;
-          this.stop();
+          this.stop({ preserveQueue: true });
         }
       } else if (this.port) {
         this.port.postMessage({
@@ -594,7 +609,13 @@ export class StockfishInBrowser {
     });
   }
 
-  stop() {
+  stop({ preserveQueue = false } = {}) {
+    if (!preserveQueue) {
+      this.searchEpoch++;
+      this.queuedRequest = null;
+      for (const pending of this.pendingRequests.values()) pending.resolve(null);
+      this.pendingRequests.clear();
+    }
     if (this.worker) {
       if (this.isSearching && !this.isStopping) {
         this.isStopping = true;
@@ -607,6 +628,7 @@ export class StockfishInBrowser {
 
   reset() {
     this.lifecycleEpoch++;
+    this.searchEpoch++;
     this.downloadController?.abort();
     this._readyResolve?.(false);
     for (const pending of this.pendingRequests.values()) pending.resolve(null);

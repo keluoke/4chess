@@ -167,6 +167,7 @@ try {
     ),
     "Board and SF lines fit the native popup",
   );
+  await new Promise(resolve => setTimeout(resolve, 1800)); // Let native popup resize indicators disappear before capturing store artwork.
   let shot = await rpc("Page.captureScreenshot");
   fs.writeFileSync(
     root + "/artifacts/scan/native-scan-en.png",

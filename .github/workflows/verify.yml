@@ -13,3 +13,13 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run package
+      - run: node scripts/test_package_integrity.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diverge-extension
+          path: |
+            releases/*.zip
+            releases/*.json
+            artifacts/delivery-2026-10-25/browser-results.json
