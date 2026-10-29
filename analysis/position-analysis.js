@@ -1,5 +1,5 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261029-columns';
+import { t } from './i18n.js?v=20261029-workbench';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -75,7 +75,7 @@ export class PositionAnalysis {
 
   context() {
     const app = this.app;
-    const ply = app.isReviewingMove ? app.currentPly - 1 : app.currentPly;
+    const ply = app.isBranching ? app.activeBranch.base.ply + app.activeBranch.cursor : app.isReviewingMove ? app.currentPly - 1 : app.currentPly;
     const fen = app.isBranching ? app.branchFen : app.positions[ply]?.fen;
     if (!fen) return null;
     const history = app.isBranching ? (app.branchHistory || []) : app.positions.slice(Math.max(0, ply - 7), ply).map(p => p.fen);
@@ -100,6 +100,8 @@ export class PositionAnalysis {
       const previous = this.app.reviewResult?.allMoves?.find(m => m.ply === ctx.ply && m.fenAfter === ctx.fen);
       entry.reportEvaluation = reviewEvaluation(next) || reviewEvaluation(previous, true);
       if (!entry.prediction && next?._predMoves?.length) entry.prediction = { moves: next._predMoves };
+    } else {
+      entry.reportEvaluation = this.app.activeBranch.evaluations.get(this.app.branchEvaluationKey(ctx.fen, ctx.depth)) || null;
     }
     this.active = { ctx, entry, generation };
     this.render();
@@ -132,7 +134,7 @@ export class PositionAnalysis {
     if (!this.current(snapshot)) return;
     const { ctx, entry } = snapshot;
     const board = new ChessBoard(ctx.fen);
-    if (!board.getLegalMoves().length) { this.render(); return; }
+    if (!board.getLegalMoves().length) { this.render(); await this.evaluateBranchPath(snapshot); return; }
     // Maia initialization and Stockfish search are independent. Each result can render as it arrives.
     const predict = async () => {
       if (entry.prediction?.moves?.length && !this.app.settings.heatmap) return;
@@ -157,6 +159,9 @@ export class PositionAnalysis {
         entry.sfFailed = !entry.sf;
         this.app.updateEngineStatus(); this.render();
       }
+      // Current position renders first. Fill visited branch nodes without
+      // waiting for Maia, using the same cancellable foreground search queue.
+      await this.evaluateBranchPath(snapshot);
       await maiaTask;
       if (!this.current(snapshot) || !entry.sf) return;
       const lines = engineLines(entry.sf, ctx.fen);
@@ -183,6 +188,23 @@ export class PositionAnalysis {
     }
   }
 
+  async evaluateBranchPath(snapshot) {
+    const app = this.app, branch = app.isBranching && app.activeBranch;
+    if (!branch || !this.current(snapshot)) return;
+    for (const node of [branch.base, ...branch.moves]) {
+      if (!this.current(snapshot) || app.activeBranch !== branch || !app.isBranching) return;
+      const key = app.branchEvaluationKey(node.fen, snapshot.ctx.depth);
+      if (branch.evaluations.has(key)) continue;
+      const board = new ChessBoard(node.fen);
+      const terminal = !board.getLegalMoves().length;
+      const result = terminal ? null : await this.search(snapshot, node.fen, snapshot.ctx.depth);
+      if (!this.current(snapshot) || app.activeBranch !== branch || !app.isBranching) return;
+      const evaluation = terminal ? (board.inCheck() ? { cp: board.turn === 'w' ? -10000 : 10000, text: board.turn === 'w' ? '-M0' : '+M0', isMate: true } : { cp: 0, text: '0.00' }) : whiteEvaluation(result, node.fen);
+      if (evaluation) branch.evaluations.set(key, { ...evaluation, depth: result?.depth });
+      app.syncBranchChart();
+    }
+  }
+
   renderGauge(evaluation) {
     const app = this.app;
     const gauge = document.getElementById('evaluation-gauge');
@@ -198,7 +220,7 @@ export class PositionAnalysis {
 
   render() {
     if (this.app.practice?.active) { this.clearOverlays(); return; }
-    if (!this.active) { this.renderGauge(null); return; }
+    if (!this.active) { this.renderGauge(null); this.app.renderPositionHeading?.(null); return; }
     const { ctx, entry } = this.active;
     const board = new ChessBoard(ctx.fen);
     const legal = board.getLegalMoves();
@@ -207,6 +229,11 @@ export class PositionAnalysis {
     if (terminal) evaluation = board.inCheck() ? { cp: board.turn === 'w' ? -10000 : 10000, isMate: true, text: board.turn === 'w' ? '-M0' : '+M0' } : { cp: 0, isMate: false, text: '0.00' };
     this.renderGauge(evaluation);
     const app = this.app;
+    app.renderPositionHeading?.(evaluation, entry.sf?.depth ?? entry.reportEvaluation?.depth);
+    if (app.isBranching && app.activeBranch && ctx.fen === app.branchFen) {
+      if (evaluation && (entry.sf || terminal)) app.activeBranch.evaluations.set(app.branchEvaluationKey(ctx.fen, ctx.depth), { ...evaluation, depth: entry.sf?.depth });
+      app.syncBranchChart();
+    }
     const lines = engineLines(entry.sf, ctx.fen);
     const pending = app.analyzer.isAnalyzing ? 'candidatesAfterReview' : 'statusCalculating';
     this.renderLoadingStatuses();

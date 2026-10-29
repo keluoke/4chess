@@ -5,7 +5,7 @@
  * and Maia human intuition trap detection.
  */
 
-import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261029-columns';
+import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261029-workbench';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';

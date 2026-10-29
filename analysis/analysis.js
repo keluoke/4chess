@@ -1,7 +1,7 @@
-import { IntuitionReview } from './intuition-review.js?v=20261029-columns';
-import { isKeyMoment } from '../engine/review-policy.js?v=20261029-columns';
-import { ReviewPractice } from './review-practice.js?v=20261029-columns';
-import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261029-columns';
+import { IntuitionReview } from './intuition-review.js?v=20261029-workbench';
+import { isKeyMoment } from '../engine/review-policy.js?v=20261029-workbench';
+import { ReviewPractice } from './review-practice.js?v=20261029-workbench';
+import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261029-workbench';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -10,14 +10,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261029-
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261029-columns';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261029-workbench';
 import { BoardUI } from './board-ui.js?v=20261025-v115';
-import { EvalChart } from './eval-chart.js?v=20261029-columns';
+import { EvalChart } from './eval-chart.js?v=20261029-workbench';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261029-columns';
+import { PositionAnalysis } from './position-analysis.js?v=20261029-workbench';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261029-columns';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261029-workbench';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -186,10 +186,20 @@ class AnalysisStudioApp {
     // 2. Initialize EvalChart
     this.evalChart = new EvalChart(this.el.evalChartContainer, (selectedPly) => {
       this.goToPly(selectedPly);
+    }, (offset) => {
+      if (this.isBranching && this.activeBranch) this.showBranchPosition(offset);
     });
 
     this.positionAnalysis = new PositionAnalysis(this);
     this.intuitionReview = new IntuitionReview(this);
+    try { document.body.classList.toggle('focus-mode', localStorage.getItem('diverge_studio_focus') === 'true'); } catch {}
+    const focusButton = document.getElementById('btn-focus');
+    focusButton.onclick = () => {
+      const focused = document.body.classList.toggle('focus-mode');
+      focusButton.setAttribute('aria-pressed', String(focused));
+      try { localStorage.setItem('diverge_studio_focus', String(focused)); } catch {}
+    };
+    focusButton.setAttribute('aria-pressed', String(document.body.classList.contains('focus-mode')));
 
     // 3. Initialize Sound Toggle state
     this.updateSoundToggleUI();
@@ -467,6 +477,7 @@ class AnalysisStudioApp {
 
   refreshAfterLanguageChange() {
     this.intuitionReview?.render();
+    this.renderCurrentInsight();
     if (this.practice?.active) { this.practice.stop(); this.goToPly(this.currentPly, { before: true }); }
     if (!this.el) return;
     this.updatePreferenceNotes();
@@ -1090,6 +1101,7 @@ class AnalysisStudioApp {
     document.body.classList.toggle('position-only', !!fen && !pgn && !moves?.length && this.hasAnalysisInput);
     this.isReviewingMove = false;
     this.isBranching = false;
+    document.body.classList.remove('exploring-branch');
     this.branchFen = null;
     if (this.el.branchBanner) this.el.branchBanner.style.display = 'none';
 
@@ -1097,6 +1109,7 @@ class AnalysisStudioApp {
 
     // 2. Reset UI state immediately
     this.evalChart.setData([]);
+    this.evalChart.setBranch(null);
     this.el.blunderCountBadge.textContent = '0';
     this.el.blunderList.replaceChildren();
     this.el.divergenceContent.textContent = '—';
@@ -1473,8 +1486,10 @@ class AnalysisStudioApp {
     }
 
     // 1. Update Chart
-    this.evalChart.setData(result.allMoves);
+    this.evalChart.setData(result.allMoves, result.positionEvaluations);
     this.evalChart.setCursor(this.currentPly);
+    this.syncBranchChart();
+    this.renderCurrentInsight();
 
     // Include ordinary mistakes as well as confirmed human/engine divergences.
     const rawMoments = (result.keyMoments || result.allMoves || []);
@@ -1808,6 +1823,7 @@ class AnalysisStudioApp {
       partialRow.textContent = t('errorPartialPgn', { ply: this.positions.stoppedAtPly, san: this.positions.unparsedSan || (getLang() === 'zh' ? '未知' : 'unknown') });
       this.el.moveNotationTable.appendChild(partialRow);
     }
+    this.renderStudyBranches();
   }
 
   annotateMoveList(allMoves) {
@@ -1912,6 +1928,8 @@ class AnalysisStudioApp {
       this.el.boardStatusText.textContent = this.isReviewingMove ? t('reviewMoveBefore', { move: currentPos.san, number: currentPos.moveNumber }) : t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
     }
     this.updateActivePositionAnalysis();
+    this.renderCurrentInsight();
+    this.renderStudyBranches();
     if (!options.silent) this.scheduleReviewResume();
   }
 
@@ -1973,7 +1991,7 @@ class AnalysisStudioApp {
     this.pauseWholeReview();
     this.hasAnalysisInput = true;
     if (!this.isBranching) {
-      this.activeBranch = { base: { ...context, history: [...context.history] }, anchor: this.currentPly, moves: [], cursor: 0 };
+      this.activeBranch = { base: { ...context, history: [...context.history] }, anchor: this.currentPly, moves: [], cursor: 0, evaluations: new Map() };
       this.savedBranches.push(this.activeBranch);
     }
     this.activeBranch.moves = [...this.activeBranch.moves.slice(0, this.activeBranch.cursor), ...variation];
@@ -1984,6 +2002,7 @@ class AnalysisStudioApp {
     const branch = this.activeBranch;
     branch.cursor = Math.max(0, Math.min(cursor, branch.moves.length));
     this.isBranching = true;
+    document.body.classList.add('exploring-branch');
     const moves = branch.moves.slice(0, branch.cursor);
     this.branchFen = moves.at(-1)?.fen || branch.base.fen;
     this.branchHistory = [...branch.base.history, ...[branch.base.fen, ...moves.map(move => move.fen)].slice(0, -1)].slice(-7);
@@ -1992,30 +2011,89 @@ class AnalysisStudioApp {
     this.boardUI.setPosition(this.branchFen, last ? { from: last.uci.slice(0, 2), to: last.uci.slice(2, 4) } : null);
     this.el.boardStatusText.textContent = last?.label || t('branchBannerText');
     this.renderStudyBranches();
+    this.syncBranchChart();
+    this.renderCurrentInsight();
     if (last) soundEffects.playSoundForMove(last.san);
     this.updateActivePositionAnalysis();
   }
 
   navigateStudy(delta) {
     if (this.isBranching) {
-      if (this.activeBranch.cursor + delta < 0) this.goToPly(this.activeBranch.anchor);
+      if (this.activeBranch.cursor + delta < 0) this.goToPly(Math.max(0, this.activeBranch.base.ply - 1));
       else this.showBranchPosition(this.activeBranch.cursor + delta);
     } else this.goToPly(this.currentPly + delta);
   }
 
   renderStudyBranches() {
-    let list = document.getElementById('study-branches');
-    if (!list) { list = document.createElement('div'); list.id = 'study-branches'; list.className = 'study-branches'; this.el.moveNotationTable.parentElement.append(list); }
-    list.replaceChildren();
+    document.getElementById('study-branches')?.remove();
+    this.el.moveNotationTable.querySelectorAll('.study-branches').forEach(el => el.remove());
     if (!this.savedBranches.length) return;
-    const heading = document.createElement('strong'); heading.textContent = t('userBranches'); list.append(heading);
     for (const branch of this.savedBranches) {
-      const button = document.createElement('button'); button.type = 'button'; button.className = 'study-branch';
-      const base = new ChessBoard(branch.base.fen);
-      const origin = branch.base.fen === ChessBoard.INITIAL_FEN ? t('startingPosition') : `${base.fullMoves}${base.turn === 'w' ? '.' : '…'}`;
-      button.textContent = `${origin} · ${branch.moves.map(move => move.label).join(' ')}`;
-      button.onclick = () => { this.pauseWholeReview(); this.activeBranch = branch; this.currentPly = branch.anchor; this.showBranchPosition(branch.moves.length); };
-      list.append(button);
+      const list = document.createElement('div'); list.className = 'study-branches';
+      list.setAttribute('aria-label', t('userBranches'));
+      const label = document.createElement('span'); label.className = 'branch-origin';
+      label.textContent = '↳'; list.append(label);
+      branch.moves.forEach((move, i) => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'study-branch';
+        const before = new ChessBoard(i ? branch.moves[i - 1].fen : branch.base.fen);
+        button.textContent = `${before.turn === 'w' ? before.fullMoves + '. ' : i === 0 ? before.fullMoves + '… ' : ''}${move.san}`;
+        button.setAttribute('aria-pressed', String(this.isBranching && branch === this.activeBranch && i + 1 === branch.cursor));
+        button.onclick = () => { this.pauseWholeReview(); this.activeBranch = branch; this.currentPly = branch.anchor; this.showBranchPosition(i + 1); };
+        list.append(button);
+      });
+      const row = document.getElementById(`move-ply-${branch.base.ply + 1}`)?.closest('.notation-row') || document.getElementById(`move-ply-${branch.base.ply}`)?.closest('.notation-row');
+      if (row) row.after(list); else this.el.moveNotationTable.append(list);
+    }
+  }
+
+  branchEvaluationKey(fen, depth = Number(this.el.positionDepth.value)) {
+    return `${this.stockfish.engineKey}|${depth}|${fen}`;
+  }
+
+  syncBranchChart() {
+    const branch = this.isBranching && this.activeBranch;
+    if (!branch) { this.evalChart.setBranch(null); return; }
+    const points = [branch.base, ...branch.moves].map((node, offset) => {
+      const evaluation = branch.evaluations.get(this.branchEvaluationKey(node.fen));
+      const origin = offset === 0 && this.evalChart.mainPoints.find(point => point.ply === branch.base.ply);
+      if (origin && Number.isFinite(origin.cp)) return { ...origin, offset: 0, san: t('branchStart') };
+      const before = new ChessBoard(offset < 2 ? branch.base.fen : branch.moves[offset - 2].fen);
+      return { ply: branch.base.ply + offset, offset, san: node.san || t('branchStart'), moveNumber: before.fullMoves, turn: before.turn,
+        cp: evaluation?.cp ?? null, displayText: evaluation?.text || '—', depth: evaluation?.depth };
+    });
+    this.evalChart.setBranch({ basePly: branch.base.ply, cursor: branch.cursor, points });
+  }
+
+  renderPositionHeading(evaluation, depth) {
+    document.getElementById('position-score').textContent = evaluation?.text || '—';
+    document.getElementById('position-context').textContent = t(this.isBranching ? 'chartBranch' : 'currentPosition');
+    document.getElementById('position-search-depth').textContent = Number.isFinite(depth) ? `D${depth}` : '';
+  }
+
+  renderCurrentInsight() {
+    const panel = document.getElementById('current-insight');
+    panel.replaceChildren();
+    const move = this.reviewResult?.allMoves?.find(move => move.ply === this.currentPly);
+    if (!this.isBranching && !move) { panel.hidden = true; return; }
+    panel.hidden = false;
+    const heading = document.createElement('div'); heading.className = 'insight-context-heading';
+    heading.textContent = this.isBranching ? t('branchComparison') : `${move.moveNumber}${move.turn === 'w' ? '. ' : '… '}${move.san}`;
+    panel.append(heading);
+    if (this.isBranching) {
+      const note = document.createElement('p'); note.textContent = t('branchScoreNote'); panel.append(note);
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header'; button.textContent = t('btnExitBranch');
+      button.onclick = () => this.goToPly(this.currentPly); panel.append(button);
+    } else {
+      for (const [label, value] of [[t('cardPlayed'), move.san], [t('engineCandidates'), move.bestSan], [t('intuitionCandidates'), move.maiaTopSan]]) {
+        if (!value || value === '?') continue;
+        const row = document.createElement('div'); row.className = 'insight-fact';
+        const name = document.createElement('span'); name.textContent = label;
+        const result = document.createElement('strong'); result.textContent = value; row.append(name, result); panel.append(row);
+      }
+      if (isKeyMoment(move)) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header btn-primary'; button.textContent = t('retryMove');
+        button.onclick = () => this.practice.start(move); panel.append(button);
+      }
     }
   }
 
@@ -2056,6 +2134,8 @@ class AnalysisStudioApp {
   exitBranchMode() {
     if (!this.isBranching) return;
     this.isBranching = false;
+    document.body.classList.remove('exploring-branch');
+    this.evalChart.setBranch(null);
     this.branchFen = null;
     this.branchHistory = [];
     this.el.branchBanner.style.display = 'none';

@@ -59,3 +59,30 @@ app.analyzer.isAnalyzing = true;
 assert.equal(controller.current({ ...snapshot, generation: controller.generation, ctx: { ...snapshot.ctx, epoch: 2 } }), false, 'Single-position work cannot interrupt a full review');
 
 console.log('✅ White perspective, mate/unknown scores, legal PV replay, all MultiPV lines, promotion/castling, stale result rejection and review scheduling passed.');
+
+// Branch history is searched independently of Maia and bound to the visible session.
+app.analyzer.isAnalyzing = false;
+app.isBranching = true;
+app.activeBranch = { base: {fen:initial,ply:0}, moves:pv.slice(0,2), evaluations:new Map() };
+app.branchEvaluationKey = (fen,depth) => `${depth}|${fen}`;
+let charts = 0;
+app.syncBranchChart = () => charts++;
+const branchSnapshot = {...snapshot,generation:controller.generation,ctx:{...snapshot.ctx,epoch:2}};
+const branchRun = controller.evaluateBranchPath(branchSnapshot);
+await new Promise(resolve=>setImmediate(resolve));
+controller.cancel(); app.isBranching = false;
+completeSearch({scoreCp:80,depth:10});
+await branchRun;
+assert.equal(app.activeBranch.evaluations.size,0,'Cancelled branch search must not write late results');
+assert.equal(charts,0,'Returning to the game cannot resurrect a branch curve');
+app.isBranching = true;
+app.stockfish.evaluate = async fen => ({scoreCp:fen===afterE4?-60:30,depth:10});
+await controller.evaluateBranchPath({...branchSnapshot,generation:controller.generation});
+assert.equal(app.activeBranch.evaluations.get(`10|${afterE4}`).cp,60,'Branch evaluations use White perspective');
+assert.equal(app.activeBranch.evaluations.size,3,'Fill the branch origin and intermediate nodes');
+const mateLine = legalVariation(initial,['f2f3','e7e5','g2g4','d8h4']);
+app.activeBranch = {base:{fen:initial,ply:0},moves:mateLine,evaluations:new Map()};
+await controller.compute({...branchSnapshot,generation:controller.generation,ctx:{...branchSnapshot.ctx,fen:mateLine.at(-1).fen}});
+assert.equal(app.activeBranch.evaluations.size,5,'A terminal endpoint still fills preceding branch nodes');
+assert.equal(app.activeBranch.evaluations.get(`10|${mateLine.at(-1).fen}`).text,'-M0','Black checkmate keeps its correct direction');
+console.log('✅ Branch path evaluation, White perspective and late cancellation isolation passed.');

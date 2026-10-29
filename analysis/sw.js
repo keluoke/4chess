@@ -4,30 +4,31 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261029-columns';
+const CACHE_NAME = '4chess-review-20261029-workbench';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261029-columns',
-  './analysis.css?v=20261029-columns',
+  './analysis.js?v=20261029-workbench',
+  './analysis.css?v=20261029-workbench',
+  './workbench.css?v=20261029-workbench',
   '../ui/chessboard.css?v=20261025-v115',
-  './i18n.js?v=20261029-columns',
+  './i18n.js?v=20261029-workbench',
   '../ui/theme.css?v=20261025-v115',
   '../ui/theme.js?v=20261025-v115',
-  '../engine/review-policy.js?v=20261029-columns',
-  './review-practice.js?v=20261029-columns',
-  './intuition-review.js?v=20261029-columns',
+  '../engine/review-policy.js?v=20261029-workbench',
+  './review-practice.js?v=20261029-workbench',
+  './intuition-review.js?v=20261029-workbench',
   './board-ui.js',
-  './scan-authorization.js?v=20261029-columns',
+  './scan-authorization.js?v=20261029-workbench',
   '../engine/maia-worker.js',
-  './position-analysis.js?v=20261029-columns',
+  './position-analysis.js?v=20261029-workbench',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js?v=20261029-columns',
+  './eval-chart.js?v=20261029-workbench',
   './manifest.webmanifest',
   './favicon.svg',
-  '../engine/game-analyzer.js?v=20261029-columns',
+  '../engine/game-analyzer.js?v=20261029-workbench',
   '../engine/chess-core.js',
   '../engine/chess-notation.js',
   '../engine/stockfish-inbrowser.js',

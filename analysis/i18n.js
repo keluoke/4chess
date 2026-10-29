@@ -8,6 +8,18 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    focusMode: "专注",
+    currentPosition: "当前局面",
+    whitePerspective: "白方视角",
+    chartOriginal: "实战",
+    chartBranch: "我的分支",
+    branchStart: "分支起点",
+    chartPending: "等待评估",
+    chartComparisonLabel: "实战与分支走势，白方视角",
+    chartThroughMove: "第 {move} 回合",
+    branchComparison: "分支对比",
+    branchScoreNote: "走势保留实战作参照，试走不改变对局成绩。",
+
     intuitionTitle: "直觉盲区",
     analysisHelp: "说明",
     intuitionIdle: "评分完成后独立扫描",
@@ -135,8 +147,8 @@ export const DICTIONARY = {
 
     // Eval Chart
     evalChartTitle: '局面走势',
-    chartLegendBeyond: '✨ 妙手',
-    chartLegendTrap: '🫤 俗手',
+    chartLegendBeyond: '妙手',
+    chartLegendTrap: '俗手',
     chartLegendBlunder: '大漏',
     chartLegendMistake: '失误',
     chartLegendInaccuracy: '疑问手',
@@ -207,14 +219,14 @@ export const DICTIONARY = {
 
     // Moments List Details
     beyondTitle: '✨ 妙手：你走出了引擎首选。相比人类直觉的自然走法，这步保留了更多优势。',
-    beyondText: '✨ 妙手',
+    beyondText: '妙手',
     beyondComboText: '组合延续',
     beyondIntuitionBreak: '突破直觉',
     naturalIntuitionTop: '自然直觉首选: ',
     betterThanIntuition: ' · 优于直觉 +{pawns} 兵',
     playedEngineBest: '实战走出引擎首选，优于自然直觉',
     trapTitle: '🫤 俗手：这步人类直觉的优先选择，看起来很自然，但会明显损失优势。',
-    trapText: '🫤 俗手',
+    trapText: '俗手',
     lossPawns: '损耗 -{loss} 兵',
     bestMoveIs: '最佳走法: ',
     trapTopTendency: '直觉一选 ({prob}% 倾向)',
@@ -283,6 +295,18 @@ export const DICTIONARY = {
   },
 
   en: {
+    focusMode: "Focus",
+    currentPosition: "Current position",
+    whitePerspective: "White’s perspective",
+    chartOriginal: "Game",
+    chartBranch: "My variation",
+    branchStart: "Branch point",
+    chartPending: "Awaiting evaluation",
+    chartComparisonLabel: "Game and variation evaluations, White’s perspective",
+    chartThroughMove: "Move {move}",
+    branchComparison: "Compare variation",
+    branchScoreNote: "The game remains on the timeline. Exploration does not change game accuracy.",
+
     intuitionTitle: "Intuition blind spots",
     analysisHelp: "Details",
     intuitionIdle: "Scans independently after scoring",
@@ -410,8 +434,8 @@ export const DICTIONARY = {
 
     // Eval Chart
     evalChartTitle: 'Evaluation Trend',
-    chartLegendBeyond: '✨ Brilliant',
-    chartLegendTrap: '🫤 Intuition trap',
+    chartLegendBeyond: 'Brilliant',
+    chartLegendTrap: 'Intuition trap',
     chartLegendBlunder: 'Blunder',
     chartLegendMistake: 'Mistake',
     chartLegendInaccuracy: 'Inaccuracy',
@@ -482,14 +506,14 @@ export const DICTIONARY = {
 
     // Moments List Details
     beyondTitle: '✨ Brilliant: Top engine choice that retains far greater advantage than natural intuition.',
-    beyondText: '✨ Brilliant',
+    beyondText: 'Brilliant',
     beyondComboText: 'Combo Follow-up',
     beyondIntuitionBreak: 'Beyond Intuition',
     naturalIntuitionTop: 'Natural intuition: ',
     betterThanIntuition: ' · Over intuition +{pawns} pawns',
     playedEngineBest: 'Played engine best, outperforming natural intuition',
     trapTitle: '🫤 Intuition trap: Natural human choice that looks appealing, but incurs a loss of advantage.',
-    trapText: '🫤 Intuition trap',
+    trapText: 'Intuition trap',
     lossPawns: 'Loss -{loss} pawns',
     bestMoveIs: 'Best move: ',
     trapTopTendency: 'Top intuition pick ({prob}% tendency)',

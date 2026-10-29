@@ -1,6 +1,6 @@
-import { t } from './i18n.js?v=20261029-columns';
+import { t } from './i18n.js?v=20261029-workbench';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { retryVerdict } from '../engine/review-policy.js?v=20261029-columns';
+import { retryVerdict } from '../engine/review-policy.js?v=20261029-workbench';
 
 export class ReviewPractice {
   constructor(app) { this.app = app; this.generation = 0; }

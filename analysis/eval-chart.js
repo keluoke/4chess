@@ -1,223 +1,121 @@
-/**
- * Interactive Evaluation & Winrate Trend Chart (SVG)
- * Modern, sleek advantage chart with smooth spline curves, dual-zone background,
- * reference gridlines, key moment markers, and interactive hover tooltip.
- */
-
-import { t, onLanguageChange } from './i18n.js?v=20261029-columns';
+/** Evaluation timeline. Original game and study branches never share mutable scores. */
+import { t, onLanguageChange } from './i18n.js?v=20261029-workbench';
+const NS = 'http://www.w3.org/2000/svg';
 
 export class EvalChart {
-  constructor(containerEl, onSelectPly) {
+  constructor(containerEl, onSelectPly, onSelectBranch) {
     this.container = containerEl;
     this.onSelectPly = onSelectPly;
-    this.data = []; // [{ ply, moveNumber, turn, san, cp, evalText, severity, lossPawns, isHumanTrap }]
+    this.onSelectBranch = onSelectBranch;
+    this.data = [];
+    this.branch = null;
     this.currentPly = 0;
-    this.hoverIndex = -1;
     this.initDOM();
-    onLanguageChange(() => this.updateStaticLabels());
-  }
-
-  updateStaticLabels() {
-    const titleEl = this.container.querySelector('#eval-chart-title-label');
-    if (titleEl) titleEl.textContent = t('evalChartTitle');
-    const legBeyond = this.container.querySelector('#legend-beyond-label');
-    if (legBeyond) legBeyond.textContent = t('chartLegendBeyond');
-    const legTrap = this.container.querySelector('#legend-trap-label');
-    if (legTrap) legTrap.textContent = t('chartLegendTrap');
-    const legBlunder = this.container.querySelector('#legend-blunder-label');
-    if (legBlunder) legBlunder.textContent = t('chartLegendBlunder');
+    onLanguageChange(() => this.render());
   }
 
   initDOM() {
     this.container.innerHTML = `
       <div class="eval-chart-header">
-        <div class="eval-chart-title-group">
-          <span class="eval-chart-title" id="eval-chart-title-label">${t('evalChartTitle')}</span>
-          <span id="eval-chart-cursor-badge" class="eval-chart-badge">0.00</span>
-        </div>
-        <div class="eval-chart-legend">
-          <span class="legend-item"><span class="dot-cyan"></span> <span id="legend-beyond-label">${t('chartLegendBeyond')}</span></span>
-          <span class="legend-item"><span class="dot-gold"></span> <span id="legend-trap-label">${t('chartLegendTrap')}</span></span>
-          <span class="legend-item"><span class="dot-red"></span> <span id="legend-blunder-label">${t('chartLegendBlunder')}</span></span>
-        </div>
+        <div class="eval-chart-title-group"><span class="eval-chart-title"></span><span id="eval-chart-cursor-badge" class="eval-chart-badge">—</span></div>
+        <div class="eval-chart-legend"><span class="chart-original-label"></span><span class="chart-branch-label" hidden></span></div>
       </div>
-      <div class="eval-chart-body" id="eval-chart-body">
-        <div class="eval-chart-tooltip" id="eval-chart-tooltip"></div>
-        <svg class="eval-chart-svg" preserveAspectRatio="none" viewBox="0 0 1000 160">
-          <defs>
-            <!-- White advantage fill (upward from center) -->
-            <linearGradient id="grad-white-adv" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="var(--brand-green)" stop-opacity="0.25"/>
-              <stop offset="60%" stop-color="var(--brand-green)" stop-opacity="0.08"/>
-              <stop offset="100%" stop-color="var(--brand-green)" stop-opacity="0.0"/>
-            </linearGradient>
-            <!-- Black advantage fill (downward from center) -->
-            <linearGradient id="grad-black-adv" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="var(--brand-red)" stop-opacity="0.0"/>
-              <stop offset="40%" stop-color="var(--brand-red)" stop-opacity="0.06"/>
-              <stop offset="100%" stop-color="var(--brand-red)" stop-opacity="0.28"/>
-            </linearGradient>
-            <!-- Subtle stroke gradient -->
-            <linearGradient id="grad-stroke-line" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="var(--brand-green)"/>
-              <stop offset="50%" stop-color="var(--brand-green)"/>
-              <stop offset="100%" stop-color="var(--brand-green)"/>
-            </linearGradient>
-          </defs>
-
-          <!-- Dual Zone Background -->
-          <rect x="0" y="0" width="1000" height="80" fill="var(--dg-surface)"/>
-          <rect x="0" y="80" width="1000" height="80" fill="var(--dg-paper)"/>
-
-          <!-- Horizontal Reference Gridlines -->
-          <line x1="0" y1="28" x2="960" y2="28" stroke="var(--border-color)" stroke-dasharray="3 4" stroke-width="1"/>
-          <text x="988" y="32" fill="var(--text-muted)" font-size="10" font-family="monospace" text-anchor="end">+3</text>
-
-          <line x1="0" y1="80" x2="960" y2="80" stroke="var(--border-color)" stroke-width="1.2"/>
-          <text x="988" y="84" fill="var(--text-muted)" font-size="10" font-family="monospace" text-anchor="end">0</text>
-
-          <line x1="0" y1="132" x2="960" y2="132" stroke="var(--border-color)" stroke-dasharray="3 4" stroke-width="1"/>
-          <text x="988" y="136" fill="var(--text-muted)" font-size="10" font-family="monospace" text-anchor="end">-3</text>
-
-          <!-- Filled Curve Areas -->
-          <path id="eval-white-area" fill="url(#grad-white-adv)"/>
-          <path id="eval-black-area" fill="url(#grad-black-adv)"/>
-
-          <!-- Main Smooth Spline Line -->
-          <path id="eval-line-path" fill="none" stroke="url(#grad-stroke-line)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-
-          <!-- Key Moment Marker Dots -->
-          <g id="eval-dots-group"></g>
-
-          <!-- Interactive Hover Guide Line -->
-          <line id="eval-hover-line" x1="0" y1="0" x2="0" y2="160" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="2 2" opacity="0"/>
-
-          <!-- Active Move Scrub Cursor -->
-          <line id="eval-scrub-line" x1="0" y1="0" x2="0" y2="160" stroke="var(--brand-gold)" stroke-width="2" opacity="0"/>
-          <circle id="eval-scrub-dot" cx="0" cy="80" r="4.5" fill="var(--brand-gold)" stroke="var(--dg-surface)" stroke-width="1.5" opacity="0"/>
-        </svg>
-      </div>
-    `;
-
-    this.chartBody = this.container.querySelector('#eval-chart-body');
-    this.tooltip = this.container.querySelector('#eval-chart-tooltip');
-    this.cursorBadge = this.container.querySelector('#eval-chart-cursor-badge');
-    this.svg = this.container.querySelector('.eval-chart-svg');
-    this.linePath = this.container.querySelector('#eval-line-path');
-    this.whiteArea = this.container.querySelector('#eval-white-area');
-    this.blackArea = this.container.querySelector('#eval-black-area');
-    this.dotsGroup = this.container.querySelector('#eval-dots-group');
-    this.hoverLine = this.container.querySelector('#eval-hover-line');
-    this.scrubLine = this.container.querySelector('#eval-scrub-line');
-    this.scrubDot = this.container.querySelector('#eval-scrub-dot');
-
-    this.bindInteractions();
-  }
-
-  bindInteractions() {
-    this.svg.addEventListener('mousemove', (e) => {
-      if (this.data.length === 0) return;
-      const rect = this.svg.getBoundingClientRect();
-      const xRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const targetIndex = Math.round(xRatio * (this.data.length - 1));
-      const item = this.data[targetIndex];
-      if (!item) return;
-
-      this.hoverIndex = targetIndex;
-      const xSvg = (targetIndex / (this.data.length - 1 || 1)) * 1000;
-      this.hoverLine.setAttribute('x1', xSvg);
-      this.hoverLine.setAttribute('x2', xSvg);
-      this.hoverLine.style.opacity = '1';
-
-      // Tooltip position and content
-      const xPx = xRatio * rect.width;
-      this.tooltip.style.left = `${xPx}px`;
-      this.tooltip.style.top = `20px`;
-      this.tooltip.style.display = 'block';
-
-      const isWhite = item.turn === 'w';
-      const sideText = isWhite ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
-      const evalSign = item.displayText;
-      const evalColor = item.cp > 40 ? 'var(--brand-green)' : (item.cp < -40 ? 'var(--brand-red)' : 'var(--text-muted)');
-
-      this.tooltip.replaceChildren();
-
-      const topRow = document.createElement('div');
-      topRow.style.fontWeight = '600';
-      topRow.style.marginBottom = '2px';
-
-      topRow.appendChild(document.createTextNode(`${t('chartMove', { move: item.moveNumber, side: sideText, san: '' }).trim()} `));
-      const sanSpan = document.createElement('span');
-      sanSpan.textContent = item.san;
-      topRow.appendChild(sanSpan);
-      topRow.appendChild(document.createTextNode(')'));
-
-      if (item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition) {
-        const badge = document.createElement('span');
-        badge.style.color = 'var(--brand-blue)';
-        badge.style.fontWeight = '700';
-        badge.textContent = item.isCombinationFollowup ? ` · ${t('chartLegendBeyond')} ${t('beyondComboText')}` : ` · ${t('chartLegendBeyond')} (${t('beyondIntuitionBreak')})`;
-        topRow.appendChild(badge);
-      } else if (item.divergenceType === 'intuition_trap' || item.isHumanTrap) {
-        const badge = document.createElement('span');
-        badge.style.color = 'var(--brand-gold)';
-        badge.style.fontWeight = '700';
-        badge.textContent = ` · ${t('chartLegendTrap')} (-${item.lossPawns})`;
-        topRow.appendChild(badge);
-      } else if (item.severity === 'blunder') {
-        const badge = document.createElement('span');
-        badge.style.color = 'var(--brand-red)';
-        badge.style.fontWeight = '700';
-        badge.textContent = ` · ${t('chartLegendBlunder')} (${item.lossPawns})`;
-        topRow.appendChild(badge);
-      } else if (item.severity === 'mistake') {
-        const badge = document.createElement('span');
-        badge.style.color = 'var(--brand-gold)';
-        badge.style.fontWeight = '700';
-        badge.textContent = ` · ${t('chartLegendMistake')} (${item.lossPawns})`;
-        topRow.appendChild(badge);
-      }
-      this.tooltip.appendChild(topRow);
-
-      const evalRow = document.createElement('div');
-      evalRow.style.color = 'var(--text-dim)';
-      evalRow.style.fontSize = '10.5px';
-      evalRow.appendChild(document.createTextNode(t('chartWhiteAdvantage')));
-      const evalStrong = document.createElement('strong');
-      evalStrong.style.color = evalColor;
-      evalStrong.textContent = evalSign;
-      evalRow.appendChild(evalStrong);
-      this.tooltip.appendChild(evalRow);
-    });
-
-    this.svg.addEventListener('mouseleave', () => {
-      this.hoverLine.style.opacity = '0';
-      this.tooltip.style.display = 'none';
-      this.hoverIndex = -1;
-    });
-
-    this.svg.addEventListener('click', (e) => {
-      const rect = this.svg.getBoundingClientRect();
-      const xRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      if (this.data.length > 0) {
-        const targetIndex = Math.round(xRatio * (this.data.length - 1));
-        const item = this.data[targetIndex];
-        if (item && this.onSelectPly) {
-          this.onSelectPly(item.ply);
-        }
-      }
+      <div class="eval-chart-body"><div class="eval-chart-tooltip"></div>
+        <svg class="eval-chart-svg" viewBox="0 0 1000 160" preserveAspectRatio="none" role="img">
+          <g class="eval-grid"><line x1="0" y1="41.333" x2="1000" y2="41.333"/><line x1="0" y1="80" x2="1000" y2="80"/><line x1="0" y1="118.667" x2="1000" y2="118.667"/></g>
+          <path id="eval-line-path" fill="none" stroke="var(--brand-blue)" stroke-width="2"/>
+          <path id="eval-branch-path" fill="none" stroke="var(--brand-blue)" stroke-width="2.5"/>
+          <line id="eval-fork-line" y1="0" y2="160" stroke="var(--border-color)" opacity="0"/>
+          <g id="eval-dots-group"></g><g id="eval-branch-dots"></g>
+          <line id="eval-hover-line" y1="0" y2="160" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
+          <line id="eval-scrub-line" y1="0" y2="160" stroke="var(--brand-blue)" opacity="0"/>
+          <circle id="eval-scrub-dot" r="4.5" fill="var(--brand-blue)" stroke="var(--dg-surface)" stroke-width="1.5" opacity="0"/>
+        </svg><div class="chart-scale" aria-hidden="true"><span>+3</span><span>0</span><span>−3</span></div>
+      </div><div class="chart-axis"><span class="chart-axis-start"></span><span class="chart-axis-end"></span></div>`;
+    const q = selector => this.container.querySelector(selector);
+    this.svg = q('svg'); this.tooltip = q('.eval-chart-tooltip'); this.cursorBadge = q('.eval-chart-badge');
+    this.linePath = q('#eval-line-path'); this.branchPath = q('#eval-branch-path'); this.forkLine = q('#eval-fork-line');
+    this.dotsGroup = q('#eval-dots-group'); this.branchDots = q('#eval-branch-dots');
+    this.hoverLine = q('#eval-hover-line'); this.scrubLine = q('#eval-scrub-line'); this.scrubDot = q('#eval-scrub-dot');
+    this.svg.addEventListener('pointermove', event => this.showTooltip(event));
+    this.svg.addEventListener('pointerleave', () => this.hideTooltip());
+    this.svg.addEventListener('click', event => {
+      const hit = this.hit(event);
+      if (hit) this.select(hit);
     });
   }
 
-  setData(analyzedMoves) {
+  get mainPoints() { return this.initialPoint ? [this.initialPoint, ...this.data] : this.data; }
+  get allPoints() { return [...this.mainPoints, ...(this.branch?.points || [])]; }
+  get minPly() { return Math.min(...this.allPoints.map(p => p.ply), 0); }
+  get maxPly() { return Math.max(...this.allPoints.map(p => p.ply), 1); }
+  x(ply) { return (ply - this.minPly) / (this.maxPly - this.minPly || 1) * 1000; }
+  y(cp) { return 80 - Math.max(-450, Math.min(450, cp)) / 450 * 58; }
+  known(point) { return Number.isFinite(point?.cp); }
+
+  // Missing evaluations break the path. Never interpolate a guessed zero.
+  path(points) {
+    let connected = false;
+    return points.map(point => {
+      if (!this.known(point)) { connected = false; return ''; }
+      const command = connected ? 'L' : 'M'; connected = true;
+      return `${command}${this.x(point.ply)},${this.y(point.cp)}`;
+    }).join(' ');
+  }
+
+  setBranch(branch) {
+    this.branch = branch;
+    this.hideTooltip();
+    this.render();
+  }
+
+  hit(event) {
+    const rect = this.svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const ply = Math.round(this.minPly + Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * (this.maxPly - this.minPly));
+    const main = this.mainPoints.find(p => p.ply === ply);
+    const branch = this.branch?.points.find(p => p.ply === ply);
+    const y = (event.clientY - rect.top) / rect.height * 160;
+    if (branch && (!main || !this.known(branch) || Math.abs(y - this.y(branch.cp)) <= Math.abs(y - this.y(main.cp)))) return { point: branch, branch: true };
+    return main ? { point: main, branch: false } : null;
+  }
+
+  select({ point, branch }) {
+    if (branch) this.onSelectBranch?.(point.offset);
+    else this.onSelectPly?.(point.ply);
+  }
+
+  showTooltip(event) {
+    const hit = this.hit(event);
+    if (!hit) { this.hideTooltip(); return; }
+    const point = hit.point;
+    this.hoverLine.setAttribute('x1', this.x(point.ply)); this.hoverLine.setAttribute('x2', this.x(point.ply)); this.hoverLine.style.opacity = '1';
+    this.tooltip.replaceChildren();
+    const label = document.createElement('strong');
+    label.textContent = `${t(hit.branch ? 'chartBranch' : 'chartOriginal')} · ${point.moveNumber ? point.moveNumber + (point.turn === 'b' ? '… ' : '. ') : ''}${point.san || ''}`;
+    const value = document.createElement('div');
+    value.textContent = `${t('chartWhiteAdvantage')} ${point.displayText || '—'}${Number.isFinite(point.depth) ? ` · D${point.depth}` : ''}`;
+    if (!this.known(point)) value.textContent = t('chartPending');
+    this.tooltip.append(label, value);
+    const classification = point.isBeyondIntuition || point.divergenceType === 'beyond_intuition' ? 'beyondText' : point.isHumanTrap || point.divergenceType === 'intuition_trap' ? 'trapText' : point.severity === 'blunder' ? 'blunderText' : point.severity === 'mistake' ? 'mistakeText' : null;
+    if (classification) { const tag = document.createElement('div'); tag.textContent = t(classification); this.tooltip.append(tag); }
+    this.tooltip.style.display = 'block';
+    const width = this.svg.getBoundingClientRect().width;
+    const left = Math.max(0, Math.min(width - this.tooltip.offsetWidth, event.clientX - this.svg.getBoundingClientRect().left + 10));
+    this.tooltip.style.left = `${left}px`;
+  }
+  hideTooltip() { this.tooltip.style.display = 'none'; this.hoverLine.style.opacity = '0'; }
+
+  setData(analyzedMoves, evaluations = []) {
     if (!analyzedMoves || analyzedMoves.length === 0) {
       this.data = [];
+      this.initialPoint = null;
       this.render();
       return;
     }
 
     // Convert centipawns / eval into White advantage: clamp to [-450, +450]
-    this.data = analyzedMoves.map((m) => {
+    this.data = analyzedMoves.map((m, index) => {
       // Review scores are from the side to move at the evaluated position.
       // In particular, terminal M0 means that side has LOST; its numeric score
       // is -10000. Inferring the sign from the text alone flips the final point.
@@ -225,30 +123,31 @@ export class EvalChart {
       const before = !after && m.evalBefore && m.evalBefore !== '?';
       const evalStr = after ? m.evalAfter : before ? m.evalBefore : m.eval;
       const numericCp = after ? m.evalAfterCp : before ? m.evalBeforeCp : undefined;
-      let cp = 0;
+      let cp = null;
       if (Number.isFinite(numericCp)) {
         cp = numericCp;
       } else if (evalStr && evalStr !== '?') {
         const mate = String(evalStr).match(/^[#M](-?\d+)$/);
         cp = mate ? (Number(mate[1]) > 0 ? 900 : -900) : parseFloat(evalStr) * 100;
-        if (!Number.isFinite(cp)) cp = 0;
+        if (!Number.isFinite(cp)) cp = null;
       }
 
       const fen = before ? m.fenBefore : m.fenAfter;
       const sideToMove = fen?.split(' ')[1] || (before ? m.turn : m.turn === 'w' ? 'b' : 'w');
-      if (sideToMove === 'b') cp = -cp;
+      if (cp !== null && sideToMove === 'b') cp = -cp;
 
       // Clamp between -450 and +450 centipawns ([-4.5, +4.5] pawns)
-      const clamped = Math.max(-450, Math.min(450, cp));
+      const clamped = cp === null ? null : Math.max(-450, Math.min(450, cp));
 
       return {
-        ply: m.ply,
+        ply: m.ply ?? index + 1,
+        depth: evaluations[m.ply ?? index + 1]?.depth ?? m.depth,
         moveNumber: m.moveNumber,
         turn: m.turn,
         san: m.san,
         cp: clamped,
         rawCp: cp,
-        displayText: /^[M#]/.test(evalStr || '') ? `${cp < 0 ? '-' : '+'}M${Math.abs(Number(String(evalStr).slice(1)))}` : `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(2)}`,
+        displayText: cp === null ? '—' : /^[M#]/.test(evalStr || '') ? `${cp < 0 ? '-' : '+'}M${Math.abs(Number(String(evalStr).slice(1)))}` : `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(2)}`,
         evalText: evalStr || '0.00',
         severity: m.severity || 'normal',
         lossPawns: m.lossPawns || '0.00',
@@ -259,152 +158,63 @@ export class EvalChart {
       };
     });
 
+    const first = analyzedMoves[0];
+    const cp = Number.isFinite(first.evalBeforeCp) && first.evalBefore && first.evalBefore !== '?'
+      ? first.evalBeforeCp * ((first.fenBefore?.split(' ')[1] || first.turn) === 'b' ? -1 : 1) : null;
+    this.initialPoint = Number.isFinite(cp) ? { ply: this.data[0].ply - 1, cp: Math.max(-450, Math.min(450, cp)), rawCp: cp,
+      depth: evaluations[0]?.depth,
+      displayText: /^[M#]/.test(first.evalBefore) ? `${cp < 0 ? '-' : '+'}M${Math.abs(Number(first.evalBefore.slice(1)))}` : `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(2)}`, san: t('startingPosition') } : null;
     this.render();
   }
 
   setCursor(ply) {
     this.currentPly = ply;
-    if (this.data.length <= 1) return;
-
-    const idx = this.data.findIndex(d => d.ply === ply);
-    if (idx === -1) return;
-
-    const item = this.data[idx];
-    const n = this.data.length;
-    const x = (idx / (n - 1 || 1)) * 1000;
-    const midY = 80;
-    const y = midY - (item.cp / 450) * 58;
-
-    this.scrubLine.setAttribute('x1', x);
-    this.scrubLine.setAttribute('x2', x);
-    this.scrubLine.style.opacity = '1';
-
-    this.scrubDot.setAttribute('cx', x);
-    this.scrubDot.setAttribute('cy', y);
-    this.scrubDot.style.opacity = '1';
-
-    // Update cursor badge
-    const evalSign = item.displayText;
-    if (this.cursorBadge) {
-      this.cursorBadge.textContent = evalSign;
-      if (item.cp > 50) {
-        this.cursorBadge.style.color = 'var(--brand-green)';
-      } else if (item.cp < -50) {
-        this.cursorBadge.style.color = 'var(--brand-red)';
-      } else {
-        this.cursorBadge.style.color = 'var(--text-muted)';
-      }
-    }
+    this.renderCursor();
   }
 
-  /**
-   * Catmull-Rom to Cubic Bézier spline generator for organic, smooth curve
-   */
-  generateSmoothPath(points) {
-    if (points.length <= 1) return points.length === 1 ? `M ${points[0].x} ${points[0].y}` : '';
-    if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
-
-    let path = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[Math.max(0, i - 1)];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[Math.min(points.length - 1, i + 2)];
-
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-      path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
-    }
-    return path;
+  renderCursor() {
+    const point = this.branch ? this.branch.points[this.branch.cursor] : this.mainPoints.find(p => p.ply === this.currentPly);
+    this.scrubLine.style.opacity = point ? '1' : '0';
+    this.scrubDot.style.opacity = this.known(point) ? '1' : '0';
+    this.cursorBadge.textContent = point?.displayText || '—';
+    if (!point) return;
+    this.scrubLine.setAttribute('x1', this.x(point.ply)); this.scrubLine.setAttribute('x2', this.x(point.ply));
+    this.scrubDot.setAttribute('cx', this.x(point.ply));
+    if (this.known(point)) this.scrubDot.setAttribute('cy', this.y(point.cp));
   }
 
   render() {
-    if (this.data.length === 0) {
-      this.linePath.setAttribute('d', '');
-      this.whiteArea.setAttribute('d', '');
-      this.blackArea.setAttribute('d', '');
-      this.dotsGroup.innerHTML = '';
-      this.scrubLine.style.opacity = '0';
-      this.scrubDot.style.opacity = '0';
-      return;
+    this.container.classList.toggle('chart-has-branch', !!this.branch);
+    this.container.querySelector('.eval-chart-title').textContent = t('evalChartTitle');
+    this.container.querySelector('.chart-original-label').textContent = t('chartOriginal');
+    const legend = this.container.querySelector('.chart-branch-label'); legend.hidden = !this.branch; legend.textContent = t('chartBranch');
+    this.svg.setAttribute('aria-label', t(this.branch ? 'chartComparisonLabel' : 'evalChartTitle'));
+    this.container.querySelector('.chart-axis-start').textContent = this.allPoints.length ? t('startingPosition') : '';
+    const last = this.allPoints.find(point => point.ply === this.maxPly);
+    this.container.querySelector('.chart-axis-end').textContent = this.allPoints.length ? t('chartThroughMove', { move: last?.moveNumber || Math.ceil(this.maxPly / 2) }) : '';
+    this.linePath.setAttribute('d', this.path(this.mainPoints));
+    this.linePath.setAttribute('stroke', this.branch ? 'var(--text-muted)' : 'var(--brand-blue)');
+    this.linePath.setAttribute('stroke-dasharray', this.branch ? '5 5' : '');
+    this.branchPath.setAttribute('d', this.path(this.branch?.points || []));
+    this.forkLine.style.opacity = this.branch ? '1' : '0';
+    if (this.branch) { this.forkLine.setAttribute('x1', this.x(this.branch.basePly)); this.forkLine.setAttribute('x2', this.x(this.branch.basePly)); }
+    this.dotsGroup.replaceChildren(); this.branchDots.replaceChildren();
+    const dot = (point, branch, color, radius) => {
+      if (!this.known(point)) return;
+      const el = document.createElementNS(NS, 'circle');
+      el.setAttribute('cx', this.x(point.ply)); el.setAttribute('cy', this.y(point.cp)); el.setAttribute('r', radius);
+      el.setAttribute('fill', color); el.setAttribute('stroke', 'var(--dg-surface)'); el.setAttribute('stroke-width', '1.5');
+      el.dataset.ply = point.ply;
+      if (branch) el.dataset.offset = point.offset;
+      el.addEventListener('click', event => { event.stopPropagation(); this.select({ point, branch }); });
+      (branch ? this.branchDots : this.dotsGroup).append(el);
+    };
+    for (const point of this.data) {
+      const beyond = point.isBeyondIntuition || point.divergenceType === 'beyond_intuition';
+      const trap = point.isHumanTrap || point.divergenceType === 'intuition_trap';
+      if (beyond || trap || ['blunder','mistake'].includes(point.severity)) dot(point, false, beyond ? 'var(--brand-blue)' : trap ? 'var(--brand-gold)' : 'var(--brand-red)', 4);
     }
-
-    const n = this.data.length;
-    const w = 1000;
-    const midY = 80;
-
-    const points = this.data.map((d, i) => {
-      const x = (i / (n - 1 || 1)) * w;
-      // y: +450 cp -> ~22 (top), -450 cp -> ~138 (bottom)
-      const y = midY - (d.cp / 450) * 58;
-      return { x, y, d };
-    });
-
-    // 1. Smooth Main Curve
-    const curvePath = this.generateSmoothPath(points);
-    this.linePath.setAttribute('d', curvePath);
-
-    // 2. Dual Area Fill (White advantage top area, Black advantage bottom area)
-    const whiteAreaPoints = points.map(p => ({ x: p.x, y: Math.min(midY, p.y) }));
-    const whiteCurve = this.generateSmoothPath(whiteAreaPoints);
-    const whiteAreaD = `${whiteCurve} L ${points[points.length - 1].x} ${midY} L ${points[0].x} ${midY} Z`;
-    this.whiteArea.setAttribute('d', whiteAreaD);
-
-    const blackAreaPoints = points.map(p => ({ x: p.x, y: Math.max(midY, p.y) }));
-    const blackCurve = this.generateSmoothPath(blackAreaPoints);
-    const blackAreaD = `${blackCurve} L ${points[points.length - 1].x} ${midY} L ${points[0].x} ${midY} Z`;
-    this.blackArea.setAttribute('d', blackAreaD);
-
-    // 3. Render Markers on Key Moments
-    this.dotsGroup.innerHTML = '';
-    points.forEach(p => {
-      const isBeyond = p.d.divergenceType === 'beyond_intuition' || p.d.isBeyondIntuition;
-      const isTrap = p.d.divergenceType === 'intuition_trap' || p.d.isHumanTrap;
-      const isBlunder = p.d.severity === 'blunder';
-      const isMistake = p.d.severity === 'mistake';
-
-      if (isBeyond || isTrap || isBlunder || isMistake) {
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', p.x);
-        circle.setAttribute('cy', p.y);
-
-        let color = 'var(--brand-gold)';
-        let radius = '4.5';
-        if (isBeyond) {
-          color = 'var(--brand-blue)';
-          radius = '5.5';
-        } else if (isTrap) {
-          color = 'var(--brand-gold)';
-          radius = '5';
-        } else if (isBlunder) {
-          color = 'var(--brand-red)';
-          radius = '5';
-        } else if (isMistake) {
-          color = 'var(--brand-gold)';
-          radius = '4';
-        }
-
-        circle.setAttribute('r', radius);
-        circle.setAttribute('fill', color);
-        circle.setAttribute('stroke', 'var(--dg-surface)');
-        circle.setAttribute('stroke-width', '1.5');
-        circle.style.cursor = 'pointer';
-        circle.style.transition = 'transform 0.15s ease';
-
-        circle.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (this.onSelectPly) this.onSelectPly(p.d.ply);
-        });
-
-        this.dotsGroup.appendChild(circle);
-      }
-    });
-
-    if (this.currentPly) {
-      this.setCursor(this.currentPly);
-    }
+    for (const point of this.branch?.points || []) dot(point, true, 'var(--brand-blue)', 3.5);
+    this.renderCursor();
   }
 }
