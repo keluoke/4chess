@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { isKeyMoment, qualifiesBeyond, retryVerdict } from '../engine/review-policy.js';
+import { ReviewPractice } from '../analysis/review-practice.js';
+import { JSDOM } from 'jsdom';
+assert.equal(isKeyMoment({ severity:'blunder' }),true);
+assert.equal(isKeyMoment({ severity:'mistake' }),true);
+assert.equal(isKeyMoment({ severity:'normal' }),false);
+const evidence = { lossCp:0, maiaLossCp:90, probability:.08, stableBest:true, verified:true };
+assert.equal(qualifiesBeyond(evidence),true);
+for (const change of [{ maiaLossCp:1 },{probability:.6},{verified:false},{stableBest:false},{lossCp:45},{probability:NaN}]) {
+  assert.equal(qualifiesBeyond({...evidence,...change}),false);
+}
+assert.equal(retryVerdict({scoreCp:100,depth:14},{scoreCp:-80,depth:13}),'retryGood','Equivalent good choices are accepted');
+assert.equal(retryVerdict({scoreCp:100,depth:14},{scoreCp:0,depth:13}),'retryAgain');
+assert.equal(retryVerdict({scoreCp:100,depth:5},{scoreCp:-100,depth:13}),'retryUncertain');
+assert.equal(retryVerdict({scoreCp:9900,depth:14},{scoreCp:-10000,terminal:true}),'retryGood','Delivering mate is accepted');
+assert.equal(retryVerdict(null,{scoreCp:0,depth:13}),'retryUncertain');
+const dom = new JSDOM('<div id="practice-panel"></div>',{url:'https://4chess.cc/analysis/'});
+globalThis.window=dom.window;globalThis.document=dom.window.document;
+let complete, searches=0, boardUpdates=0;
+const app={stockfish:{evaluate:()=>{searches++;return new Promise(resolve=>complete=resolve);},stop(){}},boardUI:{setPosition(){boardUpdates++;}}};
+const practice = new ReviewPractice(app);
+practice.active=true;practice.item={fenBefore:'fixture'};practice.message=document.createElement('p');
+const pending=practice.submit({uci:'e2e4'},'after');
+practice.stop();
+complete({scoreCp:30,depth:14});
+await pending;
+assert.equal(searches,1,'Cancelled retry must not launch child search');
+assert.equal(boardUpdates,0,'Late retry result cannot replace the new board');
+dom.window.close();
+console.log('Review policies and retry cancellation regressions passed');

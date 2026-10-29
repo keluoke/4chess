@@ -63,12 +63,13 @@ try {
   assert.doesNotMatch(await page.locator('#val-accuracy-white').textContent(), /%/);
   assert.doesNotMatch(await page.locator('#val-accuracy-black').textContent(), /%/);
   assert.match(await page.locator('#accuracy-detail-black').textContent(), /\d+\/\d+/);
-  assert(await page.locator('#val-accuracy-black').evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 32));
+  assert(await page.locator('#val-accuracy-black').evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 28));
   await page.locator('.accuracy-method summary').click();
   assert.match(await page.locator('#accuracy-analysis-detail').textContent(), /D12/);
   assert.match(await page.locator('.accuracy-method p').first().textContent(), /调和平均/);
   fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-desktop.png') });
+  await page.screenshot({ path: path.join(root, 'artifacts/studio-workspace-desktop.png') });
   await page.setViewportSize({ width: 390, height: 900 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-mobile.png') });
@@ -84,6 +85,7 @@ try {
   await page.evaluate(() => window.__maiaStudioApp.goToPly(4, { before: true }));
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.chess.getFen() === window.__maiaStudioApp.positions[3].fen), true);
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
+  await page.locator('.candidate-details summary').click();
   await page.locator('#engine-candidate-lines .candidate-move').first().click();
   assert.equal(await page.locator('#branch-banner').isVisible(), true);
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.branchFen === window.__maiaStudioApp.boardUI.chess.getFen()), true);
@@ -123,6 +125,31 @@ try {
   assert.equal(await page.locator('.blunder-card').count(), 1);
   await page.locator('.blunder-card').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.isReviewingMove), true);
+  await page.waitForFunction(() => document.querySelectorAll('.comparison-table tbody tr').length > 0);
+  const comparedMoves = await page.locator('.comparison-table .candidate-move').allTextContents();
+  assert.equal(new Set(comparedMoves).size, comparedMoves.length, 'Candidate union has no duplicate moves');
+  await page.locator('.practice-start').click();
+  assert.equal(await page.locator('#practice-panel').isVisible(), true);
+  assert.equal(await page.locator('.position-analysis').isVisible(), false);
+  assert.equal(await page.locator('.notation-section').isVisible(), false);
+  assert.equal(await page.locator('.eval-chart-wrapper').isVisible(), false);
+  await page.screenshot({ path: path.join(root, 'artifacts/studio-practice-desktop.png') });
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.arrows.length), 0);
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    const move = app.boardUI.chess.getLegalMoves().find(m => m.uci === 'f7f6');
+    app.boardUI.chess.makeMove(move);
+    app.handleUserBoardMove(move, app.boardUI.chess.getFen());
+  });
+  await page.waitForFunction(() => !window.__maiaStudioApp.practice.busy, null, { timeout: 20000 });
+  assert.match(await page.locator('#practice-panel [role="status"]').textContent(), /loses ground/);
+  assert.equal(await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    return app.boardUI.chess.getFen() === app.practice.item.fenBefore;
+  }), true, 'Unsuccessful attempt returns to the original position without revealing answers');
+  await page.locator('#practice-panel button').click();
+  assert.equal(await page.locator('.position-analysis').isVisible(), true);
+  assert.equal(await page.locator('#practice-panel').isVisible(), false);
   // Fast navigation and a new game must leave every row bound to the final visible position.
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;

@@ -8,6 +8,26 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    filterMistakes: "失误",
+    retryMove: "重试这一步",
+    retryTurn: "轮到{side} · 独立思考",
+    retryPrompt: "在棋盘上走出你的选择。候选、评分与后续棋谱已隐藏。",
+    retryReveal: "结束练习，查看分析",
+    retryChecking: "正在验证你的选择…",
+    retryGood: "好棋！与当前搜索最佳选择相差不超过 0.30 兵。可以再试其他选择，或查看分析。",
+    retryAgain: "这步仍有明显损失。已回到原局面，再试一次。",
+    retryUncertain: "本次计算不足以可靠判定。请重试，或查看分析。",
+    compareTitle: "比较当前选择",
+    compareNote: "评分统一为白方视角；概率是所选等级的模型预测，并非胜率。",
+    compareLines: "展开引擎与直觉变化",
+    comparisonPending: "候选将在计算完成后逐步出现。",
+    compareMove: "着法",
+    compareScore: "引擎评分",
+    compareProbability: "模型概率",
+    comparePlayed: "实战",
+    compareEngine: "引擎首选",
+    compareHuman: "直觉首选",
+
     userBranches: '我的分支',
     reviewPausedForPosition: '全盘分析暂缓 · 优先分析当前局面',
     reviewResumeHint: '返回对局并停止回看后继续全盘分析。',
@@ -109,7 +129,6 @@ export const DICTIONARY = {
 
     // Analysis / Perspective Column
     perspectiveEyebrow: 'A DIFFERENT PERSPECTIVE',
-    compareTitle: '比较三种选择',
     compareSubtitle: '实战、人类直觉与引擎推荐，在这里相遇。',
     divergenceBadgeDefault: '局面研判',
     cardEngineBest: '引擎推荐',
@@ -248,6 +267,26 @@ export const DICTIONARY = {
   },
 
   en: {
+    filterMistakes: "Mistakes",
+    retryMove: "Retry this move",
+    retryTurn: "{side} to move · Think independently",
+    retryPrompt: "Play your choice on the board. Candidates, evaluations and notation are hidden.",
+    retryReveal: "Finish practice and show analysis",
+    retryChecking: "Checking your choice…",
+    retryGood: "Good move! Within 0.30 pawns of the current search’s best choice. Try another move or show analysis.",
+    retryAgain: "This move still loses ground. Try again from the original position.",
+    retryUncertain: "Insufficient analysis for a reliable verdict. Retry or show analysis.",
+    compareTitle: "Compare your choices",
+    compareNote: "Scores use White’s perspective. Probabilities are model predictions at the selected rating, not win rates.",
+    compareLines: "Show engine and intuition variations",
+    comparisonPending: "Candidates will appear as analysis completes.",
+    compareMove: "Move",
+    compareScore: "Engine score",
+    compareProbability: "Model probability",
+    comparePlayed: "Played",
+    compareEngine: "Engine best",
+    compareHuman: "Intuition first",
+
     userBranches: 'My variations',
     reviewPausedForPosition: 'Game review paused · Analysing this position first',
     reviewResumeHint: 'Return to the game and pause navigation to resume its review.',
@@ -349,7 +388,6 @@ export const DICTIONARY = {
 
     // Analysis / Perspective Column
     perspectiveEyebrow: 'A DIFFERENT PERSPECTIVE',
-    compareTitle: 'Compare Three Perspectives',
     compareSubtitle: 'Played move, human intuition, and engine best in one place.',
     divergenceBadgeDefault: 'Position Review',
     cardEngineBest: 'Engine Best',

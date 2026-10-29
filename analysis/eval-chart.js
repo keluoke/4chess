@@ -4,7 +4,7 @@
  * reference gridlines, key moment markers, and interactive hover tooltip.
  */
 
-import { t, onLanguageChange } from './i18n.js?v=20261025-accuracy';
+import { t, onLanguageChange } from './i18n.js?v=20261029-studio';
 
 export class EvalChart {
   constructor(containerEl, onSelectPly) {
@@ -137,7 +137,7 @@ export class EvalChart {
 
       const isWhite = item.turn === 'w';
       const sideText = isWhite ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
-      const evalSign = item.cp > 0 ? `+${(item.cp / 100).toFixed(2)}` : (item.cp / 100).toFixed(2);
+      const evalSign = item.displayText;
       const evalColor = item.cp > 40 ? 'var(--brand-green)' : (item.cp < -40 ? 'var(--brand-red)' : 'var(--text-muted)');
 
       this.tooltip.replaceChildren();
@@ -247,6 +247,8 @@ export class EvalChart {
         turn: m.turn,
         san: m.san,
         cp: clamped,
+        rawCp: cp,
+        displayText: /^[M#]/.test(evalStr || '') ? `${cp < 0 ? '-' : '+'}M${Math.abs(Number(String(evalStr).slice(1)))}` : `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(2)}`,
         evalText: evalStr || '0.00',
         severity: m.severity || 'normal',
         lossPawns: m.lossPawns || '0.00',
@@ -282,7 +284,7 @@ export class EvalChart {
     this.scrubDot.style.opacity = '1';
 
     // Update cursor badge
-    const evalSign = item.cp > 0 ? `+${(item.cp / 100).toFixed(2)}` : (item.cp / 100).toFixed(2);
+    const evalSign = item.displayText;
     if (this.cursorBadge) {
       this.cursorBadge.textContent = evalSign;
       if (item.cp > 50) {

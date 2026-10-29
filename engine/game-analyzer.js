@@ -5,6 +5,7 @@
  * and Maia human intuition trap detection.
  */
 
+import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261029-studio';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
@@ -483,7 +484,7 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 8;
+  static SCHEMA_VERSION = 9;
   static DEFAULT_DEPTH = 12;
 
   static winScore(cp) {
@@ -1050,7 +1051,7 @@ export class GameAnalyzer {
               const matchedIdx = pred.moves.findIndex(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
               const matchedMove = matchedIdx !== -1 ? pred.moves[matchedIdx] : null;
               const matchedProb = matchedMove && typeof matchedMove.prob === 'number' ? matchedMove.prob : 0;
-              const matchedRawProb = matchedMove && typeof matchedMove.rawProb === 'number' ? matchedMove.rawProb : (matchedProb > 0 ? matchedProb / 100 : 0.0001);
+              const matchedRawProb = matchedMove && typeof matchedMove.rawProb === 'number' ? matchedMove.rawProb : (matchedMove && Number.isFinite(matchedMove.prob) ? matchedMove.prob / 100 : null);
 
               mv.humanProbability = matchedProb;
               mv.humanRawProbability = matchedRawProb;
@@ -1089,7 +1090,7 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 4: Secondary Deep Verification Pass (二次加深复核 - d12 with multipv 4)
+      // Step 4: Verify at a higher target depth; incomplete searches cannot confirm labels.
       // 实打实比较三种走法：搜索引擎一选、实战走法、Maia一选
       const candidateList = analyzedMoves
         .filter(m => m.isBeyondIntuitionCandidate || m.isHumanTrapCandidate)
@@ -1098,12 +1099,13 @@ export class GameAnalyzer {
       for (const cm of candidateList) {
         if (invalid()) break;
         try {
-          // Deeper evaluation with depth 12 and multipv 4
-          const deepEval = await evaluate(cm.fenBefore, 12, 3500, 4);
-          if (deepEval && deepEval.bestMove) {
+          // Comparable MultiPV evidence; targeted child searches use one less ply.
+          const verificationDepth = Math.max(12, depth + 2);
+          const deepEval = await evaluate(cm.fenBefore, verificationDepth, 6000, 4);
+          if (deepEval?.bestMove && Number.isFinite(deepEval.scoreCp)) {
             const deepBestSan = (deepEval.bestMove.san || '').replace(/[+#?!]/g, '');
             const deepBestUci = deepEval.bestMove.uci;
-            const deepBestScoreCp = deepEval.scoreCp || 0;
+            const deepBestScoreCp = deepEval.scoreCp;
             const cleanPlayed = cm.san.replace(/[+#?!]/g, '');
             const cleanMaia = (cm.maiaTopSan || '').replace(/[+#?!]/g, '');
 
@@ -1113,7 +1115,7 @@ export class GameAnalyzer {
 
             if (deepEval.lines) {
               for (const l of deepEval.lines) {
-                if (l.uci) {
+                if (l.uci && l.depth >= verificationDepth && Number.isFinite(l.deltaCp)) {
                   deepLossMap.set(l.uci, Math.abs(l.deltaCp));
                 }
               }
@@ -1137,8 +1139,8 @@ export class GameAnalyzer {
                   }
                 }
                 if (targetFen && targetUci) {
-                  const subEval = await evaluate(targetFen, 10, 2500, 1);
-                  if (subEval) {
+                  const subEval = await evaluate(targetFen, verificationDepth - 1, 6000, 1);
+                  if (Number.isFinite(subEval?.scoreCp) && (subEval.terminal || subEval.depth >= verificationDepth - 1)) {
                     const loss = Math.max(0, deepBestScoreCp + (subEval.scoreCp || 0));
                     deepLossMap.set(targetUci, loss);
                     return loss;
@@ -1153,11 +1155,11 @@ export class GameAnalyzer {
             // 1. 实打实确保实战走法已评估
             if (!deepLossMap.has(cm.uci)) {
               if (cm.fenAfter) {
-                const playedEval = await evaluate(cm.fenAfter, 10, 2500, 1);
-                if (playedEval) {
+                const playedEval = await evaluate(cm.fenAfter, verificationDepth - 1, 6000, 1);
+                if (Number.isFinite(playedEval?.scoreCp) && (playedEval.terminal || playedEval.depth >= verificationDepth - 1)) {
                   deepLossMap.set(cm.uci, Math.max(0, deepBestScoreCp + (playedEval.scoreCp || 0)));
-                } else if (cm.lossCp !== null) {
-                  deepLossMap.set(cm.uci, cm.lossCp);
+                } else {
+                  deepLossMap.delete(cm.uci);
                 }
               } else {
                 await evaluateMoveTargeted(cm.uci, cleanPlayed);
@@ -1173,10 +1175,14 @@ export class GameAnalyzer {
               ? deepLossMap.get(cm.maiaTopUci)
               : null;
 
-            // 3. 复核判定 妙手 (实战＝Stockfish一选，且Stockfish评估收益超过Maia一选: maiaLossCp > 0；前5个回合即前10步不判定妙手)
+            // Require a rare, stable best move and a meaningful advantage over the natural choice.
             const isStillDeepBest = (deepBestSan === cleanPlayed || deepBestUci === cm.uci || deepLossCp === 0);
             if (cm.ply > 10 && cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
-              if (isStillDeepBest && maiaLossCp !== null && maiaLossCp > 0) {
+              cm.maiaLossCp = maiaLossCp;
+              cm.verificationDepth = deepEval.depth ?? 0;
+              const verified = deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci);
+              if (qualifiesBeyond({ lossCp: deepLossCp, maiaLossCp, probability: cm.humanRawProbability,
+                stableBest: isStillDeepBest, verified })) {
                 // 连续组合去重：检查同方上一有效决策步是否已是妙手
                 const prevSameSideMove = analyzedMoves
                   .slice(0, cm.ply - 1)
@@ -1195,20 +1201,20 @@ export class GameAnalyzer {
                 }
               } else {
                 console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp <= 0)，已取消`);
-                cm.divergenceStatus = 'downgraded';
+                cm.divergenceStatus = deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci) && maiaLossCp !== null ? 'downgraded' : 'unconfirmed';
               }
             }
 
             // 4. 复核判定 俗手 (实战＝Maia一选或二选，且相对Stockfish一选明显吃亏 >= 50cp)
             if (!cm.isBeyondIntuition && cm.isHumanTrapCandidate && !cm.isOnlyLegalMove) {
-              if (!isStillDeepBest && deepLossCp >= 50) {
+              if (deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci) && !isStillDeepBest && deepLossCp >= 50) {
                 cm.isHumanTrap = true;
                 cm.divergenceType = 'intuition_trap';
                 cm.divergenceStatus = 'confirmed';
                 cm.divergenceNote = `🫤 俗手：这步属于人类直觉的优先选择 (${cm._candidateRankTxt || '自然走法'})，看起来很自然，但经深度复核会明显损失优势 (-${(deepLossCp / 100).toFixed(2)} 兵)，最佳应走 ${deepBestSan}。`;
               } else {
                 console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 俗手经复核损耗仅 ${deepLossCp}cp < 50cp，未达显著吃亏门槛，已降级`);
-                cm.divergenceStatus = 'downgraded';
+                cm.divergenceStatus = deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci) && maiaLossCp !== null ? 'downgraded' : 'unconfirmed';
               }
             }
           } else {
@@ -1249,9 +1255,9 @@ export class GameAnalyzer {
       const postBookAccuracyWhite = GameAnalyzer.aggregateAccuracy(validPostWhite);
       const postBookAccuracyBlack = GameAnalyzer.aggregateAccuracy(validPostBlack);
 
-      // 2. Confirmed Key Moments (✨ 妙手 & 🫤 俗手)
+      // 2. Key moments include serious mistakes independent of Maia availability.
       const keyMoments = analyzedMoves
-        .filter(m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap')
+        .filter(isKeyMoment)
         .sort((a, b) => a.ply - b.ply);
 
       const beyondIntuitionCount = analyzedMoves.filter(m => m.divergenceType === 'beyond_intuition' && !m.isCombinationFollowup).length;

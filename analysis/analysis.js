@@ -1,3 +1,5 @@
+import { isKeyMoment } from '../engine/review-policy.js?v=20261029-studio';
+import { ReviewPractice } from './review-practice.js?v=20261029-studio';
 import { authorizeScan, showScanLock } from './scan-authorization.js';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -7,14 +9,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261025-accuracy';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261029-studio';
 import { BoardUI } from './board-ui.js?v=20261025-v115';
-import { EvalChart } from './eval-chart.js?v=20261029-chart';
+import { EvalChart } from './eval-chart.js?v=20261029-studio';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261025-accuracy';
+import { PositionAnalysis } from './position-analysis.js?v=20261029-studio';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261025-accuracy';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261029-studio';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -255,6 +257,7 @@ class AnalysisStudioApp {
       this.positionAnalysis.cache.clear();
       this.currentGameKey = this.getReviewKey();
       // Invalidate review result so old Elo data is not mixed
+      this.practice?.stop();
       this.reviewResult = null;
       if (this.moves && this.moves.length > 0 && !this.isBranching) {
         this.runFullReview(false);
@@ -324,7 +327,7 @@ class AnalysisStudioApp {
         this.currentDivergenceFilter = pill.dataset.filter || 'all';
         const rawMoments = (this.reviewResult?.keyMoments || this.reviewResult?.allMoves || []);
         const validMoments = rawMoments.filter(
-          m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+          isKeyMoment
         ).sort((a, b) => a.ply - b.ply);
         this.renderBlunderCards(validMoments);
       });
@@ -460,6 +463,7 @@ class AnalysisStudioApp {
   }
 
   refreshAfterLanguageChange() {
+    if (this.practice?.active) { this.practice.stop(); this.goToPly(this.currentPly, { before: true }); }
     if (!this.el) return;
     this.updatePreferenceNotes();
     for (const [id, key] of [['lbl-filter-all', 'filterAll'], ['lbl-filter-beyond', 'filterBeyond'], ['lbl-filter-trap', 'filterTrap']]) {
@@ -548,7 +552,7 @@ class AnalysisStudioApp {
       this.renderAccuracyDetails();
       const rawMoments = (this.reviewResult?.keyMoments || this.reviewResult?.allMoves || []);
       const validMoments = rawMoments.filter(
-        m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+        isKeyMoment
       ).sort((a, b) => a.ply - b.ply);
       this.renderBlunderCards(validMoments);
       this.annotateMoveList(this.reviewResult?.allMoves);
@@ -1071,6 +1075,7 @@ class AnalysisStudioApp {
     this.analyzer.cancel();
     this.gameEpoch++;
     this.reviewEpoch++;
+    this.practice?.stop();
     this.reviewResult = null;
     this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && (fen !== ChessBoard.INITIAL_FEN || positionInput));
     document.body.classList.toggle('empty-study', !this.hasAnalysisInput);
@@ -1252,6 +1257,7 @@ class AnalysisStudioApp {
     }
     this.initEngines({ keepStockfish: !engineChanged });
     this.currentGameKey = this.getReviewKey();
+    this.practice?.stop();
     this.reviewResult = null;
     this.lastProgress = null;
     this.positionAnalysis.cache.clear();
@@ -1295,6 +1301,7 @@ class AnalysisStudioApp {
   }
 
   async runFullReview(forceRefresh = false) {
+    this.practice?.stop();
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
 
@@ -1460,10 +1467,10 @@ class AnalysisStudioApp {
     this.evalChart.setData(result.allMoves);
     this.evalChart.setCursor(this.currentPly);
 
-    // 2. Update Blunder list (Strictly 妙手 & 俗手 only)
+    // Include ordinary mistakes as well as confirmed human/engine divergences.
     const rawMoments = (result.keyMoments || result.allMoves || []);
     const moments = rawMoments.filter(
-      m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+      isKeyMoment
     ).sort((a, b) => a.ply - b.ply);
     this.el.blunderCountBadge.textContent = String(moments.length);
     this.renderBlunderCards(moments);
@@ -1479,16 +1486,23 @@ class AnalysisStudioApp {
     }
   }
 
+  startPractice(item) {
+    this.practice ||= new ReviewPractice(this);
+    this.practice.start(item);
+  }
+
   renderBlunderCards(moments) {
-    // Strictly filter to valid types only (妙手 and 俗手)
+    // One shared policy keeps the report, filters and practice list consistent.
     const list = (moments || []).filter(
-      m => m.divergenceType === 'beyond_intuition' || m.divergenceType === 'intuition_trap'
+      isKeyMoment
     );
 
     // 1. Update filter pill counters
     const countBeyond = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition).length;
     const countTrap = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap).length;
-    const totalAll = countBeyond + countTrap;
+    const totalAll = list.length;
+    const errorCount = document.getElementById('filter-count-mistakes');
+    if (errorCount) errorCount.textContent = String(list.filter(m => ['mistake', 'blunder'].includes(m.severity)).length);
 
     const elCountAll = document.getElementById('filter-count-all');
     const elCountBeyond = document.getElementById('filter-count-beyond');
@@ -1501,6 +1515,8 @@ class AnalysisStudioApp {
     let filteredMoments = list;
     if (this.currentDivergenceFilter === 'beyond') {
       filteredMoments = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition);
+    } else if (this.currentDivergenceFilter === 'mistakes') {
+      filteredMoments = list.filter(m => ['mistake', 'blunder'].includes(m.severity));
     } else if (this.currentDivergenceFilter === 'trap') {
       filteredMoments = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap);
     }
@@ -1671,6 +1687,10 @@ class AnalysisStudioApp {
         this.goToPly(item.ply, { before: true });
       });
 
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'btn-header practice-start'; retry.textContent = t('retryMove');
+      retry.onclick = event => { event.stopPropagation(); this.startPractice(item); };
+      card.append(retry);
       this.el.blunderList.appendChild(card);
     });
 
@@ -1831,6 +1851,7 @@ class AnalysisStudioApp {
   }
 
   goToPly(ply, options = {}) {
+    this.practice?.stop();
     if (!options.silent) this.pauseWholeReview();
     this.exitBranchMode();
 
@@ -1883,7 +1904,7 @@ class AnalysisStudioApp {
   }
 
   updateActivePositionAnalysis() {
-    this.positionAnalysis.refresh();
+    if (!this.practice?.active) this.positionAnalysis.refresh();
   }
 
   updatePreferenceNotes() {
@@ -2008,6 +2029,7 @@ class AnalysisStudioApp {
   }
 
   handleUserBoardMove(move, newFen) {
+    if (this.practice?.active) { this.practice.submit(move, newFen); return; }
     const next = this.positions[this.currentPly + (this.isReviewingMove ? 0 : 1)];
     if (!this.isBranching && next?.uci === move.uci) {
       this.goToPly(this.currentPly + (this.isReviewingMove ? 0 : 1));
