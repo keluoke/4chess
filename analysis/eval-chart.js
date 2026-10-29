@@ -218,22 +218,25 @@ export class EvalChart {
 
     // Convert centipawns / eval into White advantage: clamp to [-450, +450]
     this.data = analyzedMoves.map((m) => {
+      // Review scores are from the side to move at the evaluated position.
+      // In particular, terminal M0 means that side has LOST; its numeric score
+      // is -10000. Inferring the sign from the text alone flips the final point.
+      const after = m.evalAfter && m.evalAfter !== '?';
+      const before = !after && m.evalBefore && m.evalBefore !== '?';
+      const evalStr = after ? m.evalAfter : before ? m.evalBefore : m.eval;
+      const numericCp = after ? m.evalAfterCp : before ? m.evalBeforeCp : undefined;
       let cp = 0;
-      const evalStr = m.eval || m.evalAfter || m.evalBefore;
-      if (evalStr && evalStr !== '?') {
-        if (evalStr.startsWith('#') || evalStr.startsWith('M')) {
-          cp = evalStr.includes('-') ? -900 : 900;
-        } else {
-          cp = parseFloat(evalStr) * 100;
-        }
+      if (Number.isFinite(numericCp)) {
+        cp = numericCp;
+      } else if (evalStr && evalStr !== '?') {
+        const mate = String(evalStr).match(/^[#M](-?\d+)$/);
+        cp = mate ? (Number(mate[1]) > 0 ? 900 : -900) : parseFloat(evalStr) * 100;
+        if (!Number.isFinite(cp)) cp = 0;
       }
 
-      // Stockfish scores evalAfter from the side to move.
-      // If move was made by White, it is Black's turn next.
-      // So White's advantage after White's move is -cp.
-      if (m.turn === 'w') {
-        cp = -cp;
-      }
+      const fen = before ? m.fenBefore : m.fenAfter;
+      const sideToMove = fen?.split(' ')[1] || (before ? m.turn : m.turn === 'w' ? 'b' : 'w');
+      if (sideToMove === 'b') cp = -cp;
 
       // Clamp between -450 and +450 centipawns ([-4.5, +4.5] pawns)
       const clamped = Math.max(-450, Math.min(450, cp));
