@@ -5,7 +5,7 @@
  * and Maia human intuition trap detection.
  */
 
-import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261029-studio';
+import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261029-columns';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
@@ -484,7 +484,7 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 9;
+  static SCHEMA_VERSION = 10;
   static DEFAULT_DEPTH = 12;
 
   static winScore(cp) {
@@ -582,7 +582,7 @@ export class GameAnalyzer {
     if (res.accuracyWhite === undefined || res.accuracyBlack === undefined) return false;
     if (res.beyondIntuitionCount === undefined || res.intuitionTrapsCount === undefined) return false;
     const hasMaia = res.allMoves && res.allMoves.some(m => m.maiaTopSan != null);
-    if (!hasMaia && res.allMoves && res.allMoves.length > 0) return false;
+    if (!hasMaia && res.allMoves && res.allMoves.length > 0 && !(res.engineOnly && res.engineGameKey && res.positionEvaluations?.length === res.totalMoves + 1)) return false;
     return true;
   }
 
@@ -667,6 +667,9 @@ export class GameAnalyzer {
       const cleanResult = {
         schemaVersion: GameAnalyzer.SCHEMA_VERSION,
         totalMoves: result.totalMoves,
+        engineOnly: !!result.engineOnly,
+        engineGameKey: result.engineGameKey,
+        positionEvaluations: result.positionEvaluations,
         isPartial: !!result.isPartial,
         blundersCount: result.blundersCount,
         mistakesCount: result.mistakesCount,
@@ -736,6 +739,8 @@ export class GameAnalyzer {
     const invalid = () => this.isCancelled || this._currentRunId !== runId || FairPlayGuard.isLiveGameInProgress();
     const evaluate = async (...args) => {
       if (invalid()) return null;
+      if (options.waitForTurn) await options.waitForTurn(invalid);
+      if (invalid()) return null;
       const result = await this.stockfish.evaluate(...args);
       return invalid() ? null : result;
     };
@@ -744,16 +749,26 @@ export class GameAnalyzer {
       depth = GameAnalyzer.DEFAULT_DEPTH,
       elo = 1900,
       forceRefresh = false,
-      onProgress = null
+      onProgress = null,
+      engineOnly = false,
+      baseReview = null,
+      waitForTurn = null
     } = options;
 
-    const cacheKey = GameAnalyzer.getGameKey(moves, { depth, elo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
+    const engineGameKey = GameAnalyzer.getGameKey(moves, { depth, elo: 0, engineKey: this.stockfish.engineKey, modelKey: 'engine-only' });
+    const cacheKey = engineOnly ? engineGameKey : GameAnalyzer.getGameKey(moves, { depth, elo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
 
     // 1. Instant Cache Hit Check (0ms response)
     if (!forceRefresh && cacheKey) {
       const cached = await GameAnalyzer.getCachedReview(cacheKey);
       if (invalid()) return null;
-      if (cached) {
+      // A refreshed score pass must not be overwritten by an older enriched
+      // report, even when the game, depth and selected model are identical.
+      const sameBase = !baseReview || engineOnly || (
+        cached?.engineGameKey === baseReview.engineGameKey &&
+        JSON.stringify(cached?.positionEvaluations) === JSON.stringify(baseReview.positionEvaluations)
+      );
+      if (cached && sameBase) {
         this.lastReviewResult = cached;
         this.isAnalyzing = false;
         if (onProgress) {
@@ -780,12 +795,15 @@ export class GameAnalyzer {
       }
 
       const totalPositions = positions.length;
+      const reusable = baseReview?.engineGameKey === engineGameKey &&
+        baseReview?.schemaVersion === GameAnalyzer.SCHEMA_VERSION &&
+        baseReview?.positionEvaluations?.length === totalPositions ? baseReview.positionEvaluations : null;
       const evals = [];
       let evalFailures = 0;
       let consecutiveFailures = 0;
 
       // Step 0: Pre-flight check - ensure Stockfish is initialized and ready
-      if (this.stockfish && !this.stockfish.isReady) {
+      if (!reusable && this.stockfish && !this.stockfish.isReady) {
         console.log('[GameAnalyzer] Awaiting Stockfish engine initialization before review...');
         const ready = await this.stockfish.initialize();
         if (invalid()) return null;
@@ -813,13 +831,13 @@ export class GameAnalyzer {
             phase: 'evaluating',
             current: i + 1,
             total: totalPositions,
-            percent: Math.min(50, Math.max(1, Math.round(((i + 1) / totalPositions) * 50))),
+            percent: Math.min(engineOnly ? 100 : 50, Math.max(1, Math.round(((i + 1) / totalPositions) * (engineOnly ? 100 : 50)))),
             currentMove: positions[i].san
           });
         }
 
         // Full-game evaluation with the requested depth, bounded time and one principal variation.
-        let evalRes = await evaluate(positions[i].fen, depth, 3500, 1);
+        let evalRes = reusable ? reusable[i] : await evaluate(positions[i].fen, depth, 3500, 1);
         if (!Number.isFinite(evalRes?.scoreCp)) evalRes = null;
         // A cancelled review must not stop a newer foreground position search.
         if (invalid()) return null;
@@ -990,7 +1008,7 @@ export class GameAnalyzer {
       // Step 3: Maia intuition prediction for ALL moves
       // Guarantees comprehensive human intuition modeling across the whole game
       // without sampling bias or gaps in intuition score calculation.
-      if (this.maiaEngine && analyzedMoves.length > 0) {
+      if (!engineOnly && this.maiaEngine && analyzedMoves.length > 0) {
         if (!this.maiaEngine.isReady) {
           if (onProgress) {
             onProgress({
@@ -1012,6 +1030,8 @@ export class GameAnalyzer {
         const totalToPredict = analyzedMoves.length;
         for (let j = 0; j < totalToPredict; j++) {
           if (invalid()) break;
+          if (waitForTurn) await waitForTurn(invalid);
+          if (invalid()) return null;
           const mv = analyzedMoves[j];
 
           if (onProgress && j % 2 === 0) {
@@ -1098,6 +1118,7 @@ export class GameAnalyzer {
 
       for (const cm of candidateList) {
         if (invalid()) break;
+        if (onProgress) onProgress({ phase: 'verifying', current: candidateList.indexOf(cm) + 1, total: candidateList.length, percent: 95 });
         try {
           // Comparable MultiPV evidence; targeted child searches use one less ply.
           const verificationDepth = Math.max(12, depth + 2);
@@ -1275,6 +1296,9 @@ export class GameAnalyzer {
 
       const depths = evals.filter(e => e && !e.terminal && Number.isFinite(e.depth)).map(e => e.depth);
       const result = {
+        engineOnly,
+        engineGameKey,
+        positionEvaluations: evals,
         depthMin: depths.length ? Math.min(...depths) : null,
         depthMax: depths.length ? Math.max(...depths) : null,
         schemaVersion: GameAnalyzer.SCHEMA_VERSION,
@@ -1328,7 +1352,7 @@ export class GameAnalyzer {
       }
 
       // Save to Persistent Cache ONLY if complete, not cancelled, and no engine evaluation failures occurred
-      if (cacheKey && !positions.isPartial && evalFailures === 0 && this._currentRunId === runId) {
+      if (cacheKey && !positions.isPartial && evalFailures === 0 && (engineOnly || analyzedMoves.every(m => m._predMoves?.length)) && this._currentRunId === runId) {
         await GameAnalyzer.saveCachedReview(cacheKey, result);
       }
 

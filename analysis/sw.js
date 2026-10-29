@@ -4,29 +4,30 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261029-studio';
+const CACHE_NAME = '4chess-review-20261029-columns';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261029-studio',
-  './analysis.css?v=20261029-studio',
+  './analysis.js?v=20261029-columns',
+  './analysis.css?v=20261029-columns',
   '../ui/chessboard.css?v=20261025-v115',
-  './i18n.js?v=20261029-studio',
+  './i18n.js?v=20261029-columns',
   '../ui/theme.css?v=20261025-v115',
   '../ui/theme.js?v=20261025-v115',
-  '../engine/review-policy.js?v=20261029-studio',
-  './review-practice.js?v=20261029-studio',
+  '../engine/review-policy.js?v=20261029-columns',
+  './review-practice.js?v=20261029-columns',
+  './intuition-review.js?v=20261029-columns',
   './board-ui.js',
-  './scan-authorization.js',
+  './scan-authorization.js?v=20261029-columns',
   '../engine/maia-worker.js',
-  './position-analysis.js?v=20261029-studio',
+  './position-analysis.js?v=20261029-columns',
   './sound-effects.js',
   './chess-pieces.js',
-  './eval-chart.js?v=20261029-studio',
+  './eval-chart.js?v=20261029-columns',
   './manifest.webmanifest',
   './favicon.svg',
-  '../engine/game-analyzer.js?v=20261029-studio',
+  '../engine/game-analyzer.js?v=20261029-columns',
   '../engine/chess-core.js',
   '../engine/chess-notation.js',
   '../engine/stockfish-inbrowser.js',

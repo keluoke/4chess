@@ -8,6 +8,22 @@ const STORAGE_KEY = 'maia3_lang';
 
 export const DICTIONARY = {
   zh: {
+    intuitionTitle: "直觉盲区",
+    analysisHelp: "说明",
+    intuitionIdle: "评分完成后独立扫描",
+    intuitionScanning: "准备直觉模型…",
+    intuitionPaused: "已暂停 · 评分仍可查看",
+    intuitionDone: "扫描完成",
+    intuitionFailed: "直觉暂不可用，可重试",
+    intuitionPartial: "部分局面未完成，可重试",
+    intuitionPause: "暂停",
+    intuitionResume: "继续",
+    intuitionStart: "开始扫描",
+    intuitionCount: "预测 {current}/{total}",
+    intuitionVerifying: "复核 {current}/{total}",
+    intuitionHelp: "全盘预测与复核妙手、俗手。可暂停，已有评分与当前局面分析不受影响。",
+    intuitionLoading: "模型加载 {percent}%",
+
     filterMistakes: "失误",
     retryMove: "重试这一步",
     retryTurn: "轮到{side} · 独立思考",
@@ -96,7 +112,7 @@ export const DICTIONARY = {
     // Board Column
     boardHeading: '棋盘',
     boardSubheading: '点击或拖动棋子，试演其他可能',
-    branchBannerText: '🌿 试演分支局面 · 探索其他可能',
+    branchBannerText: '分支',
     btnExitBranch: '返回对局',
     btnFirst: '开局首步 (Home)',
     btnPrev: '上一步 (Left Arrow)',
@@ -267,6 +283,22 @@ export const DICTIONARY = {
   },
 
   en: {
+    intuitionTitle: "Intuition blind spots",
+    analysisHelp: "Details",
+    intuitionIdle: "Scans independently after scoring",
+    intuitionScanning: "Preparing intuition model…",
+    intuitionPaused: "Paused · Scores remain available",
+    intuitionDone: "Scan complete",
+    intuitionFailed: "Intuition unavailable. Retry when ready.",
+    intuitionPartial: "Some positions incomplete. Retry available.",
+    intuitionPause: "Pause",
+    intuitionResume: "Resume",
+    intuitionStart: "Start scan",
+    intuitionCount: "Predicting {current}/{total}",
+    intuitionVerifying: "Verifying {current}/{total}",
+    intuitionHelp: "Full-game predictions verify rare finds and natural mistakes. Pause anytime without losing scores or position analysis.",
+    intuitionLoading: "Loading model {percent}%",
+
     filterMistakes: "Mistakes",
     retryMove: "Retry this move",
     retryTurn: "{side} to move · Think independently",
@@ -355,7 +387,7 @@ export const DICTIONARY = {
     // Board Column
     boardHeading: 'Chessboard',
     boardSubheading: 'Click or drag pieces to explore alternatives',
-    branchBannerText: '🌿 Exploration Branch · Exploring possibilities',
+    branchBannerText: 'Branch',
     btnExitBranch: 'Back to Game',
     btnFirst: 'First Move (Home)',
     btnPrev: 'Previous Move (Left Arrow)',

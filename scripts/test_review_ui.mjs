@@ -48,7 +48,8 @@ try {
   await page.evaluate(async () => {
     const { ChessBoard } = await import('./../engine/chess-core.js');
     const app = window.__maiaStudioApp;
-    app.maiaEngine.initialize = async () => { app.maiaEngine.isReady = true; };
+    const waiting = new Promise(resolve => { window.releaseTestMaia = resolve; });
+    app.maiaEngine.initialize = async () => { await waiting; app.maiaEngine.isReady = true; };
     app.maiaEngine.predict = async (fen, elo, sf, abort) => {
       await new Promise(resolve => setTimeout(resolve, 35));
       if (abort?.()) return null;
@@ -60,6 +61,19 @@ try {
   await page.locator('#btn-submit-pgn').click();
   await page.waitForFunction(() => window.__maiaStudioApp.reviewResult, null, { timeout: 60000 });
   assert.equal(await page.locator('#review-summary').isVisible(), true);
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.maiaEngine.isReady), false, 'Scores render before delayed Maia initializes');
+  await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
+  assert.equal(await page.locator('#engine-candidate-lines').isVisible(), true, 'Engine variations remain visible while Maia waits');
+  const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
+  await page.locator('#intuition-toggle').click();
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'paused');
+  assert.equal(await page.locator('#val-accuracy-white').textContent(), coreAccuracy);
+  await page.evaluate(() => window.releaseTestMaia());
+  await page.locator('#intuition-toggle').click();
+  await page.waitForFunction(() => window.__maiaStudioApp.intuitionReview.state === 'done', null, { timeout: 60000 });
+  assert.equal(await page.locator('#val-accuracy-white').textContent(), coreAccuracy, 'Intuition enrichment does not rescore the game');
+  assert.equal(await page.locator('#candidate-comparison').count(), 0);
+  assert.equal(await page.locator('#maia-candidate-lines').isVisible(), true);
   assert.doesNotMatch(await page.locator('#val-accuracy-white').textContent(), /%/);
   assert.doesNotMatch(await page.locator('#val-accuracy-black').textContent(), /%/);
   assert.match(await page.locator('#accuracy-detail-black').textContent(), /\d+\/\d+/);
@@ -69,10 +83,12 @@ try {
   assert.match(await page.locator('.accuracy-method p').first().textContent(), /调和平均/);
   fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-desktop.png') });
-  await page.screenshot({ path: path.join(root, 'artifacts/studio-workspace-desktop.png') });
+  await page.locator('.accuracy-method summary').click();
+  await page.screenshot({ path: path.join(root, 'artifacts/studio-columns-desktop.png') });
   await page.setViewportSize({ width: 390, height: 900 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-mobile.png') });
+  await page.screenshot({path:path.join(root,'artifacts/studio-columns-mobile.png'),fullPage:true});
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.locator('#move-ply-4').click();
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3, null, { timeout: 20000 });
@@ -85,9 +101,10 @@ try {
   await page.evaluate(() => window.__maiaStudioApp.goToPly(4, { before: true }));
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.chess.getFen() === window.__maiaStudioApp.positions[3].fen), true);
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
-  await page.locator('.candidate-details summary').click();
   await page.locator('#engine-candidate-lines .candidate-move').first().click();
   assert.equal(await page.locator('#branch-banner').isVisible(), true);
+  assert.doesNotMatch(await page.locator('#branch-banner').innerText(), /🌿|探索其他可能/);
+  await page.screenshot({path:path.join(root,'artifacts/studio-columns-branch.png')});
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.branchFen === window.__maiaStudioApp.boardUI.chess.getFen()), true);
   await page.locator('#btn-exit-branch').click();
   assert.equal(await page.locator('#branch-banner').isVisible(), false);
@@ -112,6 +129,25 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.intuition-heat').length > 0, null, { timeout: 20000 });
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#review-settings').isVisible(), false);
+  // Switching Maia retains the engine report and does not start whole-game SF again.
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    window.coreBeforeSwitch = app.coreReview;
+    window.primaryWorkerBeforeSwitch = app.stockfish.worker;
+    const originalInit = app.initEngines.bind(app);
+    const predict = app.maiaEngine.predict;
+    app.initEngines = options => {
+      originalInit(options);
+      app.maiaEngine.initialize = async () => { app.maiaEngine.isReady = true; };
+      app.maiaEngine.predict = predict;
+    };
+  });
+  await page.locator('#btn-settings').click();
+  await page.locator('#intuition-edition').selectOption('23m');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.coreReview === window.coreBeforeSwitch), true);
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.stockfish.worker === window.primaryWorkerBeforeSwitch), true);
+  await page.waitForFunction(() => window.__maiaStudioApp.intuitionReview.state === 'done', null, { timeout:60000 });
   // Explicit fixtures exercise both key-move lists without implying real Maia classification evidence.
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;
@@ -125,9 +161,6 @@ try {
   assert.equal(await page.locator('.blunder-card').count(), 1);
   await page.locator('.blunder-card').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.isReviewingMove), true);
-  await page.waitForFunction(() => document.querySelectorAll('.comparison-table tbody tr').length > 0);
-  const comparedMoves = await page.locator('.comparison-table .candidate-move').allTextContents();
-  assert.equal(new Set(comparedMoves).size, comparedMoves.length, 'Candidate union has no duplicate moves');
   await page.locator('.practice-start').click();
   assert.equal(await page.locator('#practice-panel').isVisible(), true);
   assert.equal(await page.locator('.position-analysis').isVisible(), false);
@@ -183,8 +216,8 @@ try {
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.currentPly), 80);
   assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBox, 'Keyboard navigation must leave board position and size unchanged');
   assert.equal(await page.evaluate(() => scrollY), 0);
-  assert.equal(await page.locator('.analysis-column').evaluate(el => el.scrollTop > 0), true, 'Current key move scrolls only the right review column');
-  await page.locator('.analysis-column').hover();
+  assert.equal(await page.locator('.insight-column').evaluate(el => el.scrollTop > 0), true, 'Current key move scrolls only the right review column');
+  await page.locator('.insight-column').hover();
   await page.mouse.wheel(0, -650);
   await page.waitForTimeout(200);
   assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBox, 'Scrolling the right column must not move the board');
@@ -212,7 +245,7 @@ try {
   }), true, 'Chunked IndexedDB weights round-trip across boundaries; clearing one model preserves another');
   assert.deepEqual(errors, []);
   assert.equal(staleRequests, 0, 'Versioned style and shared translations bypass the deliberately stale four-hour responses');
-  console.log('✅ Browser UI passed: real Stockfish, bilingual layout, original controls, before/after positions, candidate rehearsal, settings, heatmap, sound, key filters, stale-game isolation and responsive widths. Maia uses a deterministic fixture in this regression.');
+  console.log('✅ Split review passed: delayed Maia, pause/resume, model-switch score reuse, three-column layout; browser UI passed: real Stockfish, bilingual layout, original controls, before/after positions, candidate rehearsal, settings, heatmap, sound, key filters, stale-game isolation and responsive widths. Maia uses a deterministic fixture in this regression.');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

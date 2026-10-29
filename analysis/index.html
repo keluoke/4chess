@@ -16,7 +16,7 @@
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
   <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
-  <link rel="stylesheet" href="analysis.css?v=20261029-studio">
+  <link rel="stylesheet" href="analysis.css?v=20261029-columns">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
 </head>
 <body class="diverge-ui">
@@ -76,7 +76,7 @@
     <section id="empty-study-intro" aria-label="Get started" hidden></section>
     <!-- Left: Chessboard Column -->
     <section class="board-column" aria-label="棋盘与局面走势">
-      <div class="workspace-section-heading"><span data-i18n="boardHeading">棋盘</span><small data-i18n="boardSubheading">点击或拖动棋子，试演其他可能</small></div>
+      <div class="workspace-section-heading"><span data-i18n="boardHeading">棋盘</span></div>
       <div class="board-with-evaluation">
         <div id="evaluation-gauge" class="evaluation-gauge" role="img" aria-label="白方视角得分：未计算">
           <div class="gauge-black" id="gauge-black"><span id="gauge-score-black"></span></div>
@@ -87,7 +87,7 @@
 
       <!-- Free Branch Exploration Banner -->
       <div id="branch-banner" class="branch-banner" style="display: none;">
-        <span id="branch-banner-text" data-i18n="branchBannerText">🌿 试演分支局面 · 探索其他可能</span>
+        <span id="branch-banner-text" data-i18n="branchBannerText">分支</span>
         <button type="button" class="btn-header" id="btn-exit-branch" data-i18n="btnExitBranch" style="height: 26px; padding: 0 10px; font-size: 11px;">返回对局</button>
       </div>
 
@@ -167,23 +167,22 @@
         </div>
       </div>
       <section class="position-analysis">
-        <div class="workspace-section-heading"><span data-i18n="compareTitle">比较当前选择</span></div>
-        <p class="comparison-note" data-i18n="compareNote">评分统一为白方视角；概率是所选等级的模型预测，并非胜率。</p>
         <div class="candidate-heading"><span data-i18n="engineCandidates">引擎</span><small id="candidate-engine-status"></small></div>
-        <div class="candidate-heading"><span data-i18n="intuitionCandidates">直觉</span><small id="candidate-maia-status"></small></div>
-        <div id="candidate-comparison" aria-live="polite"></div>
-        <details class="candidate-details"><summary data-i18n="compareLines">展开引擎与直觉变化</summary>
-
         <div class="candidate-lines engine-lines" id="engine-candidate-lines" aria-live="polite"></div>
-
+        <div class="candidate-heading"><span data-i18n="intuitionCandidates">直觉</span><small id="candidate-maia-status"></small></div>
         <div class="candidate-lines intuition-lines" id="maia-candidate-lines" aria-live="polite"></div>
-        </details>
+        <details class="analysis-help"><summary data-i18n="analysisHelp">说明</summary><p data-i18n="compareNote"></p></details>
         <p class="position-note" id="divergence-content" hidden></p>
       </section>
       <section class="notation-section" data-i18n-aria="notationHeading" aria-label="记谱">
         <div class="workspace-section-heading"><span><span id="lbl-tab-moves" data-i18n="notationHeading">记谱</span> (<span id="move-count-badge">0</span>)</span><small data-i18n="cardPlayed">实战着法</small></div>
         <div class="move-notation-table" id="move-notation-table"></div>
       </section>
+    </section>
+    <aside class="insight-column" data-i18n-aria="intuitionTitle" aria-label="直觉盲区">
+      <div class="insight-heading"><strong data-i18n="intuitionTitle">直觉盲区</strong><button id="intuition-toggle" class="btn-header" type="button" disabled data-i18n="intuitionStart">开始扫描</button></div>
+      <p id="intuition-progress" role="status" data-i18n="intuitionIdle">评分完成后独立扫描</p>
+      <details class="analysis-help"><summary data-i18n="analysisHelp">说明</summary><p data-i18n="intuitionHelp">逐步预测与复核妙手、俗手，不影响评分和当前局面分析。</p></details>
       <section class="key-moves-section" data-i18n-aria="keyMovesHeading" aria-label="关键步">
         <div class="workspace-section-heading"><span><span id="lbl-tab-blunders" data-i18n="keyMovesHeading">关键步</span> (<span id="blunder-count-badge">0</span>)</span></div>
         <div class="divergence-filters" id="divergence-filters">
@@ -194,7 +193,7 @@
         </div>
         <div class="blunder-list" id="blunder-list"></div>
       </section>
-    </section>
+    </aside>
   </main>
 
   <dialog class="review-settings-dialog" id="review-settings" data-i18n-aria="reviewSettings" aria-label="复盘设置">
@@ -256,7 +255,7 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261029-studio"></script>
+  <script type="module" src="analysis.js?v=20261029-columns"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {

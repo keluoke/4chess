@@ -49,6 +49,8 @@ export function showScanLock(app) {
     app.scanSourceLocked = true;
     app.positionAnalysis?.cancel();
     app.analyzer?.cancel();
+    app.intuitionReview?.dispose();
+    app.practice?.stop();
     app.stockfish?.reset();
     app.maiaEngine?.dispose();
     app.hasAnalysisInput = false;

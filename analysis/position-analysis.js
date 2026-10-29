@@ -1,5 +1,5 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261029-studio';
+import { t } from './i18n.js?v=20261029-columns';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -119,7 +119,16 @@ export class PositionAnalysis {
     finally { this.searchCount--; }
   }
 
+  get foregroundBusy() { return this.computingGeneration === this.generation; }
+
   async compute(snapshot) {
+    if (!this.current(snapshot)) return;
+    this.computingGeneration = snapshot.generation;
+    try { await this.computePosition(snapshot); }
+    finally { if (this.computingGeneration === snapshot.generation) this.computingGeneration = null; }
+  }
+
+  async computePosition(snapshot) {
     if (!this.current(snapshot)) return;
     const { ctx, entry } = snapshot;
     const board = new ChessBoard(ctx.fen);
@@ -214,46 +223,7 @@ export class PositionAnalysis {
       const match = lines.find(line => line.uci === move.uci);
       this.renderRow(maiaContainer, match?.evaluation || entry.maiaEvaluations.get(move.uci), match?.variation || legalVariation(ctx.fen, [move.uci]), app.settings.probability && Number.isFinite(move.prob) ? `${move.prob.toFixed(1)}%` : null, 'gold');
     });
-    this.renderComparison(lines, moves);
     this.renderOverlays(lines, moves);
-  }
-
-  renderComparison(lines, moves) {
-    const container = document.getElementById('candidate-comparison');
-    if (!container || !this.active) return;
-    container.replaceChildren();
-    const { ctx, entry } = this.active;
-    const played = this.app.reviewResult?.allMoves?.find(m => m.fenBefore === ctx.fen && m.ply === ctx.ply + 1);
-    const candidates = new Set([...lines.map(l => l.uci), ...moves.map(m => m.uci), ...(played?.uci ? [played.uci] : [])]);
-    if (!candidates.size) {
-      const message = document.createElement('p'); message.textContent = t('comparisonPending'); container.append(message); return;
-    }
-    const table = document.createElement('table'); table.className = 'comparison-table';
-    const head = document.createElement('thead'); const headers = document.createElement('tr');
-    for (const key of ['compareMove', 'compareScore', 'compareProbability']) {
-      const th = document.createElement('th'); th.scope = 'col'; th.textContent = t(key); headers.append(th);
-    }
-    head.append(headers); table.append(head);
-    const body = document.createElement('tbody');
-    for (const uci of candidates) {
-      const line = lines.find(l => l.uci === uci);
-      const prediction = entry.prediction?.moves?.find(m => m.uci === uci);
-      const variation = line?.variation || legalVariation(ctx.fen, [uci]);
-      if (!variation.length) continue;
-      const evaluation = line?.evaluation || entry.maiaEvaluations.get(uci) || (played?.uci === uci ? reviewEvaluation(played, true) : null);
-      const tr = document.createElement('tr'), moveCell = document.createElement('td');
-      const button = document.createElement('button'); button.type = 'button'; button.className = 'candidate-move'; button.textContent = variation[0].san;
-      button.onclick = () => this.app.previewCandidate(ctx, variation.slice(0, 1)); moveCell.append(button);
-      const roles = [];
-      if (uci === played?.uci) roles.push(t('comparePlayed'));
-      if (uci === lines[0]?.uci) roles.push(t('compareEngine'));
-      if (uci === moves[0]?.uci) roles.push(t('compareHuman'));
-      const badge = document.createElement('small'); badge.textContent = roles.join(' · '); moveCell.append(badge);
-      const scoreCell = document.createElement('td'); scoreCell.textContent = evaluation?.text || '—';
-      const probCell = document.createElement('td'); probCell.textContent = this.app.settings.probability && Number.isFinite(prediction?.prob) ? `${prediction.prob.toFixed(1)}%` : '—';
-      tr.append(moveCell, scoreCell, probCell); body.append(tr);
-    }
-    table.append(body); container.append(table);
   }
 
   renderLoadingStatuses() {

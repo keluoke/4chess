@@ -1,6 +1,7 @@
-import { isKeyMoment } from '../engine/review-policy.js?v=20261029-studio';
-import { ReviewPractice } from './review-practice.js?v=20261029-studio';
-import { authorizeScan, showScanLock } from './scan-authorization.js';
+import { IntuitionReview } from './intuition-review.js?v=20261029-columns';
+import { isKeyMoment } from '../engine/review-policy.js?v=20261029-columns';
+import { ReviewPractice } from './review-practice.js?v=20261029-columns';
+import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261029-columns';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -9,14 +10,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261029-studio';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261029-columns';
 import { BoardUI } from './board-ui.js?v=20261025-v115';
-import { EvalChart } from './eval-chart.js?v=20261029-studio';
+import { EvalChart } from './eval-chart.js?v=20261029-columns';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261029-studio';
+import { PositionAnalysis } from './position-analysis.js?v=20261029-columns';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261029-studio';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261029-columns';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -139,6 +140,7 @@ class AnalysisStudioApp {
   }
 
   initEngines({ keepStockfish = false } = {}) {
+    this.intuitionReview?.dispose();
     if (!keepStockfish) this.stockfish = new StockfishInBrowser({ variant: this.engineVariant });
     const stockfish = this.stockfish;
     stockfish.onDownloadProgress = () => { if (this.stockfish === stockfish) this.updateEngineStatus(); };
@@ -187,6 +189,7 @@ class AnalysisStudioApp {
     });
 
     this.positionAnalysis = new PositionAnalysis(this);
+    this.intuitionReview = new IntuitionReview(this);
 
     // 3. Initialize Sound Toggle state
     this.updateSoundToggleUI();
@@ -221,6 +224,7 @@ class AnalysisStudioApp {
       }
     }
     this.positionAnalysis?.renderLoadingStatuses();
+    this.intuitionReview?.render();
   }
 
   flipBoard() {
@@ -256,14 +260,13 @@ class AnalysisStudioApp {
       this.positionAnalysis.cancel();
       this.positionAnalysis.cache.clear();
       this.currentGameKey = this.getReviewKey();
-      // Invalidate review result so old Elo data is not mixed
       this.practice?.stop();
-      this.reviewResult = null;
-      if (this.moves && this.moves.length > 0 && !this.isBranching) {
-        this.runFullReview(false);
-      } else {
-        this.updateActivePositionAnalysis();
-      }
+      this.intuitionReview.dispose();
+      if (this.coreReview) {
+        this.applyReviewResult(this.coreReview);
+        this.intuitionReview.start();
+      } else if (this.moves.length && !this.isBranching) this.runFullReview(false);
+      else this.updateActivePositionAnalysis();
     });
 
     // Board controls
@@ -463,6 +466,7 @@ class AnalysisStudioApp {
   }
 
   refreshAfterLanguageChange() {
+    this.intuitionReview?.render();
     if (this.practice?.active) { this.practice.stop(); this.goToPly(this.currentPly, { before: true }); }
     if (!this.el) return;
     this.updatePreferenceNotes();
@@ -1073,10 +1077,13 @@ class AnalysisStudioApp {
     this.positionAnalysis.active = null;
     this.positionAnalysis.cache.clear();
     this.analyzer.cancel();
+    this.intuitionReview?.dispose();
     this.gameEpoch++;
     this.reviewEpoch++;
     this.practice?.stop();
     this.reviewResult = null;
+    this.coreReview = null;
+    this.intuitionReview?.render();
     this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && (fen !== ChessBoard.INITIAL_FEN || positionInput));
     document.body.classList.toggle('empty-study', !this.hasAnalysisInput);
     document.getElementById('empty-study-intro').hidden = this.hasAnalysisInput;
@@ -1195,12 +1202,18 @@ class AnalysisStudioApp {
     this.renderMoveList();
     this.goToPly(0, { silent: true });
 
-    const compatibleReview = cachedReview &&
+    const compatibleReview = cachedReview && GameAnalyzer.isValidReviewCache(cachedReview) &&
       (cachedReview.engineKey || 'sf19lite') === this.stockfish.engineKey &&
       (cachedReview.modelKey || 'maia3-5m') === this.maiaEngine.modelKey &&
       (cachedReview.elo == null || cachedReview.elo === this.currentElo);
     if (compatibleReview) {
       this.applyReviewResult(cachedReview);
+      if (!cachedReview.engineOnly && cachedReview.positionEvaluations) {
+        const epoch = this.gameEpoch;
+        this.analyzer.analyzeGame(this.moves, { engineOnly: true, depth: cachedReview.depth, baseReview: cachedReview }).then(core => {
+          if (this.gameEpoch === epoch && core) { this.coreReview = core; this.intuitionReview.render(); }
+        }).catch(error => console.warn('[Studio] Cached score restore failed:', error));
+      }
     } else if (autoReview || cachedReview) {
       this.runFullReview(false);
     }
@@ -1237,10 +1250,12 @@ class AnalysisStudioApp {
     const model = document.getElementById('intuition-edition').value;
     if (engine === this.engineVariant && model === this.modelVariant) return;
     const engineChanged = engine !== this.engineVariant;
+    const retainedCore = !engineChanged ? this.coreReview : null;
     if (this.isPlaying) this.toggleAutoPlay();
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
     this.reviewEpoch++;
+    this.intuitionReview?.dispose();
     this.gameEpoch++;
     this.maiaEngine.dispose();
     if (engineChanged) this.stockfish.reset();
@@ -1256,6 +1271,7 @@ class AnalysisStudioApp {
       history.replaceState(null, '', url);
     }
     this.initEngines({ keepStockfish: !engineChanged });
+    this.coreReview = retainedCore;
     this.currentGameKey = this.getReviewKey();
     this.practice?.stop();
     this.reviewResult = null;
@@ -1270,7 +1286,10 @@ class AnalysisStudioApp {
     for (const id of ['filter-count-all', 'filter-count-beyond', 'filter-count-trap']) document.getElementById(id).textContent = '0';
     this.el.divergenceContent.hidden = true;
     this.renderMoveList();
-    if (this.moves.length && !this.isBranching) this.runFullReview();
+    if (retainedCore) {
+      this.applyReviewResult(retainedCore);
+      this.intuitionReview.start();
+    } else if (this.moves.length && !this.isBranching) this.runFullReview();
     else this.updateActivePositionAnalysis();
   }
 
@@ -1302,6 +1321,7 @@ class AnalysisStudioApp {
 
   async runFullReview(forceRefresh = false) {
     this.practice?.stop();
+    this.intuitionReview?.dispose();
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
 
@@ -1323,28 +1343,13 @@ class AnalysisStudioApp {
     setTimeout(() => this.updateEngineStatus(), 0);
 
     this.el.blunderList.replaceChildren();
-    const loadingCard = document.createElement('div');
-    loadingCard.style.cssText = 'padding: 28px; text-align: center; color: var(--brand-green); font-size: 13px;';
-    const lTitle = document.createElement('div');
-    lTitle.style.cssText = 'margin-bottom: 8px; font-weight: 600;';
-    lTitle.textContent = t('launchingEngines');
-    loadingCard.appendChild(lTitle);
-    const lDetail = document.createElement('div');
-    lDetail.style.cssText = 'font-size: 11.5px; color: var(--text-dim);';
-    lDetail.id = 'blunder-loading-detail';
-    lDetail.textContent = t('startingEngines');
-    loadingCard.appendChild(lDetail);
-    this.el.blunderList.appendChild(loadingCard);
 
     try {
-      // Present the current position independently while each engine downloads/prepares.
+      // Scores must never wait for Maia download or position prediction.
       this.positionAnalysis.refresh({ calculate: false });
-      this.positionAnalysis.pending = this.positionAnalysis.compute(this.positionAnalysis.active);
-      await this.positionAnalysis.pending;
-      if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch || this.isBranching) return;
-      this.positionAnalysis.cancel();
       const result = await this.analyzer.analyzeGame(this.moves, {
         depth: GameAnalyzer.DEFAULT_DEPTH,
+        engineOnly: true,
         elo: targetElo,
         forceRefresh,
         onProgress: (prog) => {
@@ -1375,7 +1380,9 @@ class AnalysisStudioApp {
       this.el.progressCard.style.display = 'none';
       this.updateEngineStatus();
       if (result) {
+        this.coreReview = result;
         this.applyReviewResult(result);
+        this.intuitionReview.start();
       }
     } catch (err) {
       if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
@@ -1430,8 +1437,10 @@ class AnalysisStudioApp {
     });
   }
 
-  applyReviewResult(result) {
+  applyReviewResult(result, { refreshPosition = true } = {}) {
     this.reviewResult = result;
+    if (result.engineOnly) this.coreReview = result;
+    this.intuitionReview?.render();
 
     this.renderAccuracyDetails();
 
@@ -1480,7 +1489,7 @@ class AnalysisStudioApp {
 
     // 4. Update current position insight
     try {
-      this.updateActivePositionAnalysis();
+      if (refreshPosition) this.updateActivePositionAnalysis();
     } catch (err) {
       console.warn('[Analysis Studio] Failed to update active position analysis on review completion:', err);
     }
@@ -1678,7 +1687,10 @@ class AnalysisStudioApp {
       cardTop.appendChild(rightTag);
 
       cardMain.appendChild(cardTop);
-      cardMain.appendChild(cardSub);
+      const details = document.createElement('details'); details.className = 'card-details';
+      const summary = document.createElement('summary'); summary.textContent = t('analysisHelp');
+      summary.onclick = event => event.stopPropagation();
+      details.append(summary, cardSub); cardMain.append(details);
       card.appendChild(cardMain);
 
       card.addEventListener('click', () => {
@@ -1887,7 +1899,7 @@ class AnalysisStudioApp {
     blunderCards.forEach(c => {
       if (parseInt(c.dataset.ply, 10) === clampedPly) {
         c.classList.add('active');
-        this.scrollWithin(c, document.querySelector('.analysis-column'));
+        this.scrollWithin(c, document.querySelector('.insight-column'));
       } else {
         c.classList.remove('active');
       }
@@ -1940,8 +1952,10 @@ class AnalysisStudioApp {
         document.getElementById('engine-edition').value = engine; document.getElementById('intuition-edition').value = prefs.maiaVariant;
         this.changeEngineVersions({ persist: false });
       } else if (eloChanged) {
-        this.pauseWholeReview(); this.analyzer.cancel(); this.reviewEpoch++; this.currentGameKey = this.getReviewKey(); this.reviewResult = null;
-        if (this.moves.length && !this.isBranching) this.runFullReview(); else this.positionAnalysis.refresh();
+        this.intuitionReview.dispose();
+        this.currentGameKey = this.getReviewKey();
+        if (this.coreReview) { this.applyReviewResult(this.coreReview); this.intuitionReview.start(); }
+        else if (this.moves.length && !this.isBranching) this.runFullReview(); else this.positionAnalysis.refresh();
       } else if (this.positions.length) {
         if (calculate) this.positionAnalysis.refresh(); else this.positionAnalysis.render();
       }
@@ -1976,7 +1990,7 @@ class AnalysisStudioApp {
     this.el.branchBanner.style.display = 'flex';
     const last = moves.at(-1);
     this.boardUI.setPosition(this.branchFen, last ? { from: last.uci.slice(0, 2), to: last.uci.slice(2, 4) } : null);
-    this.el.boardStatusText.textContent = t('branchMoveIndicator', { move: moves.map(move => move.label).join(' ') || t('startingPosition') });
+    this.el.boardStatusText.textContent = last?.label || t('branchBannerText');
     this.renderStudyBranches();
     if (last) soundEffects.playSoundForMove(last.san);
     this.updateActivePositionAnalysis();
