@@ -28,7 +28,7 @@ const server = http.createServer(async (req, res) => {
  if (!file.startsWith(root + path.sep)) { res.writeHead(404);res.end();return; }
  if(fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');
  if(!fs.existsSync(file)){res.writeHead(404);res.end();return;}
- const mime={'.html':'text/html','.js':'application/javascript','.mjs':'application/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json','.xml':'application/xml','.txt':'text/plain'};
+ const mime={'.html':'text/html','.js':'application/javascript','.mjs':'application/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json','.xml':'application/xml','.txt':'text/plain','.woff2':'font/woff2'};
  res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});fs.createReadStream(file).pipe(res);
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -80,7 +80,9 @@ try {
  const cachedApi=await offline.evaluate(async()=>(await Promise.all((await caches.keys()).map(async k=>(await(await caches.open(k)).keys()).filter(r=>new URL(r.url).pathname.startsWith('/api/'))))).flat().length);
  assert.equal(cachedApi,0);results.api={upstreamCalls,cachedApi};
  await offlineContext.setOffline(true);await offline.reload();await offline.waitForFunction(()=>!!window.__maiaStudioApp?.positions.length);
- results.offline={app:true,firstOfflineReload:true};await offlineContext.close();
+ await offline.evaluate(() => document.fonts.ready);
+ assert.equal(await offline.evaluate(() => [...document.fonts].some(font => font.family === 'Inter' && font.status === 'loaded')), true, 'Inter is available on first offline reload');
+ results.offline={app:true,firstOfflineReload:true,font:true};await offlineContext.close();
 
  // Load exactly the user-facing unpacked directory, not the source tree or an old ZIP.
  const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))).version;

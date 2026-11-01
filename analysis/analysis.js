@@ -1,8 +1,8 @@
-import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261101-motion';
-import { IntuitionReview } from './intuition-review.js?v=20261101-motion';
-import { isKeyMoment } from '../engine/review-policy.js?v=20261101-motion';
-import { ReviewPractice } from './review-practice.js?v=20261101-motion';
-import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-motion';
+import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261101-dashboard';
+import { IntuitionReview } from './intuition-review.js?v=20261101-dashboard';
+import { isKeyMoment } from '../engine/review-policy.js?v=20261101-dashboard';
+import { ReviewPractice } from './review-practice.js?v=20261101-dashboard';
+import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-dashboard';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -11,14 +11,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261101-motion';
-import { BoardUI } from './board-ui.js?v=20261101-motion';
-import { EvalChart } from './eval-chart.js?v=20261101-motion';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261101-dashboard';
+import { BoardUI } from './board-ui.js?v=20261101-dashboard';
+import { EvalChart } from './eval-chart.js?v=20261101-dashboard';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261101-motion';
+import { PositionAnalysis } from './position-analysis.js?v=20261101-dashboard';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261101-motion';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261101-dashboard';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -1085,6 +1085,7 @@ class AnalysisStudioApp {
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = this.reviewPendingResume = false;
     this.savedBranches = [];
+    this.branchMotionLengths = new WeakMap();
     this.activeBranch = null;
     this.boardUI.clearAnnotations(true);
     this.renderStudyBranches();
@@ -1362,6 +1363,7 @@ class AnalysisStudioApp {
 
     this.el.progressCard.style.display = 'flex';
     this.el.progressBar.style.width = '0%';
+    this.el.progressCard.style.setProperty('--review-progress', '0');
     this.el.percentText.textContent = '0%';
     this.el.phaseText.textContent = t('preparingEngine');
     setTimeout(() => this.updateEngineStatus(), 0);
@@ -1380,6 +1382,7 @@ class AnalysisStudioApp {
           if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
           this.lastProgress = prog;
           this.el.progressBar.style.width = `${prog.percent}%`;
+          this.el.progressCard.style.setProperty('--review-progress', String(Math.max(0, Math.min(100, Number(prog.percent) || 0))));
           this.el.percentText.textContent = `${prog.percent}%`;
           const detailEl = document.getElementById('blunder-loading-detail');
           if (prog.phase === 'evaluating') {
@@ -1739,6 +1742,7 @@ class AnalysisStudioApp {
   }
 
   renderMoveList() {
+    cancelMotion(this.notationMarker);
     this.el.moveNotationTable.replaceChildren();
     if (!this.moves || this.moves.length === 0) return;
 
@@ -1872,6 +1876,9 @@ class AnalysisStudioApp {
   }
 
   highlightMoveRow(ply) {
+    const previous = this.el.moveNotationTable.querySelector('.notation-move.active');
+    cancelMotion(this.notationMarker);
+    this.notationMarker?.remove();
     const all = this.el.moveNotationTable.querySelectorAll('.notation-move');
     all.forEach(el => { cancelMotion(el); el.classList.remove('active'); });
     if (ply === 0) {
@@ -1883,9 +1890,21 @@ class AnalysisStudioApp {
       const activeEl = document.getElementById(`move-ply-${ply}`);
       if (activeEl) {
         activeEl.classList.add('active');
-        animateStudy(activeEl, [{ backgroundColor: 'var(--dg-blue-soft)', boxShadow: 'inset 3px 0 var(--brand-blue)' }, { backgroundColor: 'var(--dg-green-soft)', boxShadow: 'inset 0 0 transparent' }], 220);
+        this.notationMarker ||= document.createElement('span');
+        this.notationMarker.className = 'notation-selection';
+        this.notationMarker.setAttribute('aria-hidden', 'true');
+        activeEl.prepend(this.notationMarker);
         this.scrollWithin(activeEl, this.el.moveNotationTable);
         this.scrollWithin(activeEl, document.querySelector('.analysis-column'));
+        if (previous && previous !== activeEl) {
+          const from = previous.getBoundingClientRect(), to = activeEl.getBoundingClientRect();
+          // Keep long jumps immediate; adjacent selections carry the highlight only.
+          if (Math.abs(from.top - to.top) <= 80) animateStudy(this.notationMarker, [
+            { transform: `translate(${from.left - to.left}px,${from.top - to.top}px)` },
+            { transform: 'none' }
+          ], 180);
+        }
+
       }
     }
   }
@@ -2045,6 +2064,9 @@ class AnalysisStudioApp {
     if (!this.savedBranches.length) return;
     for (const branch of this.savedBranches) {
       const list = document.createElement('div'); list.className = 'study-branches';
+      this.branchMotionLengths ||= new WeakMap();
+      const previousLength = this.branchMotionLengths.get(branch);
+      this.branchMotionLengths.set(branch, branch.moves.length);
       list.setAttribute('aria-label', t('userBranches'));
       const label = document.createElement('span'); label.className = 'branch-origin';
       label.textContent = '↳'; list.append(label);
@@ -2058,6 +2080,11 @@ class AnalysisStudioApp {
       });
       const row = document.getElementById(`move-ply-${branch.base.ply + 1}`)?.closest('.notation-row') || document.getElementById(`move-ply-${branch.base.ply}`)?.closest('.notation-row');
       if (row) row.after(list); else this.el.moveNotationTable.append(list);
+      if (previousLength === undefined) {
+        animateStudy(list, [{ clipPath: 'inset(0 0 100% 0)', opacity: .5 }, { clipPath: 'inset(0)', opacity: 1 }], 240);
+      } else if (branch.moves.length > previousLength) {
+        animateStudy(list.lastElementChild, [{ opacity: 0, transform: 'translateX(-5px)' }, { opacity: 1, transform: 'none' }], 180);
+      }
     }
   }
 
@@ -2080,7 +2107,15 @@ class AnalysisStudioApp {
   }
 
   renderPositionHeading(evaluation, depth) {
-    document.getElementById('position-score').textContent = evaluation?.text || '—';
+    const score = document.getElementById('position-score');
+    const text = evaluation?.text || '—';
+    const fen = this.boardUI.chess.getFen();
+    // Animate the first measured score of a position, never every search-depth update.
+    if (text !== '—' && (this.lastScoreFen !== fen || score.textContent === '—')) {
+      animateStudy(score, [{ opacity: .55, transform: 'translateY(3px)' }, { opacity: 1, transform: 'none' }], 180);
+      this.lastScoreFen = fen;
+    } else if (text === '—') cancelMotion(score);
+    score.textContent = text;
     document.getElementById('position-context').textContent = t(this.isBranching ? 'chartBranch' : 'currentPosition');
     document.getElementById('position-search-depth').textContent = Number.isFinite(depth) ? `D${depth}` : '';
   }

@@ -1,4 +1,4 @@
-import { animateStudy, cancelMotion, motionEnabled } from './workbench-motion.js?v=20261101-motion';
+import { animateStudy, cancelMotion, motionEnabled } from './workbench-motion.js?v=20261101-dashboard';
 /**
  * Dedicated Interactive Chessboard Component for Maia-3 Analysis Studio
  * 100% self-contained, responsive, zero external framework dependency.

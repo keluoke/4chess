@@ -1,6 +1,6 @@
-import { animateStudy, cancelMotion } from './workbench-motion.js?v=20261101-motion';
+import { animateStudy, cancelMotion } from './workbench-motion.js?v=20261101-dashboard';
 /** Evaluation timeline. Original game and study branches never share mutable scores. */
-import { t, onLanguageChange } from './i18n.js?v=20261101-motion';
+import { t, onLanguageChange } from './i18n.js?v=20261101-dashboard';
 const NS = 'http://www.w3.org/2000/svg';
 
 export class EvalChart {

@@ -13,7 +13,7 @@ const staleAssets = new Map(['analysis.css', 'i18n.js'].map(name => [
   `/analysis/${name}`, execFileSync('git', ['show', `c669463:analysis/${name}`], { cwd: root })
 ]));
 let staleRequests = 0;
-const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.svg': 'image/svg+xml' };
+const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (staleAssets.has(url.pathname) && !url.searchParams.has('v')) {
@@ -36,6 +36,8 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/analysis/?lang=zh`);
   await page.waitForFunction(() => window.__maiaStudioApp?.positions?.length);
+  await page.evaluate(() => document.fonts.ready);
+  assert.equal(await page.evaluate(() => [...document.fonts].some(f => f.family === 'Inter' && f.status === 'loaded')), true, 'Bundled Inter actually loads');
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.stockfish.isReady), false, 'Blank landing must not initialize an engine');
   assert.equal(await page.locator('#text-status-sf').textContent(), '未启动');
   assert.equal(await page.locator('.candidate-line').count(), 0);
@@ -101,6 +103,8 @@ try {
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.maiaEngine.isReady), false, 'Scores render before delayed Maia initializes');
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
   assert.equal(await page.locator('#engine-candidate-lines').isVisible(), true, 'Engine variations remain visible while Maia waits');
+  assert.equal(await page.locator('#position-score').evaluate(el => getComputedStyle(el).fontSize), '48px');
+  assert.equal(await page.locator('.candidate-move').first().evaluate(el => getComputedStyle(el).fontSize), '14px');
   const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
   await page.locator('#intuition-toggle').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'paused');
@@ -131,6 +135,12 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3, null, { timeout: 20000 });
   await page.waitForFunction(() => document.querySelectorAll('#maia-candidate-lines .candidate-line').length === 3);
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.chess.getFen() === window.__maiaStudioApp.positionAnalysis.context().fen), true);
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    app.highlightMoveRow(3); app.highlightMoveRow(4);
+  });
+  assert.equal(await page.locator('#move-ply-4 .notation-selection').evaluate(el => el.getAnimations().some(a => a.effect.target === el)), true, 'Highlight slides independently of notation text');
+  assert.equal(await page.locator('#move-ply-4').evaluate(el => getComputedStyle(el).transform), 'none');
   const score = await page.locator('#evaluation-gauge').innerText();
   await page.locator('#btn-flip').click();
   assert.equal(await page.locator('#evaluation-gauge').innerText(), score, 'Flip preserves White-centric score and its sign');

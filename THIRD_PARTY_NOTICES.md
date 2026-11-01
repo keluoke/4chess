@@ -110,3 +110,13 @@ The studio also offers **Maia-3 23M**, reusing the existing CDN export at `https
 - Platform-neutral localization, coordinate detection, confidence/legality evidence and Qimi piece matching are synchronized from `chesspuzzle/services/vision/core`. `lib/vision/core-lock.json` pins the source tree, browser build and model hashes. Source bodies are preserved in static factories without eval. Browser capture, worker lifecycle and the WebAdapter remain separate platform code. Package source is available at https://github.com/keluoke/4chess/tree/main/lib/vision.
 - Chess legality validation uses **chess.js**, Copyright (c) 2022 Jeff Hlywa, under BSD-2-Clause; the upstream notice is preserved in the generated source and bundled as `LICENSES/chess-js-BSD-2-Clause.txt`.
 - Scan recognition runs locally. No Chessvision code, proprietary service or model is incorporated, and no comparative accuracy claim is made.
+
+## Inter variable font
+
+- Author: The Inter Project Authors; https://rsms.me/inter/
+- Version: 4.1, unmodified normal-style variable WOFF2 (352,240 bytes).
+- Source: https://rsms.me/inter/font-files/InterVariable.woff2?v=4.1
+- Local asset: `ui/fonts/InterVariable.woff2`
+- SHA-256: `693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3`
+- License: SIL Open Font License 1.1; full copyright and license in `LICENSES/Inter-OFL-1.1.txt` (upstream v4.1).
+- Used locally for study typography, including offline and packaged use. Chinese glyphs use the platform font fallback.
