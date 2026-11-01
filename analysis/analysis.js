@@ -1,7 +1,8 @@
-import { IntuitionReview } from './intuition-review.js?v=20261029-workbench';
-import { isKeyMoment } from '../engine/review-policy.js?v=20261029-workbench';
-import { ReviewPractice } from './review-practice.js?v=20261029-workbench';
-import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261029-workbench';
+import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261101-motion';
+import { IntuitionReview } from './intuition-review.js?v=20261101-motion';
+import { isKeyMoment } from '../engine/review-policy.js?v=20261101-motion';
+import { ReviewPractice } from './review-practice.js?v=20261101-motion';
+import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-motion';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -10,14 +11,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261029-
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261029-workbench';
-import { BoardUI } from './board-ui.js?v=20261025-v115';
-import { EvalChart } from './eval-chart.js?v=20261029-workbench';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261101-motion';
+import { BoardUI } from './board-ui.js?v=20261101-motion';
+import { EvalChart } from './eval-chart.js?v=20261101-motion';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261029-workbench';
+import { PositionAnalysis } from './position-analysis.js?v=20261101-motion';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261029-workbench';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261101-motion';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -179,6 +180,7 @@ class AnalysisStudioApp {
   initUI() {
     // 1. Initialize BoardUI
     this.boardUI = new BoardUI(this.el.boardContainer, {
+      motion: true,
       orientation: 'white',
       onMove: (move, newFen) => this.handleUserBoardMove(move, newFen)
     });
@@ -195,9 +197,11 @@ class AnalysisStudioApp {
     try { document.body.classList.toggle('focus-mode', localStorage.getItem('diverge_studio_focus') === 'true'); } catch {}
     const focusButton = document.getElementById('btn-focus');
     focusButton.onclick = () => {
-      const focused = document.body.classList.toggle('focus-mode');
-      focusButton.setAttribute('aria-pressed', String(focused));
-      try { localStorage.setItem('diverge_studio_focus', String(focused)); } catch {}
+      transitionLayout([...document.querySelectorAll('.board-column, .analysis-column, .insight-column')], () => {
+        const focused = document.body.classList.toggle('focus-mode');
+        focusButton.setAttribute('aria-pressed', String(focused));
+        try { localStorage.setItem('diverge_studio_focus', String(focused)); } catch {}
+      });
     };
     focusButton.setAttribute('aria-pressed', String(document.body.classList.contains('focus-mode')));
 
@@ -1098,6 +1102,13 @@ class AnalysisStudioApp {
     this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && (fen !== ChessBoard.INITIAL_FEN || positionInput));
     document.body.classList.toggle('empty-study', !this.hasAnalysisInput);
     document.getElementById('empty-study-intro').hidden = this.hasAnalysisInput;
+    if (this.hasAnalysisInput && !this.workspaceEntered) {
+      this.workspaceEntered = true;
+      document.querySelectorAll('.board-column, .analysis-column, .insight-column').forEach((column, i) => {
+        animateStudy(column, [{ opacity: 0 }, { opacity: 1 }], 280 + i * 60);
+      });
+    }
+
     document.body.classList.toggle('position-only', !!fen && !pgn && !moves?.length && this.hasAnalysisInput);
     this.isReviewingMove = false;
     this.isBranching = false;
@@ -1862,7 +1873,7 @@ class AnalysisStudioApp {
 
   highlightMoveRow(ply) {
     const all = this.el.moveNotationTable.querySelectorAll('.notation-move');
-    all.forEach(el => el.classList.remove('active'));
+    all.forEach(el => { cancelMotion(el); el.classList.remove('active'); });
     if (ply === 0) {
       this.el.moveNotationTable.scrollTop = 0;
       document.querySelector('.analysis-column').scrollTop = 0;
@@ -1872,6 +1883,7 @@ class AnalysisStudioApp {
       const activeEl = document.getElementById(`move-ply-${ply}`);
       if (activeEl) {
         activeEl.classList.add('active');
+        animateStudy(activeEl, [{ backgroundColor: 'var(--dg-blue-soft)', boxShadow: 'inset 3px 0 var(--brand-blue)' }, { backgroundColor: 'var(--dg-green-soft)', boxShadow: 'inset 0 0 transparent' }], 220);
         this.scrollWithin(activeEl, this.el.moveNotationTable);
         this.scrollWithin(activeEl, document.querySelector('.analysis-column'));
       }
@@ -1914,9 +1926,12 @@ class AnalysisStudioApp {
     const blunderCards = this.el.blunderList.querySelectorAll('.blunder-card');
     blunderCards.forEach(c => {
       if (parseInt(c.dataset.ply, 10) === clampedPly) {
+        const newlySelected = !c.classList.contains('active');
         c.classList.add('active');
+        if (newlySelected) animateStudy(c, [{ boxShadow: '0 0 0 3px var(--dg-blue-soft)' }, { boxShadow: '0 0 0 0 transparent' }], 480);
         this.scrollWithin(c, document.querySelector('.insight-column'));
       } else {
+        cancelMotion(c);
         c.classList.remove('active');
       }
     });
@@ -2072,6 +2087,11 @@ class AnalysisStudioApp {
 
   renderCurrentInsight() {
     const panel = document.getElementById('current-insight');
+    const contextKey = `${this.isBranching}:${this.currentPly}:${this.activeBranch?.cursor ?? ''}`;
+    if (panel.dataset.context !== contextKey) {
+      animateStudy(panel, [{ opacity: .55, transform: 'translateY(5px)' }, { opacity: 1, transform: 'none' }], 180);
+      panel.dataset.context = contextKey;
+    }
     panel.replaceChildren();
     const move = this.reviewResult?.allMoves?.find(move => move.ply === this.currentPly);
     if (!this.isBranching && !move) { panel.hidden = true; return; }

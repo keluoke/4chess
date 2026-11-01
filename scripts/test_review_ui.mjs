@@ -29,7 +29,7 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chrome', headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   const errors = [];
@@ -56,6 +56,43 @@ try {
       return { moves: new ChessBoard(fen).getLegalMoves().slice(0, 3).map((move, index) => ({ ...move, prob: [37, 23, 12][index] })), heatmap: Array(64).fill(.2) };
     };
   });
+  // Exercise actual Web Animations against rendered pieces, including interruption,
+  // castling and changing reduced-motion while an animation is running.
+  const motionFixture = await page.evaluate(async () => {
+    const { ChessBoard } = await import('../engine/chess-core.js');
+    const board = window.__maiaStudioApp.boardUI;
+    const start = new ChessBoard().getFen();
+    const chess = new ChessBoard(start);
+    chess.makeMove(chess.getLegalMoves().find(m => m.uci === 'e2e4'));
+    const moved = chess.getFen();
+    board.setPosition(start);
+    board.setPosition(moved, { from: 'e2', to: 'e4' });
+    const animated = board.squareEls.e4.querySelector('.maia-piece').getAnimations().length;
+    board.setPosition(start);
+    board.setPosition(moved, { from: 'e2', to: 'e4' });
+    const concurrent = board.container.getAnimations({ subtree: true }).filter(a => a.effect.target.classList.contains('maia-piece')).length;
+    const castle = 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1';
+    const c = new ChessBoard(castle);
+    c.makeMove(c.getLegalMoves().find(m => m.uci === 'e1g1'));
+    board.setPosition(castle);
+    board.setPosition(c.getFen(), { from: 'e1', to: 'g1' });
+    const castling = ['g1','f1'].map(sq => board.squareEls[sq].querySelector('.maia-piece').getAnimations().length);
+    window.motionFixture = { start, moved };
+    return { animated, concurrent, castling, fen: board.chess.getFen(), expected: c.getFen() };
+  });
+  assert.equal(motionFixture.animated, 1);
+  assert.equal(motionFixture.concurrent, 1, 'Rapid navigation cancels earlier piece motion');
+  assert.deepEqual(motionFixture.castling, [1, 1], 'King and rook animate together');
+  assert.equal(motionFixture.fen, motionFixture.expected, 'Logical board settles before animation');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.waitForTimeout(50);
+  assert.equal(await page.evaluate(() => {
+    const board = window.__maiaStudioApp.boardUI;
+    board.setPosition(window.motionFixture.start);
+    board.setPosition(window.motionFixture.moved);
+    return board.container.getAnimations({ subtree: true }).length;
+  }), 0, 'Reduced motion cancels in-flight animations and suppresses new ones');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.locator('#btn-import-pgn').click();
   await page.locator('#pgn-input').fill('[White "Whitehouse"]\n[Black "Blackwell"]\n[Result "1-0"]\n1. e4 e5 2. Nf3 f6 3. Nxe5 fxe5 4. Qh5+ Ke7 1-0');
   await page.locator('#btn-submit-pgn').click();
@@ -143,9 +180,32 @@ try {
   assert.equal(await page.locator('#btn-focus').getAttribute('aria-pressed'), 'true');
   await page.screenshot({path:path.join(root,'artifacts/workbench-focus-desktop.png')});
   await page.locator('#btn-focus').click();
+  const frameSample = await page.evaluate(() => new Promise(resolve => {
+    const deltas = []; let previous, frame = 0;
+    function tick(now) {
+      if (previous !== undefined) deltas.push(now - previous);
+      previous = now;
+      if ([0, 8, 16, 24].includes(frame)) document.getElementById('btn-focus').click();
+      if (++frame < 60) requestAnimationFrame(tick);
+      else resolve({ frames: deltas.length, maxMs: Math.max(...deltas), over50ms: deltas.filter(ms => ms > 50).length });
+    }
+    requestAnimationFrame(tick);
+  }));
+  fs.writeFileSync(path.join(root, 'artifacts/workbench-motion-frames.json'), JSON.stringify({ ...frameSample, scope: 'Local headless browser; real Stockfish, deterministic Maia; not a device performance benchmark' }, null, 2));
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.insight-column').isVisible(), true, 'Interrupted focus transitions retain final layout');
+  assert.equal(await page.locator('.board-column').evaluate(el => getComputedStyle(el).transform), 'none');
   await page.locator('[data-theme-toggle]').click();
   await page.waitForTimeout(350);
   await page.screenshot({path:path.join(root,'artifacts/workbench-dark-desktop.png')});
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: path.join(root, 'artifacts/workbench-dark-mobile.png'), fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: path.join(root, 'artifacts/workbench-dark-mobile-board.png') });
+  await page.locator('.position-analysis').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(root, 'artifacts/workbench-dark-mobile-analysis.png') });
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await page.locator('[data-theme-toggle]').click();
   await page.locator('#btn-exit-branch').click();
   assert.equal(await page.locator('#eval-branch-dots circle').count(), 0);
@@ -252,6 +312,7 @@ try {
     })));
     document.activeElement?.blur();
   });
+  assert.equal(await page.locator('.eval-chart-wrapper').evaluate(el => el.getBoundingClientRect().bottom <= innerHeight), true, 'Chart remains inside desktop viewport');
   const boardBox = await page.locator('#board-container').boundingBox();
   await page.keyboard.press('Home');
   await page.keyboard.press('End');

@@ -1,3 +1,4 @@
+import { animateStudy, cancelMotion, motionEnabled } from './workbench-motion.js?v=20261101-motion';
 /**
  * Dedicated Interactive Chessboard Component for Maia-3 Analysis Studio
  * 100% self-contained, responsive, zero external framework dependency.
@@ -10,6 +11,7 @@ import { CHESS_PIECES_SVG } from './chess-pieces.js';
 export class BoardUI {
   constructor(containerEl, options = {}) {
     this.container = containerEl;
+    this.motion = options.motion === true;
     this.orientation = options.orientation || 'white';
     this.onMove = options.onMove || null; // callback(fromSq, toSq, promotion)
     this.onSelectSquare = options.onSelectSquare || null;
@@ -101,18 +103,27 @@ export class BoardUI {
   }
 
   flip() {
+    this.cancelPieceMotion();
     this.orientation = this.orientation === 'white' ? 'black' : 'white';
     this.render();
   }
 
   setOrientation(color) {
     if (this.orientation !== color) {
+      this.cancelPieceMotion();
       this.orientation = color;
       this.render();
     }
   }
 
+  cancelPieceMotion() {
+    this.container.querySelectorAll('.maia-piece').forEach(cancelMotion);
+  }
+
   setPosition(fen, lastMove = null) {
+    this.cancelPieceMotion();
+    const before = this.chess.board.map(p => p ? p.color + p.type : null);
+    const oldPly = this.chess.fullMoves * 2 + (this.chess.turn === 'b' ? 1 : 0);
     this.cancelGesture();
     this.closePromotion();
     this.chess.load(fen);
@@ -126,6 +137,24 @@ export class BoardUI {
     this.selectedSq = null;
     this.legalMovesForSelected = [];
     this.render();
+    const newPly = this.chess.fullMoves * 2 + (this.chess.turn === 'b' ? 1 : 0);
+    if (this.motion && motionEnabled() && Math.abs(newPly - oldPly) === 1) {
+      const after = this.chess.board.map(p => p ? p.color + p.type : null);
+      const changed = before.map((p, i) => p !== after[i] ? i : -1).filter(i => i >= 0);
+      // Adjacent moves only; unique matching also moves the rook during castling.
+      if (changed.length <= 4) for (const to of changed) {
+        if (!after[to]) continue;
+        const origins = changed.filter(from => before[from] === after[to] && after[from] !== after[to]);
+        if (origins.length !== 1) continue;
+        const fromEl = this.squareEls[ChessBoard.indexToSquare(origins[0])];
+        const toEl = this.squareEls[ChessBoard.indexToSquare(to)];
+        const source = fromEl.getBoundingClientRect(), target = toEl.getBoundingClientRect();
+        animateStudy(toEl.querySelector('.maia-piece'), [
+          { transform: `translate(${source.left - target.left}px,${source.top - target.top}px)`, zIndex: 5 },
+          { transform: 'none', zIndex: 5 }
+        ], 160);
+      }
+    }
   }
 
   setArrows(arrows) {
@@ -351,6 +380,7 @@ export class BoardUI {
     this.boardEl.addEventListener('contextmenu', event => event.preventDefault());
     this.boardEl.addEventListener('dragstart', event => event.preventDefault());
     this.boardEl.addEventListener('pointerdown', event => {
+      this.cancelPieceMotion();
       if (event.target.closest('.promotion-picker') || this.promotionPicker || ![0, 2].includes(event.button)) return;
       const square = this.squareAtPoint(event.clientX, event.clientY);
       if (!square) return;

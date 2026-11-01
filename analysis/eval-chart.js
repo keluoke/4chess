@@ -1,5 +1,6 @@
+import { animateStudy, cancelMotion } from './workbench-motion.js?v=20261101-motion';
 /** Evaluation timeline. Original game and study branches never share mutable scores. */
-import { t, onLanguageChange } from './i18n.js?v=20261029-workbench';
+import { t, onLanguageChange } from './i18n.js?v=20261101-motion';
 const NS = 'http://www.w3.org/2000/svg';
 
 export class EvalChart {
@@ -24,7 +25,8 @@ export class EvalChart {
         <svg class="eval-chart-svg" viewBox="0 0 1000 160" preserveAspectRatio="none" role="img">
           <g class="eval-grid"><line x1="0" y1="41.333" x2="1000" y2="41.333"/><line x1="0" y1="80" x2="1000" y2="80"/><line x1="0" y1="118.667" x2="1000" y2="118.667"/></g>
           <path id="eval-line-path" fill="none" stroke="var(--brand-blue)" stroke-width="2"/>
-          <path id="eval-branch-path" fill="none" stroke="var(--brand-blue)" stroke-width="2.5"/>
+          <path id="eval-branch-path" pathLength="1" fill="none" stroke="var(--brand-blue)" stroke-width="2.5"/>
+          <path id="eval-arrival-path" fill="none" stroke="var(--brand-blue)" stroke-width="4" pathLength="1" opacity="0" pointer-events="none"/>
           <line id="eval-fork-line" y1="0" y2="160" stroke="var(--border-color)" opacity="0"/>
           <g id="eval-dots-group"></g><g id="eval-branch-dots"></g>
           <line id="eval-hover-line" y1="0" y2="160" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
@@ -35,6 +37,7 @@ export class EvalChart {
     const q = selector => this.container.querySelector(selector);
     this.svg = q('svg'); this.tooltip = q('.eval-chart-tooltip'); this.cursorBadge = q('.eval-chart-badge');
     this.linePath = q('#eval-line-path'); this.branchPath = q('#eval-branch-path'); this.forkLine = q('#eval-fork-line');
+    this.arrivalPath = q('#eval-arrival-path');
     this.dotsGroup = q('#eval-dots-group'); this.branchDots = q('#eval-branch-dots');
     this.hoverLine = q('#eval-hover-line'); this.scrubLine = q('#eval-scrub-line'); this.scrubDot = q('#eval-scrub-dot');
     this.svg.addEventListener('pointermove', event => this.showTooltip(event));
@@ -64,6 +67,7 @@ export class EvalChart {
   }
 
   setBranch(branch) {
+    if (!branch) { cancelMotion(this.arrivalPath); this.arrivalPath.setAttribute('d', ''); }
     this.branch = branch;
     this.hideTooltip();
     this.render();
@@ -195,7 +199,30 @@ export class EvalChart {
     this.linePath.setAttribute('d', this.path(this.mainPoints));
     this.linePath.setAttribute('stroke', this.branch ? 'var(--text-muted)' : 'var(--brand-blue)');
     this.linePath.setAttribute('stroke-dasharray', this.branch ? '5 5' : '');
-    this.branchPath.setAttribute('d', this.path(this.branch?.points || []));
+    const branchPath = this.path(this.branch?.points || []);
+    const previousPath = this.branchPath.getAttribute('d') || '';
+    if (branchPath !== previousPath) {
+      cancelMotion(this.branchPath);
+      // Highlight only measured, newly changed edges. Pending gaps remain gaps.
+      const points = this.branch?.points || [];
+      const edges = points.slice(1).flatMap((point, i) => {
+        const prev = points[i];
+        if (!this.known(point) || !this.known(prev)) return [];
+        const key = `${prev.ply}:${prev.cp}:${point.ply}:${point.cp}`;
+        return [{ key, path: `M${this.x(prev.ply)},${this.y(prev.cp)} L${this.x(point.ply)},${this.y(point.cp)}` }];
+      });
+      const fresh = edges.filter(edge => !this.branchEdges?.has(edge.key));
+      this.branchEdges = new Set(edges.map(edge => edge.key));
+      this.arrivalPath.setAttribute('d', fresh.map(edge => edge.path).join(' '));
+      animateStudy(this.arrivalPath, [
+        { strokeDasharray: '1', strokeDashoffset: '1', opacity: .9 },
+        { strokeDasharray: '1', strokeDashoffset: '0', opacity: 0 }
+      ], 360);
+    }
+    this.branchPath.setAttribute('d', branchPath);
+    if (branchPath.includes('L') && !previousPath.includes('L')) {
+      animateStudy(this.branchPath, [{ strokeDasharray: '1', strokeDashoffset: '1' }, { strokeDasharray: '1', strokeDashoffset: '0' }], 260);
+    }
     this.forkLine.style.opacity = this.branch ? '1' : '0';
     if (this.branch) { this.forkLine.setAttribute('x1', this.x(this.branch.basePly)); this.forkLine.setAttribute('x2', this.x(this.branch.basePly)); }
     this.dotsGroup.replaceChildren(); this.branchDots.replaceChildren();
