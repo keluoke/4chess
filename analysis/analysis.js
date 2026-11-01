@@ -1,8 +1,9 @@
-import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261101-dashboard';
-import { IntuitionReview } from './intuition-review.js?v=20261101-dashboard';
-import { isKeyMoment } from '../engine/review-policy.js?v=20261101-dashboard';
-import { ReviewPractice } from './review-practice.js?v=20261101-dashboard';
-import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-dashboard';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261101-ultrawide';
+import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261101-ultrawide';
+import { IntuitionReview } from './intuition-review.js?v=20261101-ultrawide';
+import { isKeyMoment } from '../engine/review-policy.js?v=20261101-ultrawide';
+import { ReviewPractice } from './review-practice.js?v=20261101-ultrawide';
+import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-ultrawide';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -11,14 +12,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261101-
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261101-dashboard';
-import { BoardUI } from './board-ui.js?v=20261101-dashboard';
-import { EvalChart } from './eval-chart.js?v=20261101-dashboard';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261101-ultrawide';
+import { BoardUI } from './board-ui.js?v=20261101-ultrawide';
+import { EvalChart } from './eval-chart.js?v=20261101-ultrawide';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261101-dashboard';
+import { PositionAnalysis } from './position-analysis.js?v=20261101-ultrawide';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261101-dashboard';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261101-ultrawide';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
@@ -88,6 +89,7 @@ class AnalysisStudioApp {
       document.documentElement.style.setProperty('--studio-header-height', `${Math.ceil(document.querySelector('.studio-navbar').getBoundingClientRect().height)}px`);
     });
     this.headerObserver.observe(document.querySelector('.studio-navbar'));
+    this.workbenchLayout = initWorkbenchLayout();
     this.loadInitialGame();
   }
 
@@ -1895,7 +1897,7 @@ class AnalysisStudioApp {
         this.notationMarker.setAttribute('aria-hidden', 'true');
         activeEl.prepend(this.notationMarker);
         this.scrollWithin(activeEl, this.el.moveNotationTable);
-        this.scrollWithin(activeEl, document.querySelector('.analysis-column'));
+        this.scrollWithin(activeEl, document.querySelector(matchMedia('(min-width: 1800px)').matches ? '.analysis-scroll' : '.analysis-column'));
         if (previous && previous !== activeEl) {
           const from = previous.getBoundingClientRect(), to = activeEl.getBoundingClientRect();
           // Keep long jumps immediate; adjacent selections carry the highlight only.

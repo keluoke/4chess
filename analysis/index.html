@@ -16,10 +16,10 @@
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
   <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
-  <link rel="stylesheet" href="analysis.css?v=20261101-dashboard">
+  <link rel="stylesheet" href="analysis.css?v=20261101-ultrawide">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261101-dashboard">
+  <link rel="stylesheet" href="workbench.css?v=20261101-ultrawide">
 </head>
 <body class="diverge-ui">
   <script>
@@ -130,6 +130,7 @@
         <div class="eval-chart-wrapper" id="eval-chart-container"></div>
     </section>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
+      <div class="analysis-scroll">
       <section class="review-summary" id="review-summary" hidden>
       <div class="accuracy-heading"><strong data-i18n="accuracyLabel">引擎精度</strong><span data-i18n="accuracyScale">0–100 分</span></div>
       <!-- Engine Accuracy Summary Card -->
@@ -175,10 +176,14 @@
           <div><span id="position-context" data-i18n="currentPosition">当前局面</span><small data-i18n="whitePerspective">白方视角</small></div>
           <div class="position-score-row"><strong id="position-score">—</strong><span id="position-search-depth"></span></div>
         </div>
+        <div class="candidate-group">
         <div class="candidate-heading"><span data-i18n="engineCandidates">引擎</span><small id="candidate-engine-status"></small></div>
         <div class="candidate-lines engine-lines" id="engine-candidate-lines" aria-live="polite"></div>
+        </div>
+        <div class="candidate-group">
         <div class="candidate-heading"><span data-i18n="intuitionCandidates">直觉</span><small id="candidate-maia-status"></small></div>
         <div class="candidate-lines intuition-lines" id="maia-candidate-lines" aria-live="polite"></div>
+        </div>
         <details class="analysis-help"><summary data-i18n="analysisHelp">说明</summary><p data-i18n="compareNote"></p></details>
         <p class="position-note" id="divergence-content" hidden></p>
       </section>
@@ -186,6 +191,7 @@
         <div class="workspace-section-heading"><span><span id="lbl-tab-moves" data-i18n="notationHeading">记谱</span> (<span id="move-count-badge">0</span>)</span><small data-i18n="cardPlayed">实战着法</small></div>
         <div class="move-notation-table" id="move-notation-table"></div>
       </section>
+      </div>
     </section>
     <aside class="insight-column" id="insight-column" data-i18n-aria="intuitionTitle" aria-label="直觉盲区">
       <section id="current-insight" class="current-insight" aria-live="polite" hidden></section>
@@ -264,7 +270,7 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261101-dashboard"></script>
+  <script type="module" src="analysis.js?v=20261101-ultrawide"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {

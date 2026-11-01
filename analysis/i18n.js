@@ -9,6 +9,8 @@ const STORAGE_KEY = 'maia3_lang';
 export const DICTIONARY = {
   zh: {
     focusMode: "专注",
+    resizeBoard: "调整棋盘宽度（方向键调整，双击或 Home 恢复）",
+    resizeInsight: "调整直觉栏宽度（方向键调整，双击或 Home 恢复）",
     currentPosition: "当前局面",
     whitePerspective: "白方视角",
     chartOriginal: "实战",
@@ -296,6 +298,8 @@ export const DICTIONARY = {
 
   en: {
     focusMode: "Focus",
+    resizeBoard: "Resize board (arrow keys; double-click or Home to reset)",
+    resizeInsight: "Resize insights (arrow keys; double-click or Home to reset)",
     currentPosition: "Current position",
     whitePerspective: "White’s perspective",
     chartOriginal: "Game",

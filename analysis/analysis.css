@@ -1408,10 +1408,10 @@ body{font-size:14px;user-select:auto}
 .practice-panel h2 { margin:0 0 12px; font-size:19px; }
 .practice-panel p { font-size:15px; line-height:1.7; }
 .practice-panel[hidden] { display:none; }
-.practice-active .analysis-column > :not(#practice-panel),
+.practice-active .analysis-scroll > :not(#practice-panel),
 .practice-active .evaluation-gauge,.practice-active .eval-chart-wrapper,
 .practice-active .board-controls .btn-nav-group { visibility:hidden; pointer-events:none; }
-.practice-active .analysis-column > :not(#practice-panel) { display:none !important; }
+.practice-active .analysis-scroll > :not(#practice-panel) { display:none !important; }
 .practice-active #board-status-text { font-size:14px !important; }
 @media(min-width:721px) {
   .board-column { max-width:min(100%,calc(100dvh - var(--studio-header-height,80px) - 230px)); }
