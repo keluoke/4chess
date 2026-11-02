@@ -5,7 +5,7 @@
  * and Maia human intuition trap detection.
  */
 
-import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261101-ultrawide';
+import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261102-san-case';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
@@ -447,10 +447,11 @@ export class GameAnalyzer {
     for (let i = 0; i < moves.length; i++) {
       const mItem = moves[i];
       const legals = chess.getLegalMoves();
+      // SAN is case-sensitive: Bxc3 (bishop) and bxc3 (pawn) are different moves.
       const cleanSan = mItem.san.replace(/[+#?!]/g, '');
       const matched = legals.find(m => {
         const mClean = m.san.replace(/[+#?!]/g, '');
-        return mClean === cleanSan || m.uci === cleanSan || mClean.toLowerCase() === cleanSan.toLowerCase();
+        return mClean === cleanSan || m.uci === cleanSan;
       });
 
       if (!matched) {
@@ -484,7 +485,7 @@ export class GameAnalyzer {
     return positions;
   }
 
-  static SCHEMA_VERSION = 10;
+  static SCHEMA_VERSION = 11;
   static DEFAULT_DEPTH = 12;
 
   static winScore(cp) {

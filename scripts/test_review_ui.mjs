@@ -428,6 +428,22 @@ try {
     await ModelCache.clearCache('chunked-fixture');
     return await ModelCache.getModel('chunked-fixture') === null && (await ModelCache.getModel('small-fixture')).byteLength === 2;
   }), true, 'Chunked IndexedDB weights round-trip across boundaries; clearing one model preserves another');
+  // User-reported bishop/b-pawn collision: import, full engine pass, final board and chart.
+  await page.setViewportSize({width:1440,height:1100});
+  const casePgn = fs.readFileSync(path.join(root,'scripts/fixtures/dorocha-clarkyan-20261102.pgn'),'utf8');
+  const caseReference = JSON.parse(fs.readFileSync(path.join(root,'scripts/fixtures/dorocha-clarkyan-20261102.positions.json'),'utf8'));
+  const caseResult = await page.evaluate(async pgn => {
+    const app = window.__maiaStudioApp;
+    app.startNewSession({pgn,autoReview:false});
+    const result = await app.analyzer.analyzeGame(app.moves,{engineOnly:true,depth:6,forceRefresh:true});
+    app.applyReviewResult(result); app.goToPly(58,{silent:true});
+    return {fens:app.positions.map(p=>p.fen),final:app.boardUI.chess.getFen(),total:result.totalMoves,last:result.allMoves.at(-1).san,partial:app.moves.isPartial || false};
+  },casePgn);
+  assert.deepEqual(caseResult.fens,caseReference.positions);
+  assert.equal(caseResult.partial,false);assert.equal(caseResult.total,58);assert.equal(caseResult.last,'Qxc1#');
+  assert.equal(caseResult.final,caseReference.positions.at(-1));
+  assert.equal(await page.locator('#move-ply-58').count(),1);
+  await page.screenshot({path:path.join(root,'artifacts/san-case-checkmate-20261102.png')});
   assert.deepEqual(errors, []);
   assert.equal(staleRequests, 0, 'Versioned style and shared translations bypass the deliberately stale four-hour responses');
   console.log('✅ Workbench passed: branch curves without Maia readiness, extended axis, chart/board/notation navigation, report isolation, focus mode and light/dark themes. Split review, retry, settings, stale-game isolation and responsive widths passed with real Stockfish and deterministic Maia fixtures.');

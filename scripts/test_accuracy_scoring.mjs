@@ -38,4 +38,5 @@ assert(result.accuracyBlack < result.accuracyWhite);
 assert.equal(result.accuracyBlack, G.aggregateAccuracy(result.allMoves.filter(m => m.turn === 'b' && !m.isOnlyLegalMove)));
 assert.notEqual(G.getGameKey(moves), G.getGameKey(moves, { depth: 6 }));
 assert.equal(G.isValidReviewCache({ ...result, schemaVersion: 7 }), false, 'Old arithmetic-mean reports must be invalidated');
+assert.equal(G.isValidReviewCache({ ...result, schemaVersion: 10 }), false, 'Reports built with case-insensitive SAN replay must be invalidated');
 console.log('PASS accuracy: real scorer, critical loss weighting, missing data, depth, side perspective and cache migration');

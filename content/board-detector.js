@@ -200,11 +200,12 @@ export class BoardDetector {
         if (prefix) san = prefix + san;
       }
 
+      // SAN is case-sensitive: Bxc3 (bishop) and bxc3 (pawn) are different moves.
       const cleanSan = san.replace(/[+#?!]/g, '');
       const legals = chess.getLegalMoves();
       const matched = legals.find(m => {
         const mClean = m.san.replace(/[+#?!]/g, '');
-        return mClean === cleanSan || m.uci === cleanSan || mClean.toLowerCase() === cleanSan.toLowerCase();
+        return mClean === cleanSan || m.uci === cleanSan;
       });
 
       if (matched) {
