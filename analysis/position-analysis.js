@@ -1,5 +1,5 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261102-san-case';
+import { t } from './i18n.js?v=20261102-score-label';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -229,7 +229,7 @@ export class PositionAnalysis {
     if (terminal) evaluation = board.inCheck() ? { cp: board.turn === 'w' ? -10000 : 10000, isMate: true, text: board.turn === 'w' ? '-M0' : '+M0' } : { cp: 0, isMate: false, text: '0.00' };
     this.renderGauge(evaluation);
     const app = this.app;
-    app.renderPositionHeading?.(evaluation, entry.sf?.depth ?? entry.reportEvaluation?.depth);
+    app.renderPositionHeading?.(evaluation);
     if (app.isBranching && app.activeBranch && ctx.fen === app.branchFen) {
       if (evaluation && (entry.sf || terminal)) app.activeBranch.evaluations.set(app.branchEvaluationKey(ctx.fen, ctx.depth), { ...evaluation, depth: entry.sf?.depth });
       app.syncBranchChart();

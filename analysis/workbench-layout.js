@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261102-san-case';
+import { t, onLanguageChange } from './i18n.js?v=20261102-score-label';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

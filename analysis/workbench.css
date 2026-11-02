@@ -89,8 +89,6 @@ button,input,select,textarea { font-family:inherit; }
 .position-heading small { font-size:12px;color:#fff; }
 .position-score-row { display:flex;align-items:baseline;gap:14px;margin-top:9px; }
 #position-score { display:inline-block;font-size:48px;font-weight:550;line-height:1.12;letter-spacing:-2px;font-variant-numeric:tabular-nums; }
-#position-search-depth { font:12px/1.5 Inter,sans-serif;color:#fff;background:#0000001a;padding:3px 7px;border-radius:7px; }
-#position-search-depth:empty { display:none; }
 .candidate-heading,.candidate-heading:has(+ .intuition-lines) { display:flex;color:var(--text-main);font-size:16px;font-weight:600;letter-spacing:-.3px;margin:18px 0 7px; }
 .candidate-heading small { font-size:12px;font-weight:400;letter-spacing:0; }
 .candidate-heading>span::before { content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--brand-blue);margin-right:8px;vertical-align:middle; }
