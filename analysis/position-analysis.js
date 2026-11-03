@@ -1,5 +1,5 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261102-score-label';
+import { t } from './i18n.js?v=20261103-jade';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -242,7 +242,7 @@ export class PositionAnalysis {
     engineContainer.replaceChildren(); maiaContainer.replaceChildren();
     const placeholder = (container, key) => { const el = document.createElement('div'); el.className = 'candidate-placeholder'; el.textContent = t(key); container.append(el); };
     if (!lines.length) placeholder(engineContainer, terminal ? 'noLegalMoves' : entry.sfFailed ? 'positionUnavailable' : (!app.moves.length && !app.hasAnalysisInput) ? 'engineNotStarted' : pending);
-    lines.forEach(line => this.renderRow(engineContainer, line.evaluation, line.variation, null, 'blue'));
+    lines.forEach(line => this.renderRow(engineContainer, line.evaluation, line.variation, null, 'green'));
     const valid = new Set(legal.map(m => m.uci));
     const moves = (entry.prediction?.moves || []).filter(m => valid.has(m.uci)).slice(0, 3);
     if (!moves.length) placeholder(maiaContainer, terminal ? 'noLegalMoves' : entry.maiaFailed ? 'intuitionUnavailable' : (!app.moves.length && !app.hasAnalysisInput) ? 'engineNotStarted' : pending);
@@ -292,7 +292,7 @@ export class PositionAnalysis {
     moves ||= (entry.prediction?.moves || []).slice(0, 3);
     if (this.app.settings.arrows) {
       const arrows = [];
-      if (lines[0] && this.app.settings.sfArrows !== false) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'blue' });
+      if (lines[0] && this.app.settings.sfArrows !== false) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'green' });
       if (this.app.settings.maiaArrows !== false && moves[0]?.uci && (moves[0].uci !== lines[0]?.uci || this.app.settings.sfArrows === false)) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
       this.app.boardUI.setArrows(arrows);
     }

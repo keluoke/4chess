@@ -1,9 +1,9 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261102-score-label';
-import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261102-score-label';
-import { IntuitionReview } from './intuition-review.js?v=20261102-score-label';
-import { isKeyMoment } from '../engine/review-policy.js?v=20261102-score-label';
-import { ReviewPractice } from './review-practice.js?v=20261102-score-label';
-import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261102-score-label';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261103-jade';
+import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
+import { IntuitionReview } from './intuition-review.js?v=20261103-jade';
+import { isKeyMoment } from '../engine/review-policy.js?v=20261103-jade';
+import { ReviewPractice } from './review-practice.js?v=20261103-jade';
+import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -12,14 +12,14 @@ import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261102-
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261102-score-label';
-import { BoardUI } from './board-ui.js?v=20261102-score-label';
-import { EvalChart } from './eval-chart.js?v=20261102-score-label';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261103-jade';
+import { BoardUI } from './board-ui.js?v=20261103-jade';
+import { EvalChart } from './eval-chart.js?v=20261103-jade';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261102-score-label';
+import { PositionAnalysis } from './position-analysis.js?v=20261103-jade';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261102-score-label';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261103-jade';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 // Famous Sample Games for instant exploration & demo
