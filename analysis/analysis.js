@@ -866,6 +866,17 @@ class AnalysisStudioApp {
         setLanguage(langParam);
       }
 
+      // Rating must be applied before the FEN branch starts its analysis session.
+      const eloParam = hashParams.get('elo') || searchParams.get('elo');
+      const parsedElo = Number(eloParam);
+      if (Number.isInteger(parsedElo) && parsedElo >= 600 && parsedElo <= 2600) {
+        this.currentElo = parsedElo;
+        if (![...this.el.eloSelector.options].some(option => option.value === String(parsedElo))) {
+          this.el.eloSelector.add(new Option(String(parsedElo), String(parsedElo)));
+        }
+        this.el.eloSelector.value = String(parsedElo);
+      }
+
       const fenParam = hashParams.get('fen') || searchParams.get('fen');
       if (fenParam) {
         const validBoard = new ChessBoard();
@@ -880,19 +891,10 @@ class AnalysisStudioApp {
       const textParam = hashParams.get('text') || searchParams.get('text');
       const pgnParam = hashParams.get('pgn') || searchParams.get('pgn') || (textParam && (textParam.includes('1.') || textParam.includes('[Event')) ? textParam : null);
       const urlParam = hashParams.get('url') || searchParams.get('url') || (textParam && textParam.startsWith('http') ? textParam : null);
-      const eloParam = hashParams.get('elo') || searchParams.get('elo');
 
       const whiteParam = hashParams.get('white') || searchParams.get('white');
       const blackParam = hashParams.get('black') || searchParams.get('black');
       const resultParam = hashParams.get('result') || searchParams.get('result');
-
-      if (eloParam) {
-        const parsedElo = parseInt(eloParam, 10);
-        if ([1100, 1500, 1900, 2200].includes(parsedElo)) {
-          this.currentElo = parsedElo;
-          if (this.el.eloSelector) this.el.eloSelector.value = String(parsedElo);
-        }
-      }
 
       if (pgnParam) {
         let cleanPgn = pgnParam;

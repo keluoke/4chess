@@ -133,6 +133,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'OPEN_ANALYSIS_TAB') {
     const gameData = msg.gameData || {};
+    if (gameData.fen) {
+      const board = new ChessBoard();
+      if (typeof gameData.fen !== 'string' || !board.load(gameData.fen)) {
+        sendResponse({ ok: false, error: 'Invalid position' });
+        return;
+      }
+      gameData.fen = board.getFen();
+    }
 
     // Ensure PGN text is generated if moves are present
     if (!gameData.pgn && gameData.moves && gameData.moves.length > 0) {
@@ -144,17 +152,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     chrome.storage.local.get(['useWebReview', 'webReviewBaseUrl', 'defaultElo', 'maia3_lang', 'maiaVariant', 'stockfishVariant', 'cloudflareCdnUrl'], (settings) => {
+      if (chrome.runtime.lastError) { sendResponse({ ok: false, error: 'Preferences unavailable' }); return; }
       chrome.storage.local.set({ active_analysis_game: gameData }, () => {
+        if (chrome.runtime.lastError) { sendResponse({ ok: false, error: 'Could not save analysis input' }); return; }
         // Default to true: open 4chess.cc web review directly!
         const useWeb = settings?.useWebReview !== false;
         let targetUrl = chrome.runtime.getURL('analysis/index.html');
 
-        if (useWeb && gameData.pgn) {
+        if (useWeb) {
           let base = (settings?.webReviewBaseUrl || 'https://4chess.cc/analysis').replace(/\/+$/, '');
           if (!base.endsWith('/analysis')) {
             base = `${base}/analysis`;
           }
-          const pgnParam = encodeURIComponent(gameData.pgn);
           const elo = settings?.defaultElo || 1900;
           const lang = settings?.maia3_lang || gameData.lang;
           let extra = '';
@@ -165,11 +174,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const prefs = normalizeEnginePreferences(settings);
           const sf = prefs.stockfishVariant;
           const maia = prefs.maiaVariant;
-          targetUrl = `${base}/?sf=${sf}&maia=${maia}#pgn=${pgnParam}&elo=${elo}${extra}`;
+          const input = gameData.fen ? `fen=${encodeURIComponent(gameData.fen)}&orientation=${encodeURIComponent(gameData.orientation || 'white')}` : gameData.pgn ? `pgn=${encodeURIComponent(gameData.pgn)}` : 'empty=1';
+          targetUrl = `${base}/?sf=${sf}&maia=${maia}#${input}&elo=${elo}${extra}`;
+        } else {
+          const params = new URLSearchParams({ elo: String(settings?.defaultElo || 1900), lang: settings?.maia3_lang || gameData.lang || 'en' });
+          if (gameData.fen) { params.set('fen', gameData.fen); params.set('orientation', gameData.orientation || 'white'); }
+          if (gameData.empty) params.set('empty', '1');
+          targetUrl += `#${params}`;
         }
 
         chrome.tabs.create({ url: targetUrl }, (tab) => {
-          sendResponse({ ok: true, tabId: tab?.id, targetUrl });
+          const failure = chrome.runtime.lastError;
+          sendResponse(failure || !tab?.id ? { ok: false, error: 'Could not open analysis tab' } : { ok: true, tabId: tab.id, targetUrl });
         });
       });
     });

@@ -58,12 +58,37 @@ export async function initMaiaExtension() {
     onModelLoaded: async () => {
       if (FairPlayGuard.isLiveGameInProgress()) return;
       engineInitStarted = false;
-      ensureEngineInitialized();
+      return ensureEngineInitialized();
+    },
+    onRetryEngine: async (name) => {
+      if (FairPlayGuard.isLiveGameInProgress()) return;
+      if (name === 'maia') {
+        engineInitStarted = false;
+        return ensureEngineInitialized();
+      }
+      const owner = engine;
+      const retryEpoch = owner.lifecycleEpoch;
+      owner.status.stockfish = { state: 'initializing', error: null };
+      owner.notifyStatus();
+      try {
+        owner.stockfishInBrowser.reset();
+        const ready = await owner.stockfishInBrowser.initialize();
+        if (owner !== engine || owner.lifecycleEpoch !== retryEpoch || FairPlayGuard.isLiveGameInProgress()) return;
+        if (!ready && !owner.stockfishInBrowser.isReady) throw new Error('Engine initialization failed');
+        owner.status.stockfish = { state: 'ready', error: null };
+        owner.notifyStatus();
+        if (currentFen) await runPrediction(currentFen);
+      } catch (error) {
+        if (owner !== engine || owner.lifecycleEpoch !== retryEpoch || FairPlayGuard.isLiveGameInProgress()) return;
+        owner.status.stockfish = { state: 'error', error: error?.message || String(error) };
+        owner.notifyStatus();
+        throw error;
+      }
     },
     onCdnSave: async (newUrl) => {
       await applyEnginePreferences();
     },
-    onOpenStandaloneAnalysis: async () => {
+    onOpenStandaloneAnalysis: async (mode = 'auto') => {
       if (FairPlayGuard.isLiveGameInProgress()) {
         panel.showToast(panel.lang === 'zh'
           ? '🔒 当前对局仍在进行中，为恪守公平竞技守则，请待对局结束后开启全盘分析。'
@@ -71,13 +96,41 @@ export async function initMaiaExtension() {
         return;
       }
 
+      const openStudio = async gameData => {
+        // Extraction and engine work may yield while a new live game starts.
+        if (FairPlayGuard.isLiveGameInProgress()) return;
+        panel.setActionBusy('opening');
+        if (!globalThis.chrome?.runtime?.sendMessage) throw new Error(panel.t('openFailed'));
+        await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ type: 'OPEN_ANALYSIS_TAB', gameData }, response => {
+            const failure = chrome.runtime.lastError;
+            if (failure || !response?.ok || !response.tabId) reject(new Error(panel.t('openFailed')));
+            else resolve(response);
+          });
+        });
+        panel.showToast(panel.t(gameData.fen ? 'positionOpened' : gameData.empty ? 'studioOpened' : 'gameOpened'));
+      };
+      if (mode === 'position' || mode === 'empty') {
+        if (mode === 'position' && !currentFen) throw new Error(panel.t('noMoves'));
+        return openStudio({ ...(mode === 'position' ? { fen: currentFen, orientation: currentOrientation } : { empty: true }), lang: panel.lang });
+      }
+
       panel.showToast(panel.lang === 'zh' ? '正在提取棋谱数据...' : 'Extracting game moves...');
       const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
       const moves = await GameAnalyzer.extractPageMoves(platform);
 
       if (!moves || moves.length === 0) {
-        panel.showToast(panel.lang === 'zh' ? '未能从当前页面提取到棋谱，请确认棋盘上已有完赛步数。' : 'No moves could be extracted from page.');
-        return;
+        if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
+          panel.setPositionContext(currentFen, 'position');
+          return openStudio({ fen: currentFen, orientation: currentOrientation, lang: panel.lang });
+        }
+        throw new Error(panel.t('noMoves'));
+      }
+      // An unfinished variation on a permitted study board is a position input,
+      // never a fabricated completed PGN or an exception to the review guard.
+      if (currentFen && (!moves.result || moves.result === '*') && /\/(analysis|editor|study|practice|puzzles|lessons|classroom)(\/|$)/.test(location.pathname)) {
+        panel.setPositionContext(currentFen, 'position');
+        return openStudio({ fen: currentFen, orientation: currentOrientation, lang: panel.lang });
       }
 
       let whitePlayer = moves.white || '白方';
@@ -236,14 +289,7 @@ export async function initMaiaExtension() {
         lang: panel.lang || 'zh'
       };
 
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'OPEN_ANALYSIS_TAB',
-          gameData
-        }, () => {
-          panel.showToast(panel.lang === 'zh' ? '✓ 已在新标签页开启全盘分析' : '✓ Opened Full Game Analysis in new tab');
-        });
-      }
+      return openStudio(gameData);
     }
   });
 
@@ -377,7 +423,7 @@ export async function initMaiaExtension() {
     if (FairPlayGuard.isLiveGameInProgress()) return;
     engineInitStarted = true;
     const owner = engine;
-    engine.initialize(preferences.cloudflareCdnUrl).then(() => {
+    return engine.initialize(preferences.cloudflareCdnUrl).then(() => {
       if (owner !== engine) return;
       if (engine.stockfishInBrowser?.isReady) {
         console.log('[Maia-3] ✅ 双引擎 (Maia-3 + Stockfish) 均已就绪！');
@@ -426,6 +472,8 @@ export async function initMaiaExtension() {
   detector = new BoardDetector(async ({ fen, orientation, platform }) => {
     currentFen = fen;
     currentOrientation = orientation;
+    const notation = document.querySelector('.vertical-move-list move, .move-list move, .move-list-row, kwdb, .tview2 move, .analyse__moves move');
+    panel.setPositionContext(fen, /\/(analysis|editor)(\/|$)/.test(location.pathname) && !notation ? 'position' : 'auto');
     if (typeof window !== 'undefined') {
       window.__MAIA_CURRENT_FEN__ = fen;
     }

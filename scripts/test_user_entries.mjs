@@ -37,9 +37,12 @@ try {
   const panel = page.locator('#maia3-intuition-panel'); await panel.waitFor();
   await page.waitForFunction(() => document.querySelector('#maia-turn-pill')?.textContent.includes('🛡') || document.querySelector('#maia-turn-pill svg'));
   const rect = await panel.boundingBox(); assert.equal(rect.width,300); assert.equal(rect.height,600); assert.equal(rect.x,1030); assert.equal(rect.y,100);
-  await page.locator('#weui-btn-close').click(); assert.deepEqual(await panel.boundingBox(), rect); assert.equal(await panel.getAttribute('data-collapsed'),'true');
+  await page.locator('#weui-btn-more').click(); await page.locator('#panel-collapse').scrollIntoViewIfNeeded(); await page.locator('#panel-collapse').click();
+  assert.deepEqual(await panel.boundingBox(), rect); assert.equal(await panel.getAttribute('data-collapsed'),'true');
   await page.screenshot({ path:path.join(screenshots,'locked-collapsed.png') });
   await page.locator('#maia-restore').click(); assert.deepEqual(await panel.boundingBox(),rect);
+  await page.locator('#weui-btn-close').click(); assert.equal(await panel.isVisible(),false);
+  await page.locator('#maia-wechat-float').click(); assert.deepEqual(await panel.boundingBox(),rect);
   await page.locator('#weui-btn-more').click();
   for (const variant of ['23m','79m','5m']) {
     await page.locator(`[data-model="${variant}"]`).click();

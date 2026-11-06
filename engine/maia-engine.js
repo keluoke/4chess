@@ -530,9 +530,9 @@ export class MaiaEngine {
         agreed: true,
         badge: '🫤 人类直觉首选',
         badgeEn: '🫤 Human Intuition',
-        summary: `典型 ${elo} 分段人类首选 <strong>${topMove.san}</strong> (${topMove.prob}%)。`,
-        summaryEn: `Typical ${elo} players favor <strong>${topMove.san}</strong> (${topMove.prob}%).`,
-        delta: 0,
+        summary: `Maia 预测 · ${elo} 分段：首选 <strong>${topMove.san}</strong>，预测选择率 ${topMove.prob}%；暂无引擎质量评分。`,
+        summaryEn: `Maia prediction at ${elo}: <strong>${topMove.san}</strong>, predicted choice ${topMove.prob}%; engine quality score unavailable.`,
+        delta: null,
         deltaText: null,
         evalScore: null
       };
@@ -562,8 +562,8 @@ export class MaiaEngine {
         agreed: true,
         badge: '🎯 人机高度共识',
         badgeEn: '🎯 High Consensus',
-        summary: `人类直觉与 Stockfish 顶级引擎一致首选 <strong>${topMove.san}</strong> (${topMove.prob}%)！(局面评级: ${evalScore})`,
-        summaryEn: `Human intuition & Stockfish both agree on <strong>${topMove.san}</strong> (${topMove.prob}%)! (Eval: ${evalScore})`,
+        summary: `Maia 与引擎首选一致：<strong>${topMove.san}</strong>。Maia 在 ${elo} 分段预测选择率 ${topMove.prob}%。`,
+        summaryEn: `Maia and the engine both favor <strong>${topMove.san}</strong>. Maia predicts ${topMove.prob}% choice at ${elo}.`,
         delta: 0,
         deltaText: '0.00',
         evalScore
@@ -587,8 +587,8 @@ export class MaiaEngine {
       agreed: false,
       badge: '⚠️ 人机着法分歧',
       badgeEn: '⚠️ Engine Divergence',
-      summary: `约 <strong>${topMove.prob}%</strong> 的 ${elo} 棋手凭直觉走 <strong>${topMove.san}</strong>，而 Stockfish 建议 <strong>${sfRes.bestMove.san}</strong> (评级: ${evalScore}${lossStrZh})。`,
-      summaryEn: `~<strong>${topMove.prob}%</strong> of ${elo} players favor <strong>${topMove.san}</strong>, while Stockfish advises <strong>${sfRes.bestMove.san}</strong> (Eval: ${evalScore}${lossStrEn}).`,
+      summary: `Maia 预测 · ${elo} 分段：<strong>${topMove.san}</strong> 的预测选择率 ${topMove.prob}%；引擎首选 <strong>${sfRes.bestMove.san}</strong>${lossStrZh}。`,
+      summaryEn: `Maia prediction at ${elo}: <strong>${topMove.san}</strong> has ${topMove.prob}% predicted choice; the engine favors <strong>${sfRes.bestMove.san}</strong>${lossStrEn}.`,
       delta: deltaCp !== null ? deltaCp / 100 : null,
       deltaText,
       evalScore

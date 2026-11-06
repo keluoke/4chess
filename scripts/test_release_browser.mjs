@@ -94,12 +94,17 @@ try {
   const popup=await extensionContext.newPage();await popup.goto(`chrome-extension://${id}/popup/popup.html`);
   await popup.waitForFunction(()=>!!document.querySelector('button'));
   const actual=await worker.evaluate(()=>chrome.runtime.getManifest());assert.equal(actual.version,version);assert(!actual.host_permissions.some(p=>/localhost|127\.0\.0\.1/.test(p)));
+  let protectedModelRequests=0;
+  extensionContext.on('request',request=>{if(request.url().startsWith('https://weights.4chess.cc/'))protectedModelRequests++;});
   let fixtureFinished=false;
   await extensionContext.route('https://www.chess.com/play/online',route=>route.fulfill({contentType:'text/html',body:fixtureFinished?'<!doctype html><body><div class="move-list-result">1-0</div><wc-chess-board></wc-chess-board></body>':'<!doctype html><body><div class="clock-running">5:00</div><button aria-label="Resign">Resign</button><wc-chess-board style="display:block;width:500px;height:500px"></wc-chess-board></body>'}));
   const host=await extensionContext.newPage();await host.goto('https://www.chess.com/play/online');await host.locator('#maia3-intuition-panel').waitFor();
   await host.waitForFunction(()=>/公平|Fair Play|LIVE|进行中/i.test(document.querySelector('#maia3-intuition-panel').textContent));
   await host.evaluate(()=>{document.querySelector('.clock-running').remove();document.querySelector('button[aria-label="Resign"]').remove();document.body.insertAdjacentHTML('beforeend','<div class="game-over-modal">White won by checkmate</div><div class="move-list-result">1-0</div>');});
   await host.waitForFunction(()=>document.querySelector('#maia3-intuition-panel').dataset.fairPlayLocked==='false');
+  assert.doesNotMatch(await host.locator('#maia-turn-pill').innerText(),/对局中|Live|Locked/i,'Unlock must clear stale protection before a readable FEN is available');
+  assert.equal(await host.locator('#maia-inference-time').innerText(),'');
+  assert.equal(await host.locator('#btn-trigger-standalone').isDisabled(),false);
   await host.evaluate(()=>document.querySelector('.game-over-modal').remove());
   await host.waitForTimeout(200);assert.equal(await host.locator('#maia3-intuition-panel').getAttribute('data-fair-play-locked'),'false');
   fixtureFinished=true;await host.reload();
@@ -110,7 +115,24 @@ try {
     observer.observe(panel,{attributes:true});document.body.insertAdjacentHTML('beforeend','<div class="clock-running">5:00</div>');
   }));
   assert(lockMs<150,`New-game lock exceeded 150ms in fixture: ${lockMs}`);
-  results.extension={version,id,loaded:true,liveLock:true,conclusion:true,dismiss:true,refresh:true,lockMs};
+  await host.evaluate(()=>{document.querySelector('.clock-running').remove();document.querySelector('.move-list-result').remove();});
+  await host.waitForFunction(()=>/Verifying|确认/.test(document.querySelector('#maia-moves-container').textContent));
+  assert.doesNotMatch(await host.locator('#maia-turn-pill').innerText(),/对局中|Live/);
+  await host.locator('#weui-btn-more').click();await host.locator('#panel-collapse').scrollIntoViewIfNeeded();await host.locator('#panel-collapse').click();
+  assert.match(await host.locator('#compact-title').innerText(),/Verifying|确认/);
+  await host.locator('#maia-restore').click();
+  await host.evaluate(()=>document.querySelector('wc-chess-board').remove());
+  await host.waitForFunction(()=>/Waiting for a board|等待棋盘/.test(document.querySelector('#maia-moves-container').textContent));
+  assert.doesNotMatch(await host.locator('#maia-turn-pill').innerText(),/对局中|Live/);
+  assert.equal(await host.locator('#btn-trigger-standalone').isDisabled(),true);
+  await extensionContext.route('https://lichess.org/AbCd1234',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><body><cg-board></cg-board><div class="rclock-running">5:00</div><button class="resign">Resign</button></body>'}));
+  const lichess=await extensionContext.newPage();await lichess.goto('https://lichess.org/AbCd1234');
+  await lichess.waitForFunction(()=>document.querySelector('#maia3-intuition-panel')?.dataset.fairPlayLocked==='true');
+  await lichess.evaluate(()=>{document.querySelector('.rclock-running').remove();document.querySelector('button.resign').remove();document.body.insertAdjacentHTML('beforeend','<div class="result-wrap">1-0 White is victorious</div>');});
+  await lichess.waitForFunction(()=>document.querySelector('#maia3-intuition-panel').dataset.fairPlayLocked==='false');
+  assert.doesNotMatch(await lichess.locator('#maia-turn-pill').innerText(),/对局中|Live|Locked/i);
+  assert.equal(protectedModelRequests,0,'Protected and no-readable-FEN fixtures must not download a model');
+  results.extension={version,id,loaded:true,liveLock:true,conclusion:true,dismiss:true,refresh:true,lockMs,unknownAndLobbyCopy:true,lichessUnlock:true,protectedModelRequests};
  }finally{await extensionContext.close();fs.rmSync(profile,{recursive:true,force:true});}
  fs.writeFileSync(path.join(output,'browser-results.json'),JSON.stringify(results,null,2));console.log('PASS',JSON.stringify(results));
 }finally{await browser.close();await new Promise(r=>server.close(r));globalThis.fetch=fetchOriginal;}
