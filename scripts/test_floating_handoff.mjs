@@ -46,11 +46,52 @@ try {
   assert.equal(loadedPosition.fen, fen); assert.equal(loadedPosition.elo, 2050); assert.equal(loadedPosition.orientation, 'black'); assert.equal(loadedPosition.language, 'en'); assert.equal(loadedPosition.model, '5m'); assert.equal(loadedPosition.engine, 'lite');
   await position.page.close();
   const pgn = '[White "UX White"]\n[Black "UX Black"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0';
-  const game = await open({ pgn, white: 'UX White', black: 'UX Black', result: '1-0', lang: 'en' });
+  await worker.evaluate(() => chrome.storage.local.set({ studio_orientation: 'white' }));
+  const game = await open({ pgn, orientation: 'black', white: 'UX White', black: 'UX Black', result: '1-0', lang: 'en' });
   assert.match(game.response.targetUrl, /#pgn=/);
+  assert.equal(new URLSearchParams(new URL(game.response.targetUrl).hash.slice(1)).get('orientation'), 'black');
+  assert.equal(await game.page.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
+  assert.equal(await game.page.locator('#setting-orientation').inputValue(), 'black');
   const loadedGame = await game.page.evaluate(() => ({ moves: __maiaStudioApp.moves.length, white: document.querySelector('#meta-white').textContent, black: document.querySelector('#meta-black').textContent, result: document.querySelector('#meta-result').textContent, elo: __maiaStudioApp.currentElo }));
   assert.equal(loadedGame.moves, 4); assert.match(loadedGame.white, /UX White/); assert.match(loadedGame.black, /UX Black/); assert.match(loadedGame.result, /1-0/); assert.equal(loadedGame.elo, 2050);
   await game.page.close();
+  const whiteGame = await open({ pgn, orientation: 'white' });
+  assert.equal(await whiteGame.page.evaluate(() => __maiaStudioApp.boardUI.orientation), 'white', 'Explicit white overrides the previously used black view');
+  await whiteGame.page.close();
+  // Actual panel click: read a DOM flip synchronously, then preserve that snapshot while PGN extraction yields.
+  for (const platform of ['chesscom', 'lichess']) {
+    const sourceUrl = platform === 'chesscom' ? 'https://www.chess.com/analysis/orientation-fixture' : 'https://lichess.org/analysis/orientation-fixture';
+    const board = platform === 'chesscom' ? '<wc-chess-board style="display:block;width:320px;height:320px"></wc-chess-board>' : '<div class="cg-wrap"><cg-board style="display:block;width:320px;height:320px"></cg-board></div>';
+    await context.route(sourceUrl, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><body>' + board + '</body>' }));
+    const host = await context.newPage(); await host.goto(sourceUrl);
+    await host.waitForFunction(() => document.querySelector('#maia3-intuition-panel')?.dataset.fairPlayLocked === 'false');
+    const tabId = await worker.evaluate(async url => (await chrome.tabs.query({})).find(tab => tab.url === url).id, sourceUrl);
+    const openedPage = context.waitForEvent('page');
+    await worker.evaluate(async ({ tabId, id, platform, pgn }) => {
+      await chrome.scripting.executeScript({ target: { tabId }, world: 'ISOLATED', func: async ({ id, platform, pgn }) => {
+        const { GameAnalyzer } = await import(`chrome-extension://${id}/engine/game-analyzer.js`);
+        let release;
+        GameAnalyzer.extractPageMoves = () => new Promise(resolve => { release = () => {
+          const moves = [{ san: 'e4', ply: 1 }, { san: 'e5', ply: 2 }, { san: 'Nf3', ply: 3 }, { san: 'Nc6', ply: 4 }];
+          moves.result = '1-0'; moves.rawPgn = pgn; resolve(moves);
+        }; });
+        const board = document.querySelector(platform === 'chesscom' ? 'wc-chess-board' : '.cg-wrap');
+        const flipped = platform === 'chesscom' ? 'flipped' : 'orientation-black';
+        board.classList.add(flipped);
+        const button = document.querySelector('#btn-trigger-standalone');
+        if (button.disabled) throw new Error('Analysis action must be unlocked');
+        button.click();
+        if (!release) throw new Error('Click did not start game extraction');
+        board.classList.remove(flipped); // The view changes during async extraction.
+        release();
+      }, args: [{ id, platform, pgn }] });
+    }, { tabId, id, platform, pgn });
+    const opened = await openedPage;
+    await opened.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
+    assert.equal(await opened.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black', `${platform}: preserve the direction at click time, before the flip observer/PGN completion`);
+    await opened.close(); await host.close();
+  }
+
   const invalid = await send({ fen: 'invalid-fen' }); assert.equal(invalid.ok, false);
   await worker.evaluate(() => { globalThis.savedTabsCreate = chrome.tabs.create; chrome.tabs.create = (_options, callback) => callback(undefined); });
   const failedOpen = await send({ empty: true }); assert.equal(failedOpen.ok, false, 'A failed tab creation must never report success');
@@ -63,5 +104,17 @@ try {
   assert.equal(await local.page.evaluate(() => __maiaStudioApp.positions[0].fen), fen);
   assert.equal(await local.page.evaluate(() => __maiaStudioApp.currentElo), 2050);
   assert.equal(await local.page.locator('html').getAttribute('lang'), 'zh-CN'); await local.page.close();
-  console.log('PASS packaged MV3 handoff: web and local FEN, orientation, non-preset Elo, language, model/engine preferences, completed PGN metadata, invalid FEN rejection and empty import recovery');
+  await worker.evaluate(() => chrome.storage.local.set({ studio_orientation: 'white' }));
+  const localGame = await open({ pgn, orientation: 'black' });
+  assert.equal(await localGame.page.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
+  assert.equal(await localGame.page.locator('#setting-orientation').inputValue(), 'black');
+  await localGame.page.close();
+  // Storage-only launch (legacy/offline): a stored game can carry its own view without URL intent.
+  await worker.evaluate(() => chrome.storage.local.set({ studio_orientation: 'white' }));
+  const storedGame = await context.newPage();
+  await storedGame.goto(`chrome-extension://${id}/analysis/index.html`);
+  await storedGame.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
+  assert.equal(await storedGame.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
+  await storedGame.close();
+  console.log('PASS packaged MV3 handoff: web/local FEN and PGN orientation, both platform panel clicks and delayed extraction snapshots, white/black preference overrides, storage-only view, rating/language/model preferences and invalid-input recovery');
 } finally { await context.close(); server.close(); fs.rmSync(temp, { recursive: true, force: true }); }

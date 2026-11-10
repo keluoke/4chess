@@ -854,6 +854,7 @@ class AnalysisStudioApp {
 
   async loadInitialGame() {
     let loaded = false;
+    let openingOrientation = null;
 
     // 1. Try URL parameters (Hash # or Search ?)
     try {
@@ -864,6 +865,12 @@ class AnalysisStudioApp {
       const langParam = hashParams.get('lang') || searchParams.get('lang');
       if (langParam === 'zh' || langParam === 'en') {
         setLanguage(langParam);
+      }
+      const orientation = hashParams.get('orientation') || searchParams.get('orientation');
+      if (['white', 'black'].includes(orientation)) {
+        openingOrientation = orientation;
+        this.boardUI.setOrientation(orientation);
+        document.getElementById('setting-orientation').value = orientation;
       }
 
       // Rating must be applied before the FEN branch starts its analysis session.
@@ -882,9 +889,6 @@ class AnalysisStudioApp {
         const validBoard = new ChessBoard();
         if (!validBoard.load(fenParam)) throw new Error('Invalid FEN');
         this.startNewSession({ fen: validBoard.getFen(), white: t('freeAnalysisBoard'), black: 'FEN', result: '*', autoReview: false, positionInput: true });
-        const orientation = hashParams.get('orientation') || searchParams.get('orientation');
-        if (['white', 'black'].includes(orientation)) this.boardUI.setOrientation(orientation);
-        document.getElementById('setting-orientation').value = this.boardUI.orientation;
         this.positionAnalysis.renderGauge(null);
         return;
       }
@@ -960,6 +964,10 @@ class AnalysisStudioApp {
           if (!v.ok && v.isLive) {
             this.showToast(t('toastFairPlay', { reason: v.reason }), 7000);
           } else {
+            if (!openingOrientation && ['white', 'black'].includes(game.orientation)) {
+              this.boardUI.setOrientation(game.orientation);
+              document.getElementById('setting-orientation').value = game.orientation;
+            }
             this.startNewSession({
               pgn: game.pgn,
               moves: game.moves,

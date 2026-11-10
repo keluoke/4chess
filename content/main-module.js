@@ -96,11 +96,17 @@ export async function initMaiaExtension() {
         return;
       }
 
+      // Snapshot the displayed board now, before asynchronous PGN extraction.
+      // A flip may have happened before the detector's debounced update.
+      const hasSourceBoard = detector?.findBoard();
+      if (hasSourceBoard) detector.detectOrientation();
+      const openingOrientation = hasSourceBoard ? detector.orientation : currentFen ? currentOrientation : null;
       const openStudio = async gameData => {
         // Extraction and engine work may yield while a new live game starts.
         if (FairPlayGuard.isLiveGameInProgress()) return;
         panel.setActionBusy('opening');
         if (!globalThis.chrome?.runtime?.sendMessage) throw new Error(panel.t('openFailed'));
+        if (openingOrientation) gameData = { ...gameData, orientation: openingOrientation };
         await new Promise((resolve, reject) => {
           chrome.runtime.sendMessage({ type: 'OPEN_ANALYSIS_TAB', gameData }, response => {
             const failure = chrome.runtime.lastError;

@@ -16,6 +16,7 @@ jobs:
       - run: node scripts/test_package_integrity.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      - run: npm run test:floating-handoff
       - uses: actions/upload-artifact@v4
         with:
           name: diverge-extension

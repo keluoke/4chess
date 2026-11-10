@@ -133,6 +133,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'OPEN_ANALYSIS_TAB') {
     const gameData = msg.gameData || {};
+    const orientation = ['white', 'black'].includes(gameData.orientation) ? gameData.orientation : null;
     if (gameData.fen) {
       const board = new ChessBoard();
       if (typeof gameData.fen !== 'string' || !board.load(gameData.fen)) {
@@ -171,14 +172,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (gameData.black && gameData.black !== '黑方') extra += `&black=${encodeURIComponent(gameData.black)}`;
           if (gameData.result && gameData.result !== '*') extra += `&result=${encodeURIComponent(gameData.result)}`;
           if (lang) extra += `&lang=${encodeURIComponent(lang)}`;
+          if (orientation || gameData.fen) extra += `&orientation=${orientation || 'white'}`;
           const prefs = normalizeEnginePreferences(settings);
           const sf = prefs.stockfishVariant;
           const maia = prefs.maiaVariant;
-          const input = gameData.fen ? `fen=${encodeURIComponent(gameData.fen)}&orientation=${encodeURIComponent(gameData.orientation || 'white')}` : gameData.pgn ? `pgn=${encodeURIComponent(gameData.pgn)}` : 'empty=1';
+          const input = gameData.fen ? `fen=${encodeURIComponent(gameData.fen)}` : gameData.pgn ? `pgn=${encodeURIComponent(gameData.pgn)}` : 'empty=1';
           targetUrl = `${base}/?sf=${sf}&maia=${maia}#${input}&elo=${elo}${extra}`;
         } else {
           const params = new URLSearchParams({ elo: String(settings?.defaultElo || 1900), lang: settings?.maia3_lang || gameData.lang || 'en' });
-          if (gameData.fen) { params.set('fen', gameData.fen); params.set('orientation', gameData.orientation || 'white'); }
+          if (gameData.fen) params.set('fen', gameData.fen);
+          if (orientation || gameData.fen) params.set('orientation', orientation || 'white');
           if (gameData.empty) params.set('empty', '1');
           targetUrl += `#${params}`;
         }
