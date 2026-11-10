@@ -20,7 +20,9 @@ const server = http.createServer((req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const context = await chromium.launchPersistentContext(path.join(temp, 'profile'), { channel: 'chromium', headless: true, locale: 'zh-CN', args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
+const context = await chromium.launchPersistentContext(path.join(temp, 'profile'), { channel: 'chromium', headless: true, serviceWorkers: 'block', locale: 'zh-CN', args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
+const pageErrors = [];
+context.on('page', page => page.on('pageerror', error => { pageErrors.push(error.message); console.error('Handoff page error:', page.url(), error.stack); }));
 try {
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
   const id = new URL(worker.url()).host;
@@ -30,12 +32,20 @@ try {
   });
   await context.route('https://weights.4chess.cc/**', r => r.abort());
   await context.route('https://4chess.cc/**', async r => { const u = new URL(r.request().url()); const response = await r.fetch({ url: origin + u.pathname + u.search }); await r.fulfill({ response }); });
+  // Observe the new target before navigating: Chromium can otherwise bypass routing
+  // for an extension-created tab's initial document and mix production HTML with local modules.
+  await worker.evaluate(() => {
+    const create = chrome.tabs.create.bind(chrome.tabs);
+    chrome.tabs.create = (options, callback) => { globalThis.handoffTargetUrl = options.url; return create({ ...options, url: 'about:blank' }, callback); };
+  });
   await worker.evaluate(() => chrome.storage.local.set({ maiaVariant: '5m', stockfishVariant: 'lite', defaultElo: 2050, maia3_lang: 'en', useWebReview: true }));
   const popup = await context.newPage(); await popup.goto(`chrome-extension://${id}/popup/popup.html`);
   const send = data => popup.evaluate(gameData => new Promise(resolve => chrome.runtime.sendMessage({ type: 'OPEN_ANALYSIS_TAB', gameData }, resolve)), data);
   const open = async data => {
     const pagePromise = context.waitForEvent('page'); const response = await send(data); assert.equal(response.ok, true);
-    const page = await pagePromise; await page.waitForFunction(() => window.__maiaStudioApp?.positions.length);
+    const page = await pagePromise; await page.goto(response.targetUrl);
+    try { await page.waitForFunction(() => window.__maiaStudioApp?.positions.length); }
+    catch (error) { console.error('Handoff DOM diagnostics', await page.evaluate(() => ({ title: document.title, overview: !!document.getElementById('review-overview'), scripts: [...document.scripts].map(script => script.src) }))); throw error; }
     return { page, response };
   };
   const fen = '8/8/8/4k3/8/4K3/8/8 b - - 0 42';
@@ -86,7 +96,7 @@ try {
         release();
       }, args: [{ id, platform, pgn }] });
     }, { tabId, id, platform, pgn });
-    const opened = await openedPage;
+    const opened = await openedPage; await opened.goto(await worker.evaluate(() => globalThis.handoffTargetUrl));
     await opened.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
     assert.equal(await opened.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black', `${platform}: preserve the direction at click time, before the flip observer/PGN completion`);
     await opened.close(); await host.close();
@@ -116,5 +126,6 @@ try {
   await storedGame.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
   assert.equal(await storedGame.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
   await storedGame.close();
+  assert.deepEqual(pageErrors, [], 'Handoff pages must not contain uncaught application errors');
   console.log('PASS packaged MV3 handoff: web/local FEN and PGN orientation, both platform panel clicks and delayed extraction snapshots, white/black preference overrides, storage-only view, rating/language/model preferences and invalid-input recovery');
 } finally { await context.close(); server.close(); fs.rmSync(temp, { recursive: true, force: true }); }

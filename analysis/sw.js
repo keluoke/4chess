@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261110-opening-orientation';
+const CACHE_NAME = '4chess-review-20261110-review-explorer';
 
 const STATIC_ASSETS = [
   './',
@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
   '../ui/theme.js?v=20261025-v115',
   '../engine/review-policy.js?v=20261103-jade',
   './review-practice.js?v=20261103-jade',
+  './review-explorer.js',
   './intuition-review.js?v=20261103-jade',
   './board-ui.js',
   './board-ui.js?v=20261103-jade',

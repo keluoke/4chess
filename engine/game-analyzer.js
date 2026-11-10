@@ -5,7 +5,7 @@
  * and Maia human intuition trap detection.
  */
 
-import { isKeyMoment, qualifiesBeyond } from './review-policy.js?v=20261103-jade';
+import { isKeyMoment, qualifiesBeyond, errorSeverity } from './review-policy.js?v=20261103-jade';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
@@ -931,16 +931,10 @@ export class GameAnalyzer {
             if (lossCp > maxLossBlack) maxLossBlack = lossCp;
           }
 
-          if (lossCp >= 200) {
-            severity = 'blunder'; // 大漏 >= 2.00 兵
-            blundersCount++;
-          } else if (lossCp >= 100) {
-            severity = 'mistake'; // 失误 >= 1.00 兵
-            mistakesCount++;
-          } else if (lossCp >= 40) {
-            severity = 'inaccuracy'; // 疑问手 >= 0.40 兵
-            inaccuraciesCount++;
-          }
+          severity = errorSeverity(lossCp);
+          if (severity === 'blunder') blundersCount++;
+          else if (severity === 'mistake') mistakesCount++;
+          else if (severity === 'inaccuracy') inaccuraciesCount++;
         } else {
           severity = 'unknown';
         }

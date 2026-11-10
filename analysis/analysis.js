@@ -1,7 +1,8 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261103-jade';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261103-jade';
-import { isKeyMoment } from '../engine/review-policy.js?v=20261103-jade';
+import { ReviewExplorer } from './review-explorer.js';
+import { isKeyMoment, moveQuality, intuitionKind, canPractice } from '../engine/review-policy.js?v=20261103-jade';
 import { ReviewPractice } from './review-practice.js?v=20261103-jade';
 import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
@@ -82,6 +83,7 @@ class AnalysisStudioApp {
 
     this.initEngines();
     this.initUI();
+    this.reviewExplorer = new ReviewExplorer(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
     subscribePreferences(next => this.applyPreferences(next));
@@ -344,11 +346,7 @@ class AnalysisStudioApp {
         filterPills.forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
         this.currentDivergenceFilter = pill.dataset.filter || 'all';
-        const rawMoments = (this.reviewResult?.keyMoments || this.reviewResult?.allMoves || []);
-        const validMoments = rawMoments.filter(
-          isKeyMoment
-        ).sort((a, b) => a.ply - b.ply);
-        this.renderBlunderCards(validMoments);
+        this.renderBlunderCards();
       });
     });
 
@@ -456,6 +454,8 @@ class AnalysisStudioApp {
       }
       if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey || document.activeElement?.isContentEditable || document.activeElement?.closest('input, textarea, select, [role="textbox"]')) return;
 
+      if (this.practice?.active && (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'k'].includes(e.key) || (e.key === ' ' && !document.activeElement?.closest('button, a')))) { e.preventDefault(); return; }
+
       if (e.key === 'ArrowLeft' || e.key === 'j') {
         e.preventDefault();
         this.navigateStudy(-1);
@@ -487,7 +487,7 @@ class AnalysisStudioApp {
     if (this.practice?.active) { this.practice.stop(); this.goToPly(this.currentPly, { before: true }); }
     if (!this.el) return;
     this.updatePreferenceNotes();
-    for (const [id, key] of [['lbl-filter-all', 'filterAll'], ['lbl-filter-beyond', 'filterBeyond'], ['lbl-filter-trap', 'filterTrap']]) {
+    for (const [id, key] of [['lbl-filter-all', 'filterAllLabel'], ['lbl-filter-beyond', 'filterBeyondLabel'], ['lbl-filter-trap', 'filterTrapLabel']]) {
       const label = document.getElementById(id);
       if (label) label.textContent = t(key, { count: '' }).replace(/\(\s*\)/, '').trim();
     }
@@ -518,11 +518,11 @@ class AnalysisStudioApp {
 
     // 3. Filter pills
     const lblFilterAll = document.getElementById('lbl-filter-all');
-    if (lblFilterAll) lblFilterAll.textContent = t('filterAll', { count: '' }).replace(/\(\s*\)/, '').trim();
+    if (lblFilterAll) lblFilterAll.textContent = t('filterAllLabel', { count: '' }).replace(/\(\s*\)/, '').trim();
     const lblFilterBeyond = document.getElementById('lbl-filter-beyond');
-    if (lblFilterBeyond) lblFilterBeyond.textContent = t('beyondText');
+    if (lblFilterBeyond) lblFilterBeyond.textContent = t('filterBeyondLabel');
     const lblFilterTrap = document.getElementById('lbl-filter-trap');
-    if (lblFilterTrap) lblFilterTrap.textContent = t('trapText');
+    if (lblFilterTrap) lblFilterTrap.textContent = t('filterTrapLabel');
 
     // 4. Board status text & comparison panel
     if (this.currentPly === 0) {
@@ -1109,6 +1109,8 @@ class AnalysisStudioApp {
     this.gameEpoch++;
     this.reviewEpoch++;
     this.practice?.stop();
+    this.practiceResults = new Map();
+    this.reviewExplorer.reset(this.boardUI.orientation);
     this.reviewResult = null;
     this.coreReview = null;
     this.intuitionReview?.render();
@@ -1311,6 +1313,8 @@ class AnalysisStudioApp {
     this.coreReview = retainedCore;
     this.currentGameKey = this.getReviewKey();
     this.practice?.stop();
+    this.practiceResults = new Map();
+    this.reviewExplorer.reset(this.boardUI.orientation);
     this.reviewResult = null;
     this.lastProgress = null;
     this.positionAnalysis.cache.clear();
@@ -1363,6 +1367,10 @@ class AnalysisStudioApp {
     if (!this.moves || this.moves.length === 0) return;
 
     this.positionAnalysis.cancel();
+    this.reviewResult = this.coreReview = null;
+    this.practiceResults = new Map();
+    this.reviewExplorer.clear();
+    this.intuitionReview.render();
     if (forceRefresh) this.positionAnalysis.cache.clear();
     document.getElementById('review-summary').hidden = true;
     const targetGameEpoch = this.gameEpoch;
@@ -1536,220 +1544,61 @@ class AnalysisStudioApp {
     }
   }
 
-  startPractice(item) {
+  startPractice(item, queue = [item]) {
     this.practice ||= new ReviewPractice(this);
-    this.practice.start(item);
+    this.practice.start(item, { queue });
   }
 
   renderBlunderCards(moments) {
-    // One shared policy keeps the report, filters and practice list consistent.
-    const list = (moments || []).filter(
-      isKeyMoment
-    );
-
-    // 1. Update filter pill counters
-    const countBeyond = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition).length;
-    const countTrap = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap).length;
-    const totalAll = list.length;
-    const errorCount = document.getElementById('filter-count-mistakes');
-    if (errorCount) errorCount.textContent = String(list.filter(m => ['mistake', 'blunder'].includes(m.severity)).length);
-
-    const elCountAll = document.getElementById('filter-count-all');
-    const elCountBeyond = document.getElementById('filter-count-beyond');
-    const elCountTrap = document.getElementById('filter-count-trap');
-    if (elCountAll) elCountAll.textContent = String(totalAll);
-    if (elCountBeyond) elCountBeyond.textContent = String(countBeyond);
-    if (elCountTrap) elCountTrap.textContent = String(countTrap);
-
-    // 2. Filter moments based on active category pill
-    let filteredMoments = list;
-    if (this.currentDivergenceFilter === 'beyond') {
-      filteredMoments = list.filter(m => m.divergenceType === 'beyond_intuition' || m.isBeyondIntuition);
-    } else if (this.currentDivergenceFilter === 'mistakes') {
-      filteredMoments = list.filter(m => ['mistake', 'blunder'].includes(m.severity));
-    } else if (this.currentDivergenceFilter === 'trap') {
-      filteredMoments = list.filter(m => m.divergenceType === 'intuition_trap' || m.isHumanTrap);
-    }
-
+    const moves = this.reviewResult?.allMoves || moments || [];
+    const filtered = this.reviewExplorer.render(moves);
+    this.el.blunderCountBadge.textContent = String(filtered.length);
+    document.getElementById('lbl-tab-blunders').textContent = t(this.currentDivergenceFilter === 'all' ? 'reviewKeyMoves' : this.currentDivergenceFilter === 'moves' ? 'reviewAllMoves' : 'reviewSelectedMoves');
     this.el.blunderList.replaceChildren();
-
-    if (!filteredMoments || filteredMoments.length === 0) {
-      const emptyMsg = this.currentDivergenceFilter === 'beyond'
-        ? t('noBeyondDetected')
-        : (this.currentDivergenceFilter === 'trap'
-          ? t('noTrapDetected')
-          : t('noKeyMoments'));
-      const emptyBox = document.createElement('div');
-      emptyBox.style.cssText = 'padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px;';
-      emptyBox.textContent = emptyMsg;
-      this.el.blunderList.appendChild(emptyBox);
-      return;
+    if (!filtered.length) {
+      const empty = document.createElement('p'); empty.className = 'review-empty';
+      empty.textContent = t(this.reviewResult?.engineOnly && ['beyond', 'trap'].includes(this.currentDivergenceFilter) ? 'reviewIntuitionPending' : 'reviewNoSelection');
+      this.el.blunderList.append(empty); return;
     }
-
-    filteredMoments.forEach((item, index) => {
-      const card = document.createElement('div');
-      const isBeyond = item.divergenceType === 'beyond_intuition' || item.isBeyondIntuition;
-      const isTrap = item.divergenceType === 'intuition_trap' || item.isHumanTrap;
-
-      let cardClass = 'blunder-card';
-      if (isBeyond) cardClass += ' card-beyond-intuition';
-      else if (isTrap) cardClass += ' card-intuition-trap';
-
-      card.className = cardClass;
-      card.dataset.index = index;
-      card.dataset.ply = item.ply;
-
-      const isWhite = item.turn === 'w';
-      const sideIcon = isWhite ? '⚪' : '⚫';
-      const lossPawnsNum = Math.abs((item.lossCp || 0) / 100).toFixed(1);
-      const bestMoveText = (item.bestSan && item.bestSan !== '?') ? item.bestSan : null;
-
-      const cardMain = document.createElement('div');
-      cardMain.className = 'blunder-card-main';
-
-      const cardTop = document.createElement('div');
-      cardTop.className = 'blunder-card-top';
-
-      const cardTitle = document.createElement('div');
-      cardTitle.className = 'blunder-card-title';
-
-      const moveNumSpan = document.createElement('span');
-      moveNumSpan.className = 'blunder-move-num';
-      moveNumSpan.textContent = `${item.moveNumber}.`;
-      cardTitle.appendChild(moveNumSpan);
-
-      const sideIconSpan = document.createElement('span');
-      sideIconSpan.className = 'blunder-side-icon';
-      sideIconSpan.textContent = sideIcon;
-      cardTitle.appendChild(sideIconSpan);
-
-      const sanSpan = document.createElement('span');
-      sanSpan.className = 'blunder-san';
-      sanSpan.textContent = item.san;
-      cardTitle.appendChild(sanSpan);
-
-      cardTop.appendChild(cardTitle);
-
-      const tagsGroup = document.createElement('div');
-      tagsGroup.className = 'blunder-tags-group';
-
-      const typeTag = document.createElement('span');
-      typeTag.className = 'blunder-type-tag';
-
-      const rightTag = document.createElement('span');
-      rightTag.className = 'blunder-loss-tag';
-
-      const cardSub = document.createElement('div');
-      cardSub.className = 'blunder-card-sub';
-
-      if (isBeyond) {
-        typeTag.classList.add('tag-beyond');
-        typeTag.title = t('beyondTitle');
-        typeTag.textContent = t('beyondText');
-        rightTag.classList.add('tag-gain');
-        rightTag.title = t('playedEngineBest');
-        rightTag.textContent = item.isCombinationFollowup ? t('beyondComboText') : t('beyondIntuitionBreak');
-
-        const subProb = document.createElement('span');
-        subProb.className = 'sub-trap-prob';
-        subProb.style.color = 'var(--text-dim)';
-        if (item.maiaTopSan) {
-          subProb.appendChild(document.createTextNode(t('naturalIntuitionTop')));
-          const topStrong = document.createElement('strong');
-          topStrong.style.color = 'var(--brand-gold)';
-          topStrong.textContent = item.maiaTopSan;
-          subProb.appendChild(topStrong);
-          if (item.maiaTopProb) {
-            subProb.appendChild(document.createTextNode(` (${Math.round(item.maiaTopProb)}%)`));
-          }
-          if (item.maiaLossCp != null && item.maiaLossCp > 0) {
-            const pawns = (item.maiaLossCp / 100).toFixed(1);
-            subProb.appendChild(document.createTextNode(t('betterThanIntuition', { pawns })));
-          }
-        } else {
-          subProb.textContent = t('playedEngineBest');
-        }
-        cardSub.appendChild(subProb);
-      } else if (isTrap) {
-        typeTag.classList.add('tag-trap');
-        typeTag.title = t('trapTitle');
-        typeTag.textContent = t('trapText');
-        rightTag.title = t('lossVersusBest');
-        rightTag.textContent = t('lossPawns', { loss: lossPawnsNum });
-
-        if (bestMoveText) {
-          const subBest = document.createElement('span');
-          subBest.className = 'sub-best-move';
-          subBest.appendChild(document.createTextNode(t('bestMoveIs')));
-          const bStrong = document.createElement('strong');
-          bStrong.textContent = bestMoveText;
-          subBest.appendChild(bStrong);
-          subBest.appendChild(document.createTextNode(' · '));
-          cardSub.appendChild(subBest);
-        }
-
-        const subTrap = document.createElement('span');
-        subTrap.className = 'sub-trap-prob';
-        const cleanPlayed = item.san ? item.san.replace(/[+#?!]/g, '') : '';
-        const cleanTop1 = item.maiaTopSan ? item.maiaTopSan.replace(/[+#?!]/g, '') : '';
-        if (cleanPlayed === cleanTop1) {
-          subTrap.textContent = item.maiaTopProb ? t('trapTopTendency', { prob: Math.round(item.maiaTopProb) }) : t('trapTopTendency', { prob: '100' }).replace(' (100% 倾向)', '').replace(' (100% tendency)', '');
-        } else {
-          subTrap.textContent = item.humanProbability ? t('trapHumanTendency', { prob: Math.round(item.humanProbability) }) : t('trapProne');
-        }
-        cardSub.appendChild(subTrap);
-      } else {
-        if (item.severity === 'mistake') {
-          typeTag.classList.add('tag-mistake');
-          typeTag.textContent = t('mistakeText');
-        } else if (item.severity === 'inaccuracy') {
-          typeTag.classList.add('tag-inaccuracy');
-          typeTag.textContent = t('inaccuracyText');
-        } else {
-          typeTag.classList.add('tag-blunder');
-          typeTag.textContent = t('blunderText');
-        }
-        rightTag.title = t('lossVersusBest');
-        rightTag.textContent = t('lossPawns', { loss: lossPawnsNum });
-
-        if (bestMoveText) {
-          const subBest = document.createElement('span');
-          subBest.className = 'sub-best-move';
-          subBest.appendChild(document.createTextNode(t('bestMoveIs')));
-          const bStrong = document.createElement('strong');
-          bStrong.textContent = bestMoveText;
-          subBest.appendChild(bStrong);
-          cardSub.appendChild(subBest);
-        }
+    for (const item of filtered) {
+      const quality = moveQuality(item), kind = intuitionKind(item);
+      const card = document.createElement('article'); card.className = `blunder-card quality-${quality}`; card.dataset.ply = item.ply;
+      const heading = document.createElement('div'); heading.className = 'blunder-card-top';
+      const jump = document.createElement('button'); jump.type = 'button'; jump.className = 'review-move-jump';
+      jump.textContent = `${item.moveNumber}${item.turn === 'w' ? '. ' : '… '}${item.san}`;
+      jump.setAttribute('aria-label', `${t(item.turn === 'w' ? 'whitePlayer' : 'blackPlayer')} ${jump.textContent}`);
+      jump.onclick = () => this.goToPly(item.ply, { before: true }); heading.append(jump);
+      const tags = document.createElement('div'); tags.className = 'blunder-tags-group';
+      for (const tag of [quality, ...(kind ? [kind] : []), ...(item.isBookMove ? ['book'] : [])]) {
+        const badge = document.createElement('span'); badge.className = `blunder-type-tag review-tag-${tag}`;
+        badge.textContent = t(tag === 'beyond' && item.isCombinationFollowup ? 'beyondComboText' : `reviewQuality_${tag}`); tags.append(badge);
       }
-
-      tagsGroup.appendChild(typeTag);
-      cardTop.appendChild(tagsGroup);
-      cardTop.appendChild(rightTag);
-
-      cardMain.appendChild(cardTop);
-      const details = document.createElement('details'); details.className = 'card-details';
-      const summary = document.createElement('summary'); summary.textContent = t('analysisHelp');
-      summary.onclick = event => event.stopPropagation();
-      details.append(summary, cardSub); cardMain.append(details);
-      card.appendChild(cardMain);
-
-      card.addEventListener('click', () => {
-        this.el.blunderList.querySelectorAll('.blunder-card').forEach(c => c.classList.remove('active'));
-        card.classList.add('active');
-        this.goToPly(item.ply, { before: true });
-      });
-
-      const retry = document.createElement('button');
-      retry.type = 'button'; retry.className = 'btn-header practice-start'; retry.textContent = t('retryMove');
-      retry.onclick = event => { event.stopPropagation(); this.startPractice(item); };
-      card.append(retry);
-      this.el.blunderList.appendChild(card);
-    });
-
-    if (this.currentPly) {
-      const activeCard = this.el.blunderList.querySelector(`.blunder-card[data-ply="${this.currentPly}"]`);
-      if (activeCard) activeCard.classList.add('active');
+      heading.append(tags); card.append(heading);
+      card.addEventListener('click', event => { if (!event.target.closest('button, details')) this.goToPly(item.ply, { before: true }); });
+      const loss = document.createElement('p'); loss.className = 'review-card-loss';
+      loss.textContent = quality === 'unknown' ? t('reviewEvaluationPending') : quality === 'forced' ? t('reviewForcedHelp') : t('reviewLoss', { pawns: (Math.max(0, item.lossCp) / 100).toFixed(2) }); card.append(loss);
+      const probability = Number.isFinite(item.humanRawProbability) ? item.humanRawProbability * 100 : item.humanProbability;
+      if (kind === 'trap' && Number.isFinite(probability)) {
+        const note = document.createElement('p'); note.className = 'review-card-reason';
+        note.textContent = t('reviewTrapReason', { elo: this.reviewResult?.elo || this.currentElo, probability: probability.toFixed(1) }); card.append(note);
+      } else if (kind === 'beyond' && Number.isFinite(item.maiaLossCp)) {
+        const note = document.createElement('p'); note.className = 'review-card-reason';
+        note.textContent = t('reviewBeyondReason', { move: item.maiaTopSan || '—', pawns: (item.maiaLossCp / 100).toFixed(2) }); card.append(note);
+      }
+      if (item.bestSan && item.bestSan !== '?' && quality !== 'unknown') {
+        const details = document.createElement('details'); details.className = 'card-details';
+        const summary = document.createElement('summary'); summary.textContent = t('analysisHelp');
+        const best = document.createElement('p'); best.textContent = `${t('bestMoveIs')}${item.bestSan}`;
+        details.append(summary, best); card.append(details);
+      }
+      if (canPractice(item)) {
+        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn-header practice-start'; retry.textContent = t('retryMove');
+        retry.onclick = () => this.startPractice(item); card.append(retry);
+      }
+      const status = this.practiceResults?.get(item.ply)?.status;
+      if (status) { const note = document.createElement('span'); note.className = 'review-practice-status'; note.textContent = t(`practiceStatus_${status}`); card.append(note); }
+      if (item.ply === this.currentPly) card.classList.add('active');
+      this.el.blunderList.append(card);
     }
   }
 
@@ -1922,7 +1771,7 @@ class AnalysisStudioApp {
   }
 
   goToPly(ply, options = {}) {
-    this.practice?.stop();
+    if (!options.practice) this.practice?.stop();
     if (!options.silent) this.pauseWholeReview();
     this.exitBranchMode();
 
@@ -2156,9 +2005,9 @@ class AnalysisStudioApp {
         const name = document.createElement('span'); name.textContent = label;
         const result = document.createElement('strong'); result.textContent = value; row.append(name, result); panel.append(row);
       }
-      if (isKeyMoment(move)) {
+      if (canPractice(move)) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header btn-primary'; button.textContent = t('retryMove');
-        button.onclick = () => this.practice.start(move); panel.append(button);
+        button.onclick = () => this.startPractice(move); panel.append(button);
       }
     }
   }
