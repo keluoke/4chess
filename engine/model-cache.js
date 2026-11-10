@@ -1,7 +1,8 @@
 /**
  * IndexedDB High-Speed Model Cache for Maia-3
- * Ensures the 27.97 MB model is downloaded only ONCE from Cloudflare CDN,
- * and reuses downloaded bytes on subsequent page visits.
+ * Origin-local storage primitives. Extension Maia callers use model-cache-frame
+ * via model-cache-client so all chess hosts and analysis workers share this DB.
+ * A standalone website uses its own origin's DB.
  */
 
 const DB_NAME = 'Maia3ModelCache';
@@ -152,8 +153,8 @@ export class ModelCache {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
         const req = store.count();
-        req.onsuccess = () => resolve(req.result > 0);
-        req.onerror = () => resolve(false);
+        req.onsuccess = () => { db.close(); resolve(req.result > 0); };
+        req.onerror = () => { db.close(); resolve(false); };
       });
     } catch (e) {
       return false;
@@ -168,12 +169,13 @@ export class ModelCache {
       return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const req = store.clear();
-        req.onsuccess = () => {
+        store.clear();
+        tx.oncomplete = () => {
+          db.close();
           console.log('[ModelCache] 🧹 IndexedDB 所有版本模型缓存已彻底清空');
           resolve(true);
         };
-        req.onerror = () => resolve(false);
+        tx.onabort = tx.onerror = () => { db.close(); resolve(false); };
       });
     } catch (e) {
       return false;

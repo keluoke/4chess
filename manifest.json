@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_extensionName__",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "__MSG_extensionDescription__",
   "icons": {
     "16": "icons/icon16.png",
@@ -70,6 +70,7 @@
       ],
       "js": [
         "content/preferences-bridge.js",
+        "content/model-cache-bridge.js",
         "content/scan-handoff-bridge.js"
       ],
       "run_at": "document_start"
@@ -95,6 +96,7 @@
     },
     {
       "resources": [
+        "engine/model-cache-frame.html",
         "engine/engine-preferences.js",
         "engine/engine-variants.js"
       ],

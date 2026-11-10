@@ -6,17 +6,19 @@
  * 3. Tactical trap warning rings
  */
 
+import { boardColors, arrowMarkers, drawBoardArrow, drawMoveBadge } from '../ui/board-visuals.js';
 import { FairPlayGuard } from './fair-play-guard.js';
 
 export class HeatmapOverlay {
   constructor() {
     this.svg = null;
+    this.heatmapSvg = null;
     this.boardEl = null;
     this.orientation = 'white';
     this.showHeatmap = true;
     this.showArrows = true;
     this.liveEvaluationEnabled = true;
-    this.heatmapOpacity = 0.55;
+    this.heatmapOpacity = 0.6;
     this.showStockfishArrows = true;
     this.currentData = null;
     this.activeHoverMove = null;
@@ -24,9 +26,11 @@ export class HeatmapOverlay {
 
   attach(boardEl, orientation = 'white') {
     this.orientation = orientation;
-    if (this.boardEl === boardEl && this.svg && boardEl.contains(this.svg)) {
+    if (this.boardEl === boardEl && this.svg && boardEl.contains(this.svg) && this.heatmapSvg && boardEl.contains(this.heatmapSvg)) {
       return;
     }
+    this.svg?.remove();
+    this.heatmapSvg?.remove();
     this.boardEl = boardEl;
 
     const computedStyle = window.getComputedStyle(boardEl);
@@ -36,6 +40,7 @@ export class HeatmapOverlay {
 
     const existing = boardEl.querySelector('#maia3-board-overlay');
     if (existing) existing.remove();
+    boardEl.querySelector('#maia3-heatmap-overlay')?.remove();
 
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svg.id = 'maia3-board-overlay';
@@ -49,45 +54,21 @@ export class HeatmapOverlay {
     this.svg.style.zIndex = '15';
     this.svg.style.transition = 'opacity 0.2s ease';
 
-    // SVG Arrow Markers with orient="auto" (Standard, non-inverting)
+    this.svg.setAttribute('preserveAspectRatio', 'none');
+    this.svg.style.display = 'block';
     this.svg.innerHTML = `
-      <defs>
-        <!-- Arrowhead Marker 1 (Gold / Amber) -->
-        <marker id="maia-arrow-gold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f59e0b" />
-        </marker>
-        <!-- Arrowhead Marker 2 (Cyan / Teal) -->
-        <marker id="maia-arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#06b6d4" />
-        </marker>
-        <!-- Arrowhead Marker 3 (Purple / Violet) -->
-        <marker id="maia-arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#a855f7" />
-        </marker>
-        <!-- Arrowhead Marker Stockfish (Emerald Green) -->
-        <marker id="maia-arrow-sf" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#10b981" />
-        </marker>
-        <!-- Arrowhead Marker Consensus (Glowing Cyan) -->
-        <marker id="maia-arrow-consensus" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#06b6d4" />
-        </marker>
-        <!-- Arrowhead Marker Blunder (Crimson Red) -->
-        <marker id="maia-arrow-blunder" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#ef4444" />
-        </marker>
-        <!-- Arrowhead Marker Highlight -->
-        <marker id="maia-arrow-highlight" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#ec4899" />
-        </marker>
-      </defs>
-      <g id="maia-heatmap-layer"></g>
+      ${arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().green, consensus: boardColors().green, blunder: boardColors().red })}
       <g id="maia-arrows-layer"></g>
       <g id="maia-sf-arrows-layer"></g>
       <g id="maia-traps-layer"></g>
     `;
 
-    boardEl.appendChild(this.svg);
+    // Heat belongs above the board background and below pieces, like the studio.
+    this.heatmapSvg = this.svg.cloneNode(false);
+    this.heatmapSvg.id = 'maia3-heatmap-overlay';
+    this.heatmapSvg.style.zIndex = '0';
+    this.heatmapSvg.innerHTML = '<g id="maia-heatmap-layer"></g>';
+    boardEl.append(this.heatmapSvg, this.svg);
   }
 
   setOrientation(orientation) {
@@ -164,6 +145,7 @@ export class HeatmapOverlay {
       return;
     }
     this.currentData = predictionData;
+    this.svg.querySelector('defs').outerHTML = arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().green, consensus: boardColors().green, blunder: boardColors().red });
     // Engine scores arrive in the side-to-move perspective; labels use White's perspective.
     if (predictionData?.stockfish && predictionData.turn === 'b') {
       const score = String(predictionData.stockfish.score ?? '?');
@@ -172,7 +154,7 @@ export class HeatmapOverlay {
       predictionData = { ...predictionData, stockfish: { ...predictionData.stockfish, score: whiteScore } };
     }
 
-    const heatmapGroup = this.svg.querySelector('#maia-heatmap-layer');
+    const heatmapGroup = this.heatmapSvg.querySelector('#maia-heatmap-layer');
     const arrowsGroup = this.svg.querySelector('#maia-arrows-layer');
     const sfArrowsGroup = this.svg.querySelector('#maia-sf-arrows-layer');
     const trapsGroup = this.svg.querySelector('#maia-traps-layer');
@@ -188,12 +170,9 @@ export class HeatmapOverlay {
       this.drawArrow(sfArrowsGroup, {
         from: bm.fromSq !== undefined ? bm.fromSq : bm.from,
         to: bm.toSq !== undefined ? bm.toSq : bm.to,
-        color: '#10b981',
         width: 7.5,
-        dashed: '7 4',
         marker: 'maia-arrow-sf',
-        label: `🐟 ${bm.san} (${predictionData.stockfish.score})`,
-        opacity: 0.90
+        label: `★ ${bm.san} (${predictionData.stockfish.score})`,
       });
     }
 
@@ -221,23 +200,23 @@ export class HeatmapOverlay {
   }
 
   renderHeatmapSquares(group, heatmap) {
+    const color = boardColors().gold;
     for (let i = 0; i < 64; i++) {
       const val = heatmap[i];
-      if (val < 0.15) continue;
+      if (!Number.isFinite(val) || val <= 0) continue;
 
       const { x, y, size } = this.squareToCoords(i);
-      const alpha = Math.min(0.80, val * this.heatmapOpacity);
-      const r = 245, g = 158, b = 11;
+      const alpha = Math.min(0.6, val * this.heatmapOpacity);
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', x + 4);
-      rect.setAttribute('y', y + 4);
-      rect.setAttribute('width', size - 8);
-      rect.setAttribute('height', size - 8);
-      rect.setAttribute('rx', '10');
-      rect.setAttribute('ry', '10');
-      rect.setAttribute('fill', `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`);
-      rect.style.transition = 'all 0.25s ease';
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', size);
+      rect.setAttribute('height', size);
+      rect.setAttribute('shape-rendering', 'crispEdges');
+      rect.setAttribute('fill', color);
+      rect.setAttribute('fill-opacity', alpha.toFixed(3));
+      rect.style.transition = 'fill-opacity 0.15s ease';
 
       group.appendChild(rect);
     }
@@ -250,7 +229,7 @@ export class HeatmapOverlay {
 
     // SCENARIO 1: Blunder Moment Drill (Decision point before the blunder was played)
     if (blunder && data.viewMode !== 'result') {
-      // 1. Played Blunder Arrow (❌ Crimson Red, dashed)
+      // 1. Played blunder: red dashed arrow and ! badge
       const bFrom = blunder.from || (blunder.uci ? blunder.uci.slice(0, 2) : null);
       const bTo = blunder.to || (blunder.uci ? blunder.uci.slice(2, 4) : null);
 
@@ -258,17 +237,13 @@ export class HeatmapOverlay {
         this.drawArrow(maiaGroup, {
           from: bFrom,
           to: bTo,
-          color: '#ef4444',
           width: 8.5,
           marker: 'maia-arrow-blunder',
-          dashed: '7 4',
-          label: `❌ ${blunder.san} (${blunder.lossPawns})`,
-          opacity: 0.96,
-          badgeOffsetY: -18
+          label: `! ${blunder.san} (${blunder.lossPawns})`,
         });
       }
 
-      // 2. Engine Best Move Arrow (🐟 Emerald Green, solid)
+      // 2. Engine Best Move Arrow (★ Emerald Green, solid)
       const bm = blunder.bestMove || sf?.bestMove;
       const bmFrom = bm ? (bm.fromSq !== undefined ? bm.fromSq : bm.from) : (blunder.bestUci ? blunder.bestUci.slice(0, 2) : null);
       const bmTo = bm ? (bm.toSq !== undefined ? bm.toSq : bm.to) : (blunder.bestUci ? blunder.bestUci.slice(2, 4) : null);
@@ -279,18 +254,13 @@ export class HeatmapOverlay {
         this.drawArrow(sfGroup, {
           from: bmFrom,
           to: bmTo,
-          color: '#10b981',
           width: 8.5,
           marker: 'maia-arrow-sf',
-          dashed: '7 4',
-          label: `🐟 ${bestSan} (${evalScore})`,
-          opacity: 0.96,
-          isStockfish: true,
-          badgeOffsetY: 18
+          label: `★ ${bestSan} (${evalScore})`,
         });
       }
 
-      // 3. Maia Intuition Arrow (🧠 Gold, if distinct from played blunder & engine best)
+      // 3. Maia Intuition Arrow (M Gold, if distinct from played blunder & engine best)
       const topMove = moves[0];
       if (topMove) {
         const cleanTop = topMove.san.replace(/[+#?!]/g, '');
@@ -303,12 +273,9 @@ export class HeatmapOverlay {
           this.drawArrow(maiaGroup, {
             from: topMove.from,
             to: topMove.to,
-            color: '#f59e0b',
             width: 6.5,
             marker: 'maia-arrow-gold',
-            label: `🧠 ${topMove.san} (${topMove.prob}%)`,
-            opacity: 0.85,
-            badgeOffsetY: 0
+            label: `M ${topMove.san} (${topMove.prob}%)`,
           });
         }
       }
@@ -321,26 +288,22 @@ export class HeatmapOverlay {
     const isConsensus = this.showArrows && this.showStockfishArrows && sf && sf.bestMove && topMove && (topMove.uci === sf.bestMove.uci);
 
     if (isConsensus) {
-      // Single Glowing Consensus Arrow (Maia == Stockfish)
+      // One green arrow with both engine identifiers (Maia == Stockfish)
       this.drawArrow(maiaGroup, {
         from: topMove.from,
         to: topMove.to,
-        color: '#06b6d4',
         width: 9.0,
         marker: 'maia-arrow-consensus',
-        label: `🎯 ${topMove.san} (${topMove.prob}%)`,
-        opacity: 0.95
+        label: `★ M ${topMove.san} (${topMove.prob}%)`,
       });
       // Other human moves
-      moves.slice(1, 3).forEach((m, idx) => {
+      moves.slice(1, 3).forEach(m => {
         this.drawArrow(maiaGroup, {
           from: m.from,
           to: m.to,
-          color: '#f59e0b',
           width: 5.0,
           marker: 'maia-arrow-gold',
           label: `${m.prob}%`,
-          opacity: 0.65
         });
       });
     } else {
@@ -349,11 +312,9 @@ export class HeatmapOverlay {
         this.drawArrow(maiaGroup, {
           from: topMove.from,
           to: topMove.to,
-          color: '#f59e0b',
           width: 8.5,
           marker: 'maia-arrow-gold',
-          label: `🧠 ${topMove.san} (${topMove.prob}%)`,
-          opacity: 0.92
+          label: `M ${topMove.san} (${topMove.prob}%)`,
         });
       }
 
@@ -363,13 +324,9 @@ export class HeatmapOverlay {
         this.drawArrow(sfGroup, {
           from: bm.fromSq !== undefined ? bm.fromSq : bm.from,
           to: bm.toSq !== undefined ? bm.toSq : bm.to,
-          color: '#10b981',
           width: 7.5,
           marker: 'maia-arrow-sf',
-          dashed: '7 4',
-          label: `🐟 ${bm.san} (${sf.score})`,
-          opacity: 0.92,
-          isStockfish: true
+          label: `★ ${bm.san} (${sf.score})`,
         });
       }
 
@@ -378,89 +335,21 @@ export class HeatmapOverlay {
         this.drawArrow(maiaGroup, {
           from: m.from,
           to: m.to,
-          color: '#f59e0b',
           width: 4.5,
           marker: 'maia-arrow-gold',
           label: `${m.prob}%`,
-          opacity: 0.60
         });
       });
     }
   }
 
-  drawArrow(group, { from, to, color, width, marker, label, opacity = 0.9, dashed = null, isStockfish = false, badgeOffsetY = null }) {
-    const fromCoords = this.squareToCoords(from);
-    const toCoords = this.squareToCoords(to);
-
-    const dx = toCoords.cx - fromCoords.cx;
-    const dy = toCoords.cy - fromCoords.cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) return;
-
-    const normX = dx / dist;
-    const normY = dy / dist;
-
-    // Start circle at origin square
-    const startCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    startCircle.setAttribute('cx', fromCoords.cx);
-    startCircle.setAttribute('cy', fromCoords.cy);
-    startCircle.setAttribute('r', isStockfish ? '5' : '6');
-    startCircle.setAttribute('fill', color);
-    startCircle.setAttribute('opacity', opacity);
-    group.appendChild(startCircle);
-
-    // Line offset
-    const startX = fromCoords.cx + normX * 12;
-    const startY = fromCoords.cy + normY * 12;
-    const endX = toCoords.cx - normX * 22;
-    const endY = toCoords.cy - normY * 22;
-
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', startX);
-    line.setAttribute('y1', startY);
-    line.setAttribute('x2', endX);
-    line.setAttribute('y2', endY);
-    line.setAttribute('stroke', color);
-    line.setAttribute('stroke-width', width);
-    line.setAttribute('stroke-linecap', 'round');
-    if (dashed) line.setAttribute('stroke-dasharray', dashed);
-    line.setAttribute('marker-end', `url(#${marker})`);
-    line.setAttribute('opacity', opacity);
-    group.appendChild(line);
-
-    // Label pill on destination square
-    if (label) {
-      const badgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      const badgeX = toCoords.cx;
-      const offsetY = badgeOffsetY !== null ? badgeOffsetY : (isStockfish ? 16 : -14);
-      const badgeY = toCoords.cy + offsetY;
-
-      const rectWidth = Math.max(55, label.length * 7.5 + 16);
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', badgeX - rectWidth / 2);
-      rect.setAttribute('y', badgeY - 11);
-      rect.setAttribute('width', rectWidth);
-      rect.setAttribute('height', '22');
-      rect.setAttribute('rx', '11');
-      rect.setAttribute('fill', '#0f172a');
-      rect.setAttribute('stroke', color);
-      rect.setAttribute('stroke-width', '1.6');
-      rect.setAttribute('opacity', '0.95');
-
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', badgeX);
-      text.setAttribute('y', badgeY + 4.5);
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('fill', '#ffffff');
-      text.setAttribute('font-family', 'system-ui, -apple-system, sans-serif');
-      text.setAttribute('font-size', '10.5');
-      text.setAttribute('font-weight', '700');
-      text.textContent = label;
-
-      badgeGroup.appendChild(rect);
-      badgeGroup.appendChild(text);
-      group.appendChild(badgeGroup);
-    }
+  drawArrow(group, { from, to, width, marker, label }) {
+    const a = this.squareToCoords(from), b = this.squareToCoords(to);
+    const role = marker === 'maia-arrow-sf' ? 'sf' : marker === 'maia-arrow-consensus' ? 'consensus' : marker === 'maia-arrow-blunder' ? 'error' : label?.startsWith('M ') ? 'maia' : 'candidate';
+    const colors = boardColors();
+    const color = role === 'sf' || role === 'consensus' ? colors.green : role === 'error' ? colors.red : colors.gold;
+    drawBoardArrow(group, { from: { x: a.cx, y: a.cy }, to: { x: b.cx, y: b.cy }, color, marker: width <= 5 ? `${marker}-secondary` : marker, role, secondary: width <= 5, opacity: width <= 5 ? .5 : .84, dashed: role === 'error' });
+    drawMoveBadge(group, { x: b.cx, y: b.cy, role, color, title: label });
   }
 
   renderTrapWarning(group, topMove) {
@@ -472,7 +361,7 @@ export class HeatmapOverlay {
     circle.setAttribute('cy', cy);
     circle.setAttribute('r', '38');
     circle.setAttribute('fill', 'none');
-    circle.setAttribute('stroke', '#ef4444');
+    circle.setAttribute('stroke', boardColors().red);
     circle.setAttribute('stroke-width', '3.5');
     circle.setAttribute('stroke-dasharray', '6 4');
     circle.setAttribute('opacity', '0.85');
@@ -484,7 +373,7 @@ export class HeatmapOverlay {
     this.currentData = null;
     this.activeHoverMove = null;
     if (!this.svg) return;
-    const heatmapGroup = this.svg.querySelector('#maia-heatmap-layer');
+    const heatmapGroup = this.heatmapSvg?.querySelector('#maia-heatmap-layer');
     const arrowsGroup = this.svg.querySelector('#maia-arrows-layer');
     const sfArrowsGroup = this.svg.querySelector('#maia-sf-arrows-layer');
     const trapsGroup = this.svg.querySelector('#maia-traps-layer');

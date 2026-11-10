@@ -5,6 +5,7 @@ import { animateStudy, cancelMotion, motionEnabled } from './workbench-motion.js
  * Supports drag-and-drop, click-to-move, legal move hints, flip, and vector SVG arrow overlay.
  */
 
+import { boardColors, arrowMarkers, drawBoardArrow, drawMoveBadge } from '../ui/board-visuals.js';
 import { ChessBoard } from '../engine/chess-core.js';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 
@@ -47,24 +48,13 @@ export class BoardUI {
     // SVG Overlay layer for arrows
     this.svgOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svgOverlay.setAttribute('class', 'maia-board-svg-overlay');
+    this.svgOverlay.setAttribute('viewBox', '0 0 800 800');
+    this.svgOverlay.setAttribute('preserveAspectRatio', 'none');
     this.boardEl.appendChild(this.svgOverlay);
 
     // Marker definitions for arrows
     this.svgOverlay.innerHTML = `
-      <defs>
-        <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-green)"/>
-        </marker>
-        <marker id="arrow-gold" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-gold)"/>
-        </marker>
-        <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-red)"/>
-        </marker>
-        <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--brand-blue)"/>
-        </marker>
-      </defs>
+      ${arrowMarkers('arrow', boardColors())}
       <g id="maia-svg-arrows-group"></g>
       <g class="study-annotations"></g>
     `;
@@ -272,100 +262,19 @@ export class BoardUI {
 
     if (!this.arrows || this.arrows.length === 0) return;
 
+    this.svgOverlay.querySelector('defs').outerHTML = arrowMarkers('arrow', boardColors());
+    const badges = [];
     for (const arrow of this.arrows) {
-      if (!arrow.from || !arrow.to) continue;
-
-      const p1 = this.getSquareCenterPercent(arrow.from);
-      const p2 = this.getSquareCenterPercent(arrow.to);
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const len = Math.hypot(dx, dy);
-      if (len === 0) continue;
-
-      // Shorten end slightly so marker doesn't poke out of square
-      const shorten = 3.2; // percent
-      const endX = p2.x - (dx / len) * shorten;
-      const endY = p2.y - (dy / len) * shorten;
-
-      let strokeColor = 'var(--brand-green)';
-      let markerId = 'arrow-green';
-      if (arrow.color === 'gold' || arrow.color === 'yellow' || arrow.color === '#F59E0B') {
-        strokeColor = 'var(--brand-gold)';
-        markerId = 'arrow-gold';
-      } else if (arrow.color === 'red' || arrow.color === '#EF4444') {
-        strokeColor = 'var(--brand-red)';
-        markerId = 'arrow-red';
-      } else if (arrow.color === 'blue') {
-        strokeColor = 'var(--brand-blue)';
-        markerId = 'arrow-blue';
-      }
-
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', `${p1.x}%`);
-      line.setAttribute('y1', `${p1.y}%`);
-      line.setAttribute('x2', `${endX}%`);
-      line.setAttribute('y2', `${endY}%`);
-      line.setAttribute('stroke', strokeColor);
-      line.setAttribute('stroke-width', arrow.width || '4.5');
-      line.setAttribute('stroke-linecap', 'round');
-      line.setAttribute('marker-end', `url(#${markerId})`);
-
-      if (arrow.dashed) {
-        line.setAttribute('stroke-dasharray', '6 5');
-      }
-
-      line.style.opacity = arrow.opacity || '0.9';
-      group.appendChild(line);
+      if (arrow.from == null || arrow.to == null) continue;
+      const p1 = this.getSquareCenterPercent(arrow.from), p2 = this.getSquareCenterPercent(arrow.to);
+      const key = ['gold', 'yellow', '#f59e0b'].includes(String(arrow.color).toLowerCase()) ? 'gold' : ['red', '#ef4444'].includes(String(arrow.color).toLowerCase()) ? 'red' : arrow.color === 'blue' ? 'blue' : 'green';
+      const role = arrow.role || (key === 'gold' ? 'maia' : key === 'green' ? 'sf' : key === 'red' ? 'error' : 'candidate');
+      const color = boardColors()[key];
+      const from = { x: p1.x * 8, y: p1.y * 8 }, to = { x: p2.x * 8, y: p2.y * 8 };
+      drawBoardArrow(group, { from, to, color, marker: `arrow-${key}`, role, opacity: arrow.opacity ?? .84, dashed: arrow.dashed });
+      badges.push({ x: to.x, y: to.y, role, color, title: arrow.label });
     }
-
-    // Second pass: Render labels grouped by destination square to prevent overlapping
-    const targetMap = new Map();
-    for (const arrow of this.arrows) {
-      if (!arrow.to || !arrow.label) continue;
-      if (!targetMap.has(arrow.to)) {
-        targetMap.set(arrow.to, []);
-      }
-      targetMap.get(arrow.to).push(arrow);
-    }
-
-    for (const [toSq, targetArrows] of targetMap.entries()) {
-      const p2 = this.getSquareCenterPercent(toSq);
-      const count = targetArrows.length;
-
-      targetArrows.forEach((arrow, idx) => {
-        let labelColor = 'var(--brand-green)';
-        if (arrow.color === 'gold' || arrow.color === 'yellow' || arrow.color === '#F59E0B') {
-          labelColor = 'var(--brand-gold)';
-        } else if (arrow.color === 'red' || arrow.color === '#EF4444') {
-          labelColor = 'var(--brand-red)';
-        } else if (arrow.color === 'blue') {
-          labelColor = 'var(--brand-blue)';
-        }
-
-        // Stagger vertical offset so multiple labels landing on the same square stay perfectly legible
-        let offsetY = -3.0; // percent
-        if (count === 2) {
-          offsetY = idx === 0 ? -4.0 : 3.6;
-        } else if (count >= 3) {
-          offsetY = idx === 0 ? -4.4 : (idx === 1 ? 0 : 4.4);
-        }
-
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', `${p2.x}%`);
-        text.setAttribute('y', `${p2.y + offsetY}%`);
-        text.setAttribute('fill', labelColor);
-        text.setAttribute('font-size', count > 2 ? '10px' : '11px');
-        text.setAttribute('font-weight', '700');
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('dominant-baseline', 'central');
-        text.setAttribute('paint-order', 'stroke');
-        text.setAttribute('stroke', 'var(--dg-surface)');
-        text.setAttribute('stroke-width', '3.5px');
-        text.textContent = arrow.label;
-        group.appendChild(text);
-      });
-    }
+    for (const badge of badges) drawMoveBadge(group, badge);
   }
 
   bindEvents() {
@@ -456,8 +365,9 @@ export class BoardUI {
       if (annotation.from === annotation.to) {
         for (const [key, val] of Object.entries({ cx: `${from.x}%`, cy: `${from.y}%`, r: '5%', fill: 'none' })) element.setAttribute(key, val);
       } else {
-        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: `${to.x}%`, y2: `${to.y}%`, 'marker-end': 'url(#arrow-red)' })) element.setAttribute(key, val);
+        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: to.x * 8 - (to.x - from.x) / Math.hypot(to.x - from.x, to.y - from.y) * 36, y2: to.y * 8 - (to.y - from.y) / Math.hypot(to.x - from.x, to.y - from.y) * 36, 'marker-end': 'url(#arrow-red)' })) element.setAttribute(key, val);
       }
+      element.setAttribute('vector-effect', 'non-scaling-stroke');
       element.setAttribute('stroke', 'var(--brand-red)'); element.setAttribute('stroke-width', '3'); element.setAttribute('opacity', preview === annotation ? '.5' : '.8');
       group.append(element);
     }

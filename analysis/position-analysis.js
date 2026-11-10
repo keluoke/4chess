@@ -292,7 +292,7 @@ export class PositionAnalysis {
     moves ||= (entry.prediction?.moves || []).slice(0, 3);
     if (this.app.settings.arrows) {
       const arrows = [];
-      if (lines[0] && this.app.settings.sfArrows !== false) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'green' });
+      if (lines[0] && this.app.settings.sfArrows !== false) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'green', role: this.app.settings.maiaArrows !== false && moves[0]?.uci === lines[0].uci ? 'consensus' : 'sf' });
       if (this.app.settings.maiaArrows !== false && moves[0]?.uci && (moves[0].uci !== lines[0]?.uci || this.app.settings.sfArrows === false)) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
       this.app.boardUI.setArrows(arrows);
     }

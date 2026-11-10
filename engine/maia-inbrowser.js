@@ -4,18 +4,8 @@
  * 100% offline, zero external server, zero Python, zero configuration.
  */
 
-import { ModelCache } from './model-cache.js';
+import { loadModelBytes } from './model-cache-client.js';
 import { ChessBoard } from './chess-core.js';
-
-function getModelCacheKey(url) {
-  let hash = 0;
-  for (let i = 0; i < url.length; i++) {
-    hash = ((hash << 5) - hash) + url.charCodeAt(i);
-    hash |= 0;
-  }
-  const baseName = url.split('/').pop().replace(/\.bin$/, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'maia3';
-  return `maia3_v1_${baseName}_${Math.abs(hash).toString(36)}`;
-}
 
 export class MaiaInBrowserEngine {
   constructor() {
@@ -36,210 +26,99 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
   }
 
-  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null, cacheRetried = false) {
+  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null) {
     if (this.isReady) return true;
     if (this.initPromise) return this.initPromise;
 
-    let cachedKey = null;
     this.initPromise = (async () => {
       try {
-        let arrayBuffer = null;
-        let downloadedCacheKey = null;
-
-      if (urlOrBuffer instanceof ArrayBuffer) {
-        arrayBuffer = urlOrBuffer;
-        this.modelSource = 'memory';
-      } else if (typeof urlOrBuffer === 'string') {
-        const cacheKey = getModelCacheKey(urlOrBuffer);
-        // 1. Try loading from persistent IndexedDB cache (0ms instant)
-        try {
-          let cached = cacheRetried ? null : await ModelCache.getModel(cacheKey);
-          if (!cached && !cacheRetried && urlOrBuffer === 'https://weights.4chess.cc/maia3_model.bin') {
-            // Check legacy fallback keys
-            cached = (await ModelCache.getModel('maia3_model')) || (await ModelCache.getModel('maia3-5m'));
-          }
-          if (cached && cached.byteLength > 1000000) {
-            cachedKey = cacheKey;
-            arrayBuffer = cached;
-            this.modelSource = 'cache';
-            if (onProgress) {
-              onProgress({
-                percent: 100,
-                speedMBps: '∞',
-                receivedMB: (cached.byteLength / (1024 * 1024)).toFixed(1),
-                totalMB: (cached.byteLength / (1024 * 1024)).toFixed(1),
-                status: '已读取缓存，正在准备模型',
-                source: 'cache'
-              });
-            }
-          }
-        } catch (e) {
-          console.warn('[Maia-3] Cache check failed, will fetch:', e);
-        }
-
-        // 2. Fetch from URL (Cloudflare CDN / Extension Package)
-        if (!arrayBuffer) {
-          let fetchUrl = urlOrBuffer;
-          if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://') && !fetchUrl.startsWith('chrome-extension://')) {
-            if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-              fetchUrl = chrome.runtime.getURL(fetchUrl.replace(/^\/+/, ''));
-            } else {
-              try {
-                if (typeof import.meta !== 'undefined' && import.meta.url) {
-                  fetchUrl = new URL(fetchUrl.startsWith('/') ? fetchUrl : (fetchUrl.startsWith('models/') ? `../${fetchUrl}` : fetchUrl), import.meta.url).href;
-                }
-              } catch (_) {}
-            }
-          }
-
-          console.log(`[Maia-3] 🌐 从网络/CDN 下载模型: ${fetchUrl}`);
-          onProgress?.({ percent: 0, speedMBps: '', receivedMB: '0', totalMB: '--', source: 'cdn' });
-          const res = await fetch(fetchUrl);
-          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-
-          const contentLength = parseInt(res.headers.get('content-length') || '29329712', 10);
-          const isCdn = fetchUrl.startsWith('http');
-          this.modelSource = isCdn ? 'cdn' : 'package';
-
-          if (res.body && res.body.getReader) {
-            try {
-              const reader = res.body.getReader();
-              const chunks = [];
-              let receivedLength = 0;
-              const startTime = performance.now();
-
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                receivedLength += value.length;
-
-                const elapsedSec = (performance.now() - startTime) / 1000;
-                const speedMBps = elapsedSec > 0.1 ? ((receivedLength / (1024 * 1024)) / elapsedSec).toFixed(1) : '...';
-                const percent = Math.min(100, Math.round((receivedLength / contentLength) * 100));
-
-                if (onProgress) {
-                  onProgress({
-                    percent,
-                    speedMBps,
-                    receivedMB: (receivedLength / (1024 * 1024)).toFixed(1),
-                    totalMB: (contentLength / (1024 * 1024)).toFixed(1),
-                    status: isCdn ? `Cloudflare CDN 高速下载 (${percent}%)` : `读取扩展内置模型 (${percent}%)`,
-                    source: this.modelSource
-                  });
-                }
-              }
-
-              const allBytes = new Uint8Array(receivedLength);
-              let pos = 0;
-              for (const chunk of chunks) {
-                allBytes.set(chunk, pos);
-                pos += chunk.length;
-              }
-              arrayBuffer = allBytes.buffer;
-            } catch (streamErr) {
-              // A partially consumed Response cannot be read a second time.
-              // Retry the download with a fresh response; never cache partial weights.
-              console.warn('[Maia-3] Stream interrupted, retrying model download:', streamErr);
-              const retry = await fetch(fetchUrl);
-              if (!retry.ok) throw new Error(`HTTP ${retry.status}: ${retry.statusText}`);
-              arrayBuffer = await retry.arrayBuffer();
-            }
-          } else {
-            arrayBuffer = await res.arrayBuffer();
-          }
-
-          // 3. Save to IndexedDB cache for future instant offline loads
-          downloadedCacheKey = cacheKey;
-        }
-      }
-
-      if (!arrayBuffer) {
-        throw new Error('No model buffer received');
-      }
-
-      const view = new DataView(arrayBuffer);
-      const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-      if (magic !== 'M3CF') {
-        throw new Error('Invalid Maia-3 binary magic header');
-      }
-
-      const metaLen = view.getUint32(4, true);
-      const metaBytes = new Uint8Array(arrayBuffer, 8, metaLen);
-      const metaStr = new TextDecoder().decode(metaBytes);
-      this.meta = JSON.parse(metaStr);
-      for (const [key, value] of Object.entries(expected || {})) {
-        if (this.meta[key] !== value) throw new Error(`Unexpected Maia model ${key}: ${this.meta[key]}`);
-      }
-
-      const payloadOffset = 8 + metaLen;
-      const payloadBytes = new Uint8Array(arrayBuffer, payloadOffset);
-
-      // Fast Float16 to Float32 conversion helper
-      function decodeFp16(u16Arr) {
-        const len = u16Arr.length;
-        const out = new Float32Array(len);
-        for (let i = 0; i < len; i++) {
-          const h = u16Arr[i];
-          const sign = (h & 0x8000) >> 15;
-          const exp = (h & 0x7c00) >> 10;
-          const mant = h & 0x03ff;
-          if (exp === 0) {
-            out[i] = (sign ? -1 : 1) * Math.pow(2, -14) * (mant / 1024);
-          } else if (exp === 0x1f) {
-            out[i] = mant ? NaN : ((sign ? -1 : 1) * Infinity);
-          } else {
-            out[i] = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + mant / 1024);
-          }
-        }
-        return out;
-      }
-
-      const isFp16 = this.meta.dtype === 'float16';
-
-      // Map tensor buffers (zero-copy if 4-byte aligned, or decode float16)
-      for (const [name, info] of Object.entries(this.meta.tensors)) {
-        const totalOffset = payloadBytes.byteOffset + info.offset;
-        if (isFp16) {
-          const u16Slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 2);
-          if (typeof Float16Array !== 'undefined') {
-            this.tensors[name] = new Float32Array(new Float16Array(u16Slice));
-          } else {
-            this.tensors[name] = decodeFp16(new Uint16Array(u16Slice));
-          }
+        let arrayBuffer;
+        if (urlOrBuffer instanceof ArrayBuffer) {
+          arrayBuffer = urlOrBuffer;
+          this.modelSource = 'memory';
         } else {
-          if (totalOffset % 4 === 0) {
-            this.tensors[name] = new Float32Array(
-              payloadBytes.buffer,
-              totalOffset,
-              info.numel
-            );
+          const loaded = await loadModelBytes(urlOrBuffer, onProgress, expected);
+          arrayBuffer = loaded.buffer;
+          this.modelSource = loaded.source;
+          this.cachePersisted = loaded.persisted;
+        }
+
+        if (!arrayBuffer) {
+          throw new Error('No model buffer received');
+        }
+
+        const view = new DataView(arrayBuffer);
+        const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+        if (magic !== 'M3CF') {
+          throw new Error('Invalid Maia-3 binary magic header');
+        }
+
+        const metaLen = view.getUint32(4, true);
+        const metaBytes = new Uint8Array(arrayBuffer, 8, metaLen);
+        const metaStr = new TextDecoder().decode(metaBytes);
+        this.meta = JSON.parse(metaStr);
+        for (const [key, value] of Object.entries(expected || {})) {
+          if (this.meta[key] !== value) throw new Error(`Unexpected Maia model ${key}: ${this.meta[key]}`);
+        }
+
+        const payloadOffset = 8 + metaLen;
+        const payloadBytes = new Uint8Array(arrayBuffer, payloadOffset);
+
+        // Fast Float16 to Float32 conversion helper
+        function decodeFp16(u16Arr) {
+          const len = u16Arr.length;
+          const out = new Float32Array(len);
+          for (let i = 0; i < len; i++) {
+            const h = u16Arr[i];
+            const sign = (h & 0x8000) >> 15;
+            const exp = (h & 0x7c00) >> 10;
+            const mant = h & 0x03ff;
+            if (exp === 0) {
+              out[i] = (sign ? -1 : 1) * Math.pow(2, -14) * (mant / 1024);
+            } else if (exp === 0x1f) {
+              out[i] = mant ? NaN : ((sign ? -1 : 1) * Infinity);
+            } else {
+              out[i] = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + mant / 1024);
+            }
+          }
+          return out;
+        }
+
+        const isFp16 = this.meta.dtype === 'float16';
+
+        // Map tensor buffers (zero-copy if 4-byte aligned, or decode float16)
+        for (const [name, info] of Object.entries(this.meta.tensors)) {
+          const totalOffset = payloadBytes.byteOffset + info.offset;
+          if (isFp16) {
+            const u16Slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 2);
+            if (typeof Float16Array !== 'undefined') {
+              this.tensors[name] = new Float32Array(new Float16Array(u16Slice));
+            } else {
+              this.tensors[name] = decodeFp16(new Uint16Array(u16Slice));
+            }
           } else {
-            const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
-            this.tensors[name] = new Float32Array(slice);
+            if (totalOffset % 4 === 0) {
+              this.tensors[name] = new Float32Array(
+                payloadBytes.buffer,
+                totalOffset,
+                info.numel
+              );
+            } else {
+              const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
+              this.tensors[name] = new Float32Array(slice);
+            }
           }
         }
-      }
 
-      this.initVocab();
-      if (downloadedCacheKey) await ModelCache.saveModel(downloadedCacheKey, arrayBuffer).catch(() => false);
-      this.isReady = true;
-      console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource})`);
-      return true;
-    } catch (err) {
-      this.initPromise = null;
-      if (cachedKey && !cacheRetried) {
-        await ModelCache.clearCache(cachedKey);
-        if (urlOrBuffer === 'https://weights.4chess.cc/maia3_model.bin') {
-          await ModelCache.clearCache('maia3_model');
-          await ModelCache.clearCache('maia3-5m');
-        }
-        this.reset();
-        return this.loadModel(urlOrBuffer, onProgress, expected, true);
+        this.initVocab();
+        this.isReady = true;
+        console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource})`);
+        return true;
+      } catch (err) {
+        this.initPromise = null;
+        throw err;
       }
-      throw err;
-    }
-  })();
+    })();
 
     return this.initPromise;
   }

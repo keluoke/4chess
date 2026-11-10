@@ -5,6 +5,7 @@
  * during full-game blunder review and position analysis.
  */
 
+import { setModelCachePort } from './model-cache-client.js';
 import { ChessBoard } from './chess-core.js';
 import { MaiaInBrowserEngine } from './maia-inbrowser.js';
 
@@ -15,6 +16,9 @@ self.onmessage = async (e) => {
   const { type, id, data } = e.data || {};
 
   switch (type) {
+    case 'cache-connect':
+      setModelCachePort(e.data.port);
+      break;
     case 'loadModel': {
       try {
         await engine.loadModel(data?.url, (prog) => {

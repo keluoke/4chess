@@ -119,7 +119,7 @@ try {
     const cleared=[...document.querySelectorAll('#maia3-board-overlay > g')].every(g=>!g.children.length);
     return {score,dash,sfOnly,neither,consensus,cleared};
   },id);
-  assert.match(svgChecks.score,/-0.80/); assert.equal(svgChecks.dash,'7 4'); for(const key of ['sfOnly','neither','consensus','cleared']) assert(svgChecks[key],key);
+  assert.match(svgChecks.score,/-0.80/); assert.equal(svgChecks.dash,null); for(const key of ['sfOnly','neither','consensus','cleared']) assert(svgChecks[key],key);
   await arrowsPage.close();
   // Actual bundled WASM must work inside an isolated host iframe before Maia finishes downloading.
   await worker.evaluate(()=>chrome.storage.local.set({maiaVariant:'5m',stockfishVariant:'lite',cloudflareCdnUrl:'https://weights.4chess.cc/maia3_model.bin'}));

@@ -1314,7 +1314,7 @@
 #maia3-intuition-panel .diverge-visual-legend a { color: var(--dg-green); }
 #maia3-intuition-panel .legend-maia { color: var(--dg-gold); }
 #maia3-intuition-panel .legend-sf { color: var(--dg-green); }
-#maia3-intuition-panel .legend-consensus { color: var(--dg-blue); }
+#maia3-intuition-panel .legend-consensus { color: var(--dg-green); }
 #maia3-intuition-panel{width:342px;max-width:calc(100vw - 24px);border-radius:12px;box-shadow:var(--dg-shadow);border:1px solid var(--dg-line);font-size:13px;line-height:1.6}
 #maia3-intuition-panel .weui-navbar{height:53px;min-height:53px;padding:0 14px;border-bottom:1px solid var(--dg-line)}
 #maia3-intuition-panel .weui-navbar__left{gap:8px}

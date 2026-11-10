@@ -1,7 +1,7 @@
 /**
  * Unified Maia-3 Inference Coordinator (Scheme 0: Cloudflare CDN + Standalone WebAssembly Architecture)
  * 100% In-Browser Execution with High-Speed CDN & IndexedDB Persistent Caching:
- * 1. Maia-3 Chessformer Neural Engine loaded via Cloudflare CDN / IndexedDB cache / Local package
+ * 1. Maia-3 Chessformer Neural Engine loaded via Cloudflare CDN / IndexedDB cache
  * 2. Stockfish WebAssembly Engine (lib/stockfish.js) via sandboxed Web Worker bridge
  * Zero external servers, zero Python runtime, zero localhost bridges.
  * Clear independent dual-engine status tracking and concurrent evaluation.
@@ -10,28 +10,11 @@
 import { ChessBoard } from './chess-core.js';
 import { MaiaInBrowserEngine } from './maia-inbrowser.js';
 import { StockfishInBrowser } from './stockfish-inbrowser.js';
-import { ModelCache } from './model-cache.js';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
-export function modelSourceCandidates(variant, input = '') {
-  const spec = MAIA_VARIANTS[variant];
-  const fileName = new URL(spec.url).pathname.split('/').pop();
-  const candidates = [];
-  try {
-    const url = new URL(input.trim());
-    if (['https:', 'http:'].includes(url.protocol)) {
-      if (/\.bin$/i.test(url.pathname)) {
-        const name = url.pathname.split('/').pop();
-        const known = Object.values(MAIA_VARIANTS).some(model => new URL(model.url).pathname.split('/').pop() === name);
-        if (!known || name === fileName) candidates.push(url.href);
-      } else {
-        url.pathname = `${url.pathname.replace(/\/+$/, '')}/${fileName}`;
-        candidates.push(url.href);
-      }
-    }
-  } catch { /* Invalid or relative URLs fall back to the external official CDN. */ }
-  return [...new Set([...candidates, spec.url])];
-}
+export { modelSourceCandidates } from './model-sources.js';
+import { modelSourceCandidates } from './model-sources.js';
+import { connectModelCache } from './model-cache-client.js';
 
 export class MaiaEngine {
   constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m' } = {}) {
@@ -207,7 +190,6 @@ export class MaiaEngine {
       this.worker.postMessage({ type: 'reset' });
     }
     this.maiaInBrowser.reset();
-    if (overrideUrl) await ModelCache.clearAll();
     return this.initialize(overrideUrl);
   }
 
@@ -288,6 +270,13 @@ export class MaiaEngine {
         };
 
         if (this.worker) {
+          if (this._cacheWorker !== this.worker) {
+            const owner = this.worker;
+            const port = await connectModelCache();
+            if (!current() || this.worker !== owner) { port?.close(); throw new Error('Analysis session changed'); }
+            owner.postMessage({ type: 'cache-connect', port }, port ? [port] : []);
+            this._cacheWorker = owner;
+          }
           await new Promise((resolve, reject) => {
             this._workerProgress = onProgress;
             this._workerLoadResolve = resolve;

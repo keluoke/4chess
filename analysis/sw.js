@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261103-jade';
+const CACHE_NAME = '4chess-review-20261110-board-visuals';
 
 const STATIC_ASSETS = [
   './',
@@ -16,6 +16,7 @@ const STATIC_ASSETS = [
   '../ui/chessboard.css?v=20261025-v115',
   './i18n.js?v=20261103-jade',
   '../ui/theme.css?v=20261025-v115',
+  '../ui/board-visuals.js',
   '../ui/theme.js?v=20261025-v115',
   '../engine/review-policy.js?v=20261103-jade',
   './review-practice.js?v=20261103-jade',
@@ -43,6 +44,9 @@ const STATIC_ASSETS = [
   '../engine/maia-inbrowser.js',
   '../engine/game-analyzer.js',
   '../engine/model-cache.js',
+  '../engine/model-loader.js',
+  '../engine/model-cache-client.js',
+  '../engine/model-sources.js',
   '../engine/engine-variants.js',
   '../engine/engine-preferences.js',
   '../engine/stockfish-standard-web.js',
