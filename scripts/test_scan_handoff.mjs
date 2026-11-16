@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
 import { nativePopup } from "./native_popup_helper.mjs";
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "playwright"
@@ -14,20 +15,32 @@ fs.mkdirSync(ext);
 const version = JSON.parse(fs.readFileSync(root + "/manifest.json")).version;
 execFileSync("unzip", [
   "-q",
-  root + `/releases/diverge-extension-v${version}.zip`,
+  process.env.SCAN_EXTENSION_ZIP || root + `/releases/diverge-extension-v${version}.zip`,
   "-d",
   ext,
 ]);
-const c = await chromium.launchPersistentContext(tmp + "/profile", {
-  channel: "chromium",
-  headless: false,
-  args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
-});
+const profile = path.join(tmp, 'profile');
+// Connect without Playwright's focus emulation or timer-throttling overrides.
+const chrome = spawn(chromium.executablePath(), [
+  `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--no-first-run',
+  '--enable-unsafe-extension-debugging', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`,
+], { stdio: 'ignore' });
+const exited = once(chrome, 'exit');
+let browser;
 try {
-  const sw = c.serviceWorkers()[0] || (await c.waitForEvent("serviceworker"));
+  const portFile = path.join(profile, 'DevToolsActivePort');
+  for (let attempt = 0; attempt < 50 && !fs.existsSync(portFile) && chrome.exitCode === null; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  const [port, browserPath] = fs.readFileSync(portFile, 'utf8').split('\n');
+  browser = await chromium.connectOverCDP(`ws://127.0.0.1:${port}${browserPath}`, { noDefaults: true });
+  const [c] = browser.contexts();
+  const isExtensionWorker = worker => worker.url().startsWith('chrome-extension://') && worker.url().endsWith('/background.js');
+  const sw = c.serviceWorkers().find(isExtensionWorker) || await c.waitForEvent('serviceworker', isExtensionWorker);
   await sw.evaluate(() =>
     chrome.storage.local.set({
       maia3_lang: "en",
+      diverge_sound_enabled: false,
       liveEvaluation: false,
       maiaVariant: "5m",
       stockfishVariant: "lite",
@@ -115,6 +128,30 @@ try {
     await web.evaluate(() => window.__maiaStudioApp.reviewResult),
     null,
   );
+  await web.waitForFunction(() => document.querySelector('#engine-candidate-lines .candidate-line'));
+  const branchFen = await web.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    const move = app.boardUI.chess.getLegalMoves()[0];
+    app.boardUI.moveTo(move.fromSq, move.toSq);
+    return app.branchFen;
+  });
+  assert(branchFen);
+  const { webId, otherId } = await sw.evaluate(async url => {
+    const webTab = (await chrome.tabs.query({})).find(tab => tab.url === url);
+    const otherTab = await chrome.tabs.create({ url: 'about:blank', windowId: webTab.windowId, active: true });
+    return { webId: webTab.id, otherId: otherTab.id };
+  }, web.url());
+  await web.waitForFunction(() => document.hidden, null, { polling: 100, timeout: 4000 });
+  // Chrome batches background timers on a cadence longer than the old 500ms lease.
+  await new Promise(resolve => setTimeout(resolve, 2500));
+  assert.equal(await web.locator('#scan-source-lock').count(), 0);
+  assert.equal(await web.evaluate(() => document.querySelector('main').inert), true);
+  await sw.evaluate(id => chrome.tabs.update(id, { active: true }), webId);
+  await web.waitForFunction(() => !document.hidden && !document.querySelector('main').inert, null, { timeout: 3000 });
+  assert.equal(await web.locator('#scan-source-lock').count(), 0);
+  assert.equal(await web.evaluate(() => window.__maiaStudioApp.branchFen), branchFen);
+  await web.waitForFunction(() => document.querySelector('#engine-candidate-lines .candidate-line'));
+  await sw.evaluate(id => chrome.tabs.remove(id), otherId);
   const began = await host.evaluate(() => {
     const t = Date.now();
     const clock = document.createElement("div");
@@ -148,11 +185,13 @@ try {
     true,
   );
   console.log(
-    "PASS DOM read, confirmation, underpromotion, popup reopen, current-FEN web handoff, position-only UI, live-game stop/clear in " +
+    "PASS DOM read, confirmation, underpromotion, popup reopen, current-FEN web handoff, tab switch with branch recovery, live-game stop/clear in " +
       elapsed +
       "ms",
   );
 } finally {
-  await c.close();
+  await browser?.close();
+  chrome.kill();
+  await exited;
   fs.rmSync(tmp, { recursive: true, force: true });
 }

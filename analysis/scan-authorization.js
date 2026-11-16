@@ -1,20 +1,29 @@
 // Source-bound Scan URLs fail closed when the extension/source is unavailable.
-export async function authorizeScan(token, onRevoke) {
+export async function authorizeScan(token, onRevoke, onAvailability) {
   if (!token) return true;
   return new Promise((resolve) => {
-    let initial = true,
-      revoked = false,
-      last = Date.now();
+    let started = false, available = false, last = 0, deadline = 0;
+    let requestId = 0, supportsRequestId = false;
     const lock = () => {
-      if (revoked) return;
-      revoked = true;
-      if (initial) {
-        initial = false;
-        resolve(false);
-      }
+      clearInterval(watchdog);
+      window.removeEventListener("message", receive);
+      document.removeEventListener("visibilitychange", recheck);
+      if (!started) resolve(false);
       onRevoke();
     };
-    window.addEventListener("message", (event) => {
+    const recheck = () => {
+      if (available) {
+        available = false;
+        onAvailability(false);
+      }
+      if (document.hidden) return;
+      deadline = performance.now() + 2000;
+      window.postMessage(
+        { type: "DIVERGE_SCAN_AUTH_READ", token, requestId: ++requestId },
+        location.origin,
+      );
+    };
+    const receive = (event) => {
       if (
         event.source !== window ||
         event.origin !== location.origin ||
@@ -22,31 +31,66 @@ export async function authorizeScan(token, onRevoke) {
         event.data.token !== token
       )
         return;
-      last = Date.now();
       if (event.data.allowed !== true) {
         lock();
         return;
       }
-      if (initial && !revoked) {
-        initial = false;
+      // Older installed bridges do not echo request IDs. Updated bridges must
+      // confirm the current check before the board becomes interactive again.
+      supportsRequestId ||= Object.hasOwn(event.data, "requestId");
+      if (document.hidden || (supportsRequestId && event.data.requestId !== requestId)) return;
+      last = performance.now();
+      if (available) return;
+      available = true;
+      if (!started) {
+        started = true;
         resolve(true);
-      }
-    });
-    window.postMessage(
-      { type: "DIVERGE_SCAN_AUTH_READ", token },
-      location.origin,
-    );
-    setTimeout(() => {
-      if (initial) lock();
-    }, 2000);
-    setInterval(() => {
-      if (!initial && Date.now() - last > 500) lock();
+      } else onAvailability(true);
+    };
+    window.addEventListener("message", receive);
+    document.addEventListener("visibilitychange", recheck);
+    const watchdog = setInterval(() => {
+      // Hidden renderers may batch timers or freeze entirely. Recheck when
+      // visible, while keeping a real denial final even in the background.
+      if (document.hidden) return;
+      const now = performance.now();
+      if (available && now - last > 500) recheck();
+      else if (!available && now > deadline) lock();
     }, 100);
+    recheck();
   });
 }
+
+function setWorkspaceAvailable(available) {
+  const main = document.querySelector("main");
+  if (!main) return;
+  main.inert = !available;
+  main.style.visibility = available ? "" : "hidden";
+}
+
+export function setScanAvailability(app, available) {
+  if (!app) return;
+  app.scanSourceLocked = !available;
+  setWorkspaceAvailable(available);
+  if (available) {
+    app.intuitionReview.render();
+    app.updateActivePositionAnalysis();
+    app.scheduleReviewResume();
+  } else {
+    if (app.isPlaying) app.toggleAutoPlay();
+    app.boardUI.cancelGesture();
+    app.boardUI.closePromotion();
+    app.positionAnalysis.cancel();
+    app.pauseWholeReview();
+    if (app.intuitionReview.state === 'running') app.intuitionReview.pause();
+    if (app.practice?.busy) app.stockfish.stop();
+  }
+}
+
 export function showScanLock(app) {
   if (app) {
     app.scanSourceLocked = true;
+    if (app.isPlaying) app.toggleAutoPlay();
     app.positionAnalysis?.cancel();
     app.analyzer?.cancel();
     app.intuitionReview?.dispose();
@@ -55,16 +99,16 @@ export function showScanLock(app) {
     app.maiaEngine?.dispose();
     app.hasAnalysisInput = false;
     app.gameEpoch++;
+    app.boardUI?.cancelGesture();
+    app.boardUI?.closePromotion();
     app.boardUI?.clearArrows();
     app.boardUI?.clearAnnotations(true);
     app.resetPositionPanel();
   }
   document.querySelector(".studio-workspace")?.setAttribute("inert", "");
-  const main = document.querySelector("main");
-  if (main) {
-    main.inert = true;
-    main.style.visibility = "hidden";
-  }
+  setWorkspaceAvailable(false);
+  document.getElementById("engine-candidate-lines")?.replaceChildren();
+  document.getElementById("maia-candidate-lines")?.replaceChildren();
   let note = document.getElementById("scan-source-lock");
   if (!note) {
     note = document.createElement("p");

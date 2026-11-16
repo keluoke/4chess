@@ -143,6 +143,13 @@ for (const [url, html, allowed] of cases) {
       "Never send DOM nodes outside the source document",
     );
     const image = document.images[0];
+    const visibleBounds = image.getBoundingClientRect;
+    image.getBoundingClientRect = () => ({ left: 200, top: -500, right: 600, bottom: -100 });
+    listener({ type: 'SCAN_SOURCE_CHECK', validationOnly: true }, {}, (value) => (result = value));
+    assert.equal(result.allowed, true, 'The confirmed image remains bound when it leaves the viewport');
+    listener({ type: 'SCAN_SOURCE_CHECK' }, {}, (value) => (result = value));
+    assert.equal(result.allowed, false, 'A new screenshot still requires a visible region');
+    image.getBoundingClientRect = visibleBounds;
     image.src += "?changed";
     await new Promise((r) => setTimeout(r, 20));
     assert(

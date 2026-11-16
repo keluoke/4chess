@@ -209,11 +209,16 @@
         images = null;
         nonce = crypto.randomUUID();
       }
-      const gate = check(true);
+      const validationOnly = msg.validationOnly === true && !msg.resetImages;
+      const gate = check(!validationOnly);
       if (msg.resetImages) lastAllowed = gate.allowed;
       if (gate.allowed && gate.imageOnly && !images) images = gate.candidates;
       // DOM nodes stay in the source document; only normalized image rectangles leave it.
       delete gate.candidates;
+      if (validationOnly) {
+        reply({ allowed: gate.allowed, reason: gate.reason, nonce });
+        return;
+      }
       let fen = null,
         orientation = "white",
         assumed = true;

@@ -4,7 +4,7 @@ import { IntuitionReview } from './intuition-review.js?v=20261103-jade';
 import { ReviewExplorer } from './review-explorer.js';
 import { isKeyMoment, moveQuality, intuitionKind, canPractice } from '../engine/review-policy.js?v=20261103-jade';
 import { ReviewPractice } from './review-practice.js?v=20261103-jade';
-import { authorizeScan, showScanLock } from './scan-authorization.js?v=20261103-jade';
+import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -457,6 +457,7 @@ class AnalysisStudioApp {
         return;
       }
       if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey || document.activeElement?.isContentEditable || document.activeElement?.closest('input, textarea, select, [role="textbox"]')) return;
+      if (this.scanSourceLocked) return;
 
       if (this.practice?.active && (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'k'].includes(e.key) || (e.key === ' ' && !document.activeElement?.closest('button, a')))) { e.preventDefault(); return; }
 
@@ -2082,7 +2083,11 @@ async function initApp() {
   const scanToken = hash.get('scan');
   if (scanToken) { setLanguage(getPreferences().maia3_lang); initI18n(); }
   let scanRevoked = false;
-  if (!await authorizeScan(scanToken, () => { scanRevoked = true; showScanLock(window.__maiaStudioApp); }) || scanRevoked) return;
+  if (!await authorizeScan(
+    scanToken,
+    () => { scanRevoked = true; showScanLock(window.__maiaStudioApp); },
+    available => setScanAvailability(window.__maiaStudioApp, available)
+  ) || scanRevoked) return;
   if (!window.__maiaStudioApp) {
     window.__maiaStudioApp = new AnalysisStudioApp();
   }

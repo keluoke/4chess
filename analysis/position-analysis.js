@@ -111,7 +111,7 @@ export class PositionAnalysis {
   }
 
   current(snapshot) {
-    return !this.app.practice?.active && snapshot && snapshot.generation === this.generation && snapshot.ctx.epoch === this.app.gameEpoch && snapshot.ctx.elo === this.app.currentElo && !this.app.analyzer.isAnalyzing;
+    return !this.app.scanSourceLocked && !this.app.practice?.active && snapshot && snapshot.generation === this.generation && snapshot.ctx.epoch === this.app.gameEpoch && snapshot.ctx.elo === this.app.currentElo && !this.app.analyzer.isAnalyzing;
   }
 
   async search(snapshot, fen, depth, multipv = 1) {

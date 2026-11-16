@@ -306,9 +306,9 @@ export class BoardUI {
       if (!gesture || gesture.id !== event.pointerId) return;
       const to = this.squareAtPoint(event.clientX, event.clientY);
       if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) gesture.moved = true;
-      if (gesture.button === 2) {
+      if (gesture.button === 2 && !gesture.brilliant) {
         const { from } = gesture;
-        this.drawAnnotations(to ? { from, to, brilliant: gesture.brilliant && from !== to } : null);
+        this.drawAnnotations(to ? { from, to } : null);
       } else if (gesture.moved) {
         const piece = this.chess.board[ChessBoard.squareToIndex(gesture.from)];
         if (!piece || piece.color !== this.chess.turn) return;
@@ -332,14 +332,15 @@ export class BoardUI {
       this.suppressClickUntil = performance.now() + 300;
       this.cancelGesture();
       if (!to) { this.render(); return; }
-      if (gesture.button === 2) {
+      if (gesture.brilliant) {
+        if (gesture.from !== to) this.moveTo(gesture.from, to, true);
+        else this.render();
+      } else if (gesture.button === 2) {
         const fen = this.chess.getFen();
         const annotations = this.annotations.get(fen) || [];
-        const brilliant = gesture.brilliant && gesture.from !== to;
         const index = annotations.findIndex(arrow => arrow.from === gesture.from && arrow.to === to);
-        if (index < 0) annotations.push({ from: gesture.from, to, brilliant });
-        else if (Boolean(annotations[index].brilliant) === brilliant) annotations.splice(index, 1);
-        else annotations[index].brilliant = brilliant;
+        if (index < 0) annotations.push({ from: gesture.from, to });
+        else annotations.splice(index, 1);
         this.annotations.set(fen, annotations);
         this.drawAnnotations();
       } else if (gesture.moved) {
@@ -373,18 +374,28 @@ export class BoardUI {
     const badges = [];
     for (const annotation of visible) {
       const from = this.getSquareCenterPercent(annotation.from), to = this.getSquareCenterPercent(annotation.to);
-      const marker = annotation.brilliant ? 'arrow-blue' : 'arrow-red';
+      if (annotation.brilliant) {
+        const origin = { x: from.x * 8, y: from.y * 8 };
+        const target = { x: to.x * 8, y: to.y * 8 };
+        const dx = target.x - origin.x, dy = target.y - origin.y;
+        const inset = 24 / Math.hypot(dx, dy);
+        drawBoardArrow(group, {
+          from: origin, to: { x: target.x - dx * inset, y: target.y - dy * inset },
+          color: 'var(--brand-blue)', marker: 'arrow-blue', role: 'brilliant', strokeWidth: 25, opacity: .78
+        });
+        badges.push({ ...target, role: 'brilliant', color: 'var(--dg-ink)' });
+        continue;
+      }
       const element = document.createElementNS('http://www.w3.org/2000/svg', annotation.from === annotation.to ? 'circle' : 'line');
       if (annotation.from === annotation.to) {
         for (const [key, val] of Object.entries({ cx: `${from.x}%`, cy: `${from.y}%`, r: '5%', fill: 'none' })) element.setAttribute(key, val);
       } else {
-        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: to.x * 8 - (to.x - from.x) / Math.hypot(to.x - from.x, to.y - from.y) * 36, y2: to.y * 8 - (to.y - from.y) / Math.hypot(to.x - from.x, to.y - from.y) * 36, 'marker-end': `url(#${marker})` })) element.setAttribute(key, val);
+        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: to.x * 8 - (to.x - from.x) / Math.hypot(to.x - from.x, to.y - from.y) * 36, y2: to.y * 8 - (to.y - from.y) / Math.hypot(to.x - from.x, to.y - from.y) * 36, 'marker-end': 'url(#arrow-red)' })) element.setAttribute(key, val);
       }
       element.setAttribute('vector-effect', 'non-scaling-stroke');
-      element.setAttribute('stroke', annotation.brilliant ? 'var(--brand-blue)' : 'var(--brand-red)');
+      element.setAttribute('stroke', 'var(--brand-red)');
       element.setAttribute('stroke-width', '3'); element.setAttribute('opacity', preview === annotation ? '.5' : '.8');
       group.append(element);
-      if (annotation.brilliant) badges.push({ x: to.x * 8, y: to.y * 8, role: 'brilliant', color: 'var(--dg-ink)', opacity: preview === annotation ? .5 : 1 });
     }
     for (const badge of badges) drawMoveBadge(group, badge);
   }
@@ -394,22 +405,22 @@ export class BoardUI {
     this.drawAnnotations();
   }
 
-  moveTo(from, to) {
+  moveTo(from, to, brilliant = false) {
     const moves = this.chess.getLegalMoves().filter(move => move.fromSq === from && move.toSq === to);
-    if (moves.length > 1 && moves.some(move => move.promo)) this.choosePromotion(moves);
-    else if (moves[0]) this.executeMove(moves[0]);
+    if (moves.length > 1 && moves.some(move => move.promo)) this.choosePromotion(moves, brilliant);
+    else if (moves[0]) this.executeMove(moves[0], brilliant);
     else this.render();
   }
 
   closePromotion() { this.promotionPicker?.remove(); this.promotionPicker = null; }
 
-  choosePromotion(moves) {
+  choosePromotion(moves, brilliant) {
     this.closePromotion();
     const picker = document.createElement('div'); picker.className = 'promotion-picker'; picker.setAttribute('role', 'dialog'); picker.setAttribute('aria-label', this.promotionLabel || 'Choose promotion');
     for (const move of moves) {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.promotion = move.promo; button.setAttribute('aria-label', move.promo.toUpperCase());
       button.innerHTML = CHESS_PIECES_SVG[this.chess.turn === 'w' ? move.promo.toUpperCase() : move.promo];
-      button.onclick = event => { event.stopPropagation(); this.closePromotion(); this.executeMove(move); };
+      button.onclick = event => { event.stopPropagation(); this.closePromotion(); this.executeMove(move, brilliant); };
       picker.append(button);
     }
     this.boardEl.append(picker); this.promotionPicker = picker; picker.querySelector('button').focus();
@@ -444,15 +455,21 @@ export class BoardUI {
     }
   }
 
-  executeMove(move) {
+  executeMove(move, brilliant) {
     this.chess.makeMove(move);
+    const fen = this.chess.getFen();
     this.lastMove = { from: move.fromSq, to: move.toSq };
+    if (brilliant) {
+      const { from, to } = this.lastMove;
+      const annotations = this.annotations.get(fen) || [];
+      this.annotations.set(fen, [...annotations.filter(arrow => arrow.from !== from || arrow.to !== to), { from, to, brilliant: true }]);
+    }
     this.selectedSq = null;
     this.legalMovesForSelected = [];
     this.render();
 
     if (this.onMove) {
-      this.onMove(move, this.chess.getFen());
+      this.onMove(move, fen);
     }
   }
 }

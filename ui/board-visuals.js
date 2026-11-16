@@ -15,35 +15,35 @@ export function arrowMarkers(prefix, colors) {
   }).join('')}</defs>`;
 }
 
-export function drawBoardArrow(group, { from, to, color, marker, role, secondary = false, opacity = .84, dashed = false }) {
+export function drawBoardArrow(group, { from, to, color, marker, role, secondary = false, strokeWidth = secondary ? 8 : 14, opacity = .84, dashed = false }) {
   const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy);
   if (!length || ![from.x, from.y, to.x, to.y].every(Number.isFinite)) return;
   const line = document.createElementNS(NS, 'line');
   const headLength = secondary ? 26 : 36;
   const values = { x1: from.x + dx / length * 12, y1: from.y + dy / length * 12, x2: to.x - dx / length * headLength, y2: to.y - dy / length * headLength,
-    stroke: color, 'stroke-width': secondary ? 8 : 14, 'stroke-linecap': 'butt', 'marker-end': `url(#${marker})`, opacity, 'data-role': role };
+    stroke: color, 'stroke-width': strokeWidth, 'stroke-linecap': 'butt', 'marker-end': `url(#${marker})`, opacity, 'data-role': role };
   for (const [name, value] of Object.entries(values)) line.setAttribute(name, value);
   if (dashed) line.setAttribute('stroke-dasharray', '14 10');
   group.append(line);
   return line;
 }
 
-export function drawMoveBadge(group, { x, y, role, color, title = '', opacity = 1 }) {
+export function drawMoveBadge(group, { x, y, role, color, title = '' }) {
   if (!['sf', 'maia', 'consensus', 'error', 'brilliant'].includes(role)) return;
   const badge = document.createElementNS(NS, 'g');
   badge.setAttribute('data-move-badge', role);
-  if (opacity !== 1) badge.setAttribute('opacity', opacity);
   const hex = color.replace('#', '');
   const light = hex.length === 6 && (parseInt(hex.slice(0, 2), 16) * 299 + parseInt(hex.slice(2, 4), 16) * 587 + parseInt(hex.slice(4, 6), 16) * 114) > 165000;
   const foreground = role === 'brilliant' ? 'var(--dg-surface)' : light ? '#17231b' : '#fff';
   // Place compact badges in square corners, leaving the piece and arrow tip visible.
-  const left = ['maia', 'brilliant'].includes(role) ? x - 44 : x + 20;
-  const top = ['error', 'brilliant'].includes(role) ? y + 20 : y - 44;
-  const width = role === 'consensus' ? 40 : role === 'brilliant' ? 28 : 24;
-  const bx = role === 'consensus' ? x + 4 : left;
+  const brilliant = role === 'brilliant';
+  const top = role === 'error' ? y + 20 : y - (brilliant ? 46 : 44);
+  const width = role === 'consensus' || brilliant ? 40 : 24;
+  const height = brilliant ? 36 : 24;
+  const bx = { maia: x - 44, consensus: x + 4, brilliant: x + 7 }[role] ?? x + 20;
   badge.setAttribute('transform', `translate(${bx} ${top})`);
   const rect = document.createElementNS(NS, 'rect');
-  for (const [key, value] of Object.entries({ width, height: 24, rx: 6, fill: color, stroke: '#ffffff', 'stroke-width': 1.5 })) rect.setAttribute(key, value);
+  for (const [key, value] of Object.entries({ width, height, rx: 6, fill: color, stroke: '#ffffff', 'stroke-width': 1.5 })) rect.setAttribute(key, value);
   badge.append(rect);
   if (role === 'sf' || role === 'consensus') {
     // Original geometric star; no third-party icon assets.
@@ -53,7 +53,7 @@ export function drawMoveBadge(group, { x, y, role, color, title = '', opacity = 
   }
   if (role !== 'sf') {
     const text = document.createElementNS(NS, 'text');
-    for (const [key, value] of Object.entries({ x: role === 'consensus' ? 29 : width / 2, y: 12.5, fill: foreground, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'system-ui, sans-serif', 'font-size': role === 'brilliant' ? 18 : 15, 'font-weight': 750 })) text.setAttribute(key, value);
+    for (const [key, value] of Object.entries({ x: role === 'consensus' ? 29 : width / 2, y: height / 2 + .5, fill: foreground, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'system-ui, sans-serif', 'font-size': brilliant ? 31 : 15, 'font-weight': brilliant ? 950 : 750 })) text.setAttribute(key, value);
     text.textContent = { brilliant: '!!', error: '!' }[role] || 'M'; badge.append(text);
   }
   const tooltip = document.createElementNS(NS, 'title'); tooltip.textContent = title || { sf: 'Stockfish', maia: 'Maia', consensus: 'Stockfish + Maia', error: 'Played move', brilliant: '!!' }[role]; badge.append(tooltip);

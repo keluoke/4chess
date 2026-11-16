@@ -43,12 +43,12 @@ function save(value, fresh = false) {
   writes = task.catch(() => {});
   return task;
 }
-async function check(source) {
+async function check(source, validationOnly = false) {
   const tab = await chrome.tabs.get(source.tabId);
   if (tab.url !== source.url) throw Error("sourceChanged");
   const gate = await chrome.tabs.sendMessage(
     source.tabId,
-    { type: "SCAN_SOURCE_CHECK" },
+    { type: "SCAN_SOURCE_CHECK", validationOnly },
     { documentId: source.documentId },
   );
   if (!gate?.allowed || gate.nonce !== source.nonce)
@@ -93,16 +93,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     /^https:\/\/4chess\.cc\/analysis(?:\/|[?#]|$)/.test(sender.url || "");
   if (msg.type === "SCAN_WEB_CHECK" && isWeb) {
     (async () => {
+      const authorized = (s) => s?.confirmed && !s.locked &&
+        msg.token === s.handoff?.token && sender.tab.id === s.handoff?.tabId;
       const s = await state();
-      if (
-        !s ||
-        s.locked ||
-        !s.confirmed ||
-        msg.token !== s.handoff?.token ||
-        sender.tab.id !== s.handoff.tabId
-      )
-        throw Error("sourceChanged");
-      await check(s.source);
+      if (!authorized(s)) throw Error("sourceChanged");
+      await check(s.source, true);
+      if (!authorized(await state())) throw Error("sourceChanged");
       reply({ ok: true });
     })().catch((e) => reply({ ok: false, error: e.message }));
     return true;
