@@ -23,6 +23,13 @@ import { soundEffects } from './sound-effects.js?v=20261025-v115';
 import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261103-jade';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
+const POSITION_TOGGLES = [
+  ['setting-maia-arrows', 'maiaArrows', 'showArrows'],
+  ['setting-sf-arrows', 'sfArrows', 'showStockfishArrows'],
+  ['setting-heatmap', 'heatmap', 'showHeatmap'],
+  ['setting-probability', 'probability', 'showProbability']
+];
+
 // Famous Sample Games for instant exploration & demo
 const SAMPLE_GAMES = {
   fischer: `[Event "Third Rosenwald Trophy"]
@@ -75,7 +82,7 @@ class AnalysisStudioApp {
     this.currentDivergenceFilter = 'all';
     this.isReviewingMove = false;
     this.hasAnalysisInput = false;
-    this.settings = { arrows: preferences.showArrows || preferences.showStockfishArrows, maiaArrows: preferences.showArrows, sfArrows: preferences.showStockfishArrows, heatmap: preferences.showHeatmap, probability: preferences.showProbability };
+    this.settings = {};
 
     this.initElements();
     initI18n();
@@ -324,13 +331,9 @@ class AnalysisStudioApp {
     });
     this.el.settingsDialog.addEventListener('close', () => this.el.btnSettings.focus());
     this.el.positionDepth.addEventListener('change', () => { savePreferences({ studio_depth: Number(this.el.positionDepth.value) }); this.positionAnalysis.refresh(); });
-    for (const [id, key] of [['setting-arrows', 'arrows'], ['setting-heatmap', 'heatmap'], ['setting-probability', 'probability']]) {
+    for (const [id, , preference] of POSITION_TOGGLES) {
       document.getElementById(id).addEventListener('change', event => {
-        this.settings[key] = event.target.checked;
-        if (key === 'arrows') this.settings.maiaArrows = this.settings.sfArrows = event.target.checked;
-        savePreferences(key === 'arrows' ? { showArrows: event.target.checked, showStockfishArrows: event.target.checked } : { [key === 'heatmap' ? 'showHeatmap' : 'showProbability']: event.target.checked });
-        if (key === 'heatmap') this.positionAnalysis.refresh();
-        else this.positionAnalysis.render();
+        savePreferences({ [preference]: event.target.checked });
       });
     }
     document.getElementById('setting-orientation').addEventListener('change', event => {
@@ -1851,10 +1854,10 @@ class AnalysisStudioApp {
       this.currentElo = prefs.defaultElo;
       if (![...this.el.eloSelector.options].some(option => option.value === String(prefs.defaultElo))) this.el.eloSelector.add(new Option(String(prefs.defaultElo), String(prefs.defaultElo)));
       this.el.eloSelector.value = String(prefs.defaultElo);
-      this.settings = { arrows: prefs.showArrows || prefs.showStockfishArrows, maiaArrows: prefs.showArrows, sfArrows: prefs.showStockfishArrows, heatmap: prefs.showHeatmap, probability: prefs.showProbability };
-      document.getElementById('setting-arrows').checked = this.settings.arrows;
-      document.getElementById('setting-heatmap').checked = prefs.showHeatmap;
-      document.getElementById('setting-probability').checked = prefs.showProbability;
+      for (const [id, key, preference] of POSITION_TOGGLES) {
+        this.settings[key] = prefs[preference];
+        document.getElementById(id).checked = prefs[preference];
+      }
       this.el.positionDepth.value = String(prefs.studio_depth);
       this.boardUI.setOrientation(prefs.studio_orientation);
       document.getElementById('setting-orientation').value = prefs.studio_orientation;

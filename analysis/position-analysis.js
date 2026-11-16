@@ -219,7 +219,7 @@ export class PositionAnalysis {
   }
 
   render() {
-    if (this.app.practice?.active) { this.clearOverlays(); return; }
+    if (this.app.scanSourceLocked || this.app.practice?.active) { this.clearOverlays(); return; }
     if (!this.active) { this.renderGauge(null); this.app.renderPositionHeading?.(null); return; }
     const { ctx, entry } = this.active;
     const board = new ChessBoard(ctx.fen);
@@ -275,7 +275,11 @@ export class PositionAnalysis {
       button.onclick = () => this.app.previewCandidate(this.active.ctx, variation.slice(0, index + 1));
       moves.append(button);
     });
-    moves.onmouseenter = () => { if (this.app.settings.arrows && (color === 'gold' ? this.app.settings.maiaArrows !== false : this.app.settings.sfArrows !== false)) this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color }]); };
+    moves.onmouseenter = () => {
+      const enabled = color === 'gold' ? this.app.settings.maiaArrows : this.app.settings.sfArrows;
+      if (!enabled || this.app.scanSourceLocked || this.app.practice?.active) return;
+      this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color }]);
+    };
     moves.onmouseleave = () => this.renderOverlays();
     row.append(moves);
     if (probability) { const prob = document.createElement('span'); prob.className = 'candidate-probability'; prob.textContent = probability; row.append(prob); }
@@ -285,15 +289,17 @@ export class PositionAnalysis {
 
   renderOverlays(lines, moves) {
     this.clearOverlays();
-    if (this.app.practice?.active) return;
+    if (this.app.scanSourceLocked || this.app.practice?.active) return;
     if (!this.active) return;
     const { ctx, entry } = this.active;
     lines ||= engineLines(entry.sf, ctx.fen);
     moves ||= (entry.prediction?.moves || []).slice(0, 3);
-    if (this.app.settings.arrows) {
+    const { maiaArrows, sfArrows } = this.app.settings;
+    if (maiaArrows || sfArrows) {
       const arrows = [];
-      if (lines[0] && this.app.settings.sfArrows !== false) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'green', role: this.app.settings.maiaArrows !== false && moves[0]?.uci === lines[0].uci ? 'consensus' : 'sf' });
-      if (this.app.settings.maiaArrows !== false && moves[0]?.uci && (moves[0].uci !== lines[0]?.uci || this.app.settings.sfArrows === false)) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
+      const consensus = maiaArrows && sfArrows && moves[0]?.uci === lines[0]?.uci;
+      if (sfArrows && lines[0]) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'green', role: consensus ? 'consensus' : 'sf' });
+      if (maiaArrows && moves[0]?.uci && !consensus) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
       this.app.boardUI.setArrows(arrows);
     }
     if (this.app.settings.heatmap && entry.prediction?.heatmap) {

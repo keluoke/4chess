@@ -131,8 +131,58 @@ try {
   await lichess.evaluate(()=>{document.querySelector('.rclock-running').remove();document.querySelector('button.resign').remove();document.body.insertAdjacentHTML('beforeend','<div class="result-wrap">1-0 White is victorious</div>');});
   await lichess.waitForFunction(()=>document.querySelector('#maia3-intuition-panel').dataset.fairPlayLocked==='false');
   assert.doesNotMatch(await lichess.locator('#maia-turn-pill').innerText(),/对局中|Live|Locked/i);
+
+  // Exercise saved preferences and arrows in the packaged studio, with representative legal results.
+  await worker.evaluate(() => chrome.storage.local.set({ showArrows: false, showStockfishArrows: true }));
+  const studio = await extensionContext.newPage();
+  await studio.goto(`chrome-extension://${id}/analysis/index.html?lang=en`);
+  await studio.waitForFunction(() => !!window.__maiaStudioApp?.positionAnalysis.active);
+  await studio.evaluate(() => {
+    const analysis = window.__maiaStudioApp.positionAnalysis;
+    analysis.active.entry.sf = { bestMove: { uci: 'e2e4' }, scoreCp: 30, depth: 10 };
+    analysis.active.entry.prediction = { moves: [{ uci: 'd2d4', prob: 42 }] };
+    analysis.render();
+  });
+  const maiaSwitch = studio.getByRole('checkbox', { name: 'Show Maia candidate arrows' });
+  const sfSwitch = studio.getByRole('checkbox', { name: 'Show Stockfish best-move arrow' });
+  const expectArrows = roles => studio.waitForFunction(expected => {
+    const actual = [...document.querySelectorAll('#maia-svg-arrows-group line[data-role]')].map(line => line.dataset.role);
+    return actual.join(',') === expected.join(',');
+  }, roles);
+  await expectArrows(['sf']);
+  await studio.locator('#maia-candidate-lines .candidate-variation').dispatchEvent('mouseenter');
+  await expectArrows(['sf']);
+  await studio.locator('#btn-settings').click();
+  assert.equal(await maiaSwitch.isChecked(), false);
+  assert.equal(await sfSwitch.isChecked(), true);
+  await maiaSwitch.check();
+  await expectArrows(['sf', 'maia']);
+  await host.waitForFunction(() => document.querySelector('#maia-chk-arrows').checked);
+  await studio.evaluate(() => {
+    const analysis = window.__maiaStudioApp.positionAnalysis;
+    analysis.active.entry.prediction.moves[0].uci = 'e2e4';
+    analysis.render();
+  });
+  await expectArrows(['consensus']);
+  await sfSwitch.uncheck();
+  await expectArrows(['maia']);
+  await studio.locator('#engine-candidate-lines .candidate-variation').dispatchEvent('mouseenter');
+  await expectArrows(['maia']);
+  await host.waitForFunction(() => !document.querySelector('#maia-chk-sf-arrows').checked);
+  await host.locator('#weui-btn-more').click();
+  await host.locator('#maia-chk-arrows').uncheck();
+  await expectArrows([]);
+  assert.equal(await maiaSwitch.isChecked(), false);
+  await host.locator('#maia-chk-arrows').check();
+  await expectArrows(['maia']);
+  await studio.reload();
+  await studio.waitForFunction(() => !!window.__maiaStudioApp?.positions.length);
+  await studio.locator('#btn-settings').click();
+  assert.equal(await maiaSwitch.isChecked(), true);
+  assert.equal(await sfSwitch.isChecked(), false);
+
   assert.equal(protectedModelRequests,0,'Protected and no-readable-FEN fixtures must not download a model');
-  results.extension={version,id,loaded:true,liveLock:true,conclusion:true,dismiss:true,refresh:true,lockMs,unknownAndLobbyCopy:true,lichessUnlock:true,protectedModelRequests};
+  results.extension={version,id,loaded:true,liveLock:true,conclusion:true,dismiss:true,refresh:true,lockMs,unknownAndLobbyCopy:true,lichessUnlock:true,independentArrowSettings:true,protectedModelRequests};
  }finally{await extensionContext.close();fs.rmSync(profile,{recursive:true,force:true});}
  fs.writeFileSync(path.join(output,'browser-results.json'),JSON.stringify(results,null,2));console.log('PASS',JSON.stringify(results));
 }finally{await browser.close();await new Promise(r=>server.close(r));globalThis.fetch=fetchOriginal;}

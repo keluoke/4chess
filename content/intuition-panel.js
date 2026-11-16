@@ -1007,27 +1007,13 @@ export class IntuitionPanel {
     }
 
     // 4. WeChat Switches (Toggles)
-    const chkHeatmap = this.container.querySelector('#maia-chk-heatmap');
-    const chkArrows = this.container.querySelector('#maia-chk-arrows');
-
-    const updateToggles = () => {
-      this.showHeatmap = chkHeatmap ? chkHeatmap.checked : true;
-      this.showArrows = chkArrows ? chkArrows.checked : true;
-      this.showStockfishArrows = this.container.querySelector('#maia-chk-sf-arrows')?.checked !== false;
-      this._setStorage({ showHeatmap: this.showHeatmap, showArrows: this.showArrows, showStockfishArrows: this.showStockfishArrows });
-      if (this.onToggleChange) {
-        this.onToggleChange({
-          showHeatmap: this.showHeatmap,
-          showArrows: this.showArrows,
-          showStockfishArrows: this.showStockfishArrows,
-          opacity: this.opacity
-        });
-      }
-    };
-
-    if (chkHeatmap) chkHeatmap.addEventListener('change', updateToggles);
-    if (chkArrows) chkArrows.addEventListener('change', updateToggles);
-    this.container.querySelector('#maia-chk-sf-arrows')?.addEventListener('change', updateToggles);
+    for (const [id, key] of [['maia-chk-heatmap', 'showHeatmap'], ['maia-chk-arrows', 'showArrows'], ['maia-chk-sf-arrows', 'showStockfishArrows']]) {
+      this.container.querySelector('#' + id)?.addEventListener('change', event => {
+        this[key] = event.target.checked;
+        this._setStorage({ [key]: this[key] });
+        this.onToggleChange?.({ [key]: this[key], opacity: this.opacity });
+      });
+    }
 
     this.container.querySelectorAll('[data-model]').forEach(btn => btn.addEventListener('click', () => this.saveModels({ maiaVariant: btn.dataset.model, cloudflareCdnUrl: MAIA_VARIANTS[btn.dataset.model].url })));
     this.container.querySelector('#maia-sf-select').addEventListener('change', event => this.saveModels({ stockfishVariant: event.target.value }));
