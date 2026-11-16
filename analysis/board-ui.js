@@ -13,6 +13,7 @@ export class BoardUI {
   constructor(containerEl, options = {}) {
     this.container = containerEl;
     this.motion = options.motion === true;
+    this.brilliantArrows = options.brilliantArrows === true;
     this.orientation = options.orientation || 'white';
     this.onMove = options.onMove || null; // callback(fromSq, toSq, promotion)
     this.onSelectSquare = options.onSelectSquare || null;
@@ -294,7 +295,10 @@ export class BoardUI {
       const square = this.squareAtPoint(event.clientX, event.clientY);
       if (!square) return;
       event.preventDefault();
-      this.gesture = { id: event.pointerId, button: event.button, from: square, x: event.clientX, y: event.clientY, moved: false };
+      this.gesture = {
+        id: event.pointerId, button: event.button, from: square, x: event.clientX, y: event.clientY, moved: false,
+        brilliant: this.brilliantArrows && event.button === 2 && event.shiftKey
+      };
       this.boardEl.setPointerCapture(event.pointerId);
     });
     this.boardEl.addEventListener('pointermove', event => {
@@ -303,7 +307,8 @@ export class BoardUI {
       const to = this.squareAtPoint(event.clientX, event.clientY);
       if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) gesture.moved = true;
       if (gesture.button === 2) {
-        this.drawAnnotations(to ? { from: gesture.from, to } : null);
+        const { from } = gesture;
+        this.drawAnnotations(to ? { from, to, brilliant: gesture.brilliant && from !== to } : null);
       } else if (gesture.moved) {
         const piece = this.chess.board[ChessBoard.squareToIndex(gesture.from)];
         if (!piece || piece.color !== this.chess.turn) return;
@@ -328,10 +333,14 @@ export class BoardUI {
       this.cancelGesture();
       if (!to) { this.render(); return; }
       if (gesture.button === 2) {
-        const annotations = this.annotations.get(this.chess.getFen()) || [];
+        const fen = this.chess.getFen();
+        const annotations = this.annotations.get(fen) || [];
+        const brilliant = gesture.brilliant && gesture.from !== to;
         const index = annotations.findIndex(arrow => arrow.from === gesture.from && arrow.to === to);
-        if (index >= 0) annotations.splice(index, 1); else annotations.push({ from: gesture.from, to });
-        this.annotations.set(this.chess.getFen(), annotations);
+        if (index < 0) annotations.push({ from: gesture.from, to, brilliant });
+        else if (Boolean(annotations[index].brilliant) === brilliant) annotations.splice(index, 1);
+        else annotations[index].brilliant = brilliant;
+        this.annotations.set(fen, annotations);
         this.drawAnnotations();
       } else if (gesture.moved) {
         this.moveTo(gesture.from, to);
@@ -359,18 +368,25 @@ export class BoardUI {
   drawAnnotations(preview = null) {
     const group = this.svgOverlay.querySelector('.study-annotations');
     group.replaceChildren();
-    for (const annotation of [...(this.annotations.get(this.chess.getFen()) || []), ...(preview ? [preview] : [])]) {
+    const saved = this.annotations.get(this.chess.getFen()) || [];
+    const visible = preview ? [...saved.filter(arrow => arrow.from !== preview.from || arrow.to !== preview.to), preview] : saved;
+    const badges = [];
+    for (const annotation of visible) {
       const from = this.getSquareCenterPercent(annotation.from), to = this.getSquareCenterPercent(annotation.to);
+      const marker = annotation.brilliant ? 'arrow-blue' : 'arrow-red';
       const element = document.createElementNS('http://www.w3.org/2000/svg', annotation.from === annotation.to ? 'circle' : 'line');
       if (annotation.from === annotation.to) {
         for (const [key, val] of Object.entries({ cx: `${from.x}%`, cy: `${from.y}%`, r: '5%', fill: 'none' })) element.setAttribute(key, val);
       } else {
-        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: to.x * 8 - (to.x - from.x) / Math.hypot(to.x - from.x, to.y - from.y) * 36, y2: to.y * 8 - (to.y - from.y) / Math.hypot(to.x - from.x, to.y - from.y) * 36, 'marker-end': 'url(#arrow-red)' })) element.setAttribute(key, val);
+        for (const [key, val] of Object.entries({ x1: `${from.x}%`, y1: `${from.y}%`, x2: to.x * 8 - (to.x - from.x) / Math.hypot(to.x - from.x, to.y - from.y) * 36, y2: to.y * 8 - (to.y - from.y) / Math.hypot(to.x - from.x, to.y - from.y) * 36, 'marker-end': `url(#${marker})` })) element.setAttribute(key, val);
       }
       element.setAttribute('vector-effect', 'non-scaling-stroke');
-      element.setAttribute('stroke', 'var(--brand-red)'); element.setAttribute('stroke-width', '3'); element.setAttribute('opacity', preview === annotation ? '.5' : '.8');
+      element.setAttribute('stroke', annotation.brilliant ? 'var(--brand-blue)' : 'var(--brand-red)');
+      element.setAttribute('stroke-width', '3'); element.setAttribute('opacity', preview === annotation ? '.5' : '.8');
       group.append(element);
+      if (annotation.brilliant) badges.push({ x: to.x * 8, y: to.y * 8, role: 'brilliant', color: 'var(--dg-ink)', opacity: preview === annotation ? .5 : 1 });
     }
+    for (const badge of badges) drawMoveBadge(group, badge);
   }
 
   clearAnnotations(all = false) {

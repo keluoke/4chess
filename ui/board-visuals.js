@@ -28,17 +28,18 @@ export function drawBoardArrow(group, { from, to, color, marker, role, secondary
   return line;
 }
 
-export function drawMoveBadge(group, { x, y, role, color, title = '' }) {
-  if (!['sf', 'maia', 'consensus', 'error'].includes(role)) return;
+export function drawMoveBadge(group, { x, y, role, color, title = '', opacity = 1 }) {
+  if (!['sf', 'maia', 'consensus', 'error', 'brilliant'].includes(role)) return;
   const badge = document.createElementNS(NS, 'g');
   badge.setAttribute('data-move-badge', role);
+  if (opacity !== 1) badge.setAttribute('opacity', opacity);
   const hex = color.replace('#', '');
   const light = hex.length === 6 && (parseInt(hex.slice(0, 2), 16) * 299 + parseInt(hex.slice(2, 4), 16) * 587 + parseInt(hex.slice(4, 6), 16) * 114) > 165000;
-  const foreground = light ? '#17231b' : '#fff';
+  const foreground = role === 'brilliant' ? 'var(--dg-surface)' : light ? '#17231b' : '#fff';
   // Place compact badges in square corners, leaving the piece and arrow tip visible.
-  const left = role === 'maia' ? x - 44 : x + 20;
-  const top = role === 'error' ? y + 20 : y - 44;
-  const width = role === 'consensus' ? 40 : 24;
+  const left = ['maia', 'brilliant'].includes(role) ? x - 44 : x + 20;
+  const top = ['error', 'brilliant'].includes(role) ? y + 20 : y - 44;
+  const width = role === 'consensus' ? 40 : role === 'brilliant' ? 28 : 24;
   const bx = role === 'consensus' ? x + 4 : left;
   badge.setAttribute('transform', `translate(${bx} ${top})`);
   const rect = document.createElementNS(NS, 'rect');
@@ -52,9 +53,9 @@ export function drawMoveBadge(group, { x, y, role, color, title = '' }) {
   }
   if (role !== 'sf') {
     const text = document.createElementNS(NS, 'text');
-    for (const [key, value] of Object.entries({ x: role === 'consensus' ? 29 : 12, y: 12.5, fill: foreground, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'system-ui, sans-serif', 'font-size': 15, 'font-weight': 750 })) text.setAttribute(key, value);
-    text.textContent = role === 'error' ? '!' : 'M'; badge.append(text);
+    for (const [key, value] of Object.entries({ x: role === 'consensus' ? 29 : width / 2, y: 12.5, fill: foreground, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'system-ui, sans-serif', 'font-size': role === 'brilliant' ? 18 : 15, 'font-weight': 750 })) text.setAttribute(key, value);
+    text.textContent = { brilliant: '!!', error: '!' }[role] || 'M'; badge.append(text);
   }
-  const tooltip = document.createElementNS(NS, 'title'); tooltip.textContent = title || { sf: 'Stockfish', maia: 'Maia', consensus: 'Stockfish + Maia', error: 'Played move' }[role]; badge.append(tooltip);
+  const tooltip = document.createElementNS(NS, 'title'); tooltip.textContent = title || { sf: 'Stockfish', maia: 'Maia', consensus: 'Stockfish + Maia', error: 'Played move', brilliant: '!!' }[role]; badge.append(tooltip);
   group.append(badge);
 }

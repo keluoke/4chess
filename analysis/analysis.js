@@ -192,6 +192,7 @@ class AnalysisStudioApp {
     // 1. Initialize BoardUI
     this.boardUI = new BoardUI(this.el.boardContainer, {
       motion: true,
+      brilliantArrows: true,
       orientation: 'white',
       onMove: (move, newFen) => this.handleUserBoardMove(move, newFen)
     });
