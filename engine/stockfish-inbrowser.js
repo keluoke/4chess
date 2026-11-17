@@ -148,6 +148,7 @@ export class StockfishInBrowser {
 
           const depth = depthMatch ? parseInt(depthMatch[1], 10) : 0;
           const multipv = multipvMatch ? parseInt(multipvMatch[1], 10) : 1;
+          const isBound = /\b(?:upperbound|lowerbound)\b/.test(line);
           let scoreText = '0.00';
           let scoreCp = 0;
           let isMate = false;
@@ -172,12 +173,13 @@ export class StockfishInBrowser {
             scoreText,
             scoreCp,
             isMate,
+            isBound,
             depth,
             pv
           });
 
           if (multipv === 1) {
-            this.lastInfo = { depth, scoreText, scoreCp, isMate, pv };
+            this.lastInfo = { depth, scoreText, scoreCp, isMate, isBound, pv };
           }
         }
 
@@ -220,6 +222,7 @@ export class StockfishInBrowser {
                   deltaCp,
                   deltaText,
                   isMate: item.isMate,
+                  isBound: item.isBound,
                   depth: item.depth,
                   pv: item.pv || []
                 });
@@ -234,6 +237,7 @@ export class StockfishInBrowser {
               scoreText: best ? best.scoreText : (this.lastInfo ? this.lastInfo.scoreText : '0.00'),
               scoreCp: best ? best.scoreCp : (this.lastInfo ? this.lastInfo.scoreCp : 0),
               isMate: best ? best.isMate : (this.lastInfo ? this.lastInfo.isMate : false),
+              isBound: !!best?.isBound,
               depth: best ? best.depth : (this.lastInfo ? this.lastInfo.depth : 0),
               pv: best ? best.pv : (this.lastInfo ? this.lastInfo.pv : []),
               lines
@@ -296,7 +300,7 @@ export class StockfishInBrowser {
       this.worker.postMessage('setoption name MultiPV value 1');
     }
     this.worker.postMessage(`position fen ${req.fen}`);
-    this.worker.postMessage(`go depth ${req.depth}`);
+    this.worker.postMessage(`go depth ${req.depth}${req.moveTime ? ` movetime ${req.moveTime}` : ''}`);
   }
 
   initIframeBridge() {
@@ -511,7 +515,8 @@ export class StockfishInBrowser {
     }, 15000);
   }
 
-  async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1) {
+  async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1, moveTime = null) {
+    if (!(Number.isSafeInteger(moveTime) && moveTime > 0)) moveTime = null;
     const epoch = this.searchEpoch;
     if (!this.isReady) {
       await this.initialize();
@@ -574,6 +579,7 @@ export class StockfishInBrowser {
             score: rawResult.scoreText,
             scoreCp: rawResult.scoreCp,
             isMate: rawResult.isMate,
+            isBound: !!rawResult.isBound,
             depth: rawResult.depth,
             pv: rawResult.pv || [],
             lines: rawResult.lines || []
@@ -582,7 +588,7 @@ export class StockfishInBrowser {
       });
 
       if (this.worker) {
-        const req = { id: reqId, fen, depth, multipv };
+        const req = { id: reqId, fen, depth, multipv, moveTime };
         if (!this.isSearching && !this.isStopping) {
           this.executeDirectSearch(req);
         } else {
@@ -599,7 +605,8 @@ export class StockfishInBrowser {
           id: reqId,
           fen,
           depth,
-          multipv
+          multipv,
+          moveTime
         });
       } else {
         clearTimeout(timer);

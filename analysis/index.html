@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261117-review-guide">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261117-trend-engines">
+  <link rel="stylesheet" href="workbench.css?v=20261117-review-policy">
 </head>
 <body class="diverge-ui">
   <script>
@@ -307,11 +307,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261117-trend-engines"></script>
+  <script type="module" src="analysis.js?v=20261117-review-policy"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261117-trend-engines').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261117-review-policy').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

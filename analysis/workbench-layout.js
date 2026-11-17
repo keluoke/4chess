@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261117-trend-engines';
+import { t, onLanguageChange } from './i18n.js?v=20261117-review-policy';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

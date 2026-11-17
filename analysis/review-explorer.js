@@ -1,5 +1,5 @@
-import { t } from './i18n.js?v=20261117-trend-engines';
-import { REVIEW_QUALITIES, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261103-jade';
+import { t } from './i18n.js?v=20261117-review-policy';
+import { REVIEW_QUALITIES, INTUITION_KINDS, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
 export class ReviewExplorer {
@@ -66,15 +66,18 @@ export class ReviewExplorer {
       }
       head.append(header); table.append(head);
       const body = element('tbody');
-      for (const category of [...REVIEW_QUALITIES, 'total', 'book', 'beyond', 'trap']) {
+      for (const category of [...REVIEW_QUALITIES, 'total', 'book', ...INTUITION_KINDS]) {
         const row = element('tr'); if (category === 'book') row.className = 'review-aux-start';
+        if (category !== 'total') row.dataset.quality = category;
         const key = category === 'total' ? 'moves' : REVIEW_QUALITIES.includes(category) ? `quality:${category}` : category;
         const label = t(category === 'total' ? 'reviewTotal' : `reviewQuality_${category}`);
         if (category === 'total') row.className = 'review-total-row';
         const heading = element('th', label); heading.scope = 'row'; row.append(heading);
         for (const side of ['w', 'b']) {
-          const cell = element('td'), pending = ['beyond', 'trap'].includes(category) && result.engineOnly;
-          const button = element('button', pending ? '—' : String(counts[side][category])); button.type = 'button';
+          const cell = element('td'), pending = INTUITION_KINDS.includes(category) && result.engineOnly;
+          const count = counts[side][category];
+          const button = element('button', pending ? '—' : String(count)); button.type = 'button';
+          button.classList.toggle('review-count-positive', !pending && count > 0);
           button.dataset.reviewSide = side; button.dataset.reviewCategory = key;
           button.disabled = pending;
           button.setAttribute('aria-label', `${t(side === 'w' ? 'whitePlayer' : 'blackPlayer')} · ${label} · ${pending ? t('reviewIntuitionPending') : counts[side][category]}`);
@@ -89,7 +92,8 @@ export class ReviewExplorer {
     }
     const side = t(this.side === 'w' ? 'whitePlayer' : this.side === 'b' ? 'blackPlayer' : 'reviewBoth');
     const filter = app.currentDivergenceFilter;
-    const label = filter.startsWith('quality:') ? t(`reviewQuality_${filter.slice(8)}`) : t({ all: 'reviewKeyMoves', moves: 'reviewAllMoves', mistakes: 'filterMistakes', book: 'reviewQuality_book', beyond: 'reviewQuality_beyond', trap: 'reviewQuality_trap' }[filter]);
+    const label = filter.startsWith('quality:') ? t(`reviewQuality_${filter.slice(8)}`)
+      : t({ all: 'reviewKeyMoves', moves: 'reviewAllMoves', mistakes: 'filterMistakes' }[filter] || `reviewQuality_${filter}`);
     const visible = this.visible(moves);
     document.getElementById('review-selection-label').textContent = result ? t('reviewSelected', { side, label, count: visible.length }) : '';
     for (const key of ['all', 'moves', 'mistakes', 'beyond', 'trap']) {

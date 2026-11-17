@@ -120,23 +120,12 @@ const mockStockfish = {
     }
     // Ply 3: 2. Nf3 (Black to move)
     if (fen.includes('rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
-      return { score: '-0.30', scoreCp: -30, bestMove: { san: 'f6', uci: 'f7f6' } };
+      return { score: '-0.30', scoreCp: -30, depth, bestMove: { san: 'Nc6', uci: 'b8c6' } };
     }
     // Ply 4: 2...f6? (White to move) -> Damiano Defense trap!
     // Best move is Nxe5 (+1.80), but if Black played f6, it was a huge intuition trap
-    if (fen.includes('rnbqkbnr/pppp1ppp/5p2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
-      if (multipv > 1) {
-        return {
-          score: '+1.80',
-          scoreCp: 180,
-          bestMove: { san: 'Nxe5', uci: 'f3e5' },
-          lines: [
-            { multipv: 1, uci: 'f3e5', scoreCp: 180, deltaCp: 0 },
-            { multipv: 2, uci: 'd2d4', scoreCp: 90, deltaCp: -90 }
-          ]
-        };
-      }
-      return { score: '+1.80', scoreCp: 180, bestMove: { san: 'Nxe5', uci: 'f3e5' } };
+    if (fen.includes('rnbqkbnr/pppp2pp/5p2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R')) {
+      return { score: '+1.80', scoreCp: 180, depth, bestMove: { san: 'Nxe5', uci: 'f3e5' } };
     }
     // Default
     return {
@@ -193,6 +182,9 @@ console.log('Black Accuracy:', review.accuracyBlack + '%');
 console.log('Book moves count:', review.bookMovesCount);
 console.log('Beyond Intuition (妙手) count:', review.beyondIntuitionCount);
 console.log('Intuition Trap (俗手) count:', review.intuitionTrapsCount);
+if (review.allMoves[3].divergenceType !== 'intuition_trap') {
+  throw new Error('The documented Damiano trap must also pass the deeper score-loss check');
+}
 
 // Verify opening move 1.e4 is NOT labeled as 妙手
 const move1 = review.allMoves.find(m => m.ply === 1);
@@ -211,11 +203,11 @@ const mockStockfishTactical = {
       return {
         score: '+3.50',
         scoreCp: 350,
+        depth,
         bestMove: { san: 'Bxf7+', uci: 'c4f7' },
         lines: [
-          { multipv: 1, uci: 'c4f7', scoreCp: 350, deltaCp: 0 },
-          { multipv: 2, uci: 'd2d4', scoreCp: 220, deltaCp: -130 },
-          { multipv: 3, uci: 'O-O', scoreCp: 200, deltaCp: -150 }
+          { multipv: 1, uci: 'c4f7', scoreCp: 350, depth },
+          { multipv: 2, uci: 'e1g1', scoreCp: 200, depth }
         ]
       };
     }

@@ -60,7 +60,7 @@
       worker.postMessage('setoption name MultiPV value 1');
     }
     worker.postMessage(`position fen ${req.fen}`);
-    worker.postMessage(`go depth ${req.depth}`);
+    worker.postMessage(`go depth ${req.depth}${req.moveTime ? ` movetime ${req.moveTime}` : ''}`);
   }
 
   function initWorker() {
@@ -118,6 +118,7 @@
 
             const depth = depthMatch ? parseInt(depthMatch[1], 10) : 0;
             const multipv = multipvMatch ? parseInt(multipvMatch[1], 10) : 1;
+            const isBound = /\b(?:upperbound|lowerbound)\b/.test(line);
             let scoreText = '0.00';
             let scoreCp = 0;
             let isMate = false;
@@ -142,6 +143,7 @@
               scoreText,
               scoreCp,
               isMate,
+              isBound,
               depth,
               pv
             });
@@ -152,6 +154,7 @@
                 scoreText,
                 scoreCp,
                 isMate,
+                isBound,
                 pv
               };
             }
@@ -198,6 +201,7 @@
                     deltaCp,
                     deltaText,
                     isMate: item.isMate,
+                    isBound: item.isBound,
                     depth: item.depth,
                     pv: item.pv || []
                   });
@@ -212,6 +216,7 @@
                 scoreText: best ? best.scoreText : (lastInfo ? lastInfo.scoreText : '0.00'),
                 scoreCp: best ? best.scoreCp : (lastInfo ? lastInfo.scoreCp : 0),
                 isMate: best ? best.isMate : (lastInfo ? lastInfo.isMate : false),
+                isBound: !!best?.isBound,
                 depth: best ? best.depth : (lastInfo ? lastInfo.depth : 0),
                 pv: best ? best.pv : (lastInfo ? lastInfo.pv : []),
                 lines
@@ -384,7 +389,8 @@
           id: data.id,
           fen: data.fen,
           depth: data.depth || 6,
-          multipv: data.multipv || 1
+          multipv: data.multipv || 1,
+          moveTime: Number.isSafeInteger(data.moveTime) && data.moveTime > 0 ? data.moveTime : null
         };
 
         if (!isSearching && !isStopping) {

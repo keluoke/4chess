@@ -1,5 +1,11 @@
 // Shared review policy: unknown evaluations never become teaching claims.
 export const REVIEW_QUALITIES = ['best', 'good', 'inaccuracy', 'mistake', 'blunder', 'forced', 'unknown'];
+export const INTUITION_KINDS = ['beyond', 'precise', 'trap'];
+
+export function expectedScore(cp) {
+  if (!Number.isFinite(cp)) return null;
+  return 1 / (1 + Math.exp(-0.00368208 * Math.max(-1000, Math.min(1000, cp))));
+}
 
 // Same loss bands as the analyzer; presentation never invents finer quality grades.
 export function errorSeverity(lossCp) {
@@ -20,19 +26,43 @@ export function intuitionKind(move) {
   if (['unknown', 'forced'].includes(moveQuality(move))) return null;
   if (move.divergenceStatus && move.divergenceStatus !== 'confirmed') return null;
   if (move.divergenceType === 'beyond_intuition' || move.isBeyondIntuition) return 'beyond';
+  if (move.divergenceType === 'precise_intuition') return 'precise';
   if (move.divergenceType === 'intuition_trap' || move.isHumanTrap) return 'trap';
   return null;
 }
 
-export function reviewKeyMove(move) {
-  return ['mistake', 'blunder'].includes(moveQuality(move)) ||
-    !!(intuitionKind(move) && !move.isCombinationFollowup);
+function isKeyError(move) {
+  const quality = moveQuality(move);
+  if (['unknown', 'forced', 'best'].includes(quality)) return false;
+  const before = move.evalBeforeCp, after = -move.evalAfterCp;
+  const beforeMate = (move.evalBeforeIsMate || /^[M#]/i.test(move.evalBefore)) ? Math.sign(before) : 0;
+  const afterMate = (move.evalAfterIsMate || /^[M#]/i.test(move.evalAfter)) ? Math.sign(after) : 0;
+  if (beforeMate > afterMate) return true;
+  if (!Number.isFinite(move.expectedScoreLoss)) return ['mistake', 'blunder'].includes(quality);
+  const loss = move.expectedScoreLoss;
+  const balanced = Math.abs(before) <= 200;
+  return loss >= 10 || (balanced && loss >= 8 && move.lossCp >= 80);
+}
+
+export function isKeyMoment(move) {
+  return isKeyError(move) || (!move.isCombinationFollowup && ['beyond', 'trap'].includes(intuitionKind(move)));
+}
+
+export function coreTurningPoints(moves) {
+  return new Set(moves.filter(isKeyMoment).map(move => {
+    const kind = intuitionKind(move);
+    const probability = Number.isFinite(move.humanRawProbability) ? move.humanRawProbability : 0;
+    const loss = Math.max(move.expectedScoreLoss ?? 0, kind === 'trap' ? move.verifiedExpectedScoreLoss ?? 0 : 0);
+    const errorImpact = isKeyError(move) ? Math.max(loss, 8) : loss;
+    const intuitionImpact = kind === 'beyond' ? (move.maiaESL ?? 0) * (1 - 0.2 * probability) : 0;
+    return { ply: move.ply, impact: Math.max(errorImpact * (1 + 0.2 * probability), intuitionImpact) };
+  }).sort((a, b) => b.impact - a.impact || a.ply - b.ply).slice(0, 3).map(move => move.ply));
 }
 
 export function selectReviewMoves(moves, side = 'all', filter = 'all') {
   return (moves || []).filter(move => ['w', 'b'].includes(move.turn) && (side === 'all' || move.turn === side) && (
-    filter === 'moves' || (filter === 'all' ? reviewKeyMove(move) : filter === 'mistakes' ? ['mistake', 'blunder'].includes(moveQuality(move)) :
-      filter === 'book' ? move.isBookMove : ['beyond', 'trap'].includes(filter) ? intuitionKind(move) === filter && !move.isCombinationFollowup :
+    filter === 'moves' || (filter === 'all' ? isKeyMoment(move) : filter === 'mistakes' ? ['mistake', 'blunder'].includes(moveQuality(move)) :
+      filter === 'book' ? move.isBookMove : INTUITION_KINDS.includes(filter) ? intuitionKind(move) === filter && !move.isCombinationFollowup :
         filter.startsWith('quality:') && moveQuality(move) === filter.slice(8))
   )).sort((a, b) => a.ply - b.ply);
 }
@@ -42,7 +72,7 @@ export function reviewCounts(moves) {
   for (const side of ['w', 'b']) {
     const own = (moves || []).filter(move => move.turn === side);
     counts[side] = Object.fromEntries(REVIEW_QUALITIES.map(quality => [quality, own.filter(move => moveQuality(move) === quality).length]));
-    for (const filter of ['book', 'beyond', 'trap']) counts[side][filter] = selectReviewMoves(own, side, filter).length;
+    for (const filter of ['book', ...INTUITION_KINDS]) counts[side][filter] = selectReviewMoves(own, side, filter).length;
     counts[side].total = own.length;
   }
   return counts;
@@ -53,15 +83,24 @@ export function canPractice(move) {
     (['inaccuracy', 'mistake', 'blunder'].includes(moveQuality(move)) || !!(intuitionKind(move) && !move.isCombinationFollowup));
 }
 
-export function isKeyMoment(move) {
-  return ['blunder', 'mistake'].includes(move.severity) ||
-    ['beyond_intuition', 'intuition_trap'].includes(move.divergenceType);
+export function isLessLikelyChoice(probability, maiaProbability) {
+  return Number.isFinite(probability) && probability >= 0 && Number.isFinite(maiaProbability) &&
+    probability < maiaProbability && (probability <= 0.25 || probability < 0.6 * maiaProbability);
 }
 
-export function qualifiesBeyond({ lossCp, maiaLossCp, probability, stableBest, verified }) {
-  return verified && stableBest && Number.isFinite(lossCp) && lossCp <= 10 &&
-    Number.isFinite(maiaLossCp) && maiaLossCp >= 50 &&
-    Number.isFinite(probability) && probability >= 0 && probability <= 0.15;
+export function positiveIntuition({ lossCp, maiaAdvantageCp, maiaESL, probability, maiaProbability, stableBest }) {
+  if (!Number.isFinite(lossCp) || lossCp > 15 || !isLessLikelyChoice(probability, maiaProbability)) return null;
+  if (stableBest && probability <= 0.15 && (maiaESL >= 8 || maiaAdvantageCp >= 70)) return 'beyond_intuition';
+  if (maiaESL >= 3 || maiaAdvantageCp >= 25) return 'precise_intuition';
+  return null;
+}
+
+export function isHighTendency(probability, rank) {
+  return Number.isFinite(probability) && (probability >= 0.20 || (rank > 0 && rank <= 2 && probability >= 0.12));
+}
+
+export function qualifiesTrap({ lossCp, scoreLoss, probability, rank, knownOpeningTrap }) {
+  return lossCp >= 70 && scoreLoss >= 7 && (knownOpeningTrap || isHighTendency(probability, rank));
 }
 
 export function retryVerdict(best, played) {

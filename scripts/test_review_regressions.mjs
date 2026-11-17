@@ -57,7 +57,7 @@ const calls=[];
 const reviewSf={isReady:true,engineKey:'regression',stop(){},async evaluate(fen,depth){
  calls.push({depth,locked:FairPlayGuard.isLiveGameInProgress()});
  if(depth===6)return {scoreCp:fen===ChessBoard.INITIAL_FEN?200:0,score:'+2.00',bestMove:{uci:'e2e4',san:'e4'}};
- if(depth===12)return {scoreCp:200,score:'+2.00',bestMove:{uci:'e2e4',san:'e4'},lines:[{uci:'e2e4',deltaCp:0}]};
+ if(depth===12)return {scoreCp:200,score:'+2.00',depth,bestMove:{uci:'e2e4',san:'e4'},lines:[{uci:'e2e4',scoreCp:200,depth}]};
  if(!releasePlayed){started();return new Promise(resolve => {releasePlayed=resolve;});}
  return {scoreCp:0,score:'0.00',bestMove:{uci:'e7e5',san:'e5'}};
 }};

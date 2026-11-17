@@ -5,7 +5,7 @@
  * and Maia human intuition trap detection.
  */
 
-import { isKeyMoment, qualifiesBeyond, errorSeverity } from './review-policy.js?v=20261103-jade';
+import { expectedScore, isKeyMoment, errorSeverity, moveQuality, isLessLikelyChoice, positiveIntuition, isHighTendency, qualifiesTrap } from './review-policy.js?v=20261117-review-policy';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
@@ -423,11 +423,11 @@ export class GameAnalyzer {
   }
 
   static SCHEMA_VERSION = 11;
+  static REVIEW_POLICY_VERSION = 2;
   static DEFAULT_DEPTH = 12;
 
   static winScore(cp) {
-    if (!Number.isFinite(cp)) return null;
-    return 1 / (1 + Math.exp(-0.00368208 * Math.max(-1000, Math.min(1000, cp))));
+    return expectedScore(cp);
   }
 
   static moveAccuracy(cpBefore, cpAfterMover, isBest = false) {
@@ -517,10 +517,12 @@ export class GameAnalyzer {
   static isValidReviewCache(res) {
     if (!res || typeof res !== 'object') return false;
     if (res.schemaVersion !== GameAnalyzer.SCHEMA_VERSION) return false;
+    if (!res.engineOnly && res.reviewPolicyVersion !== GameAnalyzer.REVIEW_POLICY_VERSION) return false;
     if (res.accuracyWhite === undefined || res.accuracyBlack === undefined) return false;
     if (res.beyondIntuitionCount === undefined || res.intuitionTrapsCount === undefined) return false;
-    const hasMaia = res.allMoves && res.allMoves.some(m => m.maiaTopSan != null);
-    if (!hasMaia && res.allMoves && res.allMoves.length > 0 && !(res.engineOnly && res.engineGameKey && res.positionEvaluations?.length === res.totalMoves + 1)) return false;
+    if (!Array.isArray(res.allMoves)) return false;
+    const hasMaia = res.allMoves.some(m => m.maiaTopSan != null);
+    if (!hasMaia && res.allMoves.length > 0 && !(res.engineOnly && res.engineGameKey && res.positionEvaluations?.length === res.totalMoves + 1)) return false;
     return true;
   }
 
@@ -543,16 +545,21 @@ export class GameAnalyzer {
    */
   static async getCachedReview(cacheKey) {
     if (!cacheKey) return null;
+    const storageKey = `maia3_review_${cacheKey}`;
+    const remember = result => {
+      // The engine-only search and accuracy inputs predate this policy and are still reusable.
+      const current = result.reviewPolicyVersion === GameAnalyzer.REVIEW_POLICY_VERSION ? result : {
+        ...result, reviewPolicyVersion: GameAnalyzer.REVIEW_POLICY_VERSION, keyMoments: result.allMoves.filter(isKeyMoment)
+      };
+      GameAnalyzer.memoryCache.set(storageKey, current);
+      return current;
+    };
     try {
-      const storageKey = `maia3_review_${cacheKey}`;
       // L1: Memory Cache
       if (GameAnalyzer.memoryCache.has(storageKey)) {
         const mem = GameAnalyzer.memoryCache.get(storageKey);
-        if (GameAnalyzer.isValidReviewCache(mem)) {
-          return mem;
-        } else {
-          await GameAnalyzer.invalidateCache(storageKey);
-        }
+        if (GameAnalyzer.isValidReviewCache(mem)) return remember(mem);
+        await GameAnalyzer.invalidateCache(storageKey);
       }
 
       // L2: Persistent chrome.storage.local
@@ -563,9 +570,8 @@ export class GameAnalyzer {
         if (data && data[storageKey] && data[storageKey].result) {
           const res = data[storageKey].result;
           if (GameAnalyzer.isValidReviewCache(res)) {
-            GameAnalyzer.memoryCache.set(storageKey, res);
             console.log(`[GameAnalyzer] ⚡ Loaded review from persistent cache for ${cacheKey}`);
-            return res;
+            return remember(res);
           } else {
             console.log(`[GameAnalyzer] Stale/incompatible review cache found for ${cacheKey}, discarding...`);
             await GameAnalyzer.invalidateCache(storageKey);
@@ -579,8 +585,7 @@ export class GameAnalyzer {
           if (parsed && parsed.result) {
             const res = parsed.result;
             if (GameAnalyzer.isValidReviewCache(res)) {
-              GameAnalyzer.memoryCache.set(storageKey, res);
-              return res;
+              return remember(res);
             } else {
               console.log(`[GameAnalyzer] Stale/incompatible review cache found in localStorage for ${cacheKey}, discarding...`);
               await GameAnalyzer.invalidateCache(storageKey);
@@ -604,6 +609,7 @@ export class GameAnalyzer {
       const storageKey = `maia3_review_${cacheKey}`;
       const cleanResult = {
         schemaVersion: GameAnalyzer.SCHEMA_VERSION,
+        reviewPolicyVersion: result.reviewPolicyVersion,
         totalMoves: result.totalMoves,
         engineOnly: !!result.engineOnly,
         engineGameKey: result.engineGameKey,
@@ -675,11 +681,28 @@ export class GameAnalyzer {
     this.isAnalyzing = true;
     this.isCancelled = false;
     const invalid = () => this.isCancelled || this._currentRunId !== runId || FairPlayGuard.isLiveGameInProgress();
-    const evaluate = async (...args) => {
+    let verificationStartup;
+    const evaluate = async (fen, targetDepth, timeoutMs, multipv, budget = null) => {
       if (invalid()) return null;
       if (options.waitForTurn) await options.waitForTurn(invalid);
       if (invalid()) return null;
-      const result = await this.stockfish.evaluate(...args);
+      if (!budget) {
+        const result = await this.stockfish.evaluate(fen, targetDepth, timeoutMs, multipv);
+        return invalid() ? null : result;
+      }
+      // Waiting for foreground work or first-time engine initialization is outside the search budget.
+      if (!this.stockfish.isReady) {
+        verificationStartup ||= this.stockfish.initialize();
+        await verificationStartup;
+        if (!this.stockfish.isReady || invalid()) return null;
+        if (options.waitForTurn) await options.waitForTurn(invalid);
+      }
+      if (invalid()) return null;
+      const limit = Math.floor(Math.min(timeoutMs, budget.remaining));
+      if (limit <= 0) return null;
+      const started = performance.now();
+      const result = await this.stockfish.evaluate(fen, targetDepth, limit, multipv, Math.max(1, limit - 60));
+      budget.remaining -= performance.now() - started;
       return invalid() ? null : result;
     };
 
@@ -909,6 +932,7 @@ export class GameAnalyzer {
           isOnlyLegalMove,
           isBookMove: bookLookup.isBookMove,
           isOpeningTrap: bookLookup.isOpeningTrap,
+          knownOpeningTrap: bookLookup.isOpeningTrap && !!bookLookup.trapNote,
           openingName: bookLookup.openingName,
           eco: bookLookup.eco,
           bookFrequency: bookLookup.bookFrequency,
@@ -919,12 +943,14 @@ export class GameAnalyzer {
           evalAfter: evalAfter ? evalAfter.score : '?',
           evalBeforeCp: evalBefore?.scoreCp ?? 0,
           evalAfterCp: evalAfter?.scoreCp ?? 0,
+          evalBeforeIsMate: !!evalBefore?.isMate,
+          evalAfterIsMate: !!evalAfter?.isMate,
           fenBefore: posBefore.fen,
           fenAfter: posAfter.fen,
           element: posAfter.moveEl,
           isHumanTrap: false,
           isBeyondIntuition: false,
-          divergenceType: null, // 'beyond_intuition' | 'intuition_trap' | null
+          divergenceType: null, // 'beyond_intuition' | 'precise_intuition' | 'intuition_trap' | null
           divergenceStatus: null, // 'confirmed' | 'unconfirmed' | 'downgraded'
           divergenceNote: '',
           humanProbability: null,
@@ -988,53 +1014,25 @@ export class GameAnalyzer {
               mv.maiaTopSan = top1.san || null;
               mv.maiaTopUci = top1.uci || null;
               mv.maiaTopProb = typeof top1.prob === 'number' ? top1.prob : null;
-              mv.maiaTopRawProb = typeof top1.rawProb === 'number' ? top1.rawProb : (top1.prob ? top1.prob / 100 : 0.01);
+              mv.maiaTopRawProb = Number.isFinite(top1.rawProb) ? top1.rawProb : (Number.isFinite(top1.prob) ? top1.prob / 100 : null);
 
               mv.maiaTop2San = top2?.san || null;
               mv.maiaTop2Uci = top2?.uci || null;
               mv.maiaTop2Prob = typeof top2?.prob === 'number' ? top2.prob : null;
 
-              const cleanPlayed = mv.san.replace(/[+#?!]/g, '');
-              const cleanBest = (mv.bestSan || '').replace(/[+#?!]/g, '');
-              const cleanMaia = (top1.san || '').replace(/[+#?!]/g, '');
-              const cleanMaia2 = top2 ? (top2.san || '').replace(/[+#?!]/g, '') : null;
+              const matchedIndex = pred.moves.findIndex(move => move.uci === mv.uci);
+              const matchedMove = pred.moves[matchedIndex];
+              mv.humanProbability = matchedMove?.prob ?? null;
+              mv.humanRawProbability = Number.isFinite(matchedMove?.rawProb) ? matchedMove.rawProb
+                : Number.isFinite(matchedMove?.prob) ? matchedMove.prob / 100 : null;
+              mv.humanChoiceRank = matchedIndex < 0 ? null : matchedIndex + 1;
+              mv.isIntuitionDivergence = !!(mv.maiaTopUci && mv.bestUci && mv.maiaTopUci !== mv.bestUci);
 
-              // Check if actual played move matches Maia predictions
-              const matchedIdx = pred.moves.findIndex(m => m.san.replace(/[+#?!]/g, '') === cleanPlayed || m.uci === cleanPlayed);
-              const matchedMove = matchedIdx !== -1 ? pred.moves[matchedIdx] : null;
-              const matchedProb = matchedMove && typeof matchedMove.prob === 'number' ? matchedMove.prob : 0;
-              const matchedRawProb = matchedMove && typeof matchedMove.rawProb === 'number' ? matchedMove.rawProb : (matchedMove && Number.isFinite(matchedMove.prob) ? matchedMove.prob / 100 : null);
-
-              mv.humanProbability = matchedProb;
-              mv.humanRawProbability = matchedRawProb;
-
-              const isMaiaTop1 = (cleanPlayed === cleanMaia || matchedIdx === 0);
-              const isMaiaTop2 = (!isMaiaTop1 && (cleanPlayed === cleanMaia2 || matchedIdx === 1));
-              const isMaiaTop1Or2 = isMaiaTop1 || isMaiaTop2;
-
-              // Flag if intuition diverges from engine best
-              mv.isIntuitionDivergence = !!(cleanMaia && cleanBest && cleanMaia !== cleanBest);
-
-              // --- Candidate Archetype Filtering ---
-
-              // Candidate 1: 妙手候选 (实战是引擎一选，且与 Maia 一选不同；前5个回合即前10步不判定妙手)
-              const isEngineBest = cleanBest && (cleanPlayed === cleanBest || (typeof mv.lossCp === 'number' && mv.lossCp <= 5));
-              if (mv.ply > 10 && isEngineBest && !mv.isBookMove && !mv.isOnlyLegalMove) {
-                if (cleanMaia && cleanMaia !== cleanPlayed) {
-                  mv.isBeyondIntuitionCandidate = true;
-                  mv._candidateMaiaSan = cleanMaia;
-                  mv._candidateMaiaUci = top1.uci || null;
-                  mv._candidateTopTxt = top1.prob ? `${Math.round(top1.prob)}%` : '';
-                  mv._candidateProbTxt = matchedProb > 0 ? `${Math.round(matchedProb)}%` : '罕见走法';
-                }
-              }
-
-              // Candidate 2: 俗手候选 (实战是 Maia 一选或二选，或开局直觉陷阱，初筛有明显损失)
-              if ((isMaiaTop1Or2 || mv.isOpeningTrap) && (mv.lossCp >= 40 || mv.isOpeningTrap) && !mv.isOnlyLegalMove) {
-                mv.isHumanTrapCandidate = true;
-                mv._candidateRankTxt = isMaiaTop1 ? '直觉一选' : (isMaiaTop2 ? '直觉二选' : '开局谱招');
-                mv._candidateProbTxt = matchedProb > 0 ? `直觉概率 ${Math.round(matchedProb)}%` : '';
-              }
+              if (['unknown', 'forced'].includes(moveQuality(mv))) continue;
+              mv.isBeyondIntuitionCandidate = mv.ply > 10 && !mv.isBookMove && mv.lossCp <= 20 &&
+                !!mv.maiaTopUci && mv.maiaTopUci !== mv.uci && isLessLikelyChoice(mv.humanRawProbability, mv.maiaTopRawProb);
+              mv.isHumanTrapCandidate = (mv.lossCp >= 40 || mv.isOpeningTrap) &&
+                (mv.knownOpeningTrap || isHighTendency(mv.humanRawProbability, mv.humanChoiceRank));
             }
           } catch (e) {
             console.warn('[GameAnalyzer] Maia prediction error on ply', mv.ply, ':', e);
@@ -1042,142 +1040,87 @@ export class GameAnalyzer {
         }
       }
 
-      // Step 4: Verify at a higher target depth; incomplete searches cannot confirm labels.
-      // 实打实比较三种走法：搜索引擎一选、实战走法、Maia一选
-      const candidateList = analyzedMoves
-        .filter(m => m.isBeyondIntuitionCandidate || m.isHumanTrapCandidate)
-        .sort((a, b) => a.ply - b.ply);
-
-      for (const cm of candidateList) {
-        if (invalid()) break;
-        if (onProgress) onProgress({ phase: 'verifying', current: candidateList.indexOf(cm) + 1, total: candidateList.length, percent: 95 });
+      // Step 4: Compare the two root lines and look up only the missing alternatives.
+      const candidateList = analyzedMoves.filter(move => move.isBeyondIntuitionCandidate || move.isHumanTrapCandidate);
+      const minimumDepth = Math.max(12, depth + 2);
+      const targetDepth = Math.max(12, depth + 3);
+      for (const [index, move] of candidateList.entries()) {
+        if (invalid()) return null;
+        onProgress?.({ phase: 'verifying', current: index + 1, total: candidateList.length, percent: 95 });
+        move.divergenceStatus = 'unconfirmed';
         try {
-          // Comparable MultiPV evidence; targeted child searches use one less ply.
-          const verificationDepth = Math.max(12, depth + 2);
-          const deepEval = await evaluate(cm.fenBefore, verificationDepth, 6000, 4);
-          if (deepEval?.bestMove && Number.isFinite(deepEval.scoreCp)) {
-            const deepBestSan = (deepEval.bestMove.san || '').replace(/[+#?!]/g, '');
-            const deepBestUci = deepEval.bestMove.uci;
-            const deepBestScoreCp = deepEval.scoreCp;
-            const cleanPlayed = cm.san.replace(/[+#?!]/g, '');
-            const cleanMaia = (cm.maiaTopSan || '').replace(/[+#?!]/g, '');
+          const budget = { remaining: 6000 };
+          const root = await evaluate(move.fenBefore, targetDepth, 4200, 2, budget);
+          move.verificationDepth = root?.depth ?? 0;
+          if (!root?.bestMove?.uci || !Number.isFinite(root.scoreCp) || !(root.depth >= minimumDepth) || root.isBound ||
+              (root.pv?.length && root.pv[0] !== root.bestMove.uci)) continue;
+          const verificationDepth = Math.min(root.depth, targetDepth);
 
-            // Build map of evaluated moves: uci -> lossCp
-            const deepLossMap = new Map();
-            if (deepBestUci) deepLossMap.set(deepBestUci, 0);
+          const scores = new Map([[root.bestMove.uci, root.scoreCp]]);
+          for (const line of root.lines || []) {
+            if (line.uci && line.depth >= verificationDepth && Number.isFinite(line.scoreCp) && !line.isBound && !scores.has(line.uci)) {
+              scores.set(line.uci, line.scoreCp);
+            }
+          }
 
-            if (deepEval.lines) {
-              for (const l of deepEval.lines) {
-                if (l.uci && l.depth >= verificationDepth && Number.isFinite(l.deltaCp)) {
-                  deepLossMap.set(l.uci, Math.abs(l.deltaCp));
-                }
+          const choices = [[move.uci, move.fenAfter]];
+          if (move.isBeyondIntuitionCandidate && !scores.has(move.maiaTopUci)) {
+            const board = new ChessBoard(move.fenBefore);
+            const alternative = board.getLegalMoves().find(legal => legal.uci === move.maiaTopUci);
+            if (alternative) {
+              board.makeMove(alternative);
+              choices.push([move.maiaTopUci, board.getFen()]);
+            }
+          }
+
+          const missing = choices.filter(([uci]) => !scores.has(uci));
+          for (const [i, [uci, fen]] of missing.entries()) {
+            const result = await evaluate(fen, verificationDepth - 1, budget.remaining / (missing.length - i), 1, budget);
+            if (invalid()) return null;
+            if (Number.isFinite(result?.scoreCp) && !result.isBound && (result.terminal || result.depth >= verificationDepth - 1)) {
+              scores.set(uci, -result.scoreCp);
+            }
+          }
+
+          const playedScore = scores.get(move.uci);
+          if (!Number.isFinite(playedScore)) continue;
+          const lossCp = Math.max(0, root.scoreCp - playedScore);
+          const scoreLoss = Math.max(0, expectedScore(root.scoreCp) - expectedScore(playedScore)) * 100;
+          move.verifiedLossCp = lossCp;
+          move.verifiedExpectedScoreLoss = scoreLoss;
+          const stableBest = root.bestMove.uci === move.uci;
+          move.divergenceStatus = 'downgraded';
+
+          if (move.isBeyondIntuitionCandidate) {
+            const maiaScore = scores.get(move.maiaTopUci);
+            if (!Number.isFinite(maiaScore)) { move.divergenceStatus = 'unconfirmed'; continue; }
+            move.maiaLossCp = Math.max(0, root.scoreCp - maiaScore);
+            move.maiaAdvantageCp = playedScore - maiaScore;
+            move.maiaESL = (expectedScore(playedScore) - expectedScore(maiaScore)) * 100;
+            const kind = positiveIntuition({
+              lossCp, maiaAdvantageCp: move.maiaAdvantageCp, maiaESL: move.maiaESL,
+              probability: move.humanRawProbability, maiaProbability: move.maiaTopRawProb, stableBest
+            });
+            if (kind) {
+              move.divergenceType = kind;
+              move.divergenceStatus = 'confirmed';
+              if (kind === 'beyond_intuition') {
+                const previous = analyzedMoves[move.ply - 3];
+                move.isBeyondIntuition = true;
+                move.isCombinationFollowup = !!(previous?.turn === move.turn && previous.isBeyondIntuition);
               }
             }
-
-            // Targeted Deep Eval Helper: evaluate move by stepping from fenBefore
-            const evaluateMoveTargeted = async (targetUci, targetCleanSan) => {
-              try {
-                let targetFen = null;
-                const chess = new ChessBoard(cm.fenBefore);
-                if (chess.isValid) {
-                  const legals = chess.getLegalMoves();
-                  const match = legals.find(m => 
-                    (targetUci && m.uci === targetUci) || 
-                    (targetCleanSan && m.san.replace(/[+#?!]/g, '') === targetCleanSan)
-                  );
-                  if (match) {
-                    chess.makeMove(match);
-                    targetFen = chess.getFen();
-                    if (!targetUci) targetUci = match.uci;
-                  }
-                }
-                if (targetFen && targetUci) {
-                  const subEval = await evaluate(targetFen, verificationDepth - 1, 6000, 1);
-                  if (Number.isFinite(subEval?.scoreCp) && (subEval.terminal || subEval.depth >= verificationDepth - 1)) {
-                    const loss = Math.max(0, deepBestScoreCp + (subEval.scoreCp || 0));
-                    deepLossMap.set(targetUci, loss);
-                    return loss;
-                  }
-                }
-              } catch (e) {
-                console.warn('[GameAnalyzer] Targeted eval error:', e);
-              }
-              return null;
-            };
-
-            // 1. 实打实确保实战走法已评估
-            if (!deepLossMap.has(cm.uci)) {
-              if (cm.fenAfter) {
-                const playedEval = await evaluate(cm.fenAfter, verificationDepth - 1, 6000, 1);
-                if (Number.isFinite(playedEval?.scoreCp) && (playedEval.terminal || playedEval.depth >= verificationDepth - 1)) {
-                  deepLossMap.set(cm.uci, Math.max(0, deepBestScoreCp + (playedEval.scoreCp || 0)));
-                } else {
-                  deepLossMap.delete(cm.uci);
-                }
-              } else {
-                await evaluateMoveTargeted(cm.uci, cleanPlayed);
-              }
-            }
-            const deepLossCp = deepLossMap.has(cm.uci) ? deepLossMap.get(cm.uci) : (cm.lossCp || 0);
-
-            // 2. 实打实确保 Maia 一选已评估
-            if (cm.maiaTopUci && !deepLossMap.has(cm.maiaTopUci)) {
-              await evaluateMoveTargeted(cm.maiaTopUci, cleanMaia);
-            }
-            const maiaLossCp = (cm.maiaTopUci && deepLossMap.has(cm.maiaTopUci))
-              ? deepLossMap.get(cm.maiaTopUci)
-              : null;
-
-            // Require a rare, stable best move and a meaningful advantage over the natural choice.
-            const isStillDeepBest = (deepBestSan === cleanPlayed || deepBestUci === cm.uci || deepLossCp === 0);
-            if (cm.ply > 10 && cm.isBeyondIntuitionCandidate && !cm.isBookMove && !cm.isOnlyLegalMove) {
-              cm.maiaLossCp = maiaLossCp;
-              cm.verificationDepth = deepEval.depth ?? 0;
-              const verified = deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci);
-              if (qualifiesBeyond({ lossCp: deepLossCp, maiaLossCp, probability: cm.humanRawProbability,
-                stableBest: isStillDeepBest, verified })) {
-                // 连续组合去重：检查同方上一有效决策步是否已是妙手
-                const prevSameSideMove = analyzedMoves
-                  .slice(0, cm.ply - 1)
-                  .reverse()
-                  .find(m => m.turn === cm.turn && !m.isBookMove && !m.isOnlyLegalMove);
-                const isCombo = prevSameSideMove && prevSameSideMove.isBeyondIntuition && (cm.ply - prevSameSideMove.ply <= 2);
-
-                cm.isBeyondIntuition = true;
-                cm.isCombinationFollowup = !!isCombo;
-                cm.divergenceType = 'beyond_intuition';
-                cm.divergenceStatus = 'confirmed';
-                if (isCombo) {
-                  cm.divergenceNote = `✨ 妙手组合延续：走出引擎首选 ${cleanPlayed}。相比人类直觉的自然走法 ${cleanMaia} (损耗 -${(maiaLossCp / 100).toFixed(2)} 兵)，这步稳固并兑现了突破直觉的战术优势。`;
-                } else {
-                  cm.divergenceNote = `✨ 妙手：你走出了引擎首选 ${cleanPlayed}。相比人类直觉的自然走法 ${cleanMaia} (损耗 -${(maiaLossCp / 100).toFixed(2)} 兵)，这步保留了更多优势。`;
-                }
-              } else {
-                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 妙手未通过加深复核 (是否深搜首选: ${isStillDeepBest}, 实战损耗: ${deepLossCp}cp, Maia首选损耗: ${maiaLossCp ?? '未测'}cp <= 0)，已取消`);
-                cm.divergenceStatus = deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci) && maiaLossCp !== null ? 'downgraded' : 'unconfirmed';
-              }
-            }
-
-            // 4. 复核判定 俗手 (实战＝Maia一选或二选，且相对Stockfish一选明显吃亏 >= 50cp)
-            if (!cm.isBeyondIntuition && cm.isHumanTrapCandidate && !cm.isOnlyLegalMove) {
-              if (deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci) && !isStillDeepBest && deepLossCp >= 50) {
-                cm.isHumanTrap = true;
-                cm.divergenceType = 'intuition_trap';
-                cm.divergenceStatus = 'confirmed';
-                cm.divergenceNote = `🫤 俗手：这步属于人类直觉的优先选择 (${cm._candidateRankTxt || '自然走法'})，看起来很自然，但经深度复核会明显损失优势 (-${(deepLossCp / 100).toFixed(2)} 兵)，最佳应走 ${deepBestSan}。`;
-              } else {
-                console.log(`[GameAnalyzer] Ply ${cm.ply} (${cleanPlayed}) 俗手经复核损耗仅 ${deepLossCp}cp < 50cp，未达显著吃亏门槛，已降级`);
-                cm.divergenceStatus = deepEval.depth >= verificationDepth && deepLossMap.has(cm.uci) && maiaLossCp !== null ? 'downgraded' : 'unconfirmed';
-              }
-            }
-          } else {
-            console.warn(`[GameAnalyzer] Ply ${cm.ply} 深搜复核无响应或超时，证据不足，标记为待确认`);
-            cm.divergenceStatus = 'unconfirmed';
-            cm.divergenceNote = '深搜复核超时，证据不足未予确认';
+          } else if (move.isHumanTrapCandidate && !stableBest && qualifiesTrap({
+            lossCp, scoreLoss, probability: move.humanRawProbability, rank: move.humanChoiceRank, knownOpeningTrap: move.knownOpeningTrap
+          })) {
+            move.isHumanTrap = true;
+            move.divergenceType = 'intuition_trap';
+            move.divergenceStatus = 'confirmed';
+            move.verifiedBestSan = root.bestMove.san;
           }
         } catch (err) {
-          console.warn('[GameAnalyzer] Deep verification error on ply', cm.ply, err);
-          cm.divergenceStatus = 'unconfirmed';
+          console.warn('[GameAnalyzer] Deep verification error on ply', move.ply, err);
+          move.divergenceStatus = 'unconfirmed';
         }
       }
 
@@ -1234,6 +1177,7 @@ export class GameAnalyzer {
         depthMin: depths.length ? Math.min(...depths) : null,
         depthMax: depths.length ? Math.max(...depths) : null,
         schemaVersion: GameAnalyzer.SCHEMA_VERSION,
+        reviewPolicyVersion: GameAnalyzer.REVIEW_POLICY_VERSION,
         runId,
         gameKey: cacheKey,
         elo,
@@ -1289,11 +1233,10 @@ export class GameAnalyzer {
       }
 
       return (this._currentRunId === runId) ? result : null;
-    } catch (err) {
+    } finally {
       if (this._currentRunId === runId) {
         this.isAnalyzing = false;
       }
-      throw err;
     }
   }
 

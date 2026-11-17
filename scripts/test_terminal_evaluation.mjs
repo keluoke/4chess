@@ -29,6 +29,8 @@ const terminalStart=uci.length;
 const terminalResult=await sf.evaluate(mateFen,6,1000);
 const terminalUci=uci.slice(terminalStart);
 assert.equal(terminalResult.terminal,true);assert.equal(terminalResult.scoreCp,-10000);
+const timed = await sf.evaluate('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 30, 1000, 2, 75);
+assert(timed && timed.depth > 0 && timed.depth < 30, 'A real engine time cap can return shallower evidence before the caller times out');
 const maia={isReady:true,modelKey:'review-fixture',async predict(){return {moves:[]}}};
 const analyzer=new GameAnalyzer(sf,maia);
 let oneMoveError;
