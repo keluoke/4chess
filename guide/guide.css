@@ -2,3 +2,8 @@
 
 header a.brand { display:inline-flex; align-items:center; gap:10px; }
 header a.brand img { display:block; width:32px; height:32px; flex-shrink:0; }
+
+.review-method-topics{display:grid;gap:18px}
+.review-method-topics article{padding:16px 20px;border:1px solid var(--dg-line);border-radius:9px;background:var(--dg-surface)}
+.review-method-topics h3{margin:0 0 8px}
+.review-method-topics p{margin:8px 0 0}

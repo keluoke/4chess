@@ -1379,9 +1379,6 @@ body{font-size:14px;user-select:auto}
 .review-summary .metric-value { font: 600 clamp(32px, 3.5vw, 46px)/1.15 var(--dg-mono); letter-spacing: -.055em; color: var(--brand-green); }
 .review-summary .side-badge { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .accuracy-samples { font-size: 10px; color: var(--text-muted); }
-.accuracy-method { font-size: 11px; color: var(--text-muted); margin-top: 12px; line-height: 1.7; }
-.accuracy-method summary { cursor: pointer; width: fit-content; }
-.accuracy-method p { margin: 7px 0; }
 
 /* Review workspace: board and timeline stay together; the decision is primary. */
 .board-column .eval-chart-wrapper { width:100%; margin:0; padding:0; }
@@ -1390,7 +1387,6 @@ body{font-size:14px;user-select:auto}
 .review-summary .metric-value { font-size:28px; }
 .review-summary .review-metrics-card { margin:4px 0; padding:0; }
 .review-summary .metric-player-row { padding:8px; }
-.accuracy-method { font-size:12px; }
 .position-analysis { padding:16px 0; }
 .comparison-note { font-size:12px; line-height:1.6; color:var(--text-muted); margin:6px 0 12px; }
 .comparison-table { width:100%; border-collapse:collapse; font-size:14px; font-variant-numeric:tabular-nums; }
@@ -1427,7 +1423,6 @@ body{font-size:14px;user-select:auto}
 .review-summary .metric-player-row { flex-direction:row; align-items:center; justify-content:space-between; border:0; background:transparent; padding:4px 0; gap:6px; }
 .review-summary .metric-group { flex-direction:row; align-items:baseline; gap:8px; }
 .review-summary .accuracy-heading { margin-bottom:6px; }
-.review-summary .accuracy-method { margin-top:4px; }
 .comparison-table td { padding-top:8px; padding-bottom:8px; }
 
 /* Three independent areas: board, position research, full-game intuition. */
@@ -1436,10 +1431,6 @@ body{font-size:14px;user-select:auto}
 .insight-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .insight-heading strong { font-size:15px; }
 #intuition-progress { color:var(--text-muted); font-size:12px; margin:12px 0; min-height:18px; }
-.analysis-help,.card-details { font-size:12px; color:var(--text-muted); margin:8px 0 12px; }
-.analysis-help summary,.card-details summary { cursor:pointer; width:fit-content; }
-.analysis-help p { line-height:1.6; margin:8px 0; }
-.card-details .blunder-card-sub { margin-top:8px; flex-wrap:wrap; line-height:1.6; }
 .position-analysis { padding:4px 0 10px; }
 .position-analysis .candidate-heading { margin:8px 0; }
 .candidate-lines { gap:5px; }

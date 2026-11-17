@@ -1,6 +1,6 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261117-elo-trend';
-import { MaiaEloTrend } from './maia-elo-trend.js?v=20261117-elo-trend';
+import { t } from './i18n.js?v=20261117-review-guide';
+import { MaiaEloTrend } from './maia-elo-trend.js?v=20261117-review-guide';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -59,7 +59,7 @@ export class PositionAnalysis {
     this.searchCount = 0;
     this.maiaQueue = [];
     const trend = globalThis.document?.getElementById('maia-elo-trend');
-    if (trend) this.eloTrend = new MaiaEloTrend(this, trend);
+    if (trend) this.eloTrend = new MaiaEloTrend(this, trend, document.getElementById('maia-trend-open'));
   }
 
   cancel() {

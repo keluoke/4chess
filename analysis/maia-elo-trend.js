@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261117-elo-trend';
+import { t } from './i18n.js?v=20261117-review-guide';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const RATINGS = [600, 1000, 1400, 1800, 2200, 2600];
@@ -25,32 +25,56 @@ function formatProbability(probability) {
 }
 
 export class MaiaEloTrend {
-  constructor(analysis, details) {
+  constructor(analysis, dialog, opener) {
     this.analysis = analysis;
-    this.details = details;
-    this.chart = details.querySelector('.maia-trend-chart');
-    this.status = details.querySelector('.maia-trend-status');
-    this.data = details.querySelector('.maia-trend-data');
+    this.dialog = dialog;
+    this.opener = opener;
+    this.chart = dialog.querySelector('.maia-trend-chart');
+    this.legend = dialog.querySelector('.maia-trend-legend');
+    this.caption = dialog.querySelector('.maia-trend-caption');
+    this.status = dialog.querySelector('.maia-trend-status');
+    this.data = dialog.querySelector('.maia-trend-data');
     this.table = this.data.querySelector('table');
-    this.retry = details.querySelector('.maia-trend-retry');
+    this.retry = dialog.querySelector('.maia-trend-retry');
+    this.views = [...dialog.querySelectorAll('[data-trend-view]')];
     this.cache = new Map();
-    details.addEventListener('toggle', () => {
-      if (details.open) void this.start();
-      else this.request = null;
+    opener.onclick = () => {
+      if (dialog.open || !analysis.current(this.snapshot) || FairPlayGuard.isLiveGameInProgress()) return;
+      if (analysis.app.isPlaying) analysis.app.toggleAutoPlay();
+      this.setView('chart');
+      dialog.showModal();
+      void this.start();
+    };
+    dialog.querySelector('#maia-trend-close').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => {
+      if (!dialog.open) this.request = null;
     });
+    dialog.addEventListener('click', event => {
+      if (event.target !== dialog) return;
+      const box = dialog.getBoundingClientRect();
+      if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
+    });
+    for (const button of this.views) button.onclick = () => this.setView(button.dataset.trendView);
     this.retry.onclick = () => this.start();
   }
 
-  get busy() { return this.request?.running === true && this.details.open; }
+  get busy() { return this.request?.running === true && this.dialog.open; }
+
+  setView(view) {
+    this.chart.hidden = view !== 'chart';
+    this.data.hidden = view !== 'table';
+    for (const button of this.views) button.setAttribute('aria-pressed', String(view === button.dataset.trendView));
+  }
 
   reset() {
     this.request = null;
-    this.details.open = false;
-    this.details.hidden = true;
+    this.opener.hidden = true;
+    if (this.dialog.open) this.dialog.close();
     this.snapshot = null;
     this.chart.replaceChildren();
+    this.legend.replaceChildren();
     this.table.replaceChildren();
-    this.data.open = false;
+    this.caption.textContent = '';
     this.status.textContent = '';
     this.retry.hidden = true;
   }
@@ -60,14 +84,14 @@ export class MaiaEloTrend {
     this.snapshot = snapshot;
     this.moves = moves;
     this.lines = lines;
-    this.details.hidden = false;
-    if (this.details.open && this.request) this.render(this.request);
+    this.opener.hidden = false;
+    if (this.dialog.open && this.request) this.render(this.request);
   }
 
   async start() {
     const snapshot = this.snapshot;
     const { app } = this.analysis;
-    if (this.busy || !this.details.open || !this.analysis.current(snapshot) || FairPlayGuard.isLiveGameInProgress()) return;
+    if (this.busy || !this.dialog.open || !this.analysis.current(snapshot) || FairPlayGuard.isLiveGameInProgress()) return;
     const { ctx, entry } = snapshot;
     const engine = app.maiaEngine;
     // Each model instance owns its distributions, including custom weights.
@@ -83,7 +107,7 @@ export class MaiaEloTrend {
     samples.set(ctx.elo, probabilities(entry.prediction.moves));
     const request = { snapshot, samples, candidates: this.moves, running: true };
     this.request = request;
-    const invalid = () => this.request !== request || !this.details.open || !this.analysis.current(snapshot) ||
+    const invalid = () => this.request !== request || !this.dialog.open || !this.analysis.current(snapshot) ||
       engine !== app.maiaEngine || FairPlayGuard.isLiveGameInProgress();
     this.render(request);
     try {
@@ -148,8 +172,7 @@ export class MaiaEloTrend {
     for (const rating of RATINGS) svg.append(svgElement('text', { x: x(rating), y: 153, 'text-anchor': 'middle' }, rating));
     svg.append(svgElement('line', { x1: x(elo), x2: x(elo), y1: y(100), y2: y(0), class: 'maia-trend-current' }));
 
-    const legend = document.createElement('ul');
-    legend.className = 'maia-trend-legend';
+    this.legend.replaceChildren();
     const ratings = [...new Set([...RATINGS, elo])].sort((a, b) => a - b);
     this.table.replaceChildren();
     const head = this.table.createTHead().insertRow();
@@ -172,7 +195,7 @@ export class MaiaEloTrend {
       const item = document.createElement('li');
       item.className = `maia-trend-series trend-${move.role}`;
       item.textContent = `${move.label} · Δ ${move.delta}`;
-      legend.append(item);
+      this.legend.append(item);
       const group = svgElement('g', { class: `maia-trend-series trend-${move.role}`, 'data-uci': move.uci });
       let d = '', connected = false;
       for (const rating of RATINGS) {
@@ -191,9 +214,7 @@ export class MaiaEloTrend {
       }
       svg.append(group);
     }
-    const caption = document.createElement('p');
-    caption.className = 'maia-trend-caption';
-    caption.textContent = `${t('maiaTrendProbability')} · ${t('maiaTrendCurrent', { elo })}`;
-    this.chart.replaceChildren(caption, svg, legend);
+    this.caption.textContent = `${t('maiaTrendProbability')} · ${t('maiaTrendCurrent', { elo })}`;
+    this.chart.replaceChildren(svg);
   }
 }

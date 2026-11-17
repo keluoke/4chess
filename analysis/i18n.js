@@ -10,8 +10,6 @@ export const DICTIONARY = {
   zh: {
     reviewSelectedMoves: "筛选着法",
     reviewTotal: "已载入着法",
-    reviewQualityHelpTitle: "分类怎么算？",
-    reviewQualityHelp: "最佳是当前搜索首选。其余按损失分为好棋（小于 0.40 兵）、不精确（0.40 至不足 1.00 兵）、失误（1.00 至不足 2.00 兵）、大漏着（至少 2.00 兵）。强制着法单列，证据不足记为未完成。精度分数使用独立的预期得分算法。",
     reviewOverview: "双方复盘总览",
     reviewBoth: "双方",
     reviewSideFilter: "筛选着法方",
@@ -19,9 +17,7 @@ export const DICTIONARY = {
     reviewKeyMoves: "关键局面",
     reviewAllMoves: "全部着法",
     reviewReset: "重置筛选",
-    reviewCountHelp: "每步只计入一项质量分类；强制着法单列。开局与直觉标签可重叠。",
     reviewIntuitionPending: "直觉尚未完成扫描，数量暂不提供。",
-    reviewConfirmedOnly: "直觉只计已确认局面；组合延续不重复计数。",
     reviewPartial: "棋谱未完整解析；统计仅覆盖已载入着法。",
     reviewSelected: "{side} · {label} · {count} 步",
     reviewPracticeBatch: "练习所选局面（{count}）",
@@ -77,7 +73,6 @@ export const DICTIONARY = {
     branchScoreNote: "走势保留实战作参照，试走不改变对局成绩。",
 
     intuitionTitle: "直觉盲区",
-    analysisHelp: "说明",
     intuitionIdle: "评分完成后独立扫描",
     intuitionScanning: "准备直觉模型…",
     intuitionPaused: "已暂停 · 评分仍可查看",
@@ -89,7 +84,6 @@ export const DICTIONARY = {
     intuitionStart: "开始扫描",
     intuitionCount: "预测 {current}/{total}",
     intuitionVerifying: "复核 {current}/{total}",
-    intuitionHelp: "全盘预测与复核妙手、俗手。可暂停，已有评分与当前局面分析不受影响。",
     intuitionLoading: "模型加载 {percent}%",
 
     filterMistakes: "明显失误",
@@ -102,7 +96,6 @@ export const DICTIONARY = {
     retryAgain: "这步仍有明显损失。已回到原局面，再试一次。",
     retryUncertain: "本次计算不足以可靠判定。请重试，或查看分析。",
     compareTitle: "比较当前选择",
-    compareNote: "评分统一为白方视角；概率是所选等级的模型预测，并非胜率。",
     compareLines: "展开引擎与直觉变化",
     comparisonPending: "候选将在计算完成后逐步出现。",
     compareMove: "着法",
@@ -122,7 +115,6 @@ export const DICTIONARY = {
     preferencesBrowserOnly: '设置保存在此浏览器；安装新版插件后，可与 popup 和悬浮窗同步。',
     modelDownloading: '下载中 {percent}%',
 
-    guideAndCredits: "使用指南 · 双引擎图例 · 关于与许可 ↗",
     engineEdition: "引擎版本",
     intuitionEdition: "直觉版本",
     sfLiteEdition: "SF19 轻量版",
@@ -136,13 +128,16 @@ export const DICTIONARY = {
     reviewThisMove: "回看此步",
     engineCandidates: "引擎",
     intuitionCandidates: "直觉",
-    maiaTrendTitle: "查看 600–2600 分段趋势",
+    reviewGuide: "复盘说明",
+    maiaTrendTitle: "Maia 分段趋势",
     maiaTrendProgress: "已完成 {count}/{total} 档",
     maiaTrendPartial: "部分档位未能完成（{count}/{total}）",
     maiaTrendRetry: "重试缺失档位",
     maiaTrendProbability: "Maia 走法选择概率",
     maiaTrendCurrent: "当前 {elo} Elo",
-    maiaTrendData: "查看采样数据",
+    maiaTrendView: "趋势显示方式",
+    maiaTrendChart: "曲线",
+    maiaTrendData: "采样数据",
     positionAnalysis: "当前局面分析",
     notationHeading: "记谱",
     keyMovesHeading: "关键步",
@@ -264,11 +259,9 @@ export const DICTIONARY = {
     // Review Column
     reviewHeading: '回看关键选择',
     accuracyLabel: '引擎精度',
-    accuracyTooltip: '每步先将引擎兵值换算为预期得分 Q，按损失 ΔQ 计算 A = 100 × exp(−5.11 × ΔQ)。整盘取局面波动加权平均与调和平均的均值，减轻平稳阶段对关键失误的稀释。唯一合法走法和计算失败步骤不计分。此为 Diverge 估计值，与 Chess.com、Lichess 的评分不等同；已明显胜败的局面仍可能得到高分。',
     accuracyScale: '0–100 分',
     accuracySamples: '{valid}/{total} 步有效',
-    accuracyMethodTitle: '精度怎么算？',
-    accuracyAnalysisDetail: '{engine} · 搜索深度 {depth} · 不计用时与超时判负',
+    accuracyAnalysisDetail: '{engine} · 搜索深度 {depth}',
     accuracyTargetDepth: '目标 D{depth}',
     tabKeyMoments: '关键步 ({count})',
     tabNotation: '记谱 ({count})',
@@ -292,7 +285,7 @@ export const DICTIONARY = {
     trapTitle: '🫤 俗手：这步人类直觉的优先选择，看起来很自然，但会明显损失优势。',
     trapText: '俗手',
     lossPawns: '损耗 -{loss} 兵',
-    bestMoveIs: '最佳走法: ',
+    cardEngineBestMove: '引擎首选 {move}',
     trapTopTendency: '直觉一选 ({prob}% 倾向)',
     trapHumanTendency: '人类自然走法 ({prob}% 倾向)',
     trapProne: '易受人类直觉惯性诱导',
@@ -361,8 +354,6 @@ export const DICTIONARY = {
   en: {
     reviewSelectedMoves: "Selected moves",
     reviewTotal: "Loaded moves",
-    reviewQualityHelpTitle: "How are moves classified?",
-    reviewQualityHelp: "Best matches the current search’s top choice. Other moves are Good below 0.40 pawns loss, Inaccuracy from 0.40 to below 1.00, Mistake from 1.00 to below 2.00, and Blunder at 2.00 or more. Forced moves are separate; insufficient evidence is Incomplete. Accuracy uses a separate expected-score formula.",
     reviewOverview: "Review overview",
     reviewBoth: "Both",
     reviewSideFilter: "Filter by side",
@@ -370,9 +361,7 @@ export const DICTIONARY = {
     reviewKeyMoves: "Key moments",
     reviewAllMoves: "All moves",
     reviewReset: "Reset filters",
-    reviewCountHelp: "Each move has one quality classification; forced moves are separate. Opening and intuition tags may overlap.",
     reviewIntuitionPending: "Intuition scan is incomplete; counts are not yet available.",
-    reviewConfirmedOnly: "Only confirmed intuition moments count; combination follow-ups are not counted again.",
     reviewPartial: "The PGN was only partly parsed; counts cover loaded moves only.",
     reviewSelected: "{side} · {label} · {count} moves",
     reviewPracticeBatch: "Practice selection ({count})",
@@ -428,7 +417,6 @@ export const DICTIONARY = {
     branchScoreNote: "The game remains on the timeline. Exploration does not change game accuracy.",
 
     intuitionTitle: "Intuition blind spots",
-    analysisHelp: "Details",
     intuitionIdle: "Scans independently after scoring",
     intuitionScanning: "Preparing intuition model…",
     intuitionPaused: "Paused · Scores remain available",
@@ -440,7 +428,6 @@ export const DICTIONARY = {
     intuitionStart: "Start scan",
     intuitionCount: "Predicting {current}/{total}",
     intuitionVerifying: "Verifying {current}/{total}",
-    intuitionHelp: "Full-game predictions verify rare finds and natural mistakes. Pause anytime without losing scores or position analysis.",
     intuitionLoading: "Loading model {percent}%",
 
     filterMistakes: "Major errors",
@@ -453,7 +440,6 @@ export const DICTIONARY = {
     retryAgain: "This move still loses ground. Try again from the original position.",
     retryUncertain: "Insufficient analysis for a reliable verdict. Retry or show analysis.",
     compareTitle: "Compare your choices",
-    compareNote: "Scores use White’s perspective. Probabilities are model predictions at the selected rating, not win rates.",
     compareLines: "Show engine and intuition variations",
     comparisonPending: "Candidates will appear as analysis completes.",
     compareMove: "Move",
@@ -473,7 +459,6 @@ export const DICTIONARY = {
     preferencesBrowserOnly: 'Saved in this browser. Install the updated extension to sync with its popup and floating panel.',
     modelDownloading: 'Downloading {percent}%',
 
-    guideAndCredits: "Guide · Dual-engine legend · Credits & licenses ↗",
     engineEdition: "Engine version",
     intuitionEdition: "Intuition model",
     sfLiteEdition: "SF19 Lite",
@@ -487,13 +472,16 @@ export const DICTIONARY = {
     reviewThisMove: "Review move",
     engineCandidates: "Engine",
     intuitionCandidates: "Intuition",
-    maiaTrendTitle: "Show trends across 600–2600 Elo",
+    reviewGuide: "Review guide",
+    maiaTrendTitle: "Maia Elo trends",
     maiaTrendProgress: "{count} of {total} ratings complete",
     maiaTrendPartial: "Some ratings could not be sampled ({count}/{total})",
     maiaTrendRetry: "Retry missing ratings",
     maiaTrendProbability: "Maia move probability",
     maiaTrendCurrent: "Current Elo {elo}",
-    maiaTrendData: "View sampled values",
+    maiaTrendView: "Trend display",
+    maiaTrendChart: "Chart",
+    maiaTrendData: "Sampled values",
     positionAnalysis: "Current position analysis",
     notationHeading: "Moves",
     keyMovesHeading: "Key moves",
@@ -615,11 +603,9 @@ export const DICTIONARY = {
     // Review Column
     reviewHeading: 'Review Key Moments',
     accuracyLabel: 'Accuracy',
-    accuracyTooltip: 'Engine centipawns are converted to expected score Q. Each move scores A = 100 × exp(−5.11 × ΔQ). Game accuracy averages the volatility-weighted mean and harmonic mean, reducing dilution of critical errors by quiet play. Forced moves and failed evaluations are excluded. This is a Diverge estimate, not a Chess.com or Lichess score; lopsided positions can still score highly.',
     accuracyScale: '0–100 points',
     accuracySamples: '{valid}/{total} moves evaluated',
-    accuracyMethodTitle: 'How is accuracy calculated?',
-    accuracyAnalysisDetail: '{engine} · Search depth {depth} · Clock use and time forfeits excluded',
+    accuracyAnalysisDetail: '{engine} · Search depth {depth}',
     accuracyTargetDepth: 'target D{depth}',
     tabKeyMoments: 'Key Moments ({count})',
     tabNotation: 'Notation ({count})',
@@ -643,7 +629,7 @@ export const DICTIONARY = {
     trapTitle: '🫤 Intuition trap: Natural human choice that looks appealing, but incurs a loss of advantage.',
     trapText: 'Intuition trap',
     lossPawns: 'Loss -{loss} pawns',
-    bestMoveIs: 'Best move: ',
+    cardEngineBestMove: 'Engine best {move}',
     trapTopTendency: 'Top intuition pick ({prob}% tendency)',
     trapHumanTendency: 'Natural human move ({prob}% tendency)',
     trapProne: 'Prone to human intuition bias',
@@ -733,6 +719,9 @@ export function onLanguageChange(fn) {
 
 export function applyTranslations() {
   document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+
+  const reviewGuide = document.getElementById('studio-review-guide');
+  if (reviewGuide) reviewGuide.href = `../guide/index.html?lang=${currentLang}#review-method`;
 
   // Update elements with data-i18n
   document.querySelectorAll('[data-i18n]').forEach((el) => {

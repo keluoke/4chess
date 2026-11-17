@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261117-elo-trend';
+import { t } from './i18n.js?v=20261117-review-guide';
 import { REVIEW_QUALITIES, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261103-jade';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
@@ -59,7 +59,7 @@ export class ReviewExplorer {
       }
       this.root.append(sides);
       const counts = reviewCounts(moves), table = element('table', null, 'review-count-table');
-      const caption = element('caption', t('reviewCountHelp')); table.append(caption);
+      table.setAttribute('aria-label', t('reviewOverview'));
       const head = element('thead'), header = element('tr');
       for (const label of [t('reviewCategory'), app.el.metaWhite.textContent, app.el.metaBlack.textContent]) {
         const th = element('th', label); th.scope = 'col'; th.title = label; header.append(th);
@@ -84,9 +84,7 @@ export class ReviewExplorer {
         body.append(row);
       }
       table.append(body); this.root.append(table);
-      const method = element('details', null, 'analysis-help');
-      method.append(element('summary', t('reviewQualityHelpTitle')), element('p', t('reviewQualityHelp'))); this.root.append(method);
-      const note = element('p', result.engineOnly ? t('reviewIntuitionPending') : t('reviewConfirmedOnly'), 'review-count-note'); this.root.append(note);
+      if (result.engineOnly) this.root.append(element('p', t('reviewIntuitionPending'), 'review-count-note'));
       if (result.isPartial) this.root.append(element('p', t('reviewPartial'), 'review-count-note'));
     }
     const side = t(this.side === 'w' ? 'whitePlayer' : this.side === 'b' ? 'blackPlayer' : 'reviewBoth');

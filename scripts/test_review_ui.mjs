@@ -125,12 +125,10 @@ try {
   assert.doesNotMatch(await page.locator('#val-accuracy-black').textContent(), /%/);
   assert.match(await page.locator('#accuracy-detail-black').textContent(), /\d+\/\d+/);
   assert(await page.locator('#val-accuracy-black').evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 28));
-  await page.locator('.accuracy-method summary').click();
   assert.match(await page.locator('#accuracy-analysis-detail').textContent(), /D12/);
-  assert.match(await page.locator('.accuracy-method p').first().textContent(), /调和平均/);
+  assert.equal(await page.locator('#review-summary details').count(),0);
   fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-desktop.png') });
-  await page.locator('.accuracy-method summary').click();
   await page.screenshot({ path: path.join(root, 'artifacts/studio-columns-desktop.png') });
   await page.setViewportSize({ width: 390, height: 900 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -304,7 +302,7 @@ try {
   await page.keyboard.press('Escape');
   assert.match(await page.locator('#accuracy-detail-black').textContent(), /moves evaluated/);
   assert.match(await page.locator('.eval-chart-title').textContent(), /Evaluation/);
-  assert.match(await page.locator('.accuracy-method p').first().textContent(), /harmonic/);
+  assert.match(await page.locator('#accuracy-analysis-detail').textContent(), /Search depth/);
   assert.equal(await page.locator('#meta-white').textContent(), '⚪ Whitehouse');
   assert.equal(await page.locator('#meta-black').textContent(), '⚫ Blackwell');
   assert.equal(await page.locator('#meta-result').textContent(), '1-0');

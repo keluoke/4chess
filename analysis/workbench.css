@@ -44,6 +44,7 @@ button,input,select,textarea { font-family:inherit; }
 .btn-home-primary:hover { box-shadow:var(--dg-shadow); }
 .btn-header:hover { border-color:var(--brand-green); }
 .btn-header.btn-import-primary { border-color:var(--dg-line); }
+.btn-review-guide { display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;text-decoration:none;border-color:var(--dg-line);box-shadow:none; }
 .empty-study .btn-header.btn-import-primary { background:var(--brand-green);color:var(--dg-on-green);border-color:transparent; }
 .empty-study #btn-reanalyze { display:none; }
 .btn-header:disabled { box-shadow:none; }
@@ -80,11 +81,25 @@ button,input,select,textarea { font-family:inherit; }
 .analysis-column { gap:18px;padding-right:3px; }
 .analysis-scroll { display:contents; }
 .analysis-scroll > * { flex:0 0 auto; }
-.maia-elo-trend { grid-column:1/-1;min-width:0;margin:8px 0 0;padding:7px 10px;border:1px solid var(--dg-line);border-radius:10px;font-size:12px;color:var(--text-muted); }
-.maia-elo-trend[hidden],.maia-trend-retry[hidden] { display:none; }
-.maia-elo-trend summary { width:fit-content;cursor:pointer;line-height:1.6;color:var(--text-main); }
-.maia-trend-status,.maia-trend-caption { margin:8px 0 0; }
-.maia-trend-status:not(:empty) { font-variant-numeric:tabular-nums; }
+.maia-trend-open { grid-column:1/-1;display:flex;width:100%;align-items:center;gap:12px;min-height:60px;margin:10px 0 0;padding:9px 12px;text-align:left;background:var(--dg-green-soft);color:var(--dg-green);border:1px solid var(--dg-line);border-radius:12px;cursor:pointer; }
+.maia-trend-open:hover { border-color:var(--dg-green); }
+.maia-trend-open[hidden],.maia-trend-retry[hidden] { display:none; }
+.maia-trend-icon { display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:9px;background:var(--dg-surface); }
+.maia-trend-open-label { display:grid;gap:3px; }
+.maia-trend-open-label strong { font-size:14px;font-weight:650; }
+.maia-trend-open-label small { font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums; }
+.maia-trend-open-arrow { margin-inline-start:auto;flex-shrink:0; }
+.maia-trend-dialog { width:min(690px,calc(100% - 36px));max-width:none;max-height:calc(100dvh - 36px);margin:auto;padding:22px 24px;border:1px solid var(--dg-line);border-radius:18px;box-shadow:var(--dg-shadow);background:var(--dg-surface);color:var(--text-main);overscroll-behavior:contain; }
+.maia-trend-dialog::backdrop { background:#101a1670; }
+.maia-trend-heading,.maia-trend-toolbar { display:flex;justify-content:space-between;align-items:center;gap:12px; }
+.maia-trend-heading h2 { margin:0;font-size:21px;font-weight:650; }
+.maia-trend-heading .btn-header { flex-shrink:0;box-shadow:none;border-color:var(--dg-line); }
+.maia-trend-status,.maia-trend-caption { margin:0;font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums; }
+.maia-trend-caption { margin-top:4px; }
+.maia-trend-toolbar { margin-top:18px;flex-wrap:wrap; }
+.maia-trend-views { display:inline-flex;gap:2px;padding:3px;background:var(--dg-paper);border:1px solid var(--dg-line);border-radius:9px; }
+.maia-trend-views button { min-height:34px;padding:4px 12px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer; }
+.maia-trend-views button[aria-pressed="true"] { background:var(--dg-surface);border-color:var(--dg-line);color:var(--dg-green);font-weight:650; }
 .maia-trend-chart svg { width:100%;max-width:580px;display:block;margin:0 auto;overflow:visible; }
 .maia-trend-chart svg text { font:11px system-ui,sans-serif;fill:var(--text-muted); }
 .maia-trend-grid { stroke:var(--dg-line); }
@@ -96,13 +111,17 @@ button,input,select,textarea { font-family:inherit; }
 .trend-teal { --trend-color:light-dark(#257172,#7bc5c5);--trend-dash:7 3 1 3; }
 .maia-trend-series path { fill:none;stroke:var(--trend-color);stroke-width:1.8;stroke-dasharray:var(--trend-dash);stroke-linecap:round; }
 .maia-trend-series circle { fill:var(--dg-surface);stroke:var(--trend-color);stroke-width:1.5; }
-.maia-trend-legend { display:flex;flex-wrap:wrap;gap:6px 12px;padding:0;margin:0 0 8px;list-style:none; }
+.maia-trend-legend { display:flex;flex-wrap:wrap;gap:6px 12px;padding:0;margin:8px 0 0;list-style:none;font-size:12px;color:var(--text-muted); }
 .maia-trend-legend li { display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums; }
 .maia-trend-legend li::before { content:'';width:9px;height:3px;border-radius:2px;background:var(--trend-color); }
 .maia-trend-data { overflow-x:auto; }
-.maia-trend-data table { width:100%;margin:8px 0;border-collapse:collapse;text-align:right;font-variant-numeric:tabular-nums; }
+.maia-trend-data table { width:100%;margin:10px 0 4px;border-collapse:collapse;text-align:right;font-size:13px;font-variant-numeric:tabular-nums; }
 .maia-trend-data :is(td,th) { padding:3px 6px;border-bottom:1px solid var(--dg-line);white-space:nowrap; }
 .maia-trend-retry { margin-top:8px; }
+@media(max-width:680px) {
+  .maia-trend-dialog { width:100%;max-height:calc(100dvh - 12px);margin:auto 0 0;padding:18px 16px max(18px,env(safe-area-inset-bottom));border-radius:18px 18px 0 0; }
+  .maia-trend-views button,.maia-trend-heading .btn-header { min-height:44px; }
+}
 .workspace-divider { display:none; }
 .review-summary,.position-analysis,.notation-section,.current-insight { background:var(--dg-surface);border:0;border-radius:24px;padding:20px;box-shadow:var(--dg-shadow); }
 .review-summary { padding:18px 20px 12px; }
@@ -114,7 +133,7 @@ button,input,select,textarea { font-family:inherit; }
 .review-summary .metric-value { color:var(--text-main);font-family:inherit;font-size:32px;font-weight:500;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-1.1px; }
 .review-summary .accuracy-samples { font-size:12px; }
 .review-summary .side-badge { font-size:12px; }
-.accuracy-method,.analysis-help,.insight-method { font-size:12px; }
+.accuracy-provenance { grid-column:1/-1;margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--text-muted); }
 .position-heading { margin:0 0 22px;padding:20px 22px 18px;border:0;border-radius:19px;color:var(--text-main);background:var(--dg-green-soft);box-shadow:none; }
 .position-heading>div:first-child { display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--text-muted); }
 .position-heading small { font-size:12px;color:var(--text-muted); }
@@ -162,7 +181,6 @@ button,input,select,textarea { font-family:inherit; }
 @media(hover:hover) { .insight-column .blunder-card:hover { transform:translateY(-2px);box-shadow:0 8px 26px light-dark(#284d3412,#00000030); } }
 .blunder-card-title { font-size:15px;font-weight:600; }
 .blunder-type-tag,.blunder-loss-tag { font-weight:500;font-size:12px;border:0;border-radius:7px; }
-.card-details { margin:8px 0;font-size:12px; }
 .practice-start { margin:10px 0 0;width:auto;font-size:12px;border-radius:10px; }
 .blunder-card-main { gap:0; }
 .divergence-filter { font-family:inherit;font-size:12px;border-radius:9px; }
@@ -238,7 +256,7 @@ button,input,select,textarea { font-family:inherit; }
   .review-summary .metric-player-row { flex-direction:row;align-items:center;gap:12px; }
   .review-summary .metric-value { font-size:28px; }
   .review-summary .metric-group { gap:0; }
-  .review-summary .accuracy-method { grid-column:1/-1;margin:0; }
+  .review-summary .accuracy-provenance { margin:2px 0 0; }
   .position-analysis { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 22px;padding:16px 20px; }
   .position-heading { grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 10px;padding:10px 16px;border-radius:13px;box-shadow:none; }
   .position-heading>div:first-child { display:block; }
@@ -247,7 +265,7 @@ button,input,select,textarea { font-family:inherit; }
   .position-analysis .candidate-group { min-width:0; }
   .position-analysis .candidate-heading { margin:8px 0; }
   .candidate-line { padding:5px 0; }
-  .position-analysis>.analysis-help,.position-analysis>.position-note { grid-column:1/-1;margin-bottom:0; }
+  .position-analysis>.position-note { grid-column:1/-1;margin-bottom:0; }
   .notation-section { padding:16px 20px; }
   .notation-section .move-notation-table { max-height:none;overflow:visible; }
   .candidate-move { font-size:15px; }
@@ -307,7 +325,6 @@ button,input,select,textarea { font-family:inherit; }
 .review-side-controls button { flex:1;padding:7px 6px;border:0;background:transparent;border-radius:8px;color:var(--text-muted);font:inherit;font-size:12px;cursor:pointer; }
 .review-side-controls button[aria-pressed="true"] { background:var(--dg-green);color:var(--dg-on-green); }
 .review-count-table { width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;font-variant-numeric:tabular-nums; }
-.review-count-table caption { caption-side:bottom;text-align:left;font-size:11px;color:var(--text-muted);line-height:1.6;padding-top:10px; }
 .review-count-table th { text-align:left;font-weight:500; }
 .review-count-table thead th { max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px 8px;color:var(--text-muted);font-size:11px; }
 .review-count-table thead th:first-child { width:42%; }
@@ -332,6 +349,7 @@ button,input,select,textarea { font-family:inherit; }
 .review-tag-trap,.review-tag-inaccuracy { background:var(--dg-gold-soft);color:var(--brand-gold); }
 .review-tag-mistake,.review-tag-blunder { background:var(--dg-red-soft);color:var(--brand-red); }
 .review-card-loss { font-size:12px;color:var(--text-muted);margin:10px 0 0; }
+.review-card-best { font-size:12px;line-height:1.5;color:var(--brand-blue);margin:6px 0 0; }
 .review-card-reason { font-size:12px;line-height:1.7;color:var(--text-main);margin:8px 0 0; }
 .review-practice-status { display:block;font-size:11px;color:var(--text-muted);margin-top:8px; }
 .practice-controls { display:flex;flex-wrap:wrap;gap:8px;margin-top:16px; }

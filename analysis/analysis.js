@@ -1,9 +1,9 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-elo-trend';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-review-guide';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261117-elo-trend';
-import { ReviewExplorer } from './review-explorer.js?v=20261117-elo-trend';
+import { IntuitionReview } from './intuition-review.js?v=20261117-review-guide';
+import { ReviewExplorer } from './review-explorer.js?v=20261117-review-guide';
 import { isKeyMoment, moveQuality, intuitionKind, canPractice } from '../engine/review-policy.js?v=20261103-jade';
-import { ReviewPractice } from './review-practice.js?v=20261117-elo-trend';
+import { ReviewPractice } from './review-practice.js?v=20261117-review-guide';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -15,12 +15,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-game-handoff';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261117-elo-trend';
+import { EvalChart } from './eval-chart.js?v=20261117-review-guide';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261117-elo-trend';
+import { PositionAnalysis } from './position-analysis.js?v=20261117-review-guide';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261117-elo-trend';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261117-review-guide';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -1579,7 +1579,7 @@ class AnalysisStudioApp {
         badge.textContent = t(tag === 'beyond' && item.isCombinationFollowup ? 'beyondComboText' : `reviewQuality_${tag}`); tags.append(badge);
       }
       heading.append(tags); card.append(heading);
-      card.addEventListener('click', event => { if (!event.target.closest('button, details')) this.goToPly(item.ply, { before: true }); });
+      card.addEventListener('click', event => { if (!event.target.closest('button')) this.goToPly(item.ply, { before: true }); });
       const loss = document.createElement('p'); loss.className = 'review-card-loss';
       loss.textContent = quality === 'unknown' ? t('reviewEvaluationPending') : quality === 'forced' ? t('reviewForcedHelp') : t('reviewLoss', { pawns: (Math.max(0, item.lossCp) / 100).toFixed(2) }); card.append(loss);
       const probability = Number.isFinite(item.humanRawProbability) ? item.humanRawProbability * 100 : item.humanProbability;
@@ -1590,11 +1590,10 @@ class AnalysisStudioApp {
         const note = document.createElement('p'); note.className = 'review-card-reason';
         note.textContent = t('reviewBeyondReason', { move: item.maiaTopSan || '—', pawns: (item.maiaLossCp / 100).toFixed(2) }); card.append(note);
       }
-      if (item.bestSan && item.bestSan !== '?' && quality !== 'unknown') {
-        const details = document.createElement('details'); details.className = 'card-details';
-        const summary = document.createElement('summary'); summary.textContent = t('analysisHelp');
-        const best = document.createElement('p'); best.textContent = `${t('bestMoveIs')}${item.bestSan}`;
-        details.append(summary, best); card.append(details);
+      if (item.bestSan && item.bestSan !== '?' && item.bestSan !== item.san && quality !== 'unknown') {
+        const best = document.createElement('p'); best.textContent = t('cardEngineBestMove', { move: item.bestSan });
+        best.className = 'review-card-best';
+        card.append(best);
       }
       if (canPractice(item)) {
         const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn-header practice-start'; retry.textContent = t('retryMove');

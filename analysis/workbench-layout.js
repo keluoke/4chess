@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261117-elo-trend';
+import { t, onLanguageChange } from './i18n.js?v=20261117-review-guide';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {
