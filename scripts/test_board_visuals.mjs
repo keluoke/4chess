@@ -8,7 +8,7 @@ fs.mkdirSync(output, { recursive: true });
 const browser = await chromium.launch({ channel: 'chromium', headless: true });
 const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/ui/theme.css"><link rel="stylesheet" href="/ui/chessboard.css"><link rel="stylesheet" href="/analysis/analysis.css"><style>
 body{margin:0;padding:32px;background:var(--dg-paper);color:var(--dg-ink);font:14px system-ui}.compare{display:flex;gap:32px}.board{width:480px!important;height:480px!important;max-width:none;flex-shrink:0}h2{font-size:16px;font-weight:600;margin:0 0 14px}p{color:var(--dg-muted)}.host{position:relative;overflow:hidden;border-radius:12px}.host .maia-square{pointer-events:none}svg{display:block}
-</style></head><body class="diverge-ui" data-theme="light"><h1 style="font-size:24px">统一棋盘视觉</h1><p>绿色 ★ 引擎最佳　·　金色 M Maia 首选　·　整格落点热力图</p><div class="compare"><section><h2>Chess.com / Lichess 页面分析</h2><div class="board host"></div></section><section><h2>全盘分析工作台</h2><div class="board studio"></div></section></div></body></html>`;
+</style></head><body class="diverge-ui" data-theme="light"><h1 style="font-size:24px">统一棋盘视觉</h1><p>蓝色 ★ 引擎最佳　·　金色 M Maia 首选　·　整格落点热力图</p><div class="compare"><section><h2>Chess.com / Lichess 页面分析</h2><div class="board host"></div></section><section><h2>全盘分析工作台</h2><div class="board studio"></div></section></div></body></html>`;
 try {
   const context = await browser.newContext({ viewport: { width: 1100, height: 710 }, deviceScaleFactor: 1.25, reducedMotion: 'reduce' });
   await context.route('https://**/*', route => {
@@ -39,7 +39,7 @@ try {
           const clone = square.cloneNode(true); clone.classList.remove('intuition-heat'); hostBoard.prepend(clone);
         }
         overlay.setOrientation(orientation); overlay.render(prediction);
-        studio.setArrows([{ from: 'e2', to: 'e4', color: 'gold' }, { from: 'd2', to: 'd4', color: 'green' }]);
+        studio.setArrows([{ from: 'e2', to: 'e4', color: 'gold' }, { from: 'd2', to: 'd4', color: 'blue', role: 'sf' }]);
       };
       paint();
     });

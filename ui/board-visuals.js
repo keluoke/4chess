@@ -32,7 +32,10 @@ export function drawMoveBadge(group, { x, y, role, color, title = '' }) {
   if (!['sf', 'maia', 'consensus', 'error', 'brilliant'].includes(role)) return;
   const badge = document.createElementNS(NS, 'g');
   badge.setAttribute('data-move-badge', role);
-  const hex = color.replace('#', '');
+  // The studio supplies light-dark() color tokens; match the fill visible on this board.
+  const variants = color.match(/#[\da-f]{6}\b/gi) || [];
+  const dark = variants.length > 1 && getComputedStyle(group).colorScheme === 'dark';
+  const hex = (variants[dark ? 1 : 0] || '').slice(1);
   const light = hex.length === 6 && (parseInt(hex.slice(0, 2), 16) * 299 + parseInt(hex.slice(2, 4), 16) * 587 + parseInt(hex.slice(4, 6), 16) * 114) > 165000;
   const foreground = role === 'brilliant' ? 'var(--dg-surface)' : light ? '#17231b' : '#fff';
   // Place compact badges in square corners, leaving the piece and arrow tip visible.

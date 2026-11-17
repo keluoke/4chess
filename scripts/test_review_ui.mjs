@@ -33,6 +33,11 @@ const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNE
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
   const page = await context.newPage();
+  const toggleTheme = async () => {
+    await page.locator('#btn-settings').click();
+    await page.locator('#review-settings [data-theme-toggle]').click();
+    await page.keyboard.press('Escape');
+  };
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/analysis/?lang=zh`);
@@ -105,7 +110,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
   assert.equal(await page.locator('#engine-candidate-lines').isVisible(), true, 'Engine variations remain visible while Maia waits');
   assert.equal(await page.locator('#position-score').evaluate(el => getComputedStyle(el).fontSize), '48px');
-  assert.equal(await page.locator('.candidate-move').first().evaluate(el => getComputedStyle(el).fontSize), '14px');
+  assert.equal(await page.locator('.candidate-move').first().evaluate(el => getComputedStyle(el).fontSize), '15px');
   const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
   await page.locator('#intuition-toggle').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'paused');
@@ -201,10 +206,10 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
   await page.waitForTimeout(250);
   await page.screenshot({path:path.join(root,'artifacts/workbench-ultrawide-2560.png')});
-  await page.locator('[data-theme-toggle]').click();
+  await toggleTheme();
   await page.waitForTimeout(200);
   await page.screenshot({path:path.join(root,'artifacts/workbench-ultrawide-dark.png')});
-  await page.locator('[data-theme-toggle]').click();
+  await toggleTheme();
   await page.locator('#btn-focus').click();
   await page.waitForTimeout(280);
   assert.equal(await page.locator('.insight-column').isVisible(), false);
@@ -243,7 +248,7 @@ try {
   await page.keyboard.press('ArrowLeft');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.keyboard.press('Home');
-  for (const size of [{width:1920,height:1080},{width:2560,height:900},{width:1800,height:720},{width:2560,height:560}]) {
+  for (const size of [{width:1360,height:768},{width:1440,height:900},{width:1512,height:982},{width:1600,height:900},{width:1920,height:1080},{width:2560,height:900},{width:1800,height:720},{width:2560,height:560}]) {
     await page.setViewportSize(size);
     await page.waitForTimeout(60);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `No wide overflow at ${size.width}x${size.height}`);
@@ -254,7 +259,7 @@ try {
     assert.equal(await page.locator('.board-column .board-controls').evaluate(el => el.getBoundingClientRect().bottom <= innerHeight), true, 'Resized board respects available height');
     await page.keyboard.press('Home');
   }
-  await page.setViewportSize({width:1440,height:1100});
+  await page.setViewportSize({width:1359,height:1100});
   await page.waitForFunction(() => document.querySelector('#eval-chart-container').parentElement.matches('.board-column'));
   assert.equal(await page.locator('#eval-chart-container').count(), 1, 'Breakpoint relocation never duplicates the chart');
   await page.locator('#btn-focus').click();
@@ -277,7 +282,7 @@ try {
   await page.waitForTimeout(300);
   assert.equal(await page.locator('.insight-column').isVisible(), true, 'Interrupted focus transitions retain final layout');
   assert.equal(await page.locator('.board-column').evaluate(el => getComputedStyle(el).transform), 'none');
-  await page.locator('[data-theme-toggle]').click();
+  await toggleTheme();
   await page.waitForTimeout(350);
   await page.screenshot({path:path.join(root,'artifacts/workbench-dark-desktop.png')});
   await page.setViewportSize({ width: 390, height: 900 });
@@ -288,13 +293,15 @@ try {
   await page.screenshot({ path: path.join(root, 'artifacts/workbench-dark-mobile-analysis.png') });
   await page.evaluate(() => scrollTo(0, 0));
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.locator('[data-theme-toggle]').click();
+  await toggleTheme();
   await page.locator('#btn-exit-branch').click();
   assert.equal(await page.locator('#eval-branch-dots circle').count(), 0);
   const sound = await page.locator('#btn-sound').getAttribute('aria-pressed');
   await page.locator('#btn-sound').click();
   assert.notEqual(await page.locator('#btn-sound').getAttribute('aria-pressed'), sound);
-  await page.locator('#btn-lang-toggle').click();
+  await page.locator('#btn-settings').click();
+  await page.locator('#review-settings #btn-lang-toggle').click();
+  await page.keyboard.press('Escape');
   assert.match(await page.locator('#accuracy-detail-black').textContent(), /moves evaluated/);
   assert.match(await page.locator('.eval-chart-title').textContent(), /Evaluation/);
   assert.match(await page.locator('.accuracy-method p').first().textContent(), /harmonic/);
@@ -303,7 +310,8 @@ try {
   assert.equal(await page.locator('#meta-result').textContent(), '1-0');
   await page.locator('#btn-settings').click();
   assert.equal(await page.locator('#review-settings').getAttribute('aria-label'), 'Analysis settings');
-  await page.locator('#setting-arrows').uncheck();
+  await page.getByRole('checkbox', { name:'Show Maia candidate arrows' }).uncheck();
+  await page.getByRole('checkbox', { name:'Show Stockfish best-move arrow' }).uncheck();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.arrows.length), 0);
   await page.locator('#setting-probability').uncheck();
   assert.equal(await page.locator('.candidate-probability').count(), 0);
@@ -333,10 +341,15 @@ try {
   // Explicit fixtures exercise both key-move lists without implying real Maia classification evidence.
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;
-    const record = app.reviewResult.allMoves[3];
-    app.reviewResult.keyMoments = [{ ...record, divergenceType: 'intuition_trap' }, { ...app.reviewResult.allMoves[6], divergenceType: 'beyond_intuition' }];
-    app.applyReviewResult(app.reviewResult);
+    const allMoves = app.reviewResult.allMoves.map((move, i) => ({
+      ...move,
+      divergenceStatus: 'confirmed',
+      divergenceType: i === 3 ? 'intuition_trap' : i === 6 ? 'beyond_intuition' : null,
+      isHumanTrap: false, isBeyondIntuition: false, isCombinationFollowup: false
+    }));
+    app.applyReviewResult({ ...app.reviewResult, engineOnly: false, allMoves });
   });
+  await page.locator('.review-side-controls [data-review-side="all"]').click();
   await page.locator('[data-filter="beyond"]').click();
   assert.equal(await page.locator('.blunder-card').count(), 1);
   await page.locator('[data-filter="trap"]').click();
@@ -362,7 +375,8 @@ try {
     const app = window.__maiaStudioApp;
     return app.boardUI.chess.getFen() === app.practice.item.fenBefore;
   }), true, 'Unsuccessful attempt returns to the original position without revealing answers');
-  await page.locator('#practice-panel button').click();
+  await page.getByRole('button', { name: 'End session', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to analysis', exact: true }).click();
   assert.equal(await page.locator('.position-analysis').isVisible(), true);
   assert.equal(await page.locator('#practice-panel').isVisible(), false);
   // Fast navigation and a new game must leave every row bound to the final visible position.
@@ -383,14 +397,16 @@ try {
     window.__maiaStudioApp.goToPly(80, { silent: true });
   });
   assert.equal(await page.locator('#move-ply-80').count(), 1, 'A long game retains its complete notation');
-  assert.equal(await page.locator('#move-notation-table').evaluate(el => el.clientHeight <= 260 && el.scrollHeight > el.clientHeight), true, 'Long notation scrolls within its section');
+  assert.equal(await page.locator('#move-notation-table').evaluate(el => el.scrollTop), 0, 'Notation has no independent scrollbar on desktop');
+  assert.equal(await page.locator('.analysis-scroll').evaluate(el => el.scrollTop > 0), true, 'Jumping to a distant move scrolls the middle column');
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;
+    app.reviewExplorer.side = 'b';
     app.renderBlunderCards(Array.from({ length: 40 }, (_, i) => ({
       ply: i * 2 + 2, san: app.positions[i * 2 + 2].san, turn: 'b', moveNumber: i + 1,
       fenBefore: app.positions[i * 2 + 1].fen, divergenceType: 'intuition_trap',
-      maiaTopSan: 'e5', maiaTopProb: 38, maiaTop1Loss: 1.2, lossPawns: 1.2
+      maiaTopSan: 'e5', maiaTopProb: 38, maiaTop1Loss: 1.2, lossPawns: 1.2, lossCp: 120, severity: 'mistake'
     })));
     document.activeElement?.blur();
   });

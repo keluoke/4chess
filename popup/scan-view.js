@@ -34,7 +34,7 @@ export function initScanView() {
   const view = document.createElement("section");
   view.id = "scan-view";
   view.hidden = true;
-  view.innerHTML = `<div class="scan-top"><button id="scan-retry" data-scan-text="retry"></button><small id="scan-source"></small></div><p id="scan-status" role="status" aria-live="polite"></p><div id="scan-capture" hidden><p data-scan-text="select"></p><canvas id="scan-preview" aria-label="Screenshot selection"></canvas><div class="scan-row"><button id="scan-detect" data-scan-text="detect"></button><button id="scan-crop" data-scan-text="crop" disabled></button></div></div><div id="scan-position" hidden><div class="scan-row"><select id="scan-turn" aria-label="Side to move"><option value="w" data-scan-text="white"></option><option value="b" data-scan-text="black"></option></select><button id="scan-edit" data-scan-text="edit"></button></div><div class="scan-board-row"><div id="scan-gauge" aria-label="White evaluation"><div id="scan-gauge-white"></div><span id="scan-score"></span></div><div id="scan-board"></div></div><div class="scan-toolbar"><button id="scan-flip" data-scan-title="flip"><svg viewBox="0 0 24 24"><path d="m7 3-4 4 4 4M3 7h14v5m0 9 4-4-4-4m4 4H7v-5"/></svg><span data-scan-text="view"></span></button><button id="scan-undo" data-scan-title="undo"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><button id="scan-original" data-scan-title="original"><svg viewBox="0 0 24 24"><path d="M5 5v14m14-14-9 7 9 7z"/></svg></button><button id="scan-copy" data-scan-title="copy"><svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM4 16V3h11"/></svg></button></div><div id="scan-editor" hidden><div class="scan-correction"><button id="scan-rotate" data-scan-text="rotate" data-scan-title="rotateHelp"></button><p data-scan-text="rotateHelp"></p><button id="scan-reselect" data-scan-text="reselect"></button></div><p data-scan-text="palette"></p><div id="scan-palette"></div><label data-scan-text="fen" for="scan-fen"></label><textarea id="scan-fen" rows="2" spellcheck="false"></textarea></div><p id="scan-assumed" data-scan-text="assumed"></p><button id="scan-confirm" class="action-primary" data-scan-text="confirm"></button><div id="scan-results" hidden><p id="scan-engine-status" role="status"></p><div id="scan-lines"></div><button id="scan-web" class="action-primary" data-scan-text="web"></button><p class="scan-help" data-scan-text="help"></p></div></div>`;
+  view.innerHTML = `<div class="scan-top"><button id="scan-retry" data-scan-text="retry"></button><small id="scan-source"></small></div><p id="scan-status" role="status" aria-live="polite"></p><div id="scan-capture" hidden><p data-scan-text="select"></p><canvas id="scan-preview" aria-label="Screenshot selection"></canvas><div class="scan-row"><button id="scan-detect" data-scan-text="detect"></button><button id="scan-crop" data-scan-text="crop" disabled></button></div></div><div id="scan-position" hidden><div class="scan-direction-row"><select id="scan-turn" aria-label="Side to move"><option value="w" data-scan-text="white"></option><option value="b" data-scan-text="black"></option></select><button id="scan-rotate" data-scan-title="rotateHelp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span data-scan-text="rotate"></span></button><button id="scan-flip" data-scan-title="flip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 3-4 4 4 4M3 7h14v5m0 9 4-4-4-4m4 4H7v-5"/></svg><span data-scan-text="view"></span></button></div><div class="scan-board-wrap"><div class="scan-board-row"><div id="scan-gauge" aria-label="White evaluation"><div id="scan-gauge-white"></div><span id="scan-score"></span></div><div id="scan-board"></div></div><div id="scan-square-popover" class="scan-square-popover" role="dialog" aria-labelledby="scan-popover-title" hidden><div class="scan-popover-head"><span id="scan-popover-title"></span><button type="button" id="scan-popover-close" aria-label="Close">✕</button></div><div id="scan-popover-grid"></div></div></div><div class="scan-toolbar"><button id="scan-undo" data-scan-title="undo"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><button id="scan-original" data-scan-title="original"><svg viewBox="0 0 24 24"><path d="M5 5v14m14-14-9 7 9 7z"/></svg></button><button id="scan-copy" data-scan-title="copy"><svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM4 16V3h11"/></svg></button><button id="scan-edit" data-scan-text="edit"></button></div><div id="scan-editor" hidden><div class="scan-correction"><p data-scan-text="rotateHelp"></p><button id="scan-reselect" data-scan-text="reselect"></button></div><p data-scan-text="palette"></p><div id="scan-palette"></div><label data-scan-text="fen" for="scan-fen"></label><textarea id="scan-fen" rows="2" spellcheck="false"></textarea></div><p id="scan-assumed" data-scan-text="assumed"></p><button id="scan-confirm" class="action-primary" data-scan-text="confirm"></button><div id="scan-results" hidden><p id="scan-engine-status" role="status"></p><div id="scan-lines"></div><button id="scan-web" class="action-primary" data-scan-text="web"></button><p class="scan-help" data-scan-text="help"></p></div></div>`;
   document.querySelector(".popup-header").after(view);
   const launch = document.createElement("button");
   launch.id = "scan-launch";
@@ -91,9 +91,9 @@ export function initScanView() {
   }
   $("scan-settings-back").onclick = closeSettings;
   document.addEventListener("keydown", (event) => {
-    if (settingsOpen && event.key === "Escape") {
-      event.preventDefault();
-      closeSettings();
+    if (event.key === "Escape") {
+      if (settingsOpen) { event.preventDefault(); closeSettings(); }
+      else if (!$("scan-square-popover").hidden) { event.preventDefault(); closePopover(); }
     }
   });
 
@@ -166,7 +166,28 @@ export function initScanView() {
       ).replace("{turn}", turn)
     );
   }
+  let popoverSquare = null;
+  function closePopover() {
+    popoverSquare = null;
+    const pop = $("scan-square-popover");
+    if (pop) pop.hidden = true;
+  }
+  function openPopover(square, targetEl) {
+    if (!state || state.locked) return;
+    popoverSquare = square;
+    const pop = $("scan-square-popover");
+    $("scan-popover-title").textContent = text("pickPiece").replace("{square}", square);
+    pop.hidden = false;
+    const wrap = pop.parentElement.getBoundingClientRect();
+    const sqRect = targetEl.getBoundingClientRect();
+    const top = sqRect.bottom - wrap.top + 6;
+    const maxTop = Math.max(8, wrap.height - pop.offsetHeight - 4);
+    pop.style.top = `${Math.min(top, maxTop)}px`;
+    const left = Math.max(4, Math.min(wrap.width - pop.offsetWidth - 4, sqRect.left - wrap.left + sqRect.width / 2 - pop.offsetWidth / 2));
+    pop.style.left = `${left}px`;
+  }
   function clear() {
+    closePopover();
     document.body.classList.remove("scan-confirmed");
     ++epoch;
     engine?.reset();
@@ -277,13 +298,11 @@ export function initScanView() {
     board.setOrientation(s.orientation);
     previewPosition(s.fen);
     $("scan-gauge").classList.toggle("flipped", board.orientation === "black");
-    for (const square of s.recognitionContext?.suspiciousSquares ||
-      s.recognition?.suspiciousSquares ||
-      []) {
-      const el =
-        board.squareEls[typeof square === "string" ? square : square.square];
-      el?.classList.add("scan-suspicious");
-    }
+    const suspicious = s.confirmed ? [] :
+      s.recognitionContext?.suspiciousSquares || s.recognition?.suspiciousSquares || [];
+    const squares = new Set(suspicious.map(square => typeof square === "string" ? square : square.square));
+    for (const [square, element] of Object.entries(board.squareEls))
+      element.classList.toggle("scan-suspicious", squares.has(square));
     status(s.confirmed ? "help" : "review");
     if (s.confirmed) analyze();
   }
@@ -506,7 +525,8 @@ export function initScanView() {
       status("invalidPosition");
       return;
     }
-    if (!(await valid())) return;
+    const request = epoch;
+    if (!(await valid()) || request !== epoch) return;
     state.fen = boardTest.getFen();
     state.confirmed = true;
     state.history = [];
@@ -515,8 +535,12 @@ export function initScanView() {
     editing = false;
     $("scan-edit").textContent = text("edit");
     $("scan-editor").hidden = true;
+    closePopover();
+    for (const square of $("scan-board").querySelectorAll(".scan-suspicious"))
+      square.classList.remove("scan-suspicious");
     board.setPosition(state.fen);
     const saved = await persist();
+    if (request !== epoch) return;
     if (!saved?.ok) {
       lock(saved?.error);
       return;
@@ -545,6 +569,32 @@ export function initScanView() {
     persist();
     status("review");
   };
+  function applySquarePiece(square, label) {
+    if (!square || !state) return;
+    clear();
+    state.confirmed = false;
+    board.chess.board[ChessBoard.squareToIndex(square)] =
+      label === "×"
+        ? null
+        : {
+            type: label.toLowerCase(),
+            color: label === label.toUpperCase() ? "w" : "b",
+          };
+    board.squareEls[square]?.classList.remove("scan-suspicious");
+    board.render();
+    state.fen = board.chess.getFen();
+    $("scan-fen").value = state.fen;
+    $("scan-confirm").hidden = false;
+    status("review");
+    persist();
+  }
+  $("scan-popover-close").onclick = closePopover;
+  document.addEventListener("pointerdown", (e) => {
+    const pop = $("scan-square-popover");
+    if (pop && !pop.hidden && !pop.contains(e.target) && !e.target.closest("#scan-board")) {
+      closePopover();
+    }
+  });
   for (const label of [
     "K",
     "Q",
@@ -570,28 +620,27 @@ export function initScanView() {
         el.classList.toggle("active", el === button);
     };
     $("scan-palette").append(button);
+    const popBtn = document.createElement("button");
+    popBtn.type = "button";
+    popBtn.innerHTML = CHESS_PIECES_SVG[label] || "×";
+    popBtn.title = button.title;
+    popBtn.onclick = () => {
+      if (popoverSquare) applySquarePiece(popoverSquare, label);
+    };
+    $("scan-popover-grid").append(popBtn);
   }
   $("scan-board").addEventListener(
     "pointerdown",
     (e) => {
+      const sqEl = e.target.closest("[data-square]");
+      const square = sqEl?.dataset.square;
       if (!state?.confirmed || editing) {
         e.stopImmediatePropagation();
         e.preventDefault();
-        if (editing) {
-          const square = e.target.closest("[data-square]")?.dataset.square;
-          if (square) {
-            board.chess.board[ChessBoard.squareToIndex(square)] =
-              piece === "×"
-                ? null
-                : {
-                    type: piece.toLowerCase(),
-                    color: piece === piece.toUpperCase() ? "w" : "b",
-                  };
-            board.render();
-            state.fen = board.chess.getFen();
-            $("scan-fen").value = state.fen;
-            persist();
-          }
+        if (editing && square) {
+          applySquarePiece(square, piece);
+        } else if (!editing && square) {
+          openPopover(square, sqEl);
         }
       }
     },
@@ -610,9 +659,14 @@ export function initScanView() {
   $("scan-fen").onchange = () => {
     const b = new ChessBoard();
     if (b.load($("scan-fen").value.trim())) {
+      clear();
+      state.confirmed = false;
       state.fen = b.getFen();
       state.turnChosen = true;
       board.setPosition(state.fen);
+      $("scan-confirm").hidden = false;
+      status("review");
+      persist();
     } else status("invalidPosition");
   };
   $("scan-flip").onclick = () => {

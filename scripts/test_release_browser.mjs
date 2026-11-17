@@ -62,12 +62,37 @@ try {
   return {local,requests,current,playing,unknown};
  });
  assert.equal(imports.local,true);assert.equal(imports.requests,0);assert(imports.current.includes('Latest'));assert.equal(imports.playing,false);assert.equal(imports.unknown,false);results.imports=imports;
+ await page.setViewportSize({width:1360,height:768});
+ const notation = await page.evaluate(() => {
+  const app = window.__maiaStudioApp;
+  const moves = Array.from({length:60}, (_, i) => `${i + 1}. ${i % 2 ? 'Ng1 Ng8' : 'Nf3 Nf6'}`).join(' ');
+  app.startNewSession({pgn:`[Result "1-0"]\n${moves} 1-0`,autoReview:false});
+  const scroll = document.querySelector('.analysis-scroll');
+  const table = app.el.moveNotationTable;
+  app.goToPly(100);
+  const row = table.querySelector('.active').getBoundingClientRect();
+  const viewport = scroll.getBoundingClientRect();
+  return {outer:scroll.scrollTop,inner:table.scrollTop,visible:row.top >= viewport.top - 1 && row.bottom <= viewport.bottom + 1};
+ });
+ assert(notation.outer > 0);
+ assert.equal(notation.inner,0,'Long jumps scroll the middle column only');
+ assert.equal(notation.visible,true);
  for(const lang of ['en','zh']){
   await page.setViewportSize({width:lang==='en'?1440:390,height:1000});
   await page.goto(origin+'/'+lang+'/');assert.equal(await page.locator('h1').count(),1);
   assert(await page.locator('link[rel="canonical"]').getAttribute('href'));assert.equal(await page.locator('link[hreflang]').count(),3);
   await page.screenshot({path:path.join(output,'landing-'+lang+'.png'),fullPage:true});
  }
+ await page.setViewportSize({width:1440,height:900});
+ await page.goto(origin+'/guide/?lang=zh');
+ await page.locator('#models').evaluate(el=>el.scrollIntoView({behavior:'instant'}));
+ await page.waitForFunction(()=>document.querySelector('.guide-toc a[href="#models"]').getAttribute('aria-current')==='true');
+ assert.equal(await page.locator('.guide-toc a[aria-current="true"]').count(),1);
+ assert.equal(await page.locator('.board-legend-card svg').count(),3);
+ await page.setViewportSize({width:390,height:844});
+ await page.locator('.guide-toc-mobile summary').click();
+ await page.locator('.guide-toc-mobile a[href="#scan"]').click();
+ assert.equal(new URL(page.url()).hash,'#scan');
  assert.equal(errors.length,0,errors.join('\n'));results.ui={errors,primaryActionVisible:true};await context.close();
 
  const offlineContext=await browser.newContext(),offline=await offlineContext.newPage();
@@ -97,7 +122,8 @@ try {
   let protectedModelRequests=0;
   extensionContext.on('request',request=>{if(request.url().startsWith('https://weights.4chess.cc/'))protectedModelRequests++;});
   let fixtureFinished=false;
-  await extensionContext.route('https://www.chess.com/play/online',route=>route.fulfill({contentType:'text/html',body:fixtureFinished?'<!doctype html><body><div class="move-list-result">1-0</div><wc-chess-board></wc-chess-board></body>':'<!doctype html><body><div class="clock-running">5:00</div><button aria-label="Resign">Resign</button><wc-chess-board style="display:block;width:500px;height:500px"></wc-chess-board></body>'}));
+  const ad = '<div class="ad-slot" style="position:absolute;left:750px;top:70px;width:300px;height:600px"></div>';
+  await extensionContext.route('https://www.chess.com/play/online',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><body>${fixtureFinished ? '<div class="move-list-result">1-0</div>' : '<div class="clock-running">5:00</div><button aria-label="Resign">Resign</button>'}<wc-chess-board style="display:block;width:500px;height:500px"></wc-chess-board>${ad}</body>`}));
   const host=await extensionContext.newPage();await host.goto('https://www.chess.com/play/online');await host.locator('#maia3-intuition-panel').waitFor();
   await host.waitForFunction(()=>/公平|Fair Play|LIVE|进行中/i.test(document.querySelector('#maia3-intuition-panel').textContent));
   await host.evaluate(()=>{document.querySelector('.clock-running').remove();document.querySelector('button[aria-label="Resign"]').remove();document.body.insertAdjacentHTML('beforeend','<div class="game-over-modal">White won by checkmate</div><div class="move-list-result">1-0</div>');});
@@ -150,6 +176,14 @@ try {
     return actual.join(',') === expected.join(',');
   }, roles);
   await expectArrows(['sf']);
+  await studio.locator('#engine-candidate-lines .candidate-variation').dispatchEvent('mouseenter');
+  await expectArrows(['sf']);
+  const sfStar = studio.locator('#maia-svg-arrows-group [data-move-badge="sf"] path');
+  assert.equal(await sfStar.count(),1,'Hover retains the Stockfish star');
+  await studio.emulateMedia({colorScheme:'dark'});
+  await studio.locator('#engine-candidate-lines .candidate-variation').dispatchEvent('mouseenter');
+  assert.equal(await sfStar.evaluate(el=>getComputedStyle(el).fill),'rgb(23, 35, 27)','Dark theme uses a dark glyph on the light blue badge');
+  await studio.locator('#engine-candidate-lines .candidate-variation').dispatchEvent('mouseleave');
   await studio.locator('#maia-candidate-lines .candidate-variation').dispatchEvent('mouseenter');
   await expectArrows(['sf']);
   await studio.locator('#btn-settings').click();

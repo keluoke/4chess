@@ -35,8 +35,12 @@ try {
   const [port, browserPath] = fs.readFileSync(portFile, 'utf8').split('\n');
   browser = await chromium.connectOverCDP(`ws://127.0.0.1:${port}${browserPath}`, { noDefaults: true });
   const [c] = browser.contexts();
-  const isExtensionWorker = worker => worker.url().startsWith('chrome-extension://') && worker.url().endsWith('/background.js');
-  const sw = c.serviceWorkers().find(isExtensionWorker) || await c.waitForEvent('serviceworker', isExtensionWorker);
+  const isDivergeWorker = async worker =>
+    worker.url().startsWith('chrome-extension://') && worker.url().endsWith('/background.js') &&
+    await worker.evaluate(() => chrome.runtime?.getManifest()?.action?.default_popup === 'popup/popup.html').catch(() => false);
+  const workers = c.serviceWorkers();
+  const flags = await Promise.all(workers.map(isDivergeWorker));
+  const sw = workers.find((_, index) => flags[index]) || await c.waitForEvent('serviceworker', isDivergeWorker);
   await sw.evaluate(() =>
     chrome.storage.local.set({
       maia3_lang: "en",

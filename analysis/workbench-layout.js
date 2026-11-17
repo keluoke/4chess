@@ -7,7 +7,7 @@ export function initWorkbenchLayout() {
   const analysis = layout.querySelector('.analysis-column');
   const insight = layout.querySelector('.insight-column');
   const chart = document.getElementById('eval-chart-container');
-  const wide = matchMedia('(min-width: 1800px)');
+  const wide = matchMedia('(min-width: 1360px)');
   const key = 'diverge-study-columns-v1';
   let saved = {}, frame = 0;
   try {
@@ -57,10 +57,15 @@ export function initWorkbenchLayout() {
     const hasInsight = getComputedStyle(insight).display !== 'none';
     const style = getComputedStyle(layout);
     const usable = width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - parseFloat(style.columnGap) * (hasInsight ? 2 : 1);
+    const analysisMin = parseFloat(style.getPropertyValue('--study-analysis-min'));
+    const insightMin = parseFloat(style.getPropertyValue('--study-insight-min'));
     const neighbour = name === 'board' ? (hasInsight ? insight.getBoundingClientRect().width : 0) : board.getBoundingClientRect().width;
-    const remaining = usable - neighbour - 480;
-    const boardMin = Math.min(440, Math.max(240, innerHeight - header - 180));
-    return name === 'board' ? [boardMin, Math.max(boardMin, Math.min(939, innerHeight - header - 180, width * .42, remaining))] : [360, Math.max(360, Math.min(width * .32, remaining))];
+    const remaining = usable - neighbour - analysisMin;
+    const boardHeight = Math.max(0, innerHeight - Math.ceil(header) - parseFloat(style.getPropertyValue('--study-board-reserve')));
+    const boardMin = Math.min(parseFloat(style.getPropertyValue('--study-board-min')), boardHeight);
+    return name === 'board'
+      ? [boardMin, Math.max(boardMin, Math.min(939, boardHeight, width * (hasInsight ? .42 : .44), remaining))]
+      : [insightMin, Math.max(insightMin, Math.min(width * .32, remaining))];
   }
   function setWidth(name, width) {
     const [min, max] = bounds(name);
@@ -72,12 +77,14 @@ export function initWorkbenchLayout() {
     if (chart.parentElement !== destination) destination.append(chart);
     for (const handle of handles) {
       const name = handle.dataset.name;
-      const [min, max] = bounds(name);
       const ratio = saved[name];
       const property = `--study-${name}-width`;
-      if (Number.isFinite(ratio) && ratio > 0 && wide.matches) layout.style.setProperty(property, `${Math.max(min, Math.min(max, ratio * layout.clientWidth))}px`);
-      else layout.style.removeProperty(property);
+      if (Number.isFinite(ratio) && ratio > 0 && wide.matches) {
+        const [min, max] = bounds(name);
+        layout.style.setProperty(property, `${Math.max(min, Math.min(max, ratio * layout.clientWidth))}px`);
+      } else layout.style.removeProperty(property);
     }
+    if (!wide.matches) return;
     for (const [index, handle] of handles.entries()) {
       const [min, max] = bounds(handle.dataset.name);
       handle.setAttribute('aria-label', t(index ? 'resizeInsight' : 'resizeBoard'));

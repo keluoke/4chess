@@ -81,7 +81,9 @@ try {
   await page.locator('#review-clear-filter').click();
   await page.evaluate(() => { __maiaStudioApp.el.blunderList.closest('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-en.png'), fullPage: true });
-  await page.locator('#btn-lang-toggle').click();
+  await page.locator('#btn-settings').click();
+  await page.locator('#review-settings #btn-lang-toggle').click();
+  await page.keyboard.press('Escape');
   assert.match(await page.locator('#review-overview h2').innerText(), /双方复盘总览/);
   await page.evaluate(() => { document.querySelector('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-zh.png'), fullPage: true });

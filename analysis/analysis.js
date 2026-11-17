@@ -1,4 +1,4 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261103-jade';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-ui';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261103-jade';
 import { ReviewExplorer } from './review-explorer.js';
@@ -14,10 +14,10 @@ import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261103-jade';
-import { BoardUI } from './board-ui.js?v=20261103-jade';
+import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261103-jade';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261103-jade';
+import { PositionAnalysis } from './position-analysis.js?v=20261117-ui';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
 import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261103-jade';
@@ -1742,14 +1742,16 @@ class AnalysisStudioApp {
   }
 
   highlightMoveRow(ply) {
-    const previous = this.el.moveNotationTable.querySelector('.notation-move.active');
+    const table = this.el.moveNotationTable;
+    const previous = table.querySelector('.notation-move.active');
+    const scrollContainer = getComputedStyle(table).overflowY === 'auto' ? table
+      : table.closest(matchMedia('(min-width:1360px)').matches ? '.analysis-scroll' : '.analysis-column');
     cancelMotion(this.notationMarker);
     this.notationMarker?.remove();
-    const all = this.el.moveNotationTable.querySelectorAll('.notation-move');
+    const all = table.querySelectorAll('.notation-move');
     all.forEach(el => { cancelMotion(el); el.classList.remove('active'); });
     if (ply === 0) {
-      this.el.moveNotationTable.scrollTop = 0;
-      document.querySelector('.analysis-column').scrollTop = 0;
+      scrollContainer.scrollTop = 0;
     }
 
     if (ply > 0) {
@@ -1760,8 +1762,7 @@ class AnalysisStudioApp {
         this.notationMarker.className = 'notation-selection';
         this.notationMarker.setAttribute('aria-hidden', 'true');
         activeEl.prepend(this.notationMarker);
-        this.scrollWithin(activeEl, this.el.moveNotationTable);
-        this.scrollWithin(activeEl, document.querySelector(matchMedia('(min-width: 1800px)').matches ? '.analysis-scroll' : '.analysis-column'));
+        this.scrollWithin(activeEl, scrollContainer);
         if (previous && previous !== activeEl) {
           const from = previous.getBoundingClientRect(), to = activeEl.getBoundingClientRect();
           // Keep long jumps immediate; adjacent selections carry the highlight only.
@@ -1813,7 +1814,7 @@ class AnalysisStudioApp {
       if (parseInt(c.dataset.ply, 10) === clampedPly) {
         const newlySelected = !c.classList.contains('active');
         c.classList.add('active');
-        if (newlySelected) animateStudy(c, [{ boxShadow: '0 0 0 3px var(--dg-blue-soft)' }, { boxShadow: '0 0 0 0 transparent' }], 480);
+        if (newlySelected) animateStudy(c, [{ boxShadow: '0 0 0 3px var(--dg-green-soft)' }, { boxShadow: '0 0 0 0 transparent' }], 480);
         this.scrollWithin(c, document.querySelector('.insight-column'));
       } else {
         cancelMotion(c);

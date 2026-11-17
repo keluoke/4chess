@@ -242,7 +242,7 @@ export class PositionAnalysis {
     engineContainer.replaceChildren(); maiaContainer.replaceChildren();
     const placeholder = (container, key) => { const el = document.createElement('div'); el.className = 'candidate-placeholder'; el.textContent = t(key); container.append(el); };
     if (!lines.length) placeholder(engineContainer, terminal ? 'noLegalMoves' : entry.sfFailed ? 'positionUnavailable' : (!app.moves.length && !app.hasAnalysisInput) ? 'engineNotStarted' : pending);
-    lines.forEach(line => this.renderRow(engineContainer, line.evaluation, line.variation, null, 'green'));
+    lines.forEach(line => this.renderRow(engineContainer, line.evaluation, line.variation, null, 'blue'));
     const valid = new Set(legal.map(m => m.uci));
     const moves = (entry.prediction?.moves || []).filter(m => valid.has(m.uci)).slice(0, 3);
     if (!moves.length) placeholder(maiaContainer, terminal ? 'noLegalMoves' : entry.maiaFailed ? 'intuitionUnavailable' : (!app.moves.length && !app.hasAnalysisInput) ? 'engineNotStarted' : pending);
@@ -278,7 +278,7 @@ export class PositionAnalysis {
     moves.onmouseenter = () => {
       const enabled = color === 'gold' ? this.app.settings.maiaArrows : this.app.settings.sfArrows;
       if (!enabled || this.app.scanSourceLocked || this.app.practice?.active) return;
-      this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color }]);
+      this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color, role: color === 'gold' ? 'maia' : 'sf' }]);
     };
     moves.onmouseleave = () => this.renderOverlays();
     row.append(moves);
@@ -298,7 +298,7 @@ export class PositionAnalysis {
     if (maiaArrows || sfArrows) {
       const arrows = [];
       const consensus = maiaArrows && sfArrows && moves[0]?.uci === lines[0]?.uci;
-      if (sfArrows && lines[0]) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: 'green', role: consensus ? 'consensus' : 'sf' });
+      if (sfArrows && lines[0]) arrows.push({ from: lines[0].uci.slice(0, 2), to: lines[0].uci.slice(2, 4), color: consensus ? 'green' : 'blue', role: consensus ? 'consensus' : 'sf' });
       if (maiaArrows && moves[0]?.uci && !consensus) arrows.push({ from: moves[0].uci.slice(0, 2), to: moves[0].uci.slice(2, 4), color: 'gold' });
       this.app.boardUI.setArrows(arrows);
     }

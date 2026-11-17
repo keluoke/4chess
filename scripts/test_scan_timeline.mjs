@@ -118,8 +118,8 @@ try {
         await popup.run(
           "document.querySelector('#scan-rotate').getClientRects().length",
         ),
-        0,
-        "Direction correction lives only in the editor",
+        1,
+        "Direction correction is available before opening the editor",
       );
       await popup.run("document.querySelector('#scan-flip').click()");
       assert.equal(
@@ -265,11 +265,27 @@ try {
         }),
       );
     }
+    if (!process.env.SCAN_SAMPLE_IMAGE) {
+      assert.equal(await popup.run("document.querySelectorAll('.scan-direction-row > :is(button, select)').length"), 3);
+      await popup.run(`(() => {
+        const square = document.querySelector('#scan-board [data-square="e2"]');
+        square.classList.add('scan-suspicious');
+        square.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true, cancelable:true}));
+      })()`);
+      assert.equal(await popup.run("document.querySelector('#scan-square-popover').hidden"), false);
+      await popup.run("document.querySelector('#scan-popover-close').click()");
+    }
     await popup.run("document.querySelector('#scan-confirm').click()");
     await popup.wait(
       "document.querySelectorAll('#scan-lines button').length === 3",
       30000,
     );
+    if (!process.env.SCAN_SAMPLE_IMAGE) {
+      assert.equal(await popup.run("document.querySelectorAll('#scan-board .scan-suspicious').length"), 0);
+      await popup.run(`document.querySelector('#scan-board [data-square="e2"]').click();
+        document.querySelector('#scan-board [data-square="e4"]').click()`);
+      assert.equal(await popup.run("document.querySelector('#scan-fen').value.split(' ')[1]"), "b");
+    }
     fs.mkdirSync(root + "/artifacts/scan", { recursive: true });
     const image = await popup.rpc("Page.captureScreenshot");
     fs.writeFileSync(

@@ -4,31 +4,32 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261116-marked-moves-scan';
+const CACHE_NAME = '4chess-review-20261117-ui';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261103-jade',
+  './analysis.js?v=20261117-ui',
   './analysis.css?v=20261103-jade',
-  './workbench.css?v=20261103-jade',
+  './workbench.css?v=20261117-ui',
   '../ui/fonts/InterVariable.woff2?v=4.1',
   '../ui/chessboard.css?v=20261025-v115',
   './i18n.js?v=20261103-jade',
   '../ui/theme.css?v=20261025-v115',
   '../ui/board-visuals.js',
+  '../ui/board-visuals.js?v=20261117-ui',
   '../ui/theme.js?v=20261025-v115',
   '../engine/review-policy.js?v=20261103-jade',
   './review-practice.js?v=20261103-jade',
   './review-explorer.js',
   './intuition-review.js?v=20261103-jade',
   './board-ui.js',
-  './board-ui.js?v=20261103-jade',
+  './board-ui.js?v=20261117-ui',
   './workbench-motion.js?v=20261103-jade',
-  './workbench-layout.js?v=20261103-jade',
+  './workbench-layout.js?v=20261117-ui',
   './scan-authorization.js?v=20261103-jade',
   '../engine/maia-worker.js',
-  './position-analysis.js?v=20261103-jade',
+  './position-analysis.js?v=20261117-ui',
   './sound-effects.js',
   './chess-pieces.js',
   './eval-chart.js?v=20261103-jade',

@@ -54,8 +54,8 @@ try {
       if (width === 300) await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-analysis.png`) });
     }
     await p.locator('#weui-btn-more').click();
-    await p.locator('#maia-sf-select').scrollIntoViewIfNeeded();
-    assert.match(await p.locator('[data-dg-text="sfWebOnly"]').innerText(), /SF19 Lite/);
+    assert.equal(await p.locator('#maia-sf-select, #panel-hide').count(), 0);
+    assert.equal(await p.locator('#panel-collapse').isVisible(), false);
     await p.locator('[data-model="79m"]').scrollIntoViewIfNeeded();
     if (width === 300) await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-settings.png`) });
     const lowContrast = await panel.evaluate(root => {
@@ -68,14 +68,12 @@ try {
       return bad;
     });
     assert.deepEqual(lowContrast, [], `${theme}/${lang} contrast`);
-    // Collapse content preserves its cover; minimize is a distinct operation.
-    await p.locator('#panel-collapse').scrollIntoViewIfNeeded(); await p.locator('#panel-collapse').click();
-    assert.equal((await panel.boundingBox()).height, height); assert.equal(await p.locator('#cdn-config-drawer').isVisible(), false);
-    await p.locator('#maia-restore').scrollIntoViewIfNeeded(); await p.locator('#maia-restore').click();
+    await p.keyboard.press('Escape');
+    assert.equal(await p.locator('#cdn-config-drawer').isVisible(), false);
     await p.locator('#weui-btn-close').click(); assert.equal(await panel.isVisible(), false);
     assert(await p.locator('#maia-wechat-float').isVisible()); await p.locator('#maia-wechat-float').click();
     assert(await panel.isVisible());
   }
   assert.deepEqual(errors, []);
-  console.log('PASS 16 floating layouts: readable summary/candidate, no row overflow, contrast, settings, cover collapse and real minimize/restore');
+  console.log('PASS 16 floating layouts: readable summary/candidate, no row overflow, contrast, settings and real minimize/restore');
 } finally { await browser.close(); server.close(); }

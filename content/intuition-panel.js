@@ -42,7 +42,7 @@ const I18N = {
     sfArrows: 'Stockfish 最佳箭头',
     dualIntro: '引擎看质量，Maia 看人类偏好',
     maiaLegend: '金色实线 · M Maia 预测',
-    sfLegend: '绿色实线 · ★ 引擎最佳',
+    sfLegend: '蓝色实线 · ★ 引擎最佳',
     consensusLegend: '绿色 ★ M · 两者首选一致',
     heatmapHelp: '暖色越深，Maia 越常选择这个落点；是相对强度，不是胜率或危险程度。',
     guide: '使用指南与图例 ↗',
@@ -107,7 +107,7 @@ const I18N = {
     sfArrows: 'Stockfish best-move arrow',
     dualIntro: 'Stockfish quality · Maia likelihood',
     maiaLegend: 'Gold solid · M Maia prediction',
-    sfLegend: 'Green solid · ★ Engine best',
+    sfLegend: 'Blue solid · ★ Engine best',
     consensusLegend: 'Green ★ M · Both favor the same move',
     heatmapHelp: 'Warmer squares are more common Maia destinations. Relative intensity, not win probability or danger.',
     guide: 'Guide & visual legend ↗',
@@ -545,7 +545,7 @@ export class IntuitionPanel {
           <p class="diverge-help" data-dg-text="heatmapHelp"></p>
         </div>
 
-        <div class="weui-drawer-item"><label for="maia-sf-select" data-dg-text="sfWebPreference"></label><select id="maia-sf-select"><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard</option></select><p class="diverge-help" data-dg-text="sfWebOnly"></p></div>
+
         <!-- Maia model variants -->
         <div class="weui-drawer-item">
           <div class="weui-drawer-label" id="lbl-model-spec">${this.t('lblModelSpec')}</div>
@@ -664,10 +664,10 @@ export class IntuitionPanel {
     this.container.querySelector('.weui-review-entry').append(actionRecovery);
     const drawer = this.container.querySelector('#cdn-config-drawer');
     const items = [...drawer.querySelectorAll(':scope > .weui-drawer-item')];
-    // Rating and display are frequent actions; web-only preferences are secondary.
-    [items[1], items[2], items[4], items[3], items[0]].forEach(item => drawer.append(item));
+    // Rating and display are frequent actions; model and language are secondary.
+    [items[1], items[2], items[3], items[0]].filter(Boolean).forEach(item => drawer.append(item));
     const positions = document.createElement('div'); positions.className = 'weui-drawer-item diverge-position-controls';
-    positions.innerHTML = '<p class="diverge-help" data-dg-text="dragHint"></p><button type="button" id="panel-reset" data-dg-text="resetPosition"></button><button type="button" id="panel-collapse" data-dg-text="collapseContent"></button><button type="button" id="panel-hide" data-dg-text="hidePanel"></button>';
+    positions.innerHTML = '<p class="diverge-help" data-dg-text="dragHint"></p><button type="button" id="panel-reset" data-dg-text="resetPosition"></button><button type="button" id="panel-collapse" data-dg-text="collapseContent" hidden></button>';
     drawer.append(positions);
     this.container.querySelector('#maia-elo-slider').setAttribute('aria-labelledby', 'lbl-elo-title');
     this.container.querySelectorAll('[data-elo], [data-lang], [data-model]').forEach(button => button.setAttribute('aria-pressed', String(button.classList.contains('active'))));
@@ -833,8 +833,6 @@ export class IntuitionPanel {
 
   setEnginePreferences(prefs) {
     this.enginePreferences = prefs;
-    const select = this.container.querySelector('#maia-sf-select');
-    if (select) select.value = prefs.stockfishVariant;
     this.container.querySelectorAll('[data-model]').forEach(btn => btn.classList.toggle('active', btn.dataset.model === prefs.maiaVariant));
     this.syncStudyChrome();
   }
@@ -854,8 +852,8 @@ export class IntuitionPanel {
     if (sf) sf.textContent = this.t('sfEngine');
     const modelHint = this.container.querySelector('#model-switch-hint');
     if (modelHint?.dataset.saved) modelHint.textContent = this.t('modelSaved');
-    const standardOption = this.container.querySelector('#maia-sf-select option[value="standard"]');
-    if (standardOption) standardOption.textContent = this.lang === 'zh' ? 'SF19 标准版' : 'SF19 Standard';
+    const collapseBtn = this.container.querySelector('#panel-collapse');
+    if (collapseBtn) collapseBtn.hidden = this.container.dataset.adCover !== 'true';
     for (const [id, key] of [['maia-chk-heatmap', 'showHeatmap'], ['maia-chk-arrows', 'showArrows'], ['maia-chk-sf-arrows', 'showStockfishArrows']]) {
       const field = this.container.querySelector('#' + id); if (field) field.checked = this[key];
     }
@@ -893,6 +891,12 @@ export class IntuitionPanel {
     const r = this.container.getBoundingClientRect();
     this.container.style.top = Math.max(12, Math.min(r.top, innerHeight - height - 12)) + 'px';
     if (this.container.style.left) this.container.style.left = Math.max(12, Math.min(parseFloat(this.container.style.left), innerWidth - width - 12)) + 'px';
+    const collapseBtn = this.container.querySelector('#panel-collapse');
+    if (collapseBtn) collapseBtn.hidden = this.container.dataset.adCover !== 'true';
+    if (this.isClosed && this.container.dataset.adCover !== 'true') {
+      this.isClosed = false;
+      this.container.dataset.collapsed = 'false';
+    }
     this.syncPanelSize();
     this.fitFab();
   }
@@ -1016,13 +1020,11 @@ export class IntuitionPanel {
     }
 
     this.container.querySelectorAll('[data-model]').forEach(btn => btn.addEventListener('click', () => this.saveModels({ maiaVariant: btn.dataset.model, cloudflareCdnUrl: MAIA_VARIANTS[btn.dataset.model].url })));
-    this.container.querySelector('#maia-sf-select').addEventListener('change', event => this.saveModels({ stockfishVariant: event.target.value }));
     this.container.querySelector('#maia-restore').addEventListener('click', () => this.open());
     this.container.querySelector('#panel-rating').addEventListener('click', () => this.setSettings(true, '#maia-elo-slider'));
     this.container.querySelector('#panel-display').addEventListener('click', () => this.setSettings(true, '#maia-chk-heatmap'));
     this.container.querySelector('#panel-reset').addEventListener('click', () => this.resetPosition());
-    this.container.querySelector('#panel-collapse').addEventListener('click', () => this.close());
-    this.container.querySelector('#panel-hide').addEventListener('click', () => this.hide());
+    this.container.querySelector('#panel-collapse')?.addEventListener('click', () => this.close());
     this.container.querySelector('#panel-expand').addEventListener('click', () => {
       this.expandedForSpace = true; this.open(); this.container.querySelector('#weui-btn-more').focus();
     });
@@ -1643,7 +1645,7 @@ export class IntuitionPanel {
         const probability = document.createElement('span'); probability.className = 'weui-move-prob'; probability.textContent = `${move.prob}%`; probability.title = this.t('probabilityHelp');
         right.append(delta, probability); main.append(left, right);
         const track = document.createElement('div'); track.className = 'weui-progress-track'; track.setAttribute('aria-hidden', 'true');
-        const bar = document.createElement('div'); bar.className = 'weui-progress-bar'; bar.style.width = `${Math.max(0, Math.min(100, Number(move.prob) || 0))}%`; bar.style.background = match ? 'var(--dg-blue)' : 'var(--dg-gold)'; track.append(bar);
+        const bar = document.createElement('div'); bar.className = 'weui-progress-bar'; bar.style.width = `${Math.max(0, Math.min(100, Number(move.prob) || 0))}%`; bar.style.background = match ? 'var(--dg-green)' : 'var(--dg-gold)'; track.append(bar);
         row.append(main, track); this.bindMovePreview(row, move); area.append(row);
       });
     } else if (sf?.bestMove) {

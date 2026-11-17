@@ -57,7 +57,7 @@ export class HeatmapOverlay {
     this.svg.setAttribute('preserveAspectRatio', 'none');
     this.svg.style.display = 'block';
     this.svg.innerHTML = `
-      ${arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().green, consensus: boardColors().green, blunder: boardColors().red })}
+      ${arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().blue, consensus: boardColors().green, blunder: boardColors().red })}
       <g id="maia-arrows-layer"></g>
       <g id="maia-sf-arrows-layer"></g>
       <g id="maia-traps-layer"></g>
@@ -145,7 +145,7 @@ export class HeatmapOverlay {
       return;
     }
     this.currentData = predictionData;
-    this.svg.querySelector('defs').outerHTML = arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().green, consensus: boardColors().green, blunder: boardColors().red });
+    this.svg.querySelector('defs').outerHTML = arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().blue, consensus: boardColors().green, blunder: boardColors().red });
     // Engine scores arrive in the side-to-move perspective; labels use White's perspective.
     if (predictionData?.stockfish && predictionData.turn === 'b') {
       const score = String(predictionData.stockfish.score ?? '?');
@@ -347,7 +347,7 @@ export class HeatmapOverlay {
     const a = this.squareToCoords(from), b = this.squareToCoords(to);
     const role = marker === 'maia-arrow-sf' ? 'sf' : marker === 'maia-arrow-consensus' ? 'consensus' : marker === 'maia-arrow-blunder' ? 'error' : label?.startsWith('M ') ? 'maia' : 'candidate';
     const colors = boardColors();
-    const color = role === 'sf' || role === 'consensus' ? colors.green : role === 'error' ? colors.red : colors.gold;
+    const color = role === 'sf' ? colors.blue : role === 'consensus' ? colors.green : role === 'error' ? colors.red : colors.gold;
     drawBoardArrow(group, { from: { x: a.cx, y: a.cy }, to: { x: b.cx, y: b.cy }, color, marker: width <= 5 ? `${marker}-secondary` : marker, role, secondary: width <= 5, opacity: width <= 5 ? .5 : .84, dashed: role === 'error' });
     drawMoveBadge(group, { x: b.cx, y: b.cy, role, color, title: label });
   }

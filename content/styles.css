@@ -1313,7 +1313,7 @@
 #maia3-intuition-panel .diverge-visual-legend p { color: var(--dg-muted); line-height: 1.7; }
 #maia3-intuition-panel .diverge-visual-legend a { color: var(--dg-green); }
 #maia3-intuition-panel .legend-maia { color: var(--dg-gold); }
-#maia3-intuition-panel .legend-sf { color: var(--dg-green); }
+#maia3-intuition-panel .legend-sf { color: var(--dg-blue); }
 #maia3-intuition-panel .legend-consensus { color: var(--dg-green); }
 #maia3-intuition-panel{width:342px;max-width:calc(100vw - 24px);border-radius:12px;box-shadow:var(--dg-shadow);border:1px solid var(--dg-line);font-size:13px;line-height:1.6}
 #maia3-intuition-panel .weui-navbar{height:53px;min-height:53px;padding:0 14px;border-bottom:1px solid var(--dg-line)}
@@ -1352,7 +1352,8 @@
 #maia3-intuition-panel .weui-delta-tag.tag-slight{background:var(--dg-gold-soft);color:var(--dg-gold)}
 #maia3-intuition-panel .weui-delta-tag.tag-blunder{background:var(--dg-red-soft);color:var(--dg-red)}
 #maia3-intuition-panel .weui-review-entry{order:3;margin:0!important}
-#maia3-intuition-panel .weui-btn-review{height:40px!important;background:var(--dg-green)!important;color:var(--dg-on-green)!important;border:1px solid var(--dg-green)!important;border-radius:7px!important;font-size:12px!important;box-shadow:none;transform:none}
+#maia3-intuition-panel .weui-btn-review{height:40px!important;background:transparent!important;color:var(--dg-green)!important;border:1px solid var(--dg-green)!important;border-radius:7px!important;font-size:12px!important;box-shadow:none;transform:none}
+#maia3-intuition-panel .weui-btn-review:hover:not(:disabled){background:var(--dg-green-soft)!important}
 #maia3-intuition-panel .weui-btn-review:disabled{cursor:not-allowed}
 #maia3-intuition-panel .weui-drawer-overlay{top:53px;background:var(--dg-surface);border-color:var(--dg-line);max-height:calc(100dvh - 150px)!important;box-shadow:var(--dg-shadow)}
 #maia3-intuition-panel .weui-drawer-header{padding:12px 14px;border-bottom:1px solid var(--dg-line);background:var(--dg-surface);position:sticky;top:0;z-index:2;flex-shrink:0}
@@ -1393,7 +1394,7 @@
 #maia3-intuition-panel .weui-insight-box strong { color: var(--dg-ink); }
 #maia3-intuition-panel .weui-sf-mini-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dg-line); font-size: 12px; }
 #maia3-intuition-panel .weui-sf-mini-row > span { min-width: 0; }
-#maia3-intuition-panel .weui-sf-eval { margin-left: auto; white-space: nowrap; }
+#maia3-intuition-panel .weui-sf-eval { margin-left: auto; white-space: nowrap; background: var(--dg-blue-soft); color: var(--dg-blue); }
 #maia3-intuition-panel .weui-move-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
 #maia3-intuition-panel .weui-move-left { min-width: 0; gap: 6px; }
 #maia3-intuition-panel .weui-move-right { flex-shrink: 0; gap: 5px; white-space: nowrap; }
@@ -1414,9 +1415,9 @@
 #maia3-intuition-panel .weui-insight-box { order: 0; padding: 11px; }
 #maia3-intuition-panel .weui-insight-header { margin-bottom: 0; }
 #maia3-intuition-panel .weui-sf-mini-row { margin-top: 6px; padding-top: 6px; font-size: 11px; }
-#maia3-intuition-panel .diverge-study-tools { order: 1; display: flex; gap: 6px; justify-content: space-between; }
+#maia3-intuition-panel .diverge-study-tools { order: 2; display: flex; gap: 6px; justify-content: space-between; }
 #maia3-intuition-panel .diverge-study-tools button { background: var(--dg-paper); border: 1px solid var(--dg-line); border-radius: 6px; padding: 6px; font-size: 11px; color: var(--dg-ink); cursor: pointer; }
-#maia3-intuition-panel .diverge-candidates { order: 2; }
+#maia3-intuition-panel .diverge-candidates { order: 1; }
 #maia3-intuition-panel .diverge-candidate-columns { display: grid; grid-template-columns: minmax(0, 1fr) auto 49px; gap: 8px; padding: 6px 10px; font-size: 10px; color: var(--dg-muted); border-bottom: 1px solid var(--dg-line); }
 #maia3-intuition-panel .diverge-candidate-columns > :not(:first-child) { text-align: right; }
 #maia3-intuition-panel .weui-move-item { padding: 10px; cursor: pointer; }

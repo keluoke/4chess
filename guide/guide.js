@@ -1,6 +1,7 @@
 const english = { reviewTrainingTitle: 'Review both sides and retry a selection', reviewTrainingBody: 'After scoring, compare Best, Good, Inaccuracy, Mistake, Blunder, Forced and Incomplete counts for White and Black. Click a count to filter moves and a move to return to its decision point. Opening and intuition tags may overlap quality labels; combination follow-ups do not inflate independent beyond-intuition counts. Intuition counts are unavailable until scanning.', reviewTrainingPractice: 'Choose White, Black or both and practice errors and confirmed intuition moments in the selection. Answers stay hidden; hints, answer reveal and next-position controls support independent attempts. Results distinguish independent, hinted, revealed and retry-later outcomes, and stay in this game session only. One success does not establish mastery. Side filters are independent of board flipping.', installExtension: 'Add to Chrome',
   scanTitle: 'Scan a chess diagram', scanBody: 'Open a static diagram in a post or article, or a permitted study board, then click Scan page. Page boards use DOM reading when available; images use the packaged local vision model. Scan automatically opens the recognized board; if detection fails, crop the screenshot and retry. Edit position corrects pieces and recognized direction. View changes only the viewing angle. Settings opens a separate scrollable screen; use Back or Escape to return with your position and edit draft intact. Coordinates determine board orientation. Without turn evidence, side to move defaults to the viewed side and remains unconfirmed. Check pieces, orientation and side to move; correct with the piece palette or complete FEN, then confirm to start SF19 Lite. Images default to no castling or en passant rights.', scanHandoff: 'Click or drag pieces to explore variations, and right-drag to annotate. Explore engine vs intuition opens the current confirmed position with saved web engine/Maia preferences. A single position has no full-game accuracy or chart. Live play, source navigation or closure stops scan analysis. Supported sources include safe Chess.com/Lichess pages and static diagrams in Twitter/X timelines, forums, articles or image documents. Ordinary-page scans retain only visible static images; scroll the complete board into view and crop it if several images are present. Replacing a captured image stops analysis. Unknown interactive game pages and live broadcasts stay locked.',
   privacyPolicy: 'Privacy policy',
+  tocTitle: 'On this page', legendConsensusTitle: 'Green ★ M · Consensus', legendConsensusDesc: 'Engine best and Maia intuition agree on the same move.', legendDivergeBadge: 'Δ -1.45 pawns', legendDivergeTitle: 'Blue ★ vs Gold M · Divergence', legendDivergeDesc: 'Natural human move loses 1.45 pawns — worth reviewing.', legendHeatTitle: 'Destination heatmap', legendHeatDesc: 'Warmer squares show higher Maia destination likelihood.',
   studyControls: 'Free exploration & shared preferences', studyControlsBody: 'Arrow keys navigate across the page; inputs, settings and promotion dialogs keep their own keyboard controls. Click or drag pieces to create a personal variation, then reopen it from My variations. Right-drag draws a thought arrow. Hold Shift while right-dragging a piece to play the move, keep its route arrow, and mark the destination piece with !!. Right-click marks a square. Marks stay with their position, and the clear button clears only the current position.', independentLoading: 'SF and Maia download and present results independently. Explore with whichever engine becomes ready first. Variations take priority; returning to the game and pausing navigation resumes an unfinished full-game review.', sharedPreferences: 'With the updated extension installed in the same Chrome browser, its popup, floating panel and web studio share the web Stockfish edition, Maia, language, rating and other preferences. Open pages update together. Without the extension, preferences stay in this browser; there is no automatic cross-device sync. The Web review engine setting does not switch the floating panel, which always runs SF19 Lite. With the updated extension enabled on the supported sites, Maia models share extension storage. Website-only analysis retains its own browser cache.', navStart: 'Get started', navDual: 'Visual legend', navAbout: 'About & licenses',
   title: 'Where do engine and intuition diverge?',
   intro: 'Compare Stockfish recommendations with Maia human move predictions. Scan a webpage chess diagram or review a finished game, then explore where the two perspectives differ.',
@@ -17,7 +18,7 @@ const english = { reviewTrainingTitle: 'Review both sides and retry a selection'
   sfBody: 'Stockfish evaluates positions, searches variations and estimates a candidate’s loss relative to its preferred move. Scores use White’s perspective: positive favors White, negative favors Black.',
   maiaQuestion: 'How likely is a player at this rating to choose it?',
   maiaBody: 'Maia predicts a distribution of human moves at the selected rating. Candidate percentages are predicted move probabilities, not winning chances. A common move can still be a bad move.',
-  gold: 'Gold solid: Maia candidates', green: 'Green solid ★: Stockfish best move', cyan: 'Green ★ M: both favor the same move',
+  gold: 'Gold solid: Maia candidates', green: 'Blue solid ★: Stockfish best move', cyan: 'Green ★ M: both favor the same move',
   heatBody: 'Warm squares aggregate Maia probabilities for every legal move’s destination, normalized by the strongest destination. Darker means relatively more common. This is not an attention matrix, danger map or win probability. Settings let you toggle each engine’s arrows and the heatmap separately.',
   modelsTitle: 'Models, downloads and local caching', model: 'Model', download: 'First download, approx.', where: 'Available in',
   extensionAndWeb: 'Extension & web studio', webOnly: 'Web review only; floating panel stays on Lite',
@@ -64,4 +65,23 @@ for (const [label, file] of [['LICENSE', '../LICENSE'], ['THIRD-PARTY NOTICES', 
       pre.textContent = await response.text(); details.dataset.loaded = 'true';
     } catch { pre.textContent = lang === 'en' ? 'Unable to load this document. Use the source link above.' : '文档暂时无法加载，请使用上方的原文链接。'; }
   });
+}
+
+const tocLinks = [...document.querySelectorAll('.guide-toc a[href^="#"]')];
+const tocTargets = tocLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+if (tocLinks.length && tocTargets.length && 'IntersectionObserver' in window) {
+  const visible = new Set();
+  const setActive = id => tocLinks.forEach(link => {
+    if (link.hash === '#' + id) link.setAttribute('aria-current', 'true');
+    else link.removeAttribute('aria-current');
+  });
+  const io = new IntersectionObserver((entries) => {
+    for (const { target, isIntersecting } of entries) {
+      if (isIntersecting) visible.add(target);
+      else visible.delete(target);
+    }
+    const active = tocTargets.find(target => visible.has(target));
+    if (active) setActive(active.id);
+  }, { rootMargin: '-72px 0px 0px 0px' });
+  tocTargets.forEach(el => io.observe(el));
 }

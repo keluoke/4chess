@@ -70,9 +70,9 @@ try {
   assert.equal(await page.locator('#maia-chk-heatmap').isChecked(), !before);
   const names = await page.locator('#cdn-config-drawer input').evaluateAll(elements => elements.every(e => e.labels.length || e.getAttribute('aria-labelledby') || e.getAttribute('aria-label')));
   assert(names);
-  await page.locator('#panel-hide').scrollIntoViewIfNeeded(); await page.locator('#panel-hide').focus(); await page.keyboard.press('Tab');
+  await page.locator('#panel-reset').scrollIntoViewIfNeeded(); await page.locator('#panel-reset').focus(); await page.keyboard.press('Tab');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'weui-btn-drawer-close');
-  await page.keyboard.press('Shift+Tab'); assert.equal(await page.evaluate(() => document.activeElement.id), 'panel-hide');
+  await page.keyboard.press('Shift+Tab'); assert.equal(await page.evaluate(() => document.activeElement.id), 'panel-reset');
   await page.keyboard.press('Escape'); assert.equal(await page.locator('#cdn-config-drawer').isVisible(), false);
   assert.equal(await page.evaluate(() => document.activeElement.id), 'weui-btn-more');
   // Three intermediate slider values produce one analysis callback on commit.
@@ -121,11 +121,11 @@ try {
   await page.evaluate(() => panel.setFairPlayLocked(false));
   assert.doesNotMatch(await panel.innerText(), /对局中|已锁定|公平竞技保护/);
   assert.match(await panel.innerText(), /读取/);
-  // Minimize frees space, while explicit content collapse closes the drawer and preserves cover.
-  await page.locator('#weui-btn-more').click(); await page.locator('#panel-collapse').scrollIntoViewIfNeeded(); await page.locator('#panel-collapse').click();
-  assert.equal(await page.locator('#cdn-config-drawer').isVisible(), false);
-  assert.equal(await panel.getAttribute('data-collapsed'), 'true');
-  await page.locator('#maia-restore').click(); await page.locator('#weui-btn-close').click();
+  // Ordinary hosts expose minimize and restore.
+  await page.locator('#weui-btn-more').click();
+  assert.equal(await page.locator('#panel-collapse').isVisible(), false);
+  await page.keyboard.press('Escape');
+  await page.locator('#weui-btn-close').click();
   assert.equal(await panel.isVisible(), false); assert(await page.locator('#maia-wechat-float').isVisible());
   await page.setViewportSize({ width: 320, height: 460 });
   await page.waitForFunction(() => { const r=document.querySelector('#maia-wechat-float').getBoundingClientRect(); return r.x>=0 && r.right<=innerWidth; });
