@@ -1,5 +1,6 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261103-jade';
+import { t } from './i18n.js?v=20261117-elo-trend';
+import { MaiaEloTrend } from './maia-elo-trend.js?v=20261117-elo-trend';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {
@@ -56,11 +57,15 @@ export class PositionAnalysis {
     this.generation = 0;
     this.cache = new Map();
     this.searchCount = 0;
+    this.maiaQueue = [];
+    const trend = globalThis.document?.getElementById('maia-elo-trend');
+    if (trend) this.eloTrend = new MaiaEloTrend(this, trend);
   }
 
   cancel() {
     this.generation++;
     clearTimeout(this.timer);
+    this.eloTrend?.reset();
     if (this.searchCount > 0 && !this.app.analyzer.isAnalyzing) this.app.stockfish.stop();
     this.clearOverlays();
   }
@@ -96,10 +101,13 @@ export class PositionAnalysis {
       if (this.cache.size > 64) this.cache.delete(this.cache.keys().next().value);
     }
     if (!this.app.isBranching) {
-      const next = this.app.reviewResult?.allMoves?.find(m => m.ply === ctx.ply + 1 && m.fenBefore === ctx.fen);
-      const previous = this.app.reviewResult?.allMoves?.find(m => m.ply === ctx.ply && m.fenAfter === ctx.fen);
+      const report = this.app.reviewResult;
+      const next = report?.allMoves?.find(m => m.ply === ctx.ply + 1 && m.fenBefore === ctx.fen);
+      const previous = report?.allMoves?.find(m => m.ply === ctx.ply && m.fenAfter === ctx.fen);
       entry.reportEvaluation = reviewEvaluation(next) || reviewEvaluation(previous, true);
-      if (!entry.prediction && next?._predMoves?.length) entry.prediction = { moves: next._predMoves };
+      if (!entry.prediction && report?.elo === ctx.elo && report.modelKey === this.app.maiaEngine.modelKey && next?._predMoves?.length) {
+        entry.prediction = { moves: next._predMoves };
+      }
     } else {
       entry.reportEvaluation = this.app.activeBranch.evaluations.get(this.app.branchEvaluationKey(ctx.fen, ctx.depth)) || null;
     }
@@ -123,6 +131,32 @@ export class PositionAnalysis {
 
   get foregroundBusy() { return this.computingGeneration === this.generation; }
 
+  // The Maia Worker handles one active inference. Select queued foreground work
+  // before an optional trend sample or the next full-game prediction.
+  predictMaia(engine, fen, elo, sf, invalid, history, priority = 0) {
+    const canceled = () => engine !== this.app.maiaEngine || this.app.scanSourceLocked || invalid();
+    return new Promise((resolve, reject) => {
+      this.maiaQueue.push({ engine, fen, elo, sf, canceled, history, priority, resolve, reject });
+      this.maiaQueue.sort((a, b) => a.priority - b.priority);
+      if (!this.maiaRunning) void this.runMaiaQueue();
+    });
+  }
+
+  async runMaiaQueue() {
+    this.maiaRunning = true;
+    try {
+      while (this.maiaQueue.length) {
+        const { engine, fen, elo, sf, canceled, history, resolve, reject } = this.maiaQueue.shift();
+        try {
+          const result = canceled() ? null : await engine.predict(fen, elo, sf, canceled, history);
+          resolve(canceled() ? null : result);
+        } catch (error) { reject(error); }
+      }
+    } finally {
+      this.maiaRunning = false;
+    }
+  }
+
   async compute(snapshot) {
     if (!this.current(snapshot)) return;
     this.computingGeneration = snapshot.generation;
@@ -141,7 +175,7 @@ export class PositionAnalysis {
       try {
         await this.app.maiaEngine.initialize();
         if (!this.current(snapshot)) return;
-        const prediction = await this.app.maiaEngine.predict(ctx.fen, ctx.elo, null, () => !this.current(snapshot), ctx.history);
+        const prediction = await this.predictMaia(this.app.maiaEngine, ctx.fen, ctx.elo, null, () => !this.current(snapshot), ctx.history);
         if (!this.current(snapshot)) return;
         entry.prediction = prediction?.moves?.length ? prediction : null;
         entry.maiaFailed = !entry.prediction;
@@ -219,8 +253,8 @@ export class PositionAnalysis {
   }
 
   render() {
-    if (this.app.scanSourceLocked || this.app.practice?.active) { this.clearOverlays(); return; }
-    if (!this.active) { this.renderGauge(null); this.app.renderPositionHeading?.(null); return; }
+    if (this.app.scanSourceLocked || this.app.practice?.active) { this.eloTrend?.reset(); this.clearOverlays(); return; }
+    if (!this.active) { this.eloTrend?.update(null); this.renderGauge(null); this.app.renderPositionHeading?.(null); return; }
     const { ctx, entry } = this.active;
     const board = new ChessBoard(ctx.fen);
     const legal = board.getLegalMoves();
@@ -250,6 +284,7 @@ export class PositionAnalysis {
       const match = lines.find(line => line.uci === move.uci);
       this.renderRow(maiaContainer, match?.evaluation || entry.maiaEvaluations.get(move.uci), match?.variation || legalVariation(ctx.fen, [move.uci]), app.settings.probability && Number.isFinite(move.prob) ? `${move.prob.toFixed(1)}%` : null, 'gold');
     });
+    this.eloTrend?.update(this.current(this.active) && (app.moves.length || app.hasAnalysisInput) ? this.active : null, moves, lines);
     this.renderOverlays(lines, moves);
   }
 

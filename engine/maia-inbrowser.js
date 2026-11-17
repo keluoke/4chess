@@ -215,6 +215,7 @@ export class MaiaInBrowserEngine {
    * real move history (up to 8 half-moves reconstructed from chronological sequence).
    */
   async predict(chessBoard, targetElo = 1900, abortCheck = null, history = null) {
+    if (abortCheck?.()) return null;
     if (!this.isReady) {
       throw new Error('Maia-3 In-Browser model is not loaded');
     }
@@ -321,13 +322,11 @@ export class MaiaInBrowserEngine {
 
     // 5. Transformer Blocks (0..7)
     for (let b = 0; b < numBlocks; b++) {
-      if (abortCheck && abortCheck()) {
-        return null;
-      }
       if (b > 0 && b % 2 === 0) {
         // Yield to browser UI thread to maintain 60 FPS piece animation
         await new Promise(r => setTimeout(r, 0));
       }
+      if (abortCheck?.()) return null;
       const pfx = `transformer.layers.${b}`;
 
       // --- Self-Attention ---

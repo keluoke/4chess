@@ -1,7 +1,7 @@
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-game-handoff';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { t } from './i18n.js?v=20261103-jade';
+import { t } from './i18n.js?v=20261117-elo-trend';
 
 // Full-game intuition has its own search worker. It never cancels the board's
 // foreground search; the large Maia model remains shared and is loaded once.
@@ -50,7 +50,7 @@ export class IntuitionReview {
       maia === app.maiaEngine && elo === app.currentElo && !app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress();
     this.state = 'running'; this.progress = ''; this.render();
     const waitForTurn = async invalid => {
-      while (current() && !invalid() && (app.positionAnalysis.foregroundBusy || app.practice?.active || app.isPlaying)) {
+      while (current() && !invalid() && (app.positionAnalysis.foregroundBusy || app.positionAnalysis.eloTrend?.busy || app.practice?.active || app.isPlaying)) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     };
@@ -63,7 +63,7 @@ export class IntuitionReview {
       async predict(fen, rating, sf, invalid, history) {
         const key = `${maia.modelKey}|${rating}|${fen}|${history.join(';')}`;
         if (predictions.has(key)) return predictions.get(key);
-        const result = await maia.predict(fen, rating, sf, invalid, history);
+        const result = await app.positionAnalysis.predictMaia(maia, fen, rating, sf, () => !current() || invalid(), history, 2);
         if (current() && !invalid() && result?.moves?.length) predictions.set(key, result);
         return result;
       }

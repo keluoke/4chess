@@ -8,7 +8,7 @@
  */
 
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261117-elo-trend';
 import { StockfishInBrowser } from './stockfish-inbrowser.js';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
@@ -84,7 +84,7 @@ export class MaiaEngine {
       const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.getURL && window.location.protocol === 'chrome-extension:';
       const workerUrl = isExtension
         ? chrome.runtime.getURL('engine/maia-worker.js')
-        : new URL('./maia-worker.js', import.meta.url).href;
+        : new URL('./maia-worker.js?v=20261117-elo-trend', import.meta.url).href;
 
       this.worker = new Worker(workerUrl, { type: 'module' });
       this.backendName = '浏览器端 Web Worker + Stockfish WASM';
@@ -352,18 +352,19 @@ export class MaiaEngine {
    * Supports both FEN-only and real history sequence modes.
    */
   async predict(fen, elo = this.targetElo, sfRes = null, abortCheck = null, history = null) {
+    if (abortCheck?.()) return null;
     let histKey = 'nohist';
     if (history && Array.isArray(history) && history.length > 0) {
       histKey = history.map(h => {
-        if (typeof h === 'string') return h.split(' ')[0];
-        if (h && typeof h.fen === 'string') return h.fen.split(' ')[0];
+        if (typeof h === 'string') return h;
+        if (h && typeof h.fen === 'string') return h.fen;
         return String(h);
       }).join(';');
     } else if (typeof history === 'string' && history.length > 0) {
       histKey = history;
     }
     const encVer = 'v2h';
-    const modelTag = this.modelName || 'maia3';
+    const modelTag = this.modelKey || this.modelName || 'maia3';
     const cacheKey = `${fen}_${elo}_${modelTag}_${encVer}_${histKey}`;
 
     if (this.lruCache.has(cacheKey)) {
@@ -411,6 +412,7 @@ export class MaiaEngine {
       } catch (e) {}
     }
 
+    if (abortCheck?.()) return null;
     // If still not ready: return Stockfish evaluation and download progress
     if (!this.isReady) {
       return {
@@ -463,15 +465,15 @@ export class MaiaEngine {
             }
           }, 20);
         });
-        maiaRes = await Promise.race([p, abortWatcher]);
-        if (checkTimer) clearInterval(checkTimer);
+        try { maiaRes = await Promise.race([p, abortWatcher]); }
+        finally { clearInterval(checkTimer); }
       } else {
         maiaRes = await p;
       }
     } else {
       maiaRes = await this.maiaInBrowser.predict(chess, elo, abortCheck, history);
     }
-    if (!maiaRes) return null; // Aborted by user moving again
+    if (!maiaRes || abortCheck?.()) return null;
 
     // 4. Human vs Stockfish Comparative Insight
     const topMove = maiaRes.moves[0] || null;

@@ -86,3 +86,28 @@ await controller.compute({...branchSnapshot,generation:controller.generation,ctx
 assert.equal(app.activeBranch.evaluations.size,5,'A terminal endpoint still fills preceding branch nodes');
 assert.equal(app.activeBranch.evaluations.get(`10|${mateLine.at(-1).fen}`).text,'-M0','Black checkmate keeps its correct direction');
 console.log('✅ Branch path evaluation, White perspective and late cancellation isolation passed.');
+
+// A shared Maia worker receives one sample at a time. Foreground beats queued
+// trends and full-game work, while stale queued samples never reach inference.
+const ratings = [];
+let finishBackground;
+app.maiaEngine.predict = async (_fen, elo) => {
+  ratings.push(elo);
+  if (elo === 600) await new Promise(resolve => { finishBackground = resolve; });
+  return { elo };
+};
+const request = (elo, priority, canceled = () => false) =>
+  controller.predictMaia(app.maiaEngine, initial, elo, null, canceled, [], priority);
+const runningBackground = request(600, 2);
+const queuedBackground = request(1000, 2);
+let canceled = false;
+const staleTrend = request(1400, 1, () => canceled);
+const nextTrend = request(2200, 1);
+const foreground = request(1800, 0);
+canceled = true;
+assert.deepEqual(ratings, [600], 'Only one inference may run at a time');
+finishBackground();
+assert.equal(await staleTrend, null);
+await Promise.all([runningBackground, queuedBackground, nextTrend, foreground]);
+assert.deepEqual(ratings, [600, 1800, 2200, 1000]);
+console.log('✅ Shared Maia inference prioritizes the current position and skips cancelled samples.');

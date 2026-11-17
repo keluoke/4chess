@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261103-jade">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261117-ui">
+  <link rel="stylesheet" href="workbench.css?v=20261117-elo-trend">
 </head>
 <body class="diverge-ui">
   <script>
@@ -182,6 +182,16 @@
         <div class="candidate-heading"><span data-i18n="intuitionCandidates">直觉</span><small id="candidate-maia-status"></small></div>
         <div class="candidate-lines intuition-lines" id="maia-candidate-lines" aria-live="polite"></div>
         </div>
+        <details id="maia-elo-trend" class="maia-elo-trend" hidden>
+          <summary data-i18n="maiaTrendTitle">查看 600–2600 分段趋势</summary>
+          <p class="maia-trend-status" role="status"></p>
+          <div class="maia-trend-chart"></div>
+          <details class="maia-trend-data">
+            <summary data-i18n="maiaTrendData">查看采样数据</summary>
+            <table></table>
+          </details>
+          <button type="button" class="btn-header maia-trend-retry" data-i18n="maiaTrendRetry" hidden>重试缺失档位</button>
+        </details>
         <details class="analysis-help"><summary data-i18n="analysisHelp">说明</summary><p data-i18n="compareNote"></p></details>
         <p class="position-note" id="divergence-content" hidden></p>
       </section>
@@ -277,11 +287,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261117-game-handoff"></script>
+  <script type="module" src="analysis.js?v=20261117-elo-trend"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261117-game-handoff').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261117-elo-trend').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

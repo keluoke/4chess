@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261103-jade';
+import { t } from './i18n.js?v=20261117-elo-trend';
 import { REVIEW_QUALITIES, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261103-jade';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };

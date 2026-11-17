@@ -1,9 +1,9 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-ui';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-elo-trend';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261117-game-handoff';
-import { ReviewExplorer } from './review-explorer.js';
+import { IntuitionReview } from './intuition-review.js?v=20261117-elo-trend';
+import { ReviewExplorer } from './review-explorer.js?v=20261117-elo-trend';
 import { isKeyMoment, moveQuality, intuitionKind, canPractice } from '../engine/review-policy.js?v=20261103-jade';
-import { ReviewPractice } from './review-practice.js?v=20261103-jade';
+import { ReviewPractice } from './review-practice.js?v=20261117-elo-trend';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -12,15 +12,15 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-game-handoff';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261103-jade';
+import { EvalChart } from './eval-chart.js?v=20261117-elo-trend';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261117-ui';
+import { PositionAnalysis } from './position-analysis.js?v=20261117-elo-trend';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261103-jade';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261117-elo-trend';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -459,7 +459,7 @@ class AnalysisStudioApp {
       if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey || document.activeElement?.isContentEditable || document.activeElement?.closest('input, textarea, select, [role="textbox"]')) return;
       if (this.scanSourceLocked) return;
 
-      if (this.practice?.active && (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'k'].includes(e.key) || (e.key === ' ' && !document.activeElement?.closest('button, a')))) { e.preventDefault(); return; }
+      if (this.practice?.active && (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'k'].includes(e.key) || (e.key === ' ' && !document.activeElement?.closest('button, a, summary')))) { e.preventDefault(); return; }
 
       if (e.key === 'ArrowLeft' || e.key === 'j') {
         e.preventDefault();
@@ -473,7 +473,7 @@ class AnalysisStudioApp {
       } else if (e.key === 'End') {
         e.preventDefault();
         if (this.isBranching) this.showBranchPosition(this.activeBranch.moves.length); else this.goToPly(this.positions.length - 1);
-      } else if ((e.key === ' ' || e.code === 'Space') && !document.activeElement?.closest('button, a')) {
+      } else if ((e.key === ' ' || e.code === 'Space') && !document.activeElement?.closest('button, a, summary')) {
         e.preventDefault();
         this.toggleAutoPlay();
       } else if (e.key === 'f' || e.key === 'F') {

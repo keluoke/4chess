@@ -85,6 +85,83 @@ try {
  assert(notation.outer > 0);
  assert.equal(notation.inner,0,'Long jumps scroll the middle column only');
  assert.equal(notation.visible,true);
+ const trendPage=await context.newPage({viewport:{width:1440,height:900}});
+ trendPage.on('pageerror',e=>errors.push(e.message));
+ await trendPage.goto(origin+'/analysis/?lang=en');
+ await trendPage.waitForFunction(()=>!!window.__maiaStudioApp?.positions.length);
+ await trendPage.evaluate(async()=>{
+  const app=window.__maiaStudioApp;
+  const {ChessBoard}=await import('../engine/chess-core.js');
+  app.currentElo=1800;
+  app.maiaEngine.initialize=async()=>true;
+  window.trendCalls=[];
+  app.maiaEngine.predict=async(fen,rating,_sf,canceled)=>{
+   const call={fen,rating,aborted:false};
+   trendCalls.push(call);
+   if(window.holdRating===rating){
+    await new Promise(resolve=>{
+     const timer=setInterval(()=>{if(canceled()){clearInterval(timer);call.aborted=true;resolve();}},5);
+    });
+   }
+   const moves=new ChessBoard(fen).getLegalMoves();
+   const rank=rating===600?['g1h3','g1f3','d2d4','c2c4','e2e4']:['e2e4','d2d4','c2c4','g1f3'];
+   const ordered=[...rank.map(uci=>moves.find(move=>move.uci===uci)).filter(Boolean),...moves.filter(move=>!rank.includes(move.uci))];
+   return {moves:ordered.map((move,index)=>({...move,rawProb:1/(index+4),prob:100/(index+4)}))};
+  };
+  app.stockfish.initialize=async()=>true;
+  app.stockfish.evaluate=async(fen,depth)=>{
+   const moves=new ChessBoard(fen).getLegalMoves();
+   const bestMove=moves.find(move=>move.uci==='g1f3')||moves[0];
+   return {bestMove,scoreCp:25,depth};
+  };
+  app.startNewSession({pgn:'[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 1-0',autoReview:false});
+ });
+ const trend=trendPage.locator('#maia-elo-trend');
+ const trendSummary=trend.locator(':scope > summary');
+ const progress=trend.locator('.maia-trend-status');
+ const extras=()=>trendPage.evaluate(()=>trendCalls.filter(call=>call.rating!==1800));
+ await trendSummary.waitFor();
+ assert.equal(await trend.getAttribute('open'),null);
+ assert.equal(await trend.locator('svg').count(),0);
+ assert.deepEqual(await extras(),[],'Collapsed trend must not start rating inference');
+ await trendSummary.focus();
+ await trendPage.keyboard.press('Space');
+ await trendPage.waitForFunction(()=>document.querySelector('.maia-trend-status')?.textContent.includes('6 of 6'));
+ assert.equal(await trendPage.evaluate(()=>window.__maiaStudioApp.isPlaying),false,'Space opens the disclosure without starting playback');
+ assert.deepEqual((await extras()).map(call=>call.rating).sort((a,b)=>a-b),[600,1000,1400,2200,2600]);
+ assert.equal(await trend.locator('g.maia-trend-series').count(),4);
+ assert.equal(await trend.locator('g[data-uci="e2e4"] circle[data-elo="600"]').count(),1,'A move outside the sampled top three retains its actual probability');
+ assert.equal(await trend.locator('g.trend-sf[data-uci="g1f3"]').count(),1);
+ await trendSummary.click();
+ await trendSummary.click();
+ assert.equal(await progress.innerText(),'6 of 6 ratings complete');
+ assert.equal((await extras()).length,5,'Reopening a complete chart must reuse its samples');
+
+ // Cancel a partly completed chart on the next position and resume only its missing ratings.
+ await trendPage.evaluate(()=>{window.holdRating=2200;window.__maiaStudioApp.goToPly(1);});
+ const priorFen=await trendPage.evaluate(()=>window.__maiaStudioApp.positions[1].fen);
+ await trendSummary.click();
+ await trendPage.waitForFunction(fen=>trendCalls.some(call=>call.fen===fen&&call.rating===2200),priorFen);
+ await trendPage.keyboard.press('ArrowRight');
+ await trendPage.waitForFunction(fen=>trendCalls.some(call=>call.fen===fen&&call.rating===2200&&call.aborted),priorFen);
+ await trendPage.waitForFunction(()=>window.__maiaStudioApp.currentPly===2&&trendCalls.some(call=>call.fen===window.__maiaStudioApp.positions[2].fen&&call.rating===1800));
+ assert.equal(await trend.getAttribute('open'),null);
+ assert.equal(await trend.locator('svg').count(),0,'A late previous-position sample must not resurrect the chart');
+ assert.deepEqual((await extras()).filter(call=>call.fen===priorFen).map(call=>call.rating),[1400,2200]);
+ await trendPage.evaluate(()=>{window.holdRating=null;window.__maiaStudioApp.goToPly(1);});
+ await trendSummary.click();
+ await trendPage.waitForFunction(()=>document.querySelector('.maia-trend-status')?.textContent.includes('6 of 6'));
+ assert.equal((await extras()).filter(call=>call.fen===priorFen&&call.rating===1400).length,1,'A completed pre-cancellation sample is reused');
+ const beforeOffGrid=(await extras()).length;
+ await trendPage.evaluate(()=>{const app=window.__maiaStudioApp;app.currentElo=1900;app.updateActivePositionAnalysis();});
+ await trendSummary.click();
+ await trendPage.waitForFunction(()=>document.querySelector('circle[data-elo="1900"]'));
+ assert.equal((await extras()).length,beforeOffGrid+1,'Off-grid marker uses the actual current prediction and reuses all six sampled ratings');
+ assert.equal(await trend.locator('.maia-trend-current').count(),1);
+ await trendPage.setViewportSize({width:390,height:844});
+ assert.equal(await trendPage.evaluate(()=>document.documentElement.scrollWidth),390);
+ await trendPage.close();
+ results.maiaTrend={lazy:true,sixRatings:true,cancel:true,resumeMissing:true};
  for(const lang of ['en','zh']){
   await page.setViewportSize({width:lang==='en'?1440:390,height:1000});
   await page.goto(origin+'/'+lang+'/');assert.equal(await page.locator('h1').count(),1);

@@ -7,7 +7,7 @@
 
 import { setModelCachePort } from './model-cache-client.js';
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261117-elo-trend';
 
 const engine = new MaiaInBrowserEngine();
 let activeRequestId = 0;
