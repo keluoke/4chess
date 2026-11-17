@@ -4,12 +4,12 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261117-ui';
+const CACHE_NAME = '4chess-review-20261117-game-handoff';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './analysis.js?v=20261117-ui',
+  './analysis.js?v=20261117-game-handoff',
   './analysis.css?v=20261103-jade',
   './workbench.css?v=20261117-ui',
   '../ui/fonts/InterVariable.woff2?v=4.1',
@@ -22,7 +22,7 @@ const STATIC_ASSETS = [
   '../engine/review-policy.js?v=20261103-jade',
   './review-practice.js?v=20261103-jade',
   './review-explorer.js',
-  './intuition-review.js?v=20261103-jade',
+  './intuition-review.js?v=20261117-game-handoff',
   './board-ui.js',
   './board-ui.js?v=20261117-ui',
   './workbench-motion.js?v=20261103-jade',
@@ -38,7 +38,7 @@ const STATIC_ASSETS = [
   './favicon.svg?v=2',
   '../icons/icon48.png?v=2',
   '../icons/icon128.png?v=2',
-  '../engine/game-analyzer.js?v=20261103-jade',
+  '../engine/game-analyzer.js?v=20261117-game-handoff',
   '../engine/chess-core.js',
   '../engine/chess-notation.js',
   '../engine/stockfish-inbrowser.js',

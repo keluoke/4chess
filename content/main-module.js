@@ -21,6 +21,7 @@ export async function initMaiaExtension() {
   const overlay = new HeatmapOverlay();
   let panel = null;
   let detector = null;
+  let actionPath = '';
   let predictionEpoch = 0;
   let engineInitStarted = false;
   let preferences = await readEnginePreferences();
@@ -96,6 +97,8 @@ export async function initMaiaExtension() {
         return;
       }
 
+      const sourcePath = location.pathname;
+      const gameSource = GameAnalyzer.gameSource(location);
       // Snapshot the displayed board now, before asynchronous PGN extraction.
       // A flip may have happened before the detector's debounced update.
       const hasSourceBoard = detector?.findBoard();
@@ -103,7 +106,7 @@ export async function initMaiaExtension() {
       const openingOrientation = hasSourceBoard ? detector.orientation : currentFen ? currentOrientation : null;
       const openStudio = async gameData => {
         // Extraction and engine work may yield while a new live game starts.
-        if (FairPlayGuard.isLiveGameInProgress()) return;
+        if (location.pathname !== sourcePath || FairPlayGuard.isLiveGameInProgress()) return;
         panel.setActionBusy('opening');
         if (!globalThis.chrome?.runtime?.sendMessage) throw new Error(panel.t('openFailed'));
         if (openingOrientation) gameData = { ...gameData, orientation: openingOrientation };
@@ -117,21 +120,18 @@ export async function initMaiaExtension() {
         panel.showToast(panel.t(gameData.fen ? 'positionOpened' : gameData.empty ? 'studioOpened' : 'gameOpened'));
       };
       if (mode === 'position' || mode === 'empty') {
-        if (mode === 'position' && !currentFen) throw new Error(panel.t('noMoves'));
-        return openStudio({ ...(mode === 'position' ? { fen: currentFen, orientation: currentOrientation } : { empty: true }), lang: panel.lang });
+        if (mode === 'empty') return openStudio({ empty: true, lang: panel.lang });
+        const fen = hasSourceBoard ? detector.extractFen() : currentFen;
+        if (!fen) throw new Error(panel.t('noMoves'));
+        return openStudio({ fen, orientation: currentOrientation, lang: panel.lang });
       }
 
       panel.showToast(panel.lang === 'zh' ? '正在提取棋谱数据...' : 'Extracting game moves...');
       const platform = detector ? detector.platform : (window.location.hostname.includes('lichess') ? 'lichess' : 'chesscom');
-      const moves = await GameAnalyzer.extractPageMoves(platform);
+      const moves = await GameAnalyzer.extractPageMoves();
 
-      if (!moves || moves.length === 0) {
-        if (currentFen && !FairPlayGuard.isLiveGameInProgress()) {
-          panel.setPositionContext(currentFen, 'position');
-          return openStudio({ fen: currentFen, orientation: currentOrientation, lang: panel.lang });
-        }
-        throw new Error(panel.t('noMoves'));
-      }
+      if (location.pathname !== sourcePath || FairPlayGuard.isLiveGameInProgress()) return;
+      if (!moves?.length) throw new Error(panel.t('noMoves'));
       // An unfinished variation on a permitted study board is a position input,
       // never a fabricated completed PGN or an exception to the review guard.
       if (currentFen && (!moves.result || moves.result === '*') && /\/(analysis|editor|study|practice|puzzles|lessons|classroom)(\/|$)/.test(location.pathname)) {
@@ -291,7 +291,7 @@ export async function initMaiaExtension() {
         black: blackPlayer,
         result: gameResult,
         pgn: moves.rawPgn || null,
-        url: window.location.href,
+        url: gameSource?.platform === 'lichess' ? `https://lichess.org/${gameSource.id}` : window.location.href,
         lang: panel.lang || 'zh'
       };
 
@@ -475,11 +475,18 @@ export async function initMaiaExtension() {
     ensureEngineInitialized();
   }
 
-  detector = new BoardDetector(async ({ fen, orientation, platform }) => {
+  function syncPositionContext() {
+    if (actionPath !== location.pathname) panel.container.querySelector('#panel-action-recovery').hidden = true;
+    actionPath = location.pathname;
+    const standaloneBoard = !GameAnalyzer.gameSource(location) && /\/(analysis|editor)(\/|$)/.test(actionPath);
+    const notation = standaloneBoard && document.querySelector('.vertical-move-list move, .move-list move, .move-list-row, kwdb, .tview2 move, .analyse__moves move');
+    panel.setPositionContext(currentFen, standaloneBoard && !notation ? 'position' : 'auto');
+  }
+
+  detector = new BoardDetector(async ({ fen, orientation }) => {
     currentFen = fen;
     currentOrientation = orientation;
-    const notation = document.querySelector('.vertical-move-list move, .move-list move, .move-list-row, kwdb, .tview2 move, .analyse__moves move');
-    panel.setPositionContext(fen, /\/(analysis|editor)(\/|$)/.test(location.pathname) && !notation ? 'position' : 'auto');
+    syncPositionContext();
     if (typeof window !== 'undefined') {
       window.__MAIA_CURRENT_FEN__ = fen;
     }
@@ -517,6 +524,7 @@ export async function initMaiaExtension() {
 
   // Instant observer for Fair Play state transitions (e.g. game finishes or starts)
   const handleFairPlayChange = (isLive) => {
+    if (currentFen && actionPath !== location.pathname) syncPositionContext();
     if (isLive !== panel.isFairPlayLocked) {
       panel.setFairPlayLocked(isLive);
       if (isLive) {

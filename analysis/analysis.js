@@ -1,6 +1,6 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-ui';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261103-jade';
+import { IntuitionReview } from './intuition-review.js?v=20261117-game-handoff';
 import { ReviewExplorer } from './review-explorer.js';
 import { isKeyMoment, moveQuality, intuitionKind, canPractice } from '../engine/review-policy.js?v=20261103-jade';
 import { ReviewPractice } from './review-practice.js?v=20261103-jade';
@@ -13,7 +13,7 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-v115';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261103-jade';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-game-handoff';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261103-jade';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
@@ -710,10 +710,10 @@ class AnalysisStudioApp {
 
 
     // 1. Detect Lichess Game URL
-    // e.g. https://lichess.org/aBcDeFgH or lichess.org/aBcDeFgH/white
-    const lichessMatch = text.match(/(?:https?:\/\/)?(?:www\.)?lichess\.org\/([a-zA-Z0-9]{8,12})/i);
-    if (lichessMatch) {
-      const gameId = lichessMatch[1].slice(0, 8);
+    const lichessPath = text.match(/^(?:https?:\/\/)?(?:www\.)?lichess\.org(\/[^?#\s]+)/i)?.[1];
+    const lichessGame = lichessPath && GameAnalyzer.gameSource({ hostname: 'lichess.org', pathname: lichessPath });
+    if (lichessGame) {
+      const { id: gameId } = lichessGame;
       this.showToast(t('toastFetchingLichess', { gameId }), 5000);
       try {
         const resp = await fetch(`https://lichess.org/game/export/${gameId}?moves=true&pgnInJson=true&clocks=true`, {

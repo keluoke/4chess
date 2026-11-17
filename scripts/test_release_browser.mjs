@@ -57,11 +57,19 @@ try {
   const current=app.el.metaWhite.textContent;
   app.toggleAutoPlay();app.startNewSession({pgn:'[Result "1-0"]\n1. e4 e5 1-0',autoReview:false});
   const playing=app.isPlaying;
+  let lichessExport;
+  window.fetch=async url=>{
+   lichessExport=new URL(url).pathname;
+   return Response.json({ status:'mate', pgn:'[Result "1-0"]\n1. e4 e5 1-0' });
+  };
+  const lichessGame=await app.smartLoadInput('https://lichess.org/game/AbCd1234wxyz');
   window.fetch=async()=>Response.json({game:{moveList:'mC0K',pgnHeaders:{Result:'*'}}});
   const unknown=await app.smartLoadInput('https://www.chess.com/game/live/12345678');window.fetch=original;
-  return {local,requests,current,playing,unknown};
+  return {local,requests,current,playing,unknown,lichessGame,lichessExport};
  });
  assert.equal(imports.local,true);assert.equal(imports.requests,0);assert(imports.current.includes('Latest'));assert.equal(imports.playing,false);assert.equal(imports.unknown,false);results.imports=imports;
+ assert.equal(imports.lichessGame,true);
+ assert.equal(imports.lichessExport,'/game/export/AbCd1234');
  await page.setViewportSize({width:1360,height:768});
  const notation = await page.evaluate(() => {
   const app = window.__maiaStudioApp;

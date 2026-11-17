@@ -169,71 +169,69 @@ export class GameAnalyzer {
     return moves;
   }
 
-  /**
-   * Multi-tiered move extraction from Lichess & Chess.com:
-   * Tier 1: Lichess Direct JSON & PGN API (with 8-character ID normalization)
-   * Tier 2: Main World Injected Bridge (reads board.game.getPGN() & moveList)
-   * Tier 3: Board element attributes (e.g. <chess-board moves="...">)
-   * Tier 4: Chess.com Callback API (TCN decode)
-   * Tier 5: DOM Move elements with Figurine Icon recovery
-   * Tier 6: In-page PGN textareas
-   */
-  static async extractPageMoves(platform) {
-    if (typeof window === 'undefined') return [];
-
-    // ------------------------------------------------------------------
-    // Tier 1: Lichess Direct Export API (CORS is open)
-    // ------------------------------------------------------------------
-    if (window.location.hostname.includes('lichess')) {
-      const lichessMatch = window.location.pathname.match(/^\/([a-zA-Z0-9]{8,12})/);
-      const NON_GAME_PATHS = new Set([
-        'analysis', 'training', 'practice', 'puzzles', 'study', 'editor',
-        'learn', 'tournament', 'broadcast', 'insights', 'streamer', 'patron',
-        'stat', 'class', 'inbox', 'forum', 'team', 'player', 'coach'
-      ]);
-      if (lichessMatch && lichessMatch[1] && !NON_GAME_PATHS.has(lichessMatch[1].toLowerCase())) {
-        const cleanId = lichessMatch[1].slice(0, 8);
-        console.log(`[GameAnalyzer] ⚡ Fetching Lichess game data for ID ${cleanId}...`);
-
-        try {
-          const resp = await fetch(`https://lichess.org/game/export/${cleanId}?moves=true&pgnInJson=true`, {
-            headers: { 'Accept': 'application/json' }
-          });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.pgn) {
-              const moves = GameAnalyzer.parsePgn(data.pgn);
-              if (moves.length > 0) {
-                console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from Lichess JSON API!`);
-                return moves;
-              }
-            }
-          }
-        } catch (e) {}
-
-        // Fallback to background worker
-        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-          try {
-            const res = await new Promise((resolve) => {
-              chrome.runtime.sendMessage({
-                type: 'FETCH_LICHESS_GAME_PGN',
-                gameId: cleanId
-              }, resolve);
-            });
-            if (res && res.ok && res.pgn) {
-              const moves = GameAnalyzer.parsePgn(res.pgn);
-              if (moves.length > 0) {
-                console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves via Lichess Background Worker!`);
-                return moves;
-              }
-            }
-          } catch (e) {}
-        }
+  /** Parse only game routes. Lichess player links can append a private four-character suffix. */
+  static gameSource({ hostname, pathname }) {
+    if (hostname === 'lichess.org' || hostname.endsWith('.lichess.org')) {
+      const match = pathname.match(/^\/(?:game\/)?([A-Za-z0-9]{8}(?:[A-Za-z0-9]{4})?)(?:\/(?:white|black))?(?:\/analysis)?\/?$/);
+      const id = match?.[1];
+      if (id && !['analysis', 'training', 'practice', 'broadcast', 'insights', 'streamer'].includes(id.toLowerCase())) {
+        return { platform: 'lichess', id: id.slice(0, 8) };
       }
     }
+    if (hostname === 'chess.com' || hostname.endsWith('.chess.com')) {
+      const match = pathname.match(/^\/(?:analysis\/game\/|game\/|play\/online\/game\/)(?:(live|daily)\/)?(\d{8,16})(?:\/(?:review|analysis))?\/?$/);
+      if (match) return { platform: 'chesscom', id: match[2], type: match[1] || 'live' };
+    }
+    return null;
+  }
+
+  static async extractFinishedGame(source) {
+    const lichess = source.platform === 'lichess';
+    const exportUrl = `https://lichess.org/game/export/${source.id}`;
+    const sources = lichess ? [
+      { url: `${exportUrl}?moves=true&pgnInJson=true` },
+      { url: exportUrl, raw: true }
+    ] : [
+      { url: `/callback/${source.type}/game/${source.id}` },
+      { url: `https://4chess.cc/api/chesscom?id=${source.id}&type=${source.type}` }
+    ];
+
+    for (const { url, raw } of sources) {
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: raw ? 'application/x-chess-pgn' : 'application/json' },
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!response.ok) continue;
+        const data = raw ? { pgn: await response.text() } : await response.json();
+        const game = data.game ? { ...data.game, pgn: data.game.pgn || data.pgn } : data;
+        if (!game.pgn && !game.moveList) continue;
+        const conclusion = FairPlayGuard.verifyConcludedGame(game);
+        if (!conclusion.ok) return [];
+
+        let pgn = game.pgn;
+        if (!pgn && !lichess) {
+          const moves = GameAnalyzer.tcnToSanMoves(game.moveList);
+          if (!moves.length || moves.length * 2 !== game.moveList.length) continue;
+          pgn = GameAnalyzer.movesToPgn(moves, { ...game.pgnHeaders, Result: conclusion.result });
+        }
+        const moves = GameAnalyzer.parsePgn(pgn);
+        if (moves.length && !GameAnalyzer.buildPositionChain(moves).isPartial) return moves;
+      } catch (error) {
+        console.debug('[GameAnalyzer] Game export unavailable:', error.message);
+      }
+    }
+    return [];
+  }
+
+  /** Prefer the platform's complete record when the page identifies a game. */
+  static async extractPageMoves() {
+    if (typeof window === 'undefined' || FairPlayGuard.isLiveGameInProgress()) return [];
+    const source = GameAnalyzer.gameSource(window.location);
+    if (source) return GameAnalyzer.extractFinishedGame(source);
 
     // ------------------------------------------------------------------
-    // Tier 2: Chess.com Main World Script Bridge (Instant & Complete)
+    // Chess.com Main World Script Bridge
     // ------------------------------------------------------------------
     if (window.location.hostname.includes('chess.com')) {
       try {
@@ -264,7 +262,7 @@ export class GameAnalyzer {
     }
 
     // ------------------------------------------------------------------
-    // Tier 3: Chess.com <chess-board moves="..."> attribute
+    // Chess.com <chess-board moves="..."> attribute
     // ------------------------------------------------------------------
     const boardEl = document.querySelector('wc-chess-board, chess-board');
     if (boardEl) {
@@ -279,68 +277,7 @@ export class GameAnalyzer {
     }
 
     // ------------------------------------------------------------------
-    // Tier 4: Chess.com Callback API & TCN Decoder
-    // ------------------------------------------------------------------
-    const numMatch = window.location.pathname.match(/\b(\d{8,15})\b/);
-    if (numMatch && numMatch[1] && window.location.hostname.includes('chess.com')) {
-      const gameId = numMatch[1];
-      const gameType = window.location.pathname.includes('daily') ? 'daily' : 'live';
-      console.log(`[GameAnalyzer] ⚡ Querying Chess.com callback for game ID ${gameId}...`);
-
-      for (const t of [gameType, 'live', 'daily']) {
-        try {
-          const cbUrl = `/callback/${t}/game/${gameId}`;
-          const cbRes = await fetch(cbUrl, {
-            headers: { 'Accept': 'application/json' },
-            credentials: 'include'
-          });
-          if (cbRes.ok) {
-            const cbData = await cbRes.json();
-            if (cbData.game?.pgn) {
-              const moves = GameAnalyzer.parsePgn(cbData.game.pgn);
-              if (moves.length > 0) {
-                console.log(`[GameAnalyzer] ✅ Retrieved ${moves.length} moves from ${t} callback PGN!`);
-                return moves;
-              }
-            }
-            if (cbData.game?.moveList) {
-              const moves = GameAnalyzer.tcnToSanMoves(cbData.game.moveList);
-              if (moves.length > 0) {
-                const cbWhite = cbData.players?.bottom?.color === 'white' ? cbData.players?.bottom?.username : cbData.players?.top?.username || cbData.game?.whiteUser || cbData.game?.pgnHeaders?.White;
-                const cbBlack = cbData.players?.bottom?.color === 'black' ? cbData.players?.bottom?.username : cbData.players?.top?.username || cbData.game?.blackUser || cbData.game?.pgnHeaders?.Black;
-                if (cbWhite) moves.white = cbWhite;
-                if (cbBlack) moves.black = cbBlack;
-                console.log(`[GameAnalyzer] ✅ Decoded ${moves.length} moves from ${t} callback!`);
-                return moves;
-              }
-            }
-          }
-        } catch (cbErr) {}
-      }
-
-      // Background service worker fallback
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        try {
-          const res = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({
-              type: 'FETCH_CHESSCOM_GAME_PGN',
-              gameId,
-              gameType
-            }, resolve);
-          });
-          if (res && res.ok) {
-            if (res.moves && res.moves.length > 0) return res.moves;
-            if (res.pgn) {
-              const moves = GameAnalyzer.parsePgn(res.pgn);
-              if (moves.length > 0) return moves;
-            }
-          }
-        } catch (bgErr) {}
-      }
-    }
-
-    // ------------------------------------------------------------------
-    // Tier 5: Search for Move elements in DOM (with figurine icon recovery)
+    // Search for move elements in the DOM (with figurine icon recovery)
     // ------------------------------------------------------------------
     const domSelectors = [
       '[data-ply]',
@@ -410,7 +347,7 @@ export class GameAnalyzer {
       }
 
       // ------------------------------------------------------------------
-      // Tier 6: In-page PGN textareas
+      // In-page PGN textareas
       // ------------------------------------------------------------------
       const pgnElements = document.querySelectorAll('textarea.share-menu-tab-pgn-textarea, textarea.copyable, .copyables textarea, [pgn-headers], [pgn]');
       for (const el of pgnElements) {

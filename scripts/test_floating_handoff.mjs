@@ -102,6 +102,49 @@ try {
     await opened.close(); await host.close();
   }
 
+  // Game Review can have a readable board before it mounts any notation.
+  const chessReviewUrl = 'https://www.chess.com/analysis/game/live/12345678/review?flip=false';
+  const lichessGameUrl = 'https://lichess.org/game/AbCd1234wxyz';
+  const chessReview = '<wc-chess-board style="display:block;width:320px;height:320px"><div class="piece wk square-11"></div><div class="piece bk square-88"></div></wc-chess-board><h1>Game Review</h1>';
+  const lichessRound = '<div class="cg-wrap"><cg-board style="display:block;position:relative;width:320px;height:320px"><piece class="white king" style="position:absolute;left:0;top:280px;width:40px;height:40px"></piece><piece class="black king" style="position:absolute;left:280px;top:0;width:40px;height:40px"></piece></cg-board></div><div class="result-wrap">1-0 White is victorious</div>';
+  await context.route(chessReviewUrl, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><body>' + chessReview }));
+  await context.route(lichessGameUrl, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><body>' + lichessRound }));
+  await context.route('https://www.chess.com/callback/live/game/12345678', route => route.fulfill({ status: 403 }));
+  await context.route('https://4chess.cc/api/chesscom?id=12345678&type=live', route => route.fulfill({
+    json: { game: { isFinished: true, moveList: 'mC0Kgv5Q', pgnHeaders: { White: 'UX White', Black: 'UX Black', Result: '1-0' } } }
+  }));
+  const lichessExports = [];
+  let lichessStatus = 'started';
+  await context.route('https://lichess.org/game/export/**', route => {
+    lichessExports.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ json: { status: lichessStatus, pgn } });
+  });
+  for (const source of [chessReviewUrl, lichessGameUrl]) {
+    const host = await context.newPage();
+    await host.goto(source);
+    const action = host.getByRole('button', { name: 'Full Game Analysis', exact: true });
+    await action.waitFor();
+    assert.equal(await action.isEnabled(), true);
+    if (source === lichessGameUrl) {
+      const openBefore = context.pages().length;
+      await action.click();
+      await host.getByText('Could not load the complete finished game.', { exact: false }).waitFor();
+      assert.equal(context.pages().length, openBefore, 'An unverified game must not silently open a position');
+      assert.equal(await action.isEnabled(), true);
+      assert.equal(await host.getByRole('button', { name: 'Open position in studio' }).isVisible(), true);
+      lichessStatus = 'mate';
+    }
+    const openedPage = context.waitForEvent('page');
+    await (source === lichessGameUrl ? host.getByRole('button', { name: 'Retry', exact: true }) : action).click();
+    const opened = await openedPage;
+    await opened.goto(await worker.evaluate(() => globalThis.handoffTargetUrl));
+    await opened.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
+    assert.match(await opened.locator('#meta-result').innerText(), /1-0/);
+    await opened.close();
+    await host.close();
+  }
+  assert.deepEqual(lichessExports, ['/game/export/AbCd1234', '/game/export/AbCd1234'], 'Only the public game ID reaches the export endpoint');
+
   const invalid = await send({ fen: 'invalid-fen' }); assert.equal(invalid.ok, false);
   await worker.evaluate(() => { globalThis.savedTabsCreate = chrome.tabs.create; chrome.tabs.create = (_options, callback) => callback(undefined); });
   const failedOpen = await send({ empty: true }); assert.equal(failedOpen.ok, false, 'A failed tab creation must never report success');
