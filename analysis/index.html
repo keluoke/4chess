@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261117-review-guide">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261117-review-guide">
+  <link rel="stylesheet" href="workbench.css?v=20261117-trend-engines">
 </head>
 <body class="diverge-ui">
   <script>
@@ -225,10 +225,23 @@
       </div>
       <p class="maia-trend-status" role="status"></p>
     </div>
+    <ul class="maia-trend-legend" data-i18n-aria="maiaTrendLegend" aria-label="着法图例"></ul>
     <div class="maia-trend-chart"></div>
     <div class="maia-trend-data" hidden><table></table></div>
-    <ul class="maia-trend-legend"></ul>
     <button type="button" class="btn-header maia-trend-retry" data-i18n="maiaTrendRetry" hidden>重试缺失档位</button>
+    <footer class="maia-trend-footer">
+      <div class="maia-trend-sources"><p id="maia-trend-probability-source"></p><p id="maia-trend-evaluation-source"></p></div>
+      <button type="button" id="maia-trend-settings-toggle" class="btn-header" aria-controls="maia-trend-settings" aria-expanded="false" data-i18n="maiaTrendSettings">引擎设置</button>
+      <form id="maia-trend-settings" hidden>
+        <label><span data-i18n="intuitionEdition">直觉版本</span><select id="maia-trend-model" class="btn-header"></select></label>
+        <label><span data-i18n="engineEdition">引擎版本</span><select id="maia-trend-engine" class="btn-header"></select></label>
+        <p id="maia-trend-extension-note" hidden><a href="https://4chess.cc/analysis/" target="_blank" rel="noopener" data-i18n="standardWebOnly">本地扩展页面使用 SF19 Lite；标准版请打开网页版复盘</a></p>
+        <div class="maia-trend-settings-actions">
+          <button type="button" id="maia-trend-settings-cancel" class="btn-header" data-i18n="btnCancel">取消</button>
+          <button type="submit" class="btn-header btn-primary" data-i18n="maiaTrendApply">应用并刷新</button>
+        </div>
+      </form>
+    </footer>
   </dialog>
 
   <dialog class="review-settings-dialog" id="review-settings" data-i18n-aria="reviewSettings" aria-label="复盘设置">
@@ -294,11 +307,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261117-review-guide"></script>
+  <script type="module" src="analysis.js?v=20261117-trend-engines"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261117-review-guide').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261117-trend-engines').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

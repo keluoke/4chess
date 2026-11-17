@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261117-review-guide';
+import { t } from './i18n.js?v=20261117-trend-engines';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { retryVerdict, canPractice } from '../engine/review-policy.js?v=20261103-jade';
 

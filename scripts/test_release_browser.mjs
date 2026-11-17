@@ -93,27 +93,38 @@ try {
   const app=window.__maiaStudioApp;
   const {ChessBoard}=await import('../engine/chess-core.js');
   app.currentElo=1800;
-  app.maiaEngine.initialize=async()=>true;
   window.trendCalls=[];
-  app.maiaEngine.predict=async(fen,rating,_sf,canceled)=>{
-   const call={fen,rating,aborted:false};
-   trendCalls.push(call);
-   if(window.holdRating===rating){
-    await new Promise(resolve=>{
-     const timer=setInterval(()=>{if(canceled()){clearInterval(timer);call.aborted=true;resolve();}},5);
-    });
-   }
-   const moves=new ChessBoard(fen).getLegalMoves();
-   const rank=rating===600?['g1h3','g1f3','d2d4','c2c4','e2e4']:['e2e4','d2d4','c2c4','g1f3'];
-   const ordered=[...rank.map(uci=>moves.find(move=>move.uci===uci)).filter(Boolean),...moves.filter(move=>!rank.includes(move.uci))];
-   return {moves:ordered.map((move,index)=>({...move,rawProb:1/(index+4),prob:100/(index+4)}))};
+  const mockEngines=()=>{
+   const model=app.maiaEngine.variant;
+   app.maiaEngine.initialize=async()=>true;
+   app.maiaEngine.predict=async(fen,rating,_sf,canceled)=>{
+    const call={fen,rating,model,aborted:false};
+    trendCalls.push(call);
+    if(window.holdRating===rating){
+     await new Promise(resolve=>{
+      const timer=setInterval(()=>{
+       if(canceled() || window.holdRating!==rating){clearInterval(timer);call.aborted=canceled();resolve();}
+      },5);
+     });
+    }
+    const moves=new ChessBoard(fen).getLegalMoves();
+    const rank=rating===600?['g1h3','g1f3','d2d4','c2c4','e2e4']:['e2e4','d2d4','c2c4','g1f3'];
+    const ordered=[...rank.map(uci=>moves.find(move=>move.uci===uci)).filter(Boolean),...moves.filter(move=>!rank.includes(move.uci))];
+    return {moves:ordered.map((move,index)=>({...move,rawProb:1/(index+4),prob:100/(index+4)}))};
+   };
+   const stockfish=app.stockfish.variant;
+   app.stockfish.initialize=async()=>true;
+   app.stockfish.evaluate=async(fen,depth)=>{
+    const moves=new ChessBoard(fen).getLegalMoves();
+    const bestMove=moves.find(move=>move.uci==='g1f3')||moves[0];
+    return {bestMove,scoreCp:25,depth:stockfish==='standard'?depth-1:depth};
+   };
   };
-  app.stockfish.initialize=async()=>true;
-  app.stockfish.evaluate=async(fen,depth)=>{
-   const moves=new ChessBoard(fen).getLegalMoves();
-   const bestMove=moves.find(move=>move.uci==='g1f3')||moves[0];
-   return {bestMove,scoreCp:25,depth};
-  };
+  const init=app.initEngines.bind(app);
+  app.initEngines=options=>{init(options);mockEngines();};
+  mockEngines();
+  window.reviewResumeCount=0;
+  app.runFullReview=()=>{window.reviewResumeCount++;app.reviewPendingResume=false;};
   app.startNewSession({pgn:'[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 1-0',autoReview:false});
  });
  const trend=trendPage.locator('#maia-elo-trend');
@@ -136,6 +147,21 @@ try {
  assert.equal(await trend.locator('g.maia-trend-series').count(),4);
  assert.equal(await trend.locator('g[data-uci="e2e4"] circle[data-elo="600"]').count(),1,'A move outside the sampled top three retains its actual probability');
  assert.equal(await trend.locator('g.trend-sf[data-uci="g1f3"]').count(),1);
+ const legend=trend.locator('.maia-trend-legend');
+ const maiaMove=legend.getByRole('button',{name:/^M e4 · Δ/});
+ const e4Line=trend.locator('g[data-uci="e2e4"]');
+ assert.equal(await legend.getByRole('button').count(),4);
+ assert.equal(await legend.getByRole('button',{name:/^★ Nf3 · Δ/}).count(),1);
+ assert.deepEqual(await maiaMove.locator('path').evaluate(path=>[getComputedStyle(path).stroke,getComputedStyle(path).strokeDasharray]),
+  await e4Line.locator('path').evaluate(path=>[getComputedStyle(path).stroke,getComputedStyle(path).strokeDasharray]));
+ await maiaMove.click();
+ assert.equal(await maiaMove.getAttribute('aria-pressed'),'true');
+ assert.equal(await trend.locator('g.trend-muted').count(),3);
+ assert.equal(await e4Line.evaluate(group=>getComputedStyle(group).opacity),'1');
+ await trendPage.evaluate(()=>window.__maiaStudioApp.positionAnalysis.render());
+ assert.equal(await maiaMove.getAttribute('aria-pressed'),'true');
+ assert.equal(await trendPage.evaluate(()=>document.activeElement.dataset.uci),'e2e4');
+ assert.match(await trend.locator('.maia-trend-sources').innerText(),/Move probabilities · Maia-3 5M\s+Top move and Δ scores · Stockfish 19 Lite · Root search D10/);
  await trend.getByRole('button',{name:'Sampled values',exact:true}).click();
  assert.equal(await trend.locator('table tbody tr').count(),6);
  assert.equal(await trend.locator('.maia-trend-chart').isVisible(),false);
@@ -183,7 +209,37 @@ try {
  const sheet=await trend.boundingBox();
  assert(sheet.x>=0 && sheet.x+sheet.width<=391 && Math.abs(sheet.y+sheet.height-844)<2,'Mobile dialog fits as a bottom sheet');
  await trendPage.screenshot({path:path.join(output,'maia-elo-mobile.png')});
+ const settings=trend.getByRole('button',{name:'Engine settings',exact:true});
+ const model=trend.locator('#maia-trend-model');
+ const sf=trend.locator('#maia-trend-engine');
+ await settings.click();
+ await model.selectOption('79m');
+ await trend.getByRole('button',{name:'Cancel',exact:true}).click();
+ assert.equal(await trendPage.locator('#intuition-edition').inputValue(),'5m');
+ await settings.click();
+ assert.equal(await model.inputValue(),'5m');
+ await model.selectOption('23m');
+ await sf.selectOption('standard');
+ assert.equal(await trend.locator('#maia-trend-settings').evaluate(form=>form.scrollWidth<=form.clientWidth),true);
+ await trendPage.evaluate(()=>{window.holdRating=1900;});
+ await trend.getByRole('button',{name:'Apply and refresh',exact:true}).click();
+ assert.equal(await trend.isVisible(),true);
+ assert.equal(await trend.locator('g.maia-trend-series').count(),0,'Old curves are cleared while the new model is pending');
+ assert.match(await progress.innerText(),/new settings/);
+ await trendPage.waitForFunction(()=>trendCalls.some(call=>call.model==='23m'&&call.rating===1900));
+ await trendPage.evaluate(()=>{window.holdRating=null;});
+ await trendPage.waitForFunction(()=>document.querySelector('.maia-trend-status')?.textContent.includes('6 of 6'));
+ assert.match(await trend.locator('.maia-trend-sources').innerText(),/Maia-3 23M\s+Top move and Δ scores · Stockfish 19 Standard · Root search D9/);
+ assert.deepEqual(await trendPage.evaluate(()=>trendCalls.filter(call=>call.model==='23m').map(({fen,rating})=>[fen,rating]).sort((a,b)=>a[1]-b[1])),
+  [600,1000,1400,1800,1900,2200,2600].map(rating=>[priorFen,rating]));
+ assert.equal(await trendPage.locator('#intuition-edition').inputValue(),'23m');
+ assert.equal(await trendPage.locator('#engine-edition').inputValue(),'standard');
+ assert.deepEqual(await trendPage.evaluate(()=>{
+  const {maiaVariant,stockfishVariant}=JSON.parse(localStorage.getItem('diverge_preferences'));
+  return [maiaVariant,stockfishVariant,reviewResumeCount];
+ }),['23m','standard',0]);
  await closeTrend.click();
+ await trendPage.waitForFunction(()=>reviewResumeCount===1);
  const helpTabPromise=context.waitForEvent('page');
  await trendPage.getByRole('link',{name:'Review guide',exact:true}).click();
  const helpTab=await helpTabPromise;
@@ -193,7 +249,7 @@ try {
  assert.equal(await trendPage.evaluate(()=>window.__maiaStudioApp.currentPly),1,'Reading the guide preserves the review position');
  await helpTab.close();
  await trendPage.close();
- results.maiaTrend={lazy:true,sixRatings:true,cancel:true,resumeMissing:true};
+ results.maiaTrend={lazy:true,sixRatings:true,cancel:true,resumeMissing:true,interactiveLegend:true,engineProvenance:true,refreshInPlace:true};
  for(const lang of ['en','zh']){
   await page.setViewportSize({width:lang==='en'?1440:390,height:1000});
   await page.goto(origin+'/'+lang+'/');assert.equal(await page.locator('h1').count(),1);

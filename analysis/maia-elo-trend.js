@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261117-review-guide';
+import { t } from './i18n.js?v=20261117-trend-engines';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const RATINGS = [600, 1000, 1400, 1800, 2200, 2600];
@@ -37,17 +37,29 @@ export class MaiaEloTrend {
     this.table = this.data.querySelector('table');
     this.retry = dialog.querySelector('.maia-trend-retry');
     this.views = [...dialog.querySelectorAll('[data-trend-view]')];
+    this.probabilitySource = dialog.querySelector('#maia-trend-probability-source');
+    this.evaluationSource = dialog.querySelector('#maia-trend-evaluation-source');
+    this.settings = dialog.querySelector('#maia-trend-settings');
+    this.settingsToggle = dialog.querySelector('#maia-trend-settings-toggle');
+    this.engineFields = [['model', 'intuition-edition'], ['engine', 'engine-edition']].map(([name, id]) => ({
+      trend: dialog.querySelector(`#maia-trend-${name}`),
+      workbench: document.getElementById(id)
+    }));
     this.cache = new Map();
     opener.onclick = () => {
       if (dialog.open || !analysis.current(this.snapshot) || FairPlayGuard.isLiveGameInProgress()) return;
       if (analysis.app.isPlaying) analysis.app.toggleAutoPlay();
       this.setView('chart');
+      this.highlight(null);
       dialog.showModal();
       void this.start();
     };
     dialog.querySelector('#maia-trend-close').onclick = () => dialog.close();
     dialog.addEventListener('close', () => {
-      if (!dialog.open) this.request = null;
+      if (dialog.open) return;
+      this.request = this.refreshTarget = null;
+      this.setSettingsOpen(false);
+      analysis.app.scheduleReviewResume();
     });
     dialog.addEventListener('click', event => {
       if (event.target !== dialog) return;
@@ -55,10 +67,62 @@ export class MaiaEloTrend {
       if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
     });
     for (const button of this.views) button.onclick = () => this.setView(button.dataset.trendView);
-    this.retry.onclick = () => this.start();
+    this.retry.onclick = () => this.refreshTarget ? analysis.refresh() : this.start();
+    this.settingsToggle.onclick = () => this.setSettingsOpen(this.settings.hidden, true);
+    dialog.querySelector('#maia-trend-settings-cancel').onclick = () => this.setSettingsOpen(false, true);
+    this.settings.onsubmit = event => {
+      event.preventDefault();
+      this.applySettings();
+    };
   }
 
+  get isOpen() { return this.dialog.open; }
   get busy() { return this.request?.running === true && this.dialog.open; }
+
+  setSettingsOpen(open, focus = false) {
+    if (open) {
+      for (const { trend, workbench } of this.engineFields) {
+        trend.replaceChildren(...Array.from(workbench.options, option => option.cloneNode(true)));
+        trend.value = workbench.value;
+      }
+      this.settings.querySelector('#maia-trend-extension-note').hidden = document.getElementById('extension-standard-note').hidden;
+    }
+    this.settings.hidden = !open;
+    this.settingsToggle.setAttribute('aria-expanded', String(open));
+    if (focus) (open ? this.engineFields[0].trend : this.settingsToggle).focus();
+  }
+
+  applySettings() {
+    const { app } = this.analysis;
+    if (app.scanSourceLocked || app.practice?.active || !this.dialog.open || FairPlayGuard.isLiveGameInProgress()) return;
+    const ctx = this.analysis.context();
+    if (!ctx || this.engineFields.some(({ trend }) => trend.selectedIndex < 0 || trend.selectedOptions[0].disabled)) return;
+    this.setSettingsOpen(false, true);
+    if (this.engineFields.every(({ trend, workbench }) => trend.value === workbench.value)) return;
+    this.refreshTarget = { ctx, positions: app.positions, branch: app.isBranching ? app.activeBranch : null };
+    for (const { trend, workbench } of this.engineFields) workbench.value = trend.value;
+    app.changeEngineVersions({ prioritizePosition: true });
+  }
+
+  isRefreshingHere() {
+    const { app } = this.analysis;
+    const target = this.refreshTarget;
+    if (!target || !this.dialog.open || target.positions !== app.positions || target.branch !== (app.isBranching ? app.activeBranch : null) ||
+        app.scanSourceLocked || app.practice?.active || FairPlayGuard.isLiveGameInProgress()) return false;
+    const ctx = this.analysis.context();
+    return ctx?.fen === target.ctx.fen && ctx.ply === target.ctx.ply && ctx.history.join(';') === target.ctx.history.join(';');
+  }
+
+  renderSources(snapshot, lines) {
+    const { maiaEngine, stockfish } = this.analysis.app;
+    this.probabilitySource.textContent = t('maiaTrendProbabilitySource', { model: maiaEngine.getModelName() });
+    const depth = snapshot?.entry.sf?.depth;
+    const status = lines.length && Number.isFinite(depth) ? t('maiaTrendDepth', { depth })
+      : t(snapshot?.entry.sfFailed ? 'maiaTrendScoreUnavailable' : 'maiaTrendAwaitingScore');
+    this.evaluationSource.textContent = t('maiaTrendEvaluationSource', {
+      engine: t(stockfish.variant === 'standard' ? 'maiaTrendStockfishStandard' : 'maiaTrendStockfishLite'), status
+    });
+  }
 
   setView(view) {
     this.chart.hidden = view !== 'chart';
@@ -69,7 +133,6 @@ export class MaiaEloTrend {
   reset() {
     this.request = null;
     this.opener.hidden = true;
-    if (this.dialog.open) this.dialog.close();
     this.snapshot = null;
     this.chart.replaceChildren();
     this.legend.replaceChildren();
@@ -77,15 +140,37 @@ export class MaiaEloTrend {
     this.caption.textContent = '';
     this.status.textContent = '';
     this.retry.hidden = true;
+    this.highlight(null);
+    if (this.isRefreshingHere()) {
+      this.status.textContent = t('maiaTrendRefreshing');
+      this.renderSources(null, []);
+      return;
+    }
+    this.refreshTarget = null;
+    if (this.dialog.open) this.dialog.close();
+    this.probabilitySource.textContent = this.evaluationSource.textContent = '';
   }
 
   update(snapshot, moves = [], lines = []) {
-    if (!snapshot || !moves.length) { this.reset(); return; }
+    if (this.refreshTarget) {
+      if (!this.isRefreshingHere()) { this.reset(); return; }
+      if (!snapshot || !moves.length) {
+        const failed = snapshot?.entry.maiaFailed;
+        this.status.textContent = t(failed ? 'intuitionUnavailable' : 'maiaTrendRefreshing');
+        this.retry.textContent = t('maiaTrendRetryPosition');
+        this.retry.hidden = !failed;
+        this.renderSources(snapshot, lines);
+        return;
+      }
+      this.refreshTarget = null;
+    } else if (!snapshot || !moves.length) { this.reset(); return; }
     this.snapshot = snapshot;
     this.moves = moves;
     this.lines = lines;
     this.opener.hidden = false;
-    if (this.dialog.open && this.request) this.render(this.request);
+    if (!this.dialog.open) return;
+    if (this.request) this.render(this.request);
+    else void this.start();
   }
 
   async start() {
@@ -152,12 +237,47 @@ export class MaiaEloTrend {
     });
   }
 
+  highlight(uci) {
+    this.highlighted = uci;
+    for (const button of this.legend.querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(button.dataset.uci === uci));
+    }
+    for (const element of this.dialog.querySelectorAll('.maia-trend-chart g[data-uci], .maia-trend-data [data-uci]')) {
+      element.classList.toggle('trend-muted', uci !== null && element.dataset.uci !== uci);
+    }
+  }
+
+  renderLegend(series) {
+    const remaining = new Map(Array.from(this.legend.children, item => [item.dataset.uci, item]));
+    for (const [index, move] of series.entries()) {
+      let item = remaining.get(move.uci);
+      remaining.delete(move.uci);
+      if (!item) {
+        item = document.createElement('li');
+        item.dataset.uci = move.uci;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.uci = move.uci;
+        button.onclick = () => this.highlight(this.highlighted === move.uci ? null : move.uci);
+        const swatch = svgElement('svg', { viewBox: '0 0 30 12', width: 30, height: 12, 'aria-hidden': 'true' });
+        swatch.append(svgElement('path', { d: 'M2 6H28' }));
+        button.append(swatch, document.createElement('span'));
+        item.append(button);
+      }
+      item.className = `maia-trend-series trend-${move.role}`;
+      item.querySelector('span').textContent = `${move.label} · Δ ${move.delta}`;
+      if (this.legend.children[index] !== item) this.legend.insertBefore(item, this.legend.children[index] || null);
+    }
+    for (const item of remaining.values()) item.remove();
+  }
+
   render(request) {
     const { samples, snapshot, running } = request;
     const elo = snapshot.ctx.elo;
     const complete = RATINGS.filter(rating => samples.has(rating)).length;
     const incomplete = !running && complete < RATINGS.length;
     this.status.textContent = t(incomplete ? 'maiaTrendPartial' : 'maiaTrendProgress', { count: complete, total: RATINGS.length });
+    this.retry.textContent = t('maiaTrendRetry');
     this.retry.hidden = !incomplete;
     const series = this.series(request);
     const x = rating => 36 + (rating - RATINGS[0]) / 2000 * 360;
@@ -172,14 +292,15 @@ export class MaiaEloTrend {
     for (const rating of RATINGS) svg.append(svgElement('text', { x: x(rating), y: 153, 'text-anchor': 'middle' }, rating));
     svg.append(svgElement('line', { x1: x(elo), x2: x(elo), y1: y(100), y2: y(0), class: 'maia-trend-current' }));
 
-    this.legend.replaceChildren();
+    this.renderLegend(series);
     const ratings = [...new Set([...RATINGS, elo])].sort((a, b) => a - b);
     this.table.replaceChildren();
     const head = this.table.createTHead().insertRow();
-    for (const title of ['Elo', ...series.map(move => move.label)]) {
+    for (const { label, uci } of [{ label: 'Elo' }, ...series]) {
       const th = document.createElement('th');
       th.scope = 'col';
-      th.textContent = title;
+      th.textContent = label;
+      if (uci) th.dataset.uci = uci;
       head.append(th);
     }
     const body = this.table.createTBody();
@@ -189,13 +310,13 @@ export class MaiaEloTrend {
       th.scope = 'row';
       th.textContent = rating;
       row.append(th);
-      for (const move of series) row.insertCell().textContent = formatProbability(samples.get(rating)?.get(move.uci));
+      for (const move of series) {
+        const cell = row.insertCell();
+        cell.dataset.uci = move.uci;
+        cell.textContent = formatProbability(samples.get(rating)?.get(move.uci));
+      }
     }
     for (const move of series) {
-      const item = document.createElement('li');
-      item.className = `maia-trend-series trend-${move.role}`;
-      item.textContent = `${move.label} · Δ ${move.delta}`;
-      this.legend.append(item);
       const group = svgElement('g', { class: `maia-trend-series trend-${move.role}`, 'data-uci': move.uci });
       let d = '', connected = false;
       for (const rating of RATINGS) {
@@ -216,5 +337,7 @@ export class MaiaEloTrend {
     }
     this.caption.textContent = `${t('maiaTrendProbability')} · ${t('maiaTrendCurrent', { elo })}`;
     this.chart.replaceChildren(svg);
+    this.highlight(series.some(move => move.uci === this.highlighted) ? this.highlighted : null);
+    this.renderSources(snapshot, this.lines);
   }
 }

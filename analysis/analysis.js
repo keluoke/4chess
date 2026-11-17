@@ -1,9 +1,9 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-review-guide';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-trend-engines';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261117-review-guide';
-import { ReviewExplorer } from './review-explorer.js?v=20261117-review-guide';
+import { IntuitionReview } from './intuition-review.js?v=20261117-trend-engines';
+import { ReviewExplorer } from './review-explorer.js?v=20261117-trend-engines';
 import { isKeyMoment, moveQuality, intuitionKind, canPractice } from '../engine/review-policy.js?v=20261103-jade';
-import { ReviewPractice } from './review-practice.js?v=20261117-review-guide';
+import { ReviewPractice } from './review-practice.js?v=20261117-trend-engines';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -15,12 +15,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261025-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-game-handoff';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261117-review-guide';
+import { EvalChart } from './eval-chart.js?v=20261117-trend-engines';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261117-review-guide';
+import { PositionAnalysis } from './position-analysis.js?v=20261117-trend-engines';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261117-review-guide';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261117-trend-engines';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -1289,7 +1289,7 @@ class AnalysisStudioApp {
     return GameAnalyzer.getGameKey(this.moves, { depth: GameAnalyzer.DEFAULT_DEPTH, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
   }
 
-  changeEngineVersions({ persist = true } = {}) {
+  changeEngineVersions({ persist = true, prioritizePosition = false } = {}) {
     const engine = document.getElementById('engine-edition').value;
     const model = document.getElementById('intuition-edition').value;
     if (engine === this.engineVariant && model === this.modelVariant) return;
@@ -1299,6 +1299,8 @@ class AnalysisStudioApp {
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
     this.reviewEpoch++;
+    clearTimeout(this.resumeReviewTimer);
+    this.fullReviewRunning = this.reviewPendingResume = false;
     this.intuitionReview?.dispose();
     this.gameEpoch++;
     this.maiaEngine.dispose();
@@ -1335,8 +1337,12 @@ class AnalysisStudioApp {
     if (retainedCore) {
       this.applyReviewResult(retainedCore);
       this.intuitionReview.start();
-    } else if (this.moves.length && !this.isBranching) this.runFullReview();
-    else this.updateActivePositionAnalysis();
+    } else if (this.moves.length && !this.isBranching && !prioritizePosition) this.runFullReview();
+    else {
+      this.reviewPendingResume = !!this.moves.length;
+      this.updateActivePositionAnalysis();
+      this.scheduleReviewResume();
+    }
   }
 
   scrollWithin(element, container) {
@@ -2032,11 +2038,11 @@ class AnalysisStudioApp {
   }
 
   scheduleReviewResume() {
-    if (!this.reviewPendingResume || this.isBranching) return;
+    if (!this.reviewPendingResume || this.isBranching || this.positionAnalysis.eloTrend?.isOpen) return;
     clearTimeout(this.resumeReviewTimer);
     this.resumeReviewTimer = setTimeout(async () => {
       await this.positionAnalysis.pending;
-      if (this.reviewPendingResume && !this.isBranching && !this.fullReviewRunning) this.runFullReview();
+      if (this.reviewPendingResume && !this.isBranching && !this.fullReviewRunning && !this.positionAnalysis.eloTrend?.isOpen) this.runFullReview();
     }, 1800);
   }
 
