@@ -1,190 +1,56 @@
-# 歧路 Diverge · 引擎与人类直觉的分歧，来自棋图或棋局
+English | [简体中文](https://github.com/keluoke/4chess/blob/main/README.zh-CN.md)
 
-Diverge 把 **Stockfish 引擎建议**与 **Maia 人类走法预测**并排呈现，帮助你探索两种选择的分歧。既可以扫描网页上看到的静态棋图，分析当前局面；也可以在 Chess.com、Lichess 的分析台或完赛棋局中比较候选，并导入 PGN 进行整局复盘。
+# Diverge
 
-Diverge compares engine recommendations with human move predictions. Scan a webpage chess diagram or review a completed game, then explore variations and compare Stockfish with Maia in the analysis studio.
+**See where chess engines and human intuition disagree.** Open a finished game or scan a chess diagram. Compare Stockfish’s best move with the move Maia predicts a player at your chosen rating is most likely to play.
 
-- **网页棋图扫描**：点击 Scan 自动识别并进入互动棋盘；失败可框选重试，棋子、识别方向和行棋方可修正。确认后弹窗提供 SF19 Lite 三分支，再将当前局面送到工作台比较 Maia 候选。
-- **完赛复盘与局面探索**：支持 PGN、FEN 和受支持的公开对局链接。完整棋局提供精度、走势、实战记谱与关键步；单一局面提供候选对比和自由分支，不显示整局精度或棋局走势图。
-- **模型与界面**：Maia-3 5M / 23M / 79M（79M 以 FP16 存储）；扩展使用 SF19 Lite，网页版另可选 SF19 Standard。支持中英文、浅深主题、直觉等级与同一浏览器内的共享偏好。
-- **本地计算**：Maia 使用 JavaScript Float32 推理，Stockfish 使用 WebAssembly。识别小模型随包，本地处理截图；大权重按需从 CDN 下载并缓存。缓存省去重复下载，仍需初始化和计算。
-- **数据与公平竞技**：截图不上传；导入公开棋局会请求平台，网页交接在浏览器内传递所选局面或棋谱。实时对局关闭分析、候选、箭头和热力图，无法确认安全的互动来源保持锁定。
+[Open the studio](https://4chess.cc/analysis/?lang=en) · [Chrome Web Store](https://chromewebstore.google.com/detail/diverge-chess-analysis-sc/egiimjkekgiaimaagaljiclacljmdkmo) · [User guide](https://4chess.cc/guide/)
 
-使用指南：[4chess.cc/guide](https://4chess.cc/guide/) · 工作台：[4chess.cc/analysis](https://4chess.cc/analysis/) · 隐私：[4chess.cc/privacy](https://4chess.cc/privacy/)
+[![Verify](https://github.com/keluoke/4chess/actions/workflows/verify.yml/badge.svg?branch=main)](https://github.com/keluoke/4chess/actions/workflows/verify.yml) [![License details](https://img.shields.io/badge/license-component_notices-59665d)](LICENSE) ![Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-396454) ![WebAssembly](https://img.shields.io/badge/runtime-WebAssembly-504881)
 
----
+[![Byrne–Fischer after 17.Kf1. Stockfish plays Be6. Maia predicts Nxd1.](https://raw.githubusercontent.com/keluoke/4chess/main/docs/media/byrne-fischer-cover.png)](https://4chess.cc/analysis/?lang=en&sf=lite&maia=5m&elo=1900)
 
-## ⚖️ 公平竞技声明与客户端防误用守卫 (Fair Play Guard)
+## Try the position
 
-> **铁律原则 (The Absolute Iron Law):**
-> **无论在 Chess.com 还是 Lichess，在正在进行的实时对局中，本插件严禁提供任何引擎计算、走法建议、候选箭头或热力图服务。严禁任何形式的对局辅助。**
-> 
-> *Under NO circumstances does this extension provide engine analysis, candidate moves, intuition arrows, or attention heatmaps during an active chess game.*
+Open the **Fischer** sample in the studio and select **17. Kf1** in the move list. Black’s knight on c3 can take the rook on d1. At 1900 Elo, Maia-3 5M gives that capture **33.1%**, its highest move probability. Stockfish 19 Lite at depth 10 prefers **17…Be6**, leaving the black queen on b6 under attack. Fischer played the bishop move. Click either candidate to explore what happens next.
 
-### 合法受限运行场景 (Permitted Environments Only)
-本插件仅在以下合法场景下进行棋局研判与展示：
-1. **分析台 (Analysis Board)**：`/analysis`、`/study`、`/editor`、`/practice`
-2. **残局与战术题 (Puzzles & Lessons)**：`/puzzles`、`/lessons`、`/classroom`
-3. **已完赛对局复盘 (Post-Game Review & Archives)**：已产生明确终局胜负裁定（如 `1-0`, `0-1`, `1/2-1/2`）或已弹出结算控件的对局。
-4. **学习用网页静态棋图 (Static Study Diagrams)**：由用户主动扫描当前可见图片；排除实时直播、未知互动棋局与活跃棋钟场景，确认局面后才允许分析。
+[![The workbench showing the board, both engines’ lines and the completed game’s review](https://raw.githubusercontent.com/keluoke/4chess/main/docs/media/byrne-fischer-studio.png)](https://4chess.cc/analysis/?lang=en)
 
-### 防误用客户端守卫边界说明
-- 扩展内置 `FairPlayGuard` 状态机，在检测到活跃时钟（`.clock-running`）或投降/认输/和棋/放弃按钮时，立即终止引擎搜索并彻底抹除所有视觉箭头与热力图。
-- 对局结束后（结算弹窗弹出、记谱表出现终局符、或出现复盘按钮），守卫自动解除锁定，恢复复盘分析。
-- **边界说明**：本守卫为**客户端防误用保护机制**，旨在防止正常用户在对局中误触或误用分析功能；基于浏览器 DOM 结构的判断机制无法防御对扩展源码的恶意篡改或第三方二次分发修改。
+For your own game, import a PGN or a supported public game link to review turning points and replay variations. A single FEN opens the position directly. The installable studio can reuse cached assets and model weights offline. First downloads and public game imports need a connection.
 
----
+## From a diagram to a playable board
 
-## 🌟 核心特性
+Choose **Scan page** on a static chess diagram. Check the pieces, orientation and side to move, correct any recognition errors, then confirm for local Stockfish lines. **Explore engine vs intuition** carries the confirmed position into the studio. Screenshots stay in the browser.
 
-1. **🧠 Maia 3 Chessformer 神经网络推理 (ICLR 2026)**
-   - **纯前端原生推理**: Float32 矩阵计算内核，按所选模型参数执行 Transformer 与 GAB 几何注意力结构。
-   - **历史感知与 FEN 模式**: 支持基于实战半回合走法历史的输入通道编码，无历史时自动按规范回退。
-   - **Elo 等级分动态调节**: 支持 `1100 (初阶)`、`1500 (中阶)`、`1900 (进阶)`、`2200 (大师)` 连续动态调节。
+![Four steps in the real extension popup, from scanning through correction to local analysis](https://raw.githubusercontent.com/keluoke/4chess/main/docs/media/diagram-scan.gif)
 
-2. **🐟 Stockfish 19 WebAssembly 引擎**
-   - **多线分析 (MultiPV 3)**: 后台沙箱中即时给出客观局面估值与最佳着法，精准度量人类直觉候选的百兵损耗 ($\Delta$ centipawn loss)。
-   - **隔离沙箱与鉴权边界**: 通过 `engine/stockfish-sandbox.html` 规避宿主 CSP，通过私有通道与单次 Token 防范宿主脚本干扰。
+## Engineering highlights
 
-3. **🏹 三方对比与直觉热力图 (Three-Way Comparison & Heatmap)**
-   - 🟡 **金色实线箭头 (Maia 3)**: 投射对应 Elo 分段最符合人类直觉的第一候选走法及概率（如 `e4 (64.3%)`）。
-   - 🟢 **翡翠绿虚线箭头 (Stockfish)**: 标出顶级引擎的客观最优解与局面评分（如 `d4 (+0.35)`）。
-   - 🎯 **共识合体**: 当人类直觉与 Stockfish 达成高度一致时呈现共识合体。
-   - 🔥 **目标落点概率热力图**: 汇聚所有合法候选着法目标方格的人类行棋概率聚合（Destination Probability Aggregation）。
-   - 💡 **核心研判标签**:
-     - **妙手**: 引擎最优且超越人类直觉的高阶胜着（客观最优且人类直觉概率低）。
-     - **俗手**: 人类常见本能直觉走法，但客观存在明显漏着或重大损耗。
-
-4. **🖥️ 独立大屏深度复盘工作台 (Analysis Studio & PWA)**
-   - 一键提取整盘对局 PGN 并在独立标签页打开大屏复盘工作台 (`analysis/index.html` 或 `https://4chess.cc`)。
-   - 支持 PWA 安装和已缓存资源的离线复用；首次模型下载和公开棋谱导入需要网络。PGN 整局复盘具备局势走势图 (`eval-chart.js`)；FEN 单局面直接进入候选对比。
-
----
-
-5. **棋图识别与互动局面 (Chessboard Scanner)**
-   - 图片识别与本地 Worker、方向证据、行棋方默认值及源绑定撤销。
-   - 弹窗支持修正棋子、观看视角、修正识别方向、三条引擎分支和独立设置页面。
-   - 网页交接当前确认局面，在工作台探索 Stockfish 与 Maia 的分歧。
-
-## 📁 目录结构
-
-```
-diverge-extension/
-├── manifest.json              # Chrome Manifest V3 扩展配置 (收敛域名与资源权限)
-├── background.js              # 后台 Service Worker 线程 (标签页调度与 PGN 请求代理)
-├── analysis/                  # 独立大屏深度复盘工作台 (支持 PWA 离线模式)
-│   ├── index.html             # 复盘工作台 HTML 界面
-│   ├── analysis.js            # 复盘工作台核心逻辑与三方对比控制器
-│   ├── analysis.css           # 复盘工作台样式表
-│   ├── board-ui.js            # 矢量棋盘渲染与箭头绘制引擎
-│   └── eval-chart.js          # 局面评估走向折线图
-├── content/                   # Content Scripts (注入到宿主平台)
-│   ├── content.js             # Content Script 模块入口
-│   ├── main-module.js         # 前端主控制器 (调度中心、延迟加载与守卫联动)
-│   ├── fair-play-guard.js     # 公平竞技与反作弊状态机守卫
-│   ├── board-detector.js      # Lichess / Chess.com 棋盘状态与 FEN 识别器
-│   ├── heatmap-overlay.js     # SVG 双轨箭头与直觉热力图层
-│   └── intuition-panel.js     # 悬浮预测面板 UI 组件
-├── engine/                    # 双引擎计算内核
-│   ├── chess-core.js          # 国际象棋规则、走法生成与合法性严格校验引擎
-│   ├── game-analyzer.js       # 全局复盘分析器、损耗排行与缓存隔离
-│   ├── maia-engine.js         # 统一双引擎协调调度器 (带历史感知与缓存隔离)
-│   ├── maia-inbrowser.js      # 浏览器端纯原生 Maia-3 Float32 推理内核
-│   ├── model-cache.js         # IndexedDB 高速模型持久化存储与清理
-│   ├── stockfish-inbrowser.js # 浏览器端 Stockfish WASM 调度器
-│   ├── stockfish-sandbox.html # 隔离沙箱 iframe 载体
-│   └── stockfish-sandbox.js   # 沙箱内 Stockfish 状态机与 Token 鉴权控制器
-├── lib/
-│   ├── stockfish-19.js        # Stockfish 19 Emscripten 胶水脚本 (GPLv3)
-│   └── stockfish.wasm         # Stockfish 19 WebAssembly 二进制文件 (GPLv3)
-├── popup/                     # 工具栏入口、棋图扫描、互动分析棋盘与设置
-├── scan/                      # 来源绑定、识别局面与网页交接
-├── offscreen/                 # 本地截图解码、识别 Worker 与取消
-├── chrome-web-store/          # 双语商品文案、元数据与提交说明
-├── scripts/                   # 自动化测试、基准对照与权重转换脚本
-│   ├── test_fair_play.mjs     # 公平竞技守卫自动化场景测试
-│   ├── test_game_analyzer.mjs # 全局复盘分析器测试
-│   ├── test_inbrowser.mjs     # 浏览器端端到端推理测试
-│   ├── export_weights.py      # 模型权重转换与对齐导出脚本
-│   └── verify_official_baseline.py # 官方推理对照基线测试
-├── LICENSE                    # 多组件开源许可证说明
-└── THIRD_PARTY_NOTICES.md     # 第三方开源声明、来源与对应源码指引
+```mermaid
+flowchart LR
+  Page[Supported chess page or diagram] --> Guard{Fair-play guard}
+  Guard -->|Active or uncertain game| Lock[Stop search and clear overlays]
+  Guard -->|Static diagram| Vision[Local recognition and confirmation]
+  Guard -->|Study or finished game| Panel[Floating panel]
+  Vision --> Studio[Review studio]
+  Panel --> Studio
+  Import[PGN or FEN] --> Studio
+  Panel --> Sandbox[MV3 sandbox and Stockfish worker]
+  Studio --> SF[Stockfish WASM]
+  Panel --> Maia[Maia Float32 worker]
+  Studio --> Maia
+  CDN[Model CDN] --> Cache[(IndexedDB)]
+  Cache --> Maia
+  SF --> Facts[Verified review facts]
+  Maia --> Facts
+  Facts --> Recap[Template or validated local AI recap]
 ```
 
----
+- **Running Maia in JavaScript.** Diverge ports CSSLab’s Maia-3 forward pass to a browser worker, including rating inputs, move history and geometric attention. The loader checks model dimensions and tensor bounds and reuses versioned weights from IndexedDB. A Python harness compares output moves and probabilities with a PyTorch reference. [Inference](engine/maia-inbrowser.js) · [Comparison harness](https://github.com/keluoke/4chess/blob/main/scripts/verify_official_baseline.py)
+- **Isolating Stockfish on a host page.** The extension opens a private message port to its engine iframe with a single-use token. The sandbox owns the WASM worker and tracks active searches so stopping an idle engine cannot trigger a search timeout. [Sandbox](engine/stockfish-sandbox.js) · [Concurrent handshake tests](https://github.com/keluoke/4chess/blob/main/scripts/test_sandbox_token_concurrency.mjs)
+- **Keeping analysis tied to a permitted source.** The scanner runs a packaged recognition model locally. On ordinary web pages it masks pixels outside eligible image regions. A source-bound scan is rechecked on navigation. During active games the extension stops analysis and clears arrows, candidates and heatmaps. A confirmed finish unlocks review. [Guard](content/fair-play-guard.js) · [DOM lifecycle tests](https://github.com/keluoke/4chess/blob/main/scripts/test_dom_fixtures.mjs)
+- **Grounding the local commentary.** Rules extract chess facts first. On supported Chrome installations, an opt-in Prompt API model can phrase a recap using bound placeholders. The validator rejects unknown references and checks for unbound moves, numbers and tactical claims. A deterministic explanation is available when generation fails or the model is unavailable. [Chess facts](engine/chess-facts.js) · [Text validation](analysis/commentary-text.js)
 
-## 🚀 安装与使用指南
+Built and maintained by **keluoke**. Maia-3 comes from CSSLab. Stockfish and its browser port come from the Stockfish and Stockfish.js contributors. Component licenses, modifications and sources are listed in the distribution notices.
 
-完整的中英文指南、双引擎图例、署名与许可证全文：[4chess.cc/guide/](https://4chess.cc/guide/)。项目署名：**keluoke**；保留第三方作者署名。
-
-### 第一步：在 Chrome 中加载插件
-1. 打开 Chrome / Edge / Brave 浏览器，在地址栏输入：
-   ```text
-   chrome://extensions
-   ```
-2. 在页面右上角开启 **开发者模式 (Developer mode)**。
-3. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
-4. 执行 `npm run package`，解压 `releases/diverge-extension-v1.1.4.zip`，选择解压后的文件夹（避免将网页版独有的标准版运行代码装入插件）。
-5. 看到 `歧路 Diverge · 人类直觉与双引擎研判` 图标亮起即安装成功。
-
-### 第二步：首次加载与模型缓存
-在允许分析的页面且已读取有效局面后，插件才从专用 CDN 下载所选 Maia 权重。5M / 23M / 79M 首次下载约 28 / 104 / 159 MiB；下载完成后写入 IndexedDB，各版本缓存独立。再次打开仍需读取缓存并初始化，不能保证零延迟。
-对局中修改模型只保存设置，不启动下载或计算。popup 与悬浮窗中的“网页版复盘引擎”只设置网页版的 SF19 档位；切换它不会切换悬浮窗引擎。悬浮窗始终运行打包的 SF19 Lite。
-更新本地插件后，在 `chrome://extensions` 重新加载扩展，再刷新棋盘标签页；更新网站不会自动更新已安装插件。
-
-### 全盘页面的操作与设置同步
-- 页面方向键回看，输入框和弹窗不接管；点击 / 拖动合法走法创建个人分支，支持升变选择与分支回看。
-- 右键拖动思考箭头、右键单击标记格子；个人标记与自动引擎图层分开，按局面保留。
-- 两个引擎独立返回结果；探索分支优先于整局复盘，回到主线停下后恢复未完成复盘。
-- 新版插件通过仅在 `https://4chess.cc/analysis` 生效的偏好连接同步三入口。仅传递白名单中的 UI 设置，不传棋谱、模型、引擎指令或自定义 CDN 地址。未安装插件的网页独立持久保存；设置与模型缓存都不自动跨设备同步。
-
-### 第三步：赛后复盘或分析台研判
-1. 访问合法研判页面：
-   - **Lichess 分析台**: [https://lichess.org/analysis](https://lichess.org/analysis)
-   - **Chess.com 分析台**: [https://www.chess.com/analysis](https://www.chess.com/analysis)
-   - **已完赛对局复盘**: 如 `/game/live/:id`（对局已正式结束且弹出结算框或出现终局标记）
-2. 页面将自动加载 **歧路 Diverge** 悬浮卡片。
-3. 棋盘上将呈现：
-   - **金色箭头**: 人类直觉候选
-   - **翡翠绿虚线箭头**: Stockfish 引擎最优推荐
-   - **暖色落点热力图**（默认关闭）: 汇总合法候选的落点概率、按最高落点归一化；颜色深浅表示相对偏好，不是注意力、危险程度或胜率。两类箭头可分别开关。
-4. 点击“**全盘分析**”打开完整棋谱；只有当前局面时使用“**在工作台打开当前局面**”，承接棋盘方向、模拟等级与界面偏好。提取或打开失败会提供重试和 PGN 导入入口。
-
-### 悬浮窗操作（1.1.8）
-- 先读首选对比，再看三条候选。选择率是 Maia 对指定等级棋手的预测，不是胜率或该局面的人群实测；评分为白方视角，Δ 是相对引擎最佳的评分变化，未评分显示 `—`。
-- 点击等级或“棋盘显示”直接打开对应设置。悬停、键盘聚焦、点击候选可预览箭头，再次点击或按 Esc 取消；实时或未知对局中保持保护锁。
-- 右上角减号会最小化到侧边入口并释放空间；设置中的“收起内容（保留侧栏）”保持原广告位覆盖；“隐藏面板”从扩展菜单恢复。拖动标题移动，在设置中恢复默认位置。
-- 短广告位自动显示核心摘要，可“展开详情”。正常引擎状态收在详情中，加载失败可以直接重试；Maia 和 Stockfish 一方失败时保留另一方可用结果。
-- 开关标签可点击，设置支持 Tab、Shift+Tab 和 Esc。连续调整等级会合并分析请求。
-
-开发验证：`npm run test:floating` 检查布局与交互；打包后运行 `npm run test:floating-handoff` 验证工作台交接。
-
----
-
-## 📄 开源许可证与协议说明 (Open Source Licenses)
-
-本项目包含不同开源许可证的独立及衍生组件，随仓库完整附带所有许可证全文，详见 [LICENSE](LICENSE)、[LICENSES/](LICENSES/) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)：
-- **联合分发许可 (Combined Work)**：扩展与 PWA 整体分发包因包含并直接链接 Stockfish (GPL-3.0) 且衍生自 Maia-3 (AGPL-3.0)，整体受 **GNU AGPLv3 / GPLv3** 保护，向所有使用者提供完备的开源自由与对应源码保障。
-- **Diverge UI & Extension Core**: 独立前端界面、DOM 桥接与样式遵循宽松的 **MIT License**。
-- **Maia 3 神经网络架构与权重**: 衍生自多伦多大学与 CMU CSSLab Maia-3 项目，遵循 **GNU Affero General Public License v3.0 (AGPL-3.0)**（全文见 [LICENSES/AGPL-3.0.txt](LICENSES/AGPL-3.0.txt)）。权重转换工具及端侧推理实现全部开源。
-- **Stockfish 19 WebAssembly & Stockfish.js**: 基于 Stockfish.js (Nathan Rugg / Chess.com) 与官方 Stockfish 19，遵循 **GNU General Public License v3.0 (GPLv3)**（全文见 [LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt)）。
-- **Cburnett 棋子 SVG**：Colin M. L. Burnett，GPL-2.0-or-later；许可全文见 [LICENSES/GPL-2.0.txt](LICENSES/GPL-2.0.txt)。
-
-
-### Scan page (1.1.4)
-
-Click **Scan page** in the toolbar popup on a permitted study page. Supported Chess.com/Lichess analysis or completed-game boards use DOM position reading when available; static image documents and Wikipedia diagrams use a local screenshot and packaged recognition WASM. Ordinary pages, including Twitter/X timelines, forums and articles, scan only visible static images: other page pixels are masked before recognition and preview. Scroll the complete diagram into view; if there are several images, crop the desired board. Replacing/removing the captured image revokes analysis. Unknown interactive game pages and live broadcasts remain locked. Scan automatically finds the diagram and opens the interactive board. If detection fails, crop the screenshot and retry. Edit position corrects pieces and recognized direction; View changes only the viewing angle. Settings opens a dedicated scrollable screen with an explicit Back button and Escape support, preserving the position and edit draft. Verify pieces, orientation and side to move, correct with the piece palette or complete FEN, then confirm. Image-derived positions default to no castling/en passant rights. Raw model labels are shown for correction rather than silently accepting rule-based piece replacements.
-
-The popup runs packaged SF19 Lite only, with White-perspective scores and up to three legal lines. Click/drag pieces to explore, right-drag to annotate, undo or return to the original. **Explore engine vs intuition** opens the current confirmed FEN (including your branch), using saved web engine/model/language preferences. Single-position analysis hides full-game accuracy, chart and key-move statistics. A scan link stays bound to its source tab/document; a live game, navigation or closed source stops and clears analysis. A copied source-bound scan URL cannot run without the original extension session. A manual study FEN URL uses `https://4chess.cc/analysis/#fen=<encoded-FEN>&orientation=white&mode=position`.
-
-Screenshots stay transient in the offscreen document and are never uploaded. Lightweight source/FEN/branch state uses `chrome.storage.session`; reopening rechecks the source and recomputes SF. `scripting` checks the user-selected source; `offscreen` hosts the local recognition worker. No permanent all-site permission is added.
-
-### Shared recognition core
-
-`chesspuzzle/services/vision/core` is the sole algorithm source. `npm run vision:check` checks the upstream tree and generated browser outputs; `npm run vision:sync` rebuilds static module factories byte-for-byte, preserving local browser adapters and worker code. Both sides record `2026.10.14.1` and source tree hashes. The sibling command `node scripts/sync-vision-to-extension.cjs` is read-only by default; use `--update` explicitly to rebuild. `node scripts/test_vision_parity.mjs --source` compares real raw-pixel outputs, including raw/corrected labels, geometry-independent evidence, orientation, turn and unknown FEN fields. CI rejects modified generated files/model bytes and runs the checked-in golden fixture; a sibling checkout is required for the full upstream comparison. Installed older releases require their own update; this does not publish the mini-program automatically.
-
-Image context uses the same shared post-processing as chesspuzzle: reliable coordinates determine orientation; otherwise piece distribution supplies an editable default. Check or explicit turn evidence takes priority. Without turn evidence, side to move defaults to the viewed side and is marked unconfirmed before analysis. Both context helpers are included in the vision source/output hash lock.
-
-### 商品文案与本地化元数据
-
-`chrome-web-store/listing-copy.json` 是 English / 简体中文标题、摘要及详细说明的共同来源。`npm run store:sync` 更新本地化元数据与商店纯文本；`npm run store:check` 检查一致性及 75 / 132 字符限制。详见 `chrome-web-store/STORE_LISTING.md`。安装包不会替你提交商店后台的详细说明。
+[GitHub releases](https://github.com/keluoke/4chess/releases) · [Development](https://github.com/keluoke/4chess/blob/main/docs/DEVELOPMENT.md) · [Engineering write-up (中文)](https://github.com/keluoke/4chess/blob/main/docs/maia-in-the-browser.zh-CN.md) · [License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
