@@ -9,6 +9,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - run: node scripts/check_wechat_config.mjs
       - run: npm ci
       - run: npm test
       - run: npm run build

@@ -24,11 +24,11 @@ const envFile = path.join(rootDir, '.env.local');
 function loadConfig() {
   const config = {
     PORT: 3210,
-    WECHAT_APPID: 'wx8e11833b3ebb8f2c',
+    WECHAT_APPID: '',
     WECHAT_APPSECRET: '',
-    TCB_ENV: 'cloud1-0g90ksru0dc315ec',
+    TCB_ENV: '',
     ENV_VERSION: 'release',
-    LOCAL_TOKEN: crypto.randomBytes(32).toString('hex')
+    LOCAL_TOKEN: ''
   };
 
   if (fs.existsSync(envFile)) {
@@ -50,10 +50,14 @@ function loadConfig() {
     if (process.env[k]) config[k] = process.env[k];
   }
 
+  if (!config.LOCAL_TOKEN || config.LOCAL_TOKEN === 'replace-with-a-random-secret') {
+    config.LOCAL_TOKEN = crypto.randomBytes(32).toString('hex');
+  }
   return config;
 }
 
 const config = loadConfig();
+const shareConfigured = Boolean(config.WECHAT_APPID && config.WECHAT_APPSECRET && config.TCB_ENV);
 
 // 2. Token Cache for WeChat OpenAPI
 let tokenCache = { token: '', expireAt: 0 };
@@ -238,9 +242,7 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({
       ok: true,
       service: 'diverge-share-bridge',
-      configured: Boolean(config.WECHAT_APPSECRET),
-      appId: config.WECHAT_APPID,
-      env: config.TCB_ENV,
+      configured: shareConfigured,
       envVersion: config.ENV_VERSION
     }));
     return;
@@ -271,6 +273,12 @@ const server = http.createServer(async (req, res) => {
         if (!fen || typeof fen !== 'string' || !new ChessBoard(fen).isValid) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: '缺少或无效的 FEN 字符串' }));
+          return;
+        }
+
+        if (!shareConfigured) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Local WeChat share configuration is incomplete' }));
           return;
         }
 
@@ -314,9 +322,8 @@ const server = http.createServer(async (req, res) => {
 // Bind STRICTLY to 127.0.0.1
 server.listen(config.PORT, '127.0.0.1', () => {
   console.log(`🚀 [Diverge Share Bridge] Listening strictly on http://127.0.0.1:${config.PORT}`);
-  console.log(`ℹ️ Target AppID: ${config.WECHAT_APPID} | CloudBase: ${config.TCB_ENV} (${config.ENV_VERSION})`);
-  if (!config.WECHAT_APPSECRET) {
-    console.log(`⚠️ 提示: 请在 ${envFile} 中配置 WECHAT_APPSECRET 以启用真实菊花码生成。`);
+  if (!shareConfigured) {
+    console.log(`⚠️ 提示: 请在 ${envFile} 中配置 WECHAT_APPID、WECHAT_APPSECRET 和 TCB_ENV 以启用小程序码生成。`);
   } else {
     console.log(`✅ AppSecret 已就绪，准备接收海报生成请求。`);
   }
