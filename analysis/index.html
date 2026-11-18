@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261118-game-summary">
+  <link rel="stylesheet" href="workbench.css?v=20261118-local-commentary">
 </head>
 <body class="diverge-ui">
   <script>
@@ -301,6 +301,13 @@
       <label><span data-i18n="showStockfishArrows">显示 Stockfish 最佳着法箭头</span><input type="checkbox" id="setting-sf-arrows" checked></label>
       <label><span data-i18n="showIntuitionHeatmap">显示直觉热力图</span><input type="checkbox" id="setting-heatmap"></label>
       <label><span data-i18n="showIntuitionProbability">显示直觉概率</span><input type="checkbox" id="setting-probability" checked></label>
+      <label><span data-i18n="commentaryToggle">本地 AI 点评（实验）</span><input type="checkbox" id="setting-review-commentary" aria-controls="review-commentary-settings"></label>
+      <div class="settings-commentary" id="review-commentary-settings" hidden>
+        <p data-i18n="commentaryHelp">为已复核的直觉陷阱提供点评。</p>
+        <p id="review-commentary-status" role="status"></p>
+        <progress id="review-commentary-progress" max="100" data-i18n-aria="commentaryDownloadProgress" hidden></progress>
+        <button type="button" class="btn-header" id="review-commentary-download" hidden></button>
+      </div>
       <label><span data-i18n="boardOrientation">棋盘方向</span><select id="setting-orientation" class="btn-header"><option value="white" data-i18n="whiteAtBottom">白方在下</option><option value="black" data-i18n="blackAtBottom">黑方在下</option></select></label>
       <div class="settings-inline-actions">
         <button type="button" class="btn-header" id="btn-lang-toggle" aria-label="Switch Language">English</button>
@@ -349,11 +356,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261118-game-summary"></script>
+  <script type="module" src="analysis.js?v=20261118-local-commentary"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261118-game-summary').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261118-local-commentary').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

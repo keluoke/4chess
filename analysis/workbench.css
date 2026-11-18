@@ -381,6 +381,15 @@ button,input,select,textarea { font-family:inherit; }
 .review-card-best { font-size:12px;line-height:1.5;color:var(--brand-blue);margin:6px 0 0; }
 .review-card-reason { font-size:12px;line-height:1.7;color:var(--text-main);margin:8px 0 0; }
 .review-practice-status { display:block;font-size:11px;color:var(--text-muted);margin-top:8px; }
+.settings-commentary { color:var(--text-muted);font-size:13px; }
+.settings-commentary p { margin:0 0 7px; }
+.settings-commentary progress { display:block;width:100%;margin:7px 0;accent-color:var(--brand-green); }
+.settings-commentary[hidden],.settings-commentary [hidden] { display:none; }
+#review-commentary { margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--dg-paper); }
+#review-commentary h3 { margin:0;font-size:14px;color:var(--text-main); }
+#review-commentary p { margin:5px 0;font-size:14px;line-height:1.6; }
+#review-commentary small { color:var(--text-muted);font-size:11px; }
+.insight-column .blunder-card .review-commentary-action { margin-top:8px; }
 .practice-controls { display:flex;flex-wrap:wrap;gap:8px;margin-top:16px; }
 .practice-controls button { min-height:36px; }
 @media (pointer:coarse) { .review-count-table td button,.review-side-controls button,.practice-controls button,.review-move-jump { min-height:44px; } }

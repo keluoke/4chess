@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261118-game-summary';
+const CACHE_NAME = '4chess-review-20261118-local-commentary';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -19,20 +19,23 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261118-precise-filter",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261118-game-summary",
+  "./workbench.css?v=20261118-local-commentary",
   "../ui/theme.js?v=20261025-v115",
-  "./analysis.js?v=20261118-game-summary",
+  "./analysis.js?v=20261118-local-commentary",
+  "./built-in-ai.js?v=20261118-local-commentary",
+  "./review-commentary.js?v=20261118-local-commentary",
+  "../engine/chess-facts.js?v=20261118-local-commentary",
   "./board-ui.js?v=20261117-ui",
   "./chess-pieces.js",
   "./eval-chart.js?v=20261118-precise-filter",
-  "./i18n.js?v=20261118-game-summary",
-  "./intuition-review.js?v=20261118-precise-filter",
+  "./i18n.js?v=20261118-local-commentary",
+  "./intuition-review.js?v=20261118-local-commentary",
   "./maia-elo-trend.js?v=20261118-precise-filter",
-  "./position-analysis.js?v=20261118-game-summary",
-  "./review-explorer.js?v=20261118-game-summary",
-  "./review-practice.js?v=20261118-game-summary",
-  "./review-overview.js?v=20261118-game-summary",
-  "./scan-authorization.js?v=20261118-game-summary",
+  "./position-analysis.js?v=20261118-local-commentary",
+  "./review-explorer.js?v=20261118-local-commentary",
+  "./review-practice.js?v=20261118-local-commentary",
+  "./review-overview.js?v=20261118-local-commentary",
+  "./scan-authorization.js?v=20261118-local-commentary",
   "./sound-effects.js?v=20261025-v115",
   "./workbench-layout.js?v=20261118-precise-filter",
   "./workbench-motion.js?v=20261103-jade",
@@ -45,7 +48,7 @@ const STATIC_ASSETS = [
   "../engine/engine-preferences.js",
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
-  "../engine/game-analyzer.js?v=20261117-review-policy",
+  "../engine/game-analyzer.js?v=20261118-local-commentary",
   "../engine/maia-engine.js?v=20261117-elo-trend",
   "../engine/maia-inbrowser.js?v=20261117-elo-trend",
   "../engine/maia-worker.js?v=20261117-elo-trend",

@@ -78,6 +78,7 @@ export function setScanAvailability(app, available) {
     app.updateActivePositionAnalysis();
     app.scheduleReviewResume();
   } else {
+    app.reviewCommentary?.suspend();
     if (app.isPlaying) app.toggleAutoPlay();
     app.boardUI.cancelGesture();
     app.boardUI.closePromotion();
@@ -91,6 +92,7 @@ export function setScanAvailability(app, available) {
 export function showScanLock(app) {
   if (app) {
     app.scanSourceLocked = true;
+    app.reviewCommentary?.suspend();
     app.reviewOverview?.show('workbench');
     if (app.isPlaying) app.toggleAutoPlay();
     app.positionAnalysis?.cancel();

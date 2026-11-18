@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { REVIEW_QUALITIES, moveQuality, reviewCounts, selectReviewMoves, canPractice, intuitionKind } from '../engine/review-policy.js';
 import { ReviewPractice } from '../analysis/review-practice.js';
+import { intuitionTrapFacts } from '../engine/chess-facts.js';
 const move = (ply, lossCp, extra = {}) => ({ ply, turn: ply % 2 ? 'w' : 'b', severity: 'good', lossCp, uci: 'a7a8n', bestUci: 'a7a8q', fenBefore: 'fixture', bestSan: 'a8=Q', ...extra });
 const moves = [move(1, 0, { uci: 'a7a8q', isBookMove: true }), move(2, 20), move(3, 40), move(4, 100, { divergenceType: 'intuition_trap', divergenceStatus: 'confirmed' }), move(5, 200), move(6, null, { severity: 'unknown' }), move(7, 0, { isOnlyLegalMove: true }), move(8, 0, { uci: 'a7a8q', divergenceType: 'beyond_intuition', divergenceStatus: 'confirmed' }), move(10, 0, { divergenceType: 'beyond_intuition', isCombinationFollowup: true }), move(11, 0, { divergenceType: 'intuition_trap', divergenceStatus: 'unconfirmed' })];
 assert.equal(moveQuality(moves[1]), 'good', 'Low loss alone is not Best, including different promotions');
@@ -19,6 +20,20 @@ assert.equal(intuitionKind(moves.at(-1)), null);
 assert.equal(intuitionKind(move(1, null, { severity: 'unknown', divergenceType: 'intuition_trap', divergenceStatus: 'confirmed' })), null, 'Missing engine evidence cannot become a teaching claim');
 assert(!canPractice(moves[5]) && !canPractice(moves[6]));
 assert(canPractice(moves[2]) && canPractice(moves[7]));
+
+const trap = move(1, 150, {
+  fenBefore: '4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2',
+  uci: 'e5d6', divergenceType: 'intuition_trap', divergenceStatus: 'confirmed',
+  verifiedBestSan: 'Kf2', verifiedLossCp: 150, verifiedExpectedScoreLoss: 14,
+  verifiedPlayedPv: ['e5d6', 'e8e1'], humanRawProbability: .42
+});
+const commentaryFacts = intuitionTrapFacts(trap, { elo: 1500 });
+assert.deepEqual(commentaryFacts.played, { san: 'exd6', square: 'd6', capture: 'p', check: false });
+assert.equal(commentaryFacts.playedReply, null, 'An illegal reply is omitted');
+assert.deepEqual(commentaryFacts.bestLine, ['Kf2'], 'Existing cache can supply verified SAN without a PV');
+assert.equal(commentaryFacts.expectedScoreLossPoints, 14);
+assert.equal(intuitionTrapFacts({ ...trap, divergenceStatus: 'unconfirmed' }, { elo: 1500 }), null);
+assert.equal(intuitionTrapFacts(trap, { engineOnly: true }), null);
 
 const dom = new JSDOM('<div id="practice-panel"></div>', { url: 'https://4chess.cc/analysis/' });
 globalThis.window = dom.window; globalThis.document = dom.window.document;

@@ -321,6 +321,133 @@ try {
   assert.equal(await page.locator('#review-overview').isVisible(), false);
   assert.equal(await page.locator('#practice-panel').isVisible(), false);
   assert.equal(await page.evaluate(() => __maiaStudioApp.practiceResults.size), 0);
+
+  // Opt-in commentary. The fake Prompt API intentionally omits Chrome brand
+  // data and lets an aborted prompt finish late to exercise application guards.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(async () => {
+    const app = __maiaStudioApp;
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261118-local-commentary');
+    setLanguage('en');
+    window.aiCalls = { probes: 0, creates: 0, prompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
+    Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {
+      async availability(options) {
+        aiCalls.probes++;
+        aiCalls.options = options;
+        return aiCalls.availability;
+      },
+      create(options) {
+        aiCalls.creates++;
+        aiCalls.createOptions = { expectedInputs: options.expectedInputs, expectedOutputs: options.expectedOutputs };
+        options.monitor({ addEventListener: (_type, listener) => listener({ loaded: .42 }) });
+        return new Promise(resolve => {
+          window.completeLocalModel = () => resolve({
+            async clone() {
+              return {
+                prompt(input, { signal, responseConstraint }) {
+                  aiCalls.prompts++;
+                  aiCalls.input = JSON.parse(input);
+                  aiCalls.constraint = responseConstraint;
+                  signal.addEventListener('abort', () => aiCalls.aborts++, { once: true });
+                  return new Promise(finish => { window.finishCommentary = finish; });
+                },
+                destroy() { aiCalls.childDestroys++; }
+              };
+            },
+            destroy() { aiCalls.rootDestroys++; }
+          });
+        });
+      }
+    } });
+    app.startNewSession({ pgn: '[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 1-0', autoReview: false });
+    const moves = app.positions.slice(1).map((move, i) => ({ ...move, fenBefore: app.positions[i].fen }));
+    Object.assign(moves[3], {
+      lossCp: 155, severity: 'mistake', accuracy: 70, expectedScoreLoss: 14,
+      verifiedLossCp: 150, verifiedExpectedScoreLoss: 13.2, divergenceType: 'intuition_trap', divergenceStatus: 'confirmed',
+      humanRawProbability: .42, maiaTopUci: 'b8c6', verifiedBestSan: 'Nf6',
+      verifiedBestUci: 'g8f6', verifiedBestPv: ['g8f6', 'b1c3'],
+      verifiedPlayedPv: ['b8c6', 'f1c4', 'g8f6']
+    });
+    window.commentaryReview = { ...syntheticReview, allMoves: moves, totalMoves: moves.length, engineOnly: false };
+    app.goToPly(4);
+    app.applyReviewResult(commentaryReview, { refreshPosition: false });
+  });
+  const commentary = page.locator('#review-commentary');
+  const toggle = page.locator('#setting-review-commentary');
+  const status = page.locator('#review-commentary-status');
+  const download = page.locator('#review-commentary-download');
+  assert.equal(await toggle.isChecked(), false);
+  assert.equal(await commentary.count(), 0);
+  assert.equal(await page.locator('.review-commentary-action').count(), 0);
+  await page.locator('#btn-settings').click();
+  assert.equal(await download.isVisible(), false);
+  assert.deepEqual(await page.evaluate(() => [aiCalls.probes, aiCalls.creates]), [0, 0]);
+  await toggle.check();
+  await download.waitFor();
+  assert.equal(await page.evaluate(() => aiCalls.creates), 0, 'Detection never starts a download');
+  assert.match(await commentary.innerText(), /Bc4.*13\.2 percentage points/);
+  await download.click();
+  await page.waitForFunction(() => document.getElementById('review-commentary-progress').value === 42);
+  assert.match(await status.innerText(), /42%/);
+  assert.deepEqual(await page.evaluate(() => aiCalls.createOptions), await page.evaluate(() => aiCalls.options));
+  await page.evaluate(() => completeLocalModel());
+  await page.waitForFunction(() => aiCalls.prompts === 1);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => __maiaStudioApp.goToPly(2));
+  assert.equal(await commentary.count(), 0);
+  assert.equal(await page.evaluate(() => aiCalls.aborts), 1);
+  await page.evaluate(() => finishCommentary('{"lead":"temptation","detail":"line"}'));
+  await page.waitForFunction(() => aiCalls.childDestroys === 1);
+  assert.equal(await page.evaluate(() => __maiaStudioApp.reviewCommentary.cache.size), 0, 'Late text cannot enter the cache');
+
+  await page.evaluate(() => __maiaStudioApp.goToPly(4));
+  await page.waitForFunction(() => aiCalls.prompts === 2);
+  await page.evaluate(() => finishCommentary('{"lead":"temptation","detail":"unverified mate"}'));
+  await page.waitForFunction(() => aiCalls.childDestroys === 2);
+  assert.match(await commentary.innerText(), /Verified chess facts/);
+  assert.doesNotMatch(await commentary.innerText(), /unverified mate/);
+  const factsInput = await page.evaluate(() => aiCalls.input.facts);
+  assert.equal(factsInput.played.san, 'Nc6');
+  assert.equal(factsInput.playedReply.san, 'Bc4');
+  assert.deepEqual(factsInput.bestLine, ['Nf6', 'Nc3']);
+  assert.equal(factsInput.expectedScoreLossPoints, 13.2);
+  assert(!JSON.stringify(factsInput).includes('rnbq'));
+
+  await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
+  await page.waitForFunction(() => aiCalls.prompts === 3);
+  await page.evaluate(() => finishCommentary('{"lead":"temptation","detail":"line"}'));
+  await page.waitForFunction(() => document.getElementById('review-commentary').textContent.includes('Chrome local AI'));
+  await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
+  assert.match(await commentary.innerText(), /Nf6 Nc3/);
+  assert(await page.evaluate(() => !__maiaStudioApp.reviewCommentary.request && aiCalls.prompts === 3), 'An identical fact snapshot reuses the validated output');
+  await page.evaluate(() => __maiaStudioApp.startPractice(commentaryReview.allMoves[3]));
+  assert.equal(await commentary.count(), 0, 'Practice hides all commentary');
+  await page.getByRole('button', { name: 'Back to Studio' }).click();
+
+  await page.locator('#btn-settings').click();
+  await page.locator('#btn-lang-toggle').click();
+  assert.match(await status.innerText(), /中文版/);
+  assert.equal(await download.isVisible(), false);
+  assert.equal(await page.evaluate(() => aiCalls.rootDestroys), 1);
+  await page.keyboard.press('Escape');
+  assert.match(await commentary.innerText(), /已验证的棋理说明/);
+  await page.locator('#btn-settings').click();
+  await toggle.uncheck();
+  assert.equal(await commentary.count(), 0);
+  assert.equal(await page.locator('.review-commentary-action').count(), 0);
+  await page.evaluate(() => { aiCalls.availability = 'unavailable'; });
+  await page.locator('#btn-lang-toggle').click();
+  await toggle.check();
+  await page.waitForFunction(() => document.getElementById('review-commentary-status').textContent.includes('unavailable'));
+  assert.equal(await download.isVisible(), false);
+  assert.equal(await page.evaluate(() => aiCalls.creates), 1, 'Unavailable browsers keep the chess explanation without a model request');
+  assert.match(await commentary.innerText(), /Verified chess facts/);
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.el.metaResult.textContent = '*';
+    app.applyReviewResult(commentaryReview, { refreshPosition: false });
+  });
+  assert.equal(await commentary.count(), 0, 'A result is required to show the new commentary');
   assert.deepEqual(errors, []);
-  console.log('PASS review UI: side counts and filters, dual labels, unscanned/unknown states, jump/chart navigation, stable side when flipped, answer hiding, practice outcomes, bilingual/mobile layout and session reset.');
+  console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, invalid and late output rejection, cache, practice isolation and Chinese fallback.');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

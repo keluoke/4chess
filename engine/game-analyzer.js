@@ -1057,9 +1057,11 @@ export class GameAnalyzer {
           const verificationDepth = Math.min(root.depth, targetDepth);
 
           const scores = new Map([[root.bestMove.uci, root.scoreCp]]);
+          let playedPv;
           for (const line of root.lines || []) {
             if (line.uci && line.depth >= verificationDepth && Number.isFinite(line.scoreCp) && !line.isBound && !scores.has(line.uci)) {
               scores.set(line.uci, line.scoreCp);
+              if (line.uci === move.uci && line.pv?.[0] === move.uci) playedPv = line.pv.slice(0, 3);
             }
           }
 
@@ -1079,6 +1081,9 @@ export class GameAnalyzer {
             if (invalid()) return null;
             if (Number.isFinite(result?.scoreCp) && !result.isBound && (result.terminal || result.depth >= verificationDepth - 1)) {
               scores.set(uci, -result.scoreCp);
+              if (uci === move.uci && result.pv?.[0] === result.bestMove?.uci && result.pv?.length) {
+                playedPv = [uci, ...result.pv.slice(0, 2)];
+              }
             }
           }
 
@@ -1117,6 +1122,9 @@ export class GameAnalyzer {
             move.divergenceType = 'intuition_trap';
             move.divergenceStatus = 'confirmed';
             move.verifiedBestSan = root.bestMove.san;
+            move.verifiedBestUci = root.bestMove.uci;
+            move.verifiedBestPv = root.pv?.slice(0, 3);
+            move.verifiedPlayedPv = playedPv;
           }
         } catch (err) {
           console.warn('[GameAnalyzer] Deep verification error on ply', move.ply, err);

@@ -1,7 +1,7 @@
-import { t } from './i18n.js?v=20261118-game-summary';
+import { t } from './i18n.js?v=20261118-local-commentary';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { retryVerdict, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
-import { legalVariation } from './position-analysis.js?v=20261118-game-summary';
+import { legalVariation } from './position-analysis.js?v=20261118-local-commentary';
 
 export class ReviewPractice {
   constructor(app) { this.app = app; this.generation = 0; app.practiceResults ||= new Map(); }

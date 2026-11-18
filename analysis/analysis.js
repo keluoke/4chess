@@ -1,11 +1,12 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-filter';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261118-precise-filter';
-import { ReviewExplorer } from './review-explorer.js?v=20261118-game-summary';
-import { ReviewOverview } from './review-overview.js?v=20261118-game-summary';
+import { IntuitionReview } from './intuition-review.js?v=20261118-local-commentary';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-local-commentary';
+import { ReviewOverview } from './review-overview.js?v=20261118-local-commentary';
+import { ReviewCommentary } from './review-commentary.js?v=20261118-local-commentary';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-game-summary';
-import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-game-summary';
+import { ReviewPractice } from './review-practice.js?v=20261118-local-commentary';
+import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-local-commentary';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -14,14 +15,14 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261117-review-policy';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-review-policy';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-local-commentary';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261118-game-summary';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-local-commentary';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-game-summary';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-local-commentary';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -93,6 +94,7 @@ class AnalysisStudioApp {
     this.initUI();
     this.reviewExplorer = new ReviewExplorer(this);
     this.reviewOverview = new ReviewOverview(this);
+    this.reviewCommentary = new ReviewCommentary(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
     subscribePreferences(next => this.applyPreferences(next));
@@ -322,6 +324,7 @@ class AnalysisStudioApp {
 
     this.el.btnSettings.addEventListener('click', () => {
       this.updateEngineStatus();
+      this.reviewCommentary.sync({ recheck: true });
       this.el.settingsDialog.showModal();
       document.getElementById('btn-close-settings').focus();
     });
@@ -494,6 +497,7 @@ class AnalysisStudioApp {
 
   refreshAfterLanguageChange() {
     this.intuitionReview?.render();
+    this.reviewCommentary?.sync();
     this.renderCurrentInsight();
     if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
@@ -1098,6 +1102,7 @@ class AnalysisStudioApp {
     positionInput = false
   } = {}) {
     if (this.scanSourceLocked) return false;
+    this.reviewCommentary.clearContext();
     this.importGeneration = (this.importGeneration || 0) + 1;
     this.importController?.abort();
     clearInterval(this.playTimer);
@@ -1302,6 +1307,7 @@ class AnalysisStudioApp {
     if (this.isPlaying) this.toggleAutoPlay();
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
+    this.reviewCommentary.clearContext();
     this.reviewEpoch++;
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = this.reviewPendingResume = false;
@@ -1390,6 +1396,7 @@ class AnalysisStudioApp {
 
   async runFullReview(forceRefresh = false) {
     this.practice?.stop();
+    this.reviewCommentary.clearContext();
     this.intuitionReview?.dispose();
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
@@ -1666,6 +1673,7 @@ class AnalysisStudioApp {
         const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn-header practice-start'; retry.textContent = t('retryMove');
         retry.onclick = () => this.startPractice(item); card.append(retry);
       }
+      this.reviewCommentary.addCardAction(card, item, this.reviewResult);
       const status = this.practiceResults?.get(item.ply)?.status;
       if (status) { const note = document.createElement('span'); note.className = 'review-practice-status'; note.textContent = t(`practiceStatus_${status}`); card.append(note); }
       if (item.ply === this.currentPly) card.classList.add('active');
@@ -2068,12 +2076,17 @@ class AnalysisStudioApp {
     }
     panel.replaceChildren();
     const move = this.reviewResult?.allMoves?.find(move => move.ply === this.currentPly);
-    if (!this.isBranching && !move) { panel.hidden = true; return; }
+    if (!this.isBranching && !move) {
+      this.reviewCommentary?.clearContext();
+      panel.hidden = true;
+      return;
+    }
     panel.hidden = false;
     const heading = document.createElement('div'); heading.className = 'insight-context-heading';
     heading.textContent = this.isBranching ? t('branchComparison') : `${move.moveNumber}${move.turn === 'w' ? '. ' : '… '}${move.san}`;
     panel.append(heading);
     if (this.isBranching) {
+      this.reviewCommentary.clearContext();
       const note = document.createElement('p'); note.textContent = t('branchScoreNote'); panel.append(note);
       const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header'; button.textContent = t('btnExitBranch');
       button.onclick = () => this.goToPly(this.currentPly); panel.append(button);
@@ -2088,6 +2101,7 @@ class AnalysisStudioApp {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header btn-primary'; button.textContent = t('retryMove');
         button.onclick = () => this.startPractice(move); panel.append(button);
       }
+      this.reviewCommentary.render(panel, move, this.reviewResult);
     }
   }
 

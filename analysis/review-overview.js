@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261118-game-summary';
+import { t } from './i18n.js?v=20261118-local-commentary';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
