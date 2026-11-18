@@ -51,7 +51,7 @@ export class BuiltInAi {
         signal: controller.signal,
         initialPrompts: [{
           role: 'system',
-          content: 'Choose the lead and supporting detail for a short chess review. Use only the provided facts and allowed sentence IDs. Choose the concrete reply if it explains the move; otherwise highlight the comparison or measured loss. Return only the requested JSON.'
+          content: 'Write one or two short, natural English sentences for a chess player. Use only the supplied evidence. Use the provided [[tokens]] verbatim in place of all moves, move numbers, scores, percentages, game results and specific tactical facts. Do not invent alternatives, motives, causal links, or a result. Return the prose in the text property.'
         }],
         monitor: monitor => monitor.addEventListener('downloadprogress', event => {
           if (revision !== this.revision || this.state !== 'starting' || !Number.isFinite(event.loaded)) return;
@@ -75,7 +75,7 @@ export class BuiltInAi {
     }
   }
 
-  async choose(input, responseConstraint, signal) {
+  async write(input, responseConstraint, signal) {
     signal.throwIfAborted();
     const clone = await this.session.clone({ signal });
     try {

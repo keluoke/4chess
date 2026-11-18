@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261118-local-commentary';
+const CACHE_NAME = '4chess-review-20261118-summary-ai';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -19,23 +19,24 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261118-precise-filter",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261118-local-commentary",
+  "./workbench.css?v=20261118-summary-ai",
   "../ui/theme.js?v=20261025-v115",
-  "./analysis.js?v=20261118-local-commentary",
-  "./built-in-ai.js?v=20261118-local-commentary",
-  "./review-commentary.js?v=20261118-local-commentary",
-  "../engine/chess-facts.js?v=20261118-local-commentary",
+  "./analysis.js?v=20261118-summary-ai",
+  "./commentary-text.js?v=20261118-summary-ai",
+  "./built-in-ai.js?v=20261118-summary-ai",
+  "./review-commentary.js?v=20261118-summary-ai",
+  "../engine/chess-facts.js?v=20261118-summary-ai",
   "./board-ui.js?v=20261117-ui",
   "./chess-pieces.js",
   "./eval-chart.js?v=20261118-precise-filter",
-  "./i18n.js?v=20261118-local-commentary",
-  "./intuition-review.js?v=20261118-local-commentary",
+  "./i18n.js?v=20261118-summary-ai",
+  "./intuition-review.js?v=20261118-summary-ai",
   "./maia-elo-trend.js?v=20261118-precise-filter",
-  "./position-analysis.js?v=20261118-local-commentary",
-  "./review-explorer.js?v=20261118-local-commentary",
-  "./review-practice.js?v=20261118-local-commentary",
-  "./review-overview.js?v=20261118-local-commentary",
-  "./scan-authorization.js?v=20261118-local-commentary",
+  "./position-analysis.js?v=20261118-summary-ai",
+  "./review-explorer.js?v=20261118-summary-ai",
+  "./review-practice.js?v=20261118-summary-ai",
+  "./review-overview.js?v=20261118-summary-ai",
+  "./scan-authorization.js?v=20261118-summary-ai",
   "./sound-effects.js?v=20261025-v115",
   "./workbench-layout.js?v=20261118-precise-filter",
   "./workbench-motion.js?v=20261103-jade",
@@ -48,7 +49,7 @@ const STATIC_ASSETS = [
   "../engine/engine-preferences.js",
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
-  "../engine/game-analyzer.js?v=20261118-local-commentary",
+  "../engine/game-analyzer.js?v=20261118-summary-ai",
   "../engine/maia-engine.js?v=20261117-elo-trend",
   "../engine/maia-inbrowser.js?v=20261117-elo-trend",
   "../engine/maia-worker.js?v=20261117-elo-trend",

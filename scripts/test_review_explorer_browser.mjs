@@ -327,9 +327,9 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261118-local-commentary');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261118-summary-ai');
     setLanguage('en');
-    window.aiCalls = { probes: 0, creates: 0, prompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
+    window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {
       async availability(options) {
         aiCalls.probes++;
@@ -345,11 +345,13 @@ try {
             async clone() {
               return {
                 prompt(input, { signal, responseConstraint }) {
-                  aiCalls.prompts++;
-                  aiCalls.input = JSON.parse(input);
+                  const request = JSON.parse(input);
+                  const overview = !!request.facts.result;
+                  if (overview) aiCalls.gamePrompts++;
+                  else { aiCalls.prompts++; aiCalls.input = request; }
                   aiCalls.constraint = responseConstraint;
                   signal.addEventListener('abort', () => aiCalls.aborts++, { once: true });
-                  return new Promise(finish => { window.finishCommentary = finish; });
+                  return new Promise(finish => { window[overview ? 'finishGameCommentary' : 'finishCommentary'] = finish; });
                 },
                 destroy() { aiCalls.childDestroys++; }
               };
@@ -359,17 +361,18 @@ try {
         });
       }
     } });
-    app.startNewSession({ pgn: '[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 1-0', autoReview: false });
+    app.startNewSession({ pgn: '[Result "1-0"]\n[Termination "White won on time"]\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 1-0', autoReview: false });
     const moves = app.positions.slice(1).map((move, i) => ({ ...move, fenBefore: app.positions[i].fen }));
     Object.assign(moves[3], {
       lossCp: 155, severity: 'mistake', accuracy: 70, expectedScoreLoss: 14,
       verifiedLossCp: 150, verifiedExpectedScoreLoss: 13.2, divergenceType: 'intuition_trap', divergenceStatus: 'confirmed',
       humanRawProbability: .42, maiaTopUci: 'b8c6', verifiedBestSan: 'Nf6',
       verifiedBestUci: 'g8f6', verifiedBestPv: ['g8f6', 'b1c3'],
-      verifiedPlayedPv: ['b8c6', 'f1c4', 'g8f6']
+      verifiedPlayedPv: ['b8c6', 'f3e5', 'c6e5']
     });
     window.commentaryReview = { ...syntheticReview, allMoves: moves, totalMoves: moves.length, engineOnly: false };
     app.goToPly(4);
+    app.reviewExplorer.side = 'all';
     app.applyReviewResult(commentaryReview, { refreshPosition: false });
   });
   const commentary = page.locator('#review-commentary');
@@ -377,48 +380,55 @@ try {
   const status = page.locator('#review-commentary-status');
   const download = page.locator('#review-commentary-download');
   assert.equal(await toggle.isChecked(), false);
-  assert.equal(await commentary.count(), 0);
-  assert.equal(await page.locator('.review-commentary-action').count(), 0);
+  assert.match(await commentary.innerText(), /Nxe5, taking a pawn.*13\.2 percentage points/);
+  assert.equal(await page.locator('.review-commentary-action').count(), 1);
+  assert.equal(await page.locator('#review-report-title').textContent(), 'Black ran out of time and White won');
+  assert.match(await page.locator('#review-report-story').textContent(), /Black played Nc6.*preferred Nf6/);
   await page.locator('#btn-settings').click();
   assert.equal(await download.isVisible(), false);
   assert.deepEqual(await page.evaluate(() => [aiCalls.probes, aiCalls.creates]), [0, 0]);
   await toggle.check();
   await download.waitFor();
   assert.equal(await page.evaluate(() => aiCalls.creates), 0, 'Detection never starts a download');
-  assert.match(await commentary.innerText(), /Bc4.*13\.2 percentage points/);
+  assert.match(await commentary.innerText(), /Nxe5, taking a pawn.*13\.2 percentage points/);
   await download.click();
   await page.waitForFunction(() => document.getElementById('review-commentary-progress').value === 42);
   assert.match(await status.innerText(), /42%/);
   assert.deepEqual(await page.evaluate(() => aiCalls.createOptions), await page.evaluate(() => aiCalls.options));
   await page.evaluate(() => completeLocalModel());
-  await page.waitForFunction(() => aiCalls.prompts === 1);
+  await page.waitForFunction(() => aiCalls.prompts === 1 && aiCalls.gamePrompts === 1);
+  await page.evaluate(() => finishGameCommentary(JSON.stringify({
+    text: '[[result]]. The main turning point came at [[turning]], when [[side]] chose [[played]] over [[best]].'
+  })));
+  await page.waitForFunction(() => !document.getElementById('review-studio-summary').hidden);
+  assert.match(await page.locator('#review-studio-summary').innerText(), /Black ran out of time and White won.*chose Nc6 over Nf6/);
   await page.keyboard.press('Escape');
   await page.evaluate(() => __maiaStudioApp.goToPly(2));
   assert.equal(await commentary.count(), 0);
   assert.equal(await page.evaluate(() => aiCalls.aborts), 1);
-  await page.evaluate(() => finishCommentary('{"lead":"temptation","detail":"line"}'));
-  await page.waitForFunction(() => aiCalls.childDestroys === 1);
-  assert.equal(await page.evaluate(() => __maiaStudioApp.reviewCommentary.cache.size), 0, 'Late text cannot enter the cache');
+  await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] cost [[cost]]."}'));
+  await page.waitForFunction(() => aiCalls.childDestroys === 2);
+  assert.equal(await page.evaluate(() => __maiaStudioApp.reviewCommentary.cache.size), 1, 'Only the recap was cached. Late move text cannot enter the cache');
 
   await page.evaluate(() => __maiaStudioApp.goToPly(4));
   await page.waitForFunction(() => aiCalls.prompts === 2);
-  await page.evaluate(() => finishCommentary('{"lead":"temptation","detail":"unverified mate"}'));
-  await page.waitForFunction(() => aiCalls.childDestroys === 2);
+  await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] cost [[cost]]. It also permitted Qh8+."}'));
+  await page.waitForFunction(() => aiCalls.childDestroys === 3);
   assert.match(await commentary.innerText(), /Verified chess facts/);
-  assert.doesNotMatch(await commentary.innerText(), /unverified mate/);
+  assert.doesNotMatch(await commentary.innerText(), /Qh8/);
   const factsInput = await page.evaluate(() => aiCalls.input.facts);
-  assert.equal(factsInput.played.san, 'Nc6');
-  assert.equal(factsInput.playedReply.san, 'Bc4');
-  assert.deepEqual(factsInput.bestLine, ['Nf6', 'Nc3']);
-  assert.equal(factsInput.expectedScoreLossPoints, 13.2);
+  assert.equal(factsInput.played, 'Nc6');
+  assert.equal(factsInput.reply, 'Nxe5, taking a pawn');
+  assert.equal(factsInput.best, 'Nf6');
+  assert.equal(factsInput.cost, '13.2 percentage points of expected score');
   assert(!JSON.stringify(factsInput).includes('rnbq'));
 
   await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
   await page.waitForFunction(() => aiCalls.prompts === 3);
-  await page.evaluate(() => finishCommentary('{"lead":"temptation","detail":"line"}'));
+  await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] gave the opponent [[reply]]. Compared with [[best]], it cost [[cost]]."}'));
   await page.waitForFunction(() => document.getElementById('review-commentary').textContent.includes('Chrome local AI'));
   await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
-  assert.match(await commentary.innerText(), /Nf6 Nc3/);
+  assert.match(await commentary.innerText(), /gave the opponent Nxe5.*Compared with Nf6/);
   assert(await page.evaluate(() => !__maiaStudioApp.reviewCommentary.request && aiCalls.prompts === 3), 'An identical fact snapshot reuses the validated output');
   await page.evaluate(() => __maiaStudioApp.startPractice(commentaryReview.allMoves[3]));
   assert.equal(await commentary.count(), 0, 'Practice hides all commentary');
@@ -428,15 +438,19 @@ try {
   await page.locator('#btn-lang-toggle').click();
   assert.match(await status.innerText(), /中文版/);
   assert.equal(await download.isVisible(), false);
-  assert.equal(await page.evaluate(() => aiCalls.rootDestroys), 1);
+  assert.equal(await page.evaluate(() => aiCalls.rootDestroys), 0);
   await page.keyboard.press('Escape');
   assert.match(await commentary.innerText(), /已验证的棋理说明/);
   await page.locator('#btn-settings').click();
-  await toggle.uncheck();
-  assert.equal(await commentary.count(), 0);
-  assert.equal(await page.locator('.review-commentary-action').count(), 0);
-  await page.evaluate(() => { aiCalls.availability = 'unavailable'; });
   await page.locator('#btn-lang-toggle').click();
+  assert.match(await commentary.innerText(), /Chrome local AI/);
+  assert.equal(await page.evaluate(() => aiCalls.creates), 1);
+  await toggle.uncheck();
+  assert.match(await commentary.innerText(), /Verified chess facts/);
+  assert.equal(await page.locator('.review-commentary-action').count(), 1);
+  assert.equal(await page.evaluate(() => aiCalls.rootDestroys), 1);
+  assert.equal(await page.locator('#review-studio-summary').isVisible(), false);
+  await page.evaluate(() => { aiCalls.availability = 'unavailable'; });
   await toggle.check();
   await page.waitForFunction(() => document.getElementById('review-commentary-status').textContent.includes('unavailable'));
   assert.equal(await download.isVisible(), false);

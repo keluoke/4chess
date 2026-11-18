@@ -1,30 +1,32 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-local-commentary';
-import { BuiltInAi } from './built-in-ai.js?v=20261118-local-commentary';
-import { getLang, t } from './i18n.js?v=20261118-local-commentary';
+import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
+import { BuiltInAi } from './built-in-ai.js?v=20261118-summary-ai';
+import { bindCommentary, COMMENTARY_SCHEMA } from './commentary-text.js?v=20261118-summary-ai';
+import { getLang, t } from './i18n.js?v=20261118-summary-ai';
 
 const PREFERENCE = 'diverge_review_commentary';
 const FINISHED = new Set(['1-0', '0-1', '1/2-1/2']);
-const PROMPT_REVISION = 1;
+const PROMPT_REVISION = 2;
 
 function wording(facts) {
   const params = {
     played: facts.played.san, elo: facts.maiaRating,
-    probability: (facts.playedProbability * 100).toFixed(1),
+    probability: facts.playedProbability === null ? null : (facts.playedProbability * 100).toFixed(1),
     points: facts.expectedScoreLossPoints.toFixed(1),
     reply: facts.playedReply?.san, best: facts.best?.san,
-    line: facts.bestLine.join(' ')
   };
-  const lead = { played: t('commentaryPlayed', params) };
-  if (facts.maiaRating && facts.playedProbability !== null) {
-    lead.tendency = t('commentaryTendency', params);
-    if (facts.playedProbability >= .2) lead.temptation = t('commentaryTemptation', params);
-  }
-  const detail = { loss: t('commentaryLoss', params) };
-  if (facts.best) detail.alternative = t('commentaryAlternative', params);
-  if (facts.bestLine.length > 1) detail.line = t('commentaryLine', params);
-  if (facts.playedReply) detail.reply = t('commentaryReply', params);
-  return { lead, detail };
+  const action = move => move && t(move.capture && move.check ? 'commentaryCaptureCheck'
+    : move.capture ? 'commentaryCapture' : move.check ? 'commentaryCheck' : 'commentaryMove', {
+    san: move.san, square: move.square, piece: move.capture ? t(`commentaryPiece_${move.capture}`) : ''
+  });
+  const playedAction = action(facts.played);
+  const replyAction = action(facts.playedReply);
+  const tactical = facts.played.capture || facts.played.check || facts.playedReply?.capture || facts.playedReply?.check;
+  const lead = !tactical && facts.maiaRating && params.probability !== null
+    ? t('commentaryTendency', params) : t('commentaryExplainPlayed', { action: playedAction });
+  const detail = facts.playedReply ? t('commentaryExplainReply', { action: replyAction, points: params.points })
+    : facts.best ? t('commentaryAlternative', params) : t('commentaryLoss', params);
+  return { fallback: `${lead} ${detail}`, playedAction, replyAction };
 }
 
 export class ReviewCommentary {
@@ -47,7 +49,7 @@ export class ReviewCommentary {
       }
       this.sync();
       app.renderCurrentInsight();
-      app.renderBlunderCards();
+      app.reviewOverview.render();
     };
     this.download.onclick = () => {
       if (this.modelAllowed()) this.model.create({ gesture: true });
@@ -57,26 +59,31 @@ export class ReviewCommentary {
       if (!event.persisted) return;
       this.sync();
       app.renderCurrentInsight();
+      app.reviewOverview.render();
     });
     this.renderSettings();
   }
 
   allowed() {
-    return this.toggle.checked && !this.app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress();
+    return !this.app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress();
   }
 
   modelAllowed() {
-    return this.allowed() && getLang() === 'en';
+    return this.toggle.checked && this.allowed() && getLang() === 'en';
   }
 
   sync(options) {
-    if (this.modelAllowed()) this.model.probe(options);
-    else this.suspend();
+    if (!this.toggle.checked || !this.allowed()) this.suspend();
+    else if (getLang() !== 'en') {
+      this.clearContext();
+      this.clearOverview();
+    } else this.model.probe(options);
     this.renderSettings();
   }
 
   suspend() {
     this.clearContext();
+    this.clearOverview();
     if (this.model.state !== 'idle') this.model.dispose();
   }
 
@@ -104,6 +111,7 @@ export class ReviewCommentary {
   onModelChange() {
     this.renderSettings();
     this.maybeGenerate();
+    this.maybeGenerateOverview();
   }
 
   eligible(move, review) {
@@ -144,14 +152,22 @@ export class ReviewCommentary {
     section.append(heading, body, source);
     panel.append(section);
 
-    const choices = wording(facts);
+    const { fallback, playedAction, replyAction } = wording(facts);
     const key = JSON.stringify([PROMPT_REVISION, getLang(), move.fenBefore, move.uci, review.engineKey, review.modelKey, facts]);
-    const cached = this.cache.get(key);
-    const fallback = {
-      lead: choices.lead.tendency ? 'tendency' : 'played',
-      detail: choices.detail.reply ? 'reply' : choices.detail.alternative ? 'alternative' : 'loss'
+    const cached = this.modelAllowed() ? this.cache.get(key) : null;
+    const bindings = { played: playedAction, cost: `${facts.expectedScoreLossPoints.toFixed(1)} percentage points of expected score` };
+    if (replyAction) bindings.reply = replyAction;
+    if (facts.best) bindings.best = facts.best.san;
+    if (facts.bestLine.length > 1) bindings.line = facts.bestLine.join(' ');
+    if (facts.maiaTop) bindings.maia = facts.maiaTop;
+    if (facts.maiaRating && facts.playedProbability !== null) {
+      bindings.chance = `a ${(facts.playedProbability * 100).toFixed(1)}% chance of being chosen at ${facts.maiaRating} Elo`;
+    }
+    const input = {
+      task: 'Explain the played move and its drawback. Use [[played]] and [[cost]]. If there is a verified reply, prefer [[reply]]. You may refer to the engine alternative [[best]], its continuation [[line]], or the Maia preference [[maia]] when supplied.',
+      turn: facts.turn, facts: bindings
     };
-    this.context = { key, move, facts, choices, review, epoch: this.app.gameEpoch, section, body, source, done: !!cached };
+    this.context = { key, move, bindings, input, review, epoch: this.app.gameEpoch, section, body, source, done: !!cached };
     this.display(this.context, cached ?? fallback, !!cached);
     this.syncModel();
   }
@@ -161,8 +177,8 @@ export class ReviewCommentary {
     this.maybeGenerate();
   }
 
-  display(context, selected, localAi) {
-    context.body.textContent = [context.choices.lead[selected.lead], context.choices.detail[selected.detail]].join(' ');
+  display(context, text, localAi) {
+    context.body.textContent = text;
     context.source.textContent = t(localAi ? 'commentarySourceAi' : 'commentarySourceFacts');
   }
 
@@ -190,19 +206,12 @@ export class ReviewCommentary {
     const timeout = setTimeout(() => controller.abort(), 6000);
     try {
       if (signal.aborted || !this.isCurrent(context)) return;
-      const leads = Object.keys(context.choices.lead), details = Object.keys(context.choices.detail);
-      const schema = {
-        type: 'object',
-        properties: { lead: { type: 'string', enum: leads }, detail: { type: 'string', enum: details } },
-        required: ['lead', 'detail'],
-        additionalProperties: false
-      };
-      const selected = await this.model.choose({ facts: context.facts, allowedSentences: context.choices }, schema, signal);
+      const draft = await this.model.write(context.input, COMMENTARY_SCHEMA, signal);
       if (signal.aborted || !this.isCurrent(context)) return;
-      if (!selected || Object.keys(selected).length !== 2 || !leads.includes(selected.lead) || !details.includes(selected.detail)) return;
-      this.cache.set(context.key, selected);
-      if (this.cache.size > 40) this.cache.delete(this.cache.keys().next().value);
-      this.display(context, selected, true);
+      const text = bindCommentary(draft, context.bindings, ['played', 'cost']);
+      if (!text) return;
+      this.remember(context.key, text);
+      this.display(context, text, true);
     } catch {
       // The deterministic description stays visible for unavailable, interrupted or invalid output.
     } finally {
@@ -220,5 +229,86 @@ export class ReviewCommentary {
     this.request = null;
     this.context?.section.remove();
     this.context = null;
+  }
+
+  remember(key, text) {
+    this.cache.set(key, text);
+    if (this.cache.size > 40) this.cache.delete(this.cache.keys().next().value);
+  }
+
+  renderOverview(review, fallback, bindings) {
+    const body = document.getElementById('review-report-story');
+    const source = document.getElementById('review-report-source');
+    const key = JSON.stringify([PROMPT_REVISION, 'overview', fallback, bindings]);
+    if (this.overview?.review === review && this.overview.key === key) return;
+    this.clearOverview();
+    body.textContent = fallback;
+    if (!this.modelAllowed() || review.isPartial || !bindings.result) return;
+    const context = this.overview = { key, review, epoch: this.app.gameEpoch, body, source, fallback, bindings };
+    const cached = this.cache.get(key);
+    if (cached) {
+      context.done = true;
+      this.displayOverview(context, cached);
+    } else {
+      this.model.probe();
+      this.maybeGenerateOverview();
+    }
+  }
+
+  async maybeGenerateOverview() {
+    const context = this.overview;
+    if (!context || context.done || this.overviewRequest || !this.modelAllowed() || this.app.practice?.inProgress) return;
+    if (this.model.state === 'available') {
+      this.model.create();
+      return;
+    }
+    if (this.model.state !== 'ready') return;
+    const controller = this.overviewRequest = new AbortController();
+    const { signal } = controller;
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const draft = await this.model.write({
+        task: 'Connect the result, turning point and closing position in one or two sentences. Start with [[result]]. At [[turning]], [[side]] had [[best]] available but played [[played]] instead. These moves are present only when verified. If supplied, [[trigger]] was the previous move and [[closing]] describes the final positions. Write in your own words around these tokens.',
+        facts: context.bindings
+      }, COMMENTARY_SCHEMA, signal);
+      if (signal.aborted || this.overview !== context || this.app.gameEpoch !== context.epoch ||
+          this.app.reviewResult !== context.review || !this.modelAllowed() || this.app.practice?.inProgress) return;
+      const required = ['result', 'turning', 'played', 'best'].filter(ref => Object.hasOwn(context.bindings, ref));
+      const text = bindCommentary(draft, context.bindings, required);
+      if (text) {
+        this.remember(context.key, text);
+        this.displayOverview(context, text);
+      }
+    } catch {
+      // The deterministic recap was already rendered.
+    } finally {
+      clearTimeout(timeout);
+      if (this.overviewRequest === controller) {
+        this.overviewRequest = null;
+        context.done = true;
+      }
+    }
+  }
+
+  displayOverview(context, text) {
+    this.display(context, text, true);
+    context.source.hidden = false;
+    const studio = document.getElementById('review-studio-summary');
+    studio.querySelector('p').textContent = text;
+    studio.hidden = false;
+  }
+
+  clearOverview() {
+    this.cancelOverview();
+    if (!this.overview) return;
+    this.overview.body.textContent = this.overview.fallback;
+    this.overview.source.hidden = true;
+    document.getElementById('review-studio-summary').hidden = true;
+    this.overview = null;
+  }
+
+  cancelOverview() {
+    this.overviewRequest?.abort();
+    this.overviewRequest = null;
   }
 }

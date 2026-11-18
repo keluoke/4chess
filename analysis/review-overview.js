@@ -1,4 +1,5 @@
-import { t } from './i18n.js?v=20261118-local-commentary';
+import { t } from './i18n.js?v=20261118-summary-ai';
+import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
@@ -132,7 +133,10 @@ export class ReviewOverview {
     const moves = this.app.reviewExplorer.available(allMoves);
     const scored = moves.filter(move => Number.isFinite(move.accuracy) && Number.isFinite(move.expectedScoreLoss));
     const turningPoint = scored.filter(move => move.expectedScoreLoss >= 8).sort(compareImpact)[0];
-    this.renderStory(result, score, scored, turningPoint);
+    const verified = moves.filter(move => move.divergenceType === 'intuition_trap' && move.divergenceStatus === 'confirmed')
+      .sort((a, b) => (b.verifiedExpectedScoreLoss ?? 0) - (a.verifiedExpectedScoreLoss ?? 0))
+      .find(move => Number.isFinite(move.verifiedExpectedScoreLoss) && (move.verifiedBestUci || move.verifiedBestSan));
+    this.renderStory(result, score, scored, turningPoint, verified);
     const beyond = selectReviewMoves(moves, 'all', 'beyond').length;
     const traps = selectReviewMoves(moves, 'all', 'trap').length;
     byId('review-report-intuition').textContent = [
@@ -141,7 +145,7 @@ export class ReviewOverview {
     ].filter(Boolean).join(' · ');
   }
 
-  renderStory(result, score, scored, turningPoint) {
+  renderStory(result, score, scored, turningPoint, verified) {
     const sideScores = (result.positionEvaluations || []).map((evaluation, index) => {
       const turn = result.allMoves[index]?.turn || (result.allMoves.at(-1)?.turn === 'b' ? 'w' : 'b');
       return Number.isFinite(evaluation?.scoreCp) ? evaluation.scoreCp * (turn === 'w' ? 1 : -1) : null;
@@ -162,18 +166,26 @@ export class ReviewOverview {
       samples.slice(0, -3).some((cp, i, early) => leadingSide(cp) === opponent && leadingSide(early[i + 1]) === opponent);
     const lastRound = result.allMoves.at(-1)?.moveNumber;
     const outcome = winner ? t('reviewWinner', { side: sideLabel(winner) }) : drawn ? t('reviewDraw') : t('gameOverview');
-    const move = { round: turningPoint?.moveNumber, side: sideLabel(turningPoint?.turn) };
+    const wonOnTime = winner && !mate && this.app.gameEndedOnTime;
+    const resultText = wonOnTime
+      ? t('reviewTimeHeadline', { winner: sideLabel(winner), loser: sideLabel(opponent) })
+      : mate && lastRound ? t('reviewMateHeadline', { side: sideLabel(mate), round: lastRound })
+        : winner || drawn ? outcome : null;
+    const facts = intuitionTrapFacts(verified, result);
+    const jump = facts?.best ? verified : turningPoint;
+    const move = { round: jump?.moveNumber, side: sideLabel(jump?.turn) };
     let title = outcome;
     let turnInTitle = false;
     if (result.isPartial) {
-      title = turningPoint ? t('reviewPartialTurnHeadline', move) : t('reviewPartialHeadline');
-      turnInTitle = !!turningPoint;
+      title = jump ? t('reviewPartialTurnHeadline', move) : t('reviewPartialHeadline');
+      turnInTitle = !!jump;
     }
+    else if (wonOnTime) title = resultText;
     else if (mate && lastRound) title = t('reviewMateHeadline', { side: sideLabel(mate), round: lastRound });
     else if (comeback) title = t('reviewComebackHeadline', { side: sideLabel(winner) });
     else if (drawn && balanced) title = t('reviewDrawHeadline');
-    else if (turningPoint) {
-      if (winner === turningPoint.turn) title = t('reviewWinMissHeadline', { outcome, round: move.round });
+    else if (jump) {
+      if (winner === jump.turn) title = t('reviewWinMissHeadline', { outcome, round: move.round });
       else title = winner || drawn ? t('reviewOutcomeTurnHeadline', { outcome, ...move }) : t('reviewTurnHeadline', move);
       turnInTitle = true;
     } else if (winner && lead === winner && stayedAhead) title = t('reviewHoldLeadHeadline', { side: sideLabel(winner) });
@@ -189,12 +201,35 @@ export class ReviewOverview {
       else if (lead) story = t('reviewFinalLead', { side: sideLabel(lead) });
       else story = t('reviewBackToBalance');
     }
-    if (turningPoint && !turnInTitle) story = [story, t('reviewLargestSwing', move)].filter(Boolean).join(' ');
-    byId('review-report-story').textContent = story;
-    this.turnButton.hidden = !turningPoint;
-    if (turningPoint) {
-      this.turnButton.textContent = t('reviewInspectRound', { round: turningPoint.moveNumber });
-      this.turnButton.onclick = () => this.jumpTo(turningPoint);
+    const closing = complete && stayedAhead ? t('reviewClosingLead', { side: sideLabel(lead) }) : '';
+    const previous = verified && result.allMoves.find(candidate => candidate.ply === verified.ply - 1);
+    const prior = intuitionTrapFacts(previous, result);
+    let turning = jump ? t('reviewLargestSwing', move) : '';
+    const related = !!facts?.best && prior?.playedReply?.san === facts.best.san && previous.moveNumber === verified.moveNumber;
+    if (facts?.best) {
+      turning = t(related ? 'reviewLinkedTurning' : 'reviewVerifiedTurning', {
+        round: verified.moveNumber, played: facts.played.san, best: facts.best.san,
+        side: sideLabel(verified.turn), trigger: prior?.played.san
+      });
+    }
+    if (facts?.best || !turnInTitle) story = [turning, story].filter(Boolean).join(' ');
+    const bindings = {};
+    if (resultText) bindings.result = resultText.replace(/[.!?]$/, '');
+    if (jump) {
+      bindings.turning = `move ${jump.moveNumber}`;
+      bindings.side = sideLabel(jump.turn);
+    }
+    if (facts?.best) {
+      bindings.played = facts.played.san;
+      bindings.best = facts.best.san;
+      if (related) bindings.trigger = prior.played.san;
+    }
+    if (closing) bindings.closing = closing.replace(/[.!?]$/, '');
+    this.app.reviewCommentary.renderOverview(result, story, bindings);
+    this.turnButton.hidden = !jump;
+    if (jump) {
+      this.turnButton.textContent = t('reviewInspectRound', { round: jump.moveNumber });
+      this.turnButton.onclick = () => this.jumpTo(jump);
     }
   }
 

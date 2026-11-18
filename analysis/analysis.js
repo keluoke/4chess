@@ -1,12 +1,12 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-filter';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261118-local-commentary';
-import { ReviewExplorer } from './review-explorer.js?v=20261118-local-commentary';
-import { ReviewOverview } from './review-overview.js?v=20261118-local-commentary';
-import { ReviewCommentary } from './review-commentary.js?v=20261118-local-commentary';
+import { IntuitionReview } from './intuition-review.js?v=20261118-summary-ai';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-summary-ai';
+import { ReviewOverview } from './review-overview.js?v=20261118-summary-ai';
+import { ReviewCommentary } from './review-commentary.js?v=20261118-summary-ai';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-local-commentary';
-import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-local-commentary';
+import { ReviewPractice } from './review-practice.js?v=20261118-summary-ai';
+import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-summary-ai';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -15,14 +15,14 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261117-review-policy';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-local-commentary';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261118-local-commentary';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-summary-ai';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-local-commentary';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-summary-ai';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -1103,6 +1103,8 @@ class AnalysisStudioApp {
   } = {}) {
     if (this.scanSourceLocked) return false;
     this.reviewCommentary.clearContext();
+    this.reviewCommentary.clearOverview();
+    this.gameEndedOnTime = false;
     this.importGeneration = (this.importGeneration || 0) + 1;
     this.importController?.abort();
     clearInterval(this.playTimer);
@@ -1308,6 +1310,7 @@ class AnalysisStudioApp {
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
     this.reviewCommentary.clearContext();
+    this.reviewCommentary.clearOverview();
     this.reviewEpoch++;
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = this.reviewPendingResume = false;
@@ -1382,6 +1385,8 @@ class AnalysisStudioApp {
     const whiteEloMatch = pgnText.match(/\[WhiteElo\s+"([^"]+)"\]/i);
     const blackEloMatch = pgnText.match(/\[BlackElo\s+"([^"]+)"\]/i);
     const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
+    const termination = pgnText.match(/^\s*\[Termination\s+"([^"\r\n]+)"\]/im)?.[1]?.trim();
+    this.gameEndedOnTime = /(?:\bwon on time|^time forfeit|^timeout)\.?$/i.test(termination || '');
 
     const whiteName = whiteMatch ? whiteMatch[1] : t('whitePlayer').replace('⚪ ', '');
     const blackName = blackMatch ? blackMatch[1] : t('blackPlayer').replace('⚫ ', '');
@@ -1397,6 +1402,7 @@ class AnalysisStudioApp {
   async runFullReview(forceRefresh = false) {
     this.practice?.stop();
     this.reviewCommentary.clearContext();
+    this.reviewCommentary.clearOverview();
     this.intuitionReview?.dispose();
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
@@ -1577,6 +1583,7 @@ class AnalysisStudioApp {
   startPractice(item, queue = [item]) {
     this.practice ||= new ReviewPractice(this);
     this.practice.start(item, { queue });
+    if (this.practice.inProgress) this.reviewCommentary.cancelOverview();
   }
 
   capturePracticeOrigin() {
@@ -1592,6 +1599,7 @@ class AnalysisStudioApp {
 
   restorePracticeOrigin(origin, move) {
     if (origin?.epoch !== this.gameEpoch || this.scanSourceLocked) return;
+    this.reviewCommentary.maybeGenerateOverview();
     this.reviewExplorer.side = origin.side;
     this.currentDivergenceFilter = origin.filter;
     this.boardUI.setOrientation(origin.orientation);

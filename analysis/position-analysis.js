@@ -1,5 +1,5 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261118-local-commentary';
+import { t } from './i18n.js?v=20261118-summary-ai';
 import { MaiaEloTrend } from './maia-elo-trend.js?v=20261118-precise-filter';
 
 // All displayed evaluations share White's perspective, regardless of orientation.

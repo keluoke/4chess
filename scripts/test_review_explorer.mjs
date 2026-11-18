@@ -3,6 +3,7 @@ import { JSDOM } from 'jsdom';
 import { REVIEW_QUALITIES, moveQuality, reviewCounts, selectReviewMoves, canPractice, intuitionKind } from '../engine/review-policy.js';
 import { ReviewPractice } from '../analysis/review-practice.js';
 import { intuitionTrapFacts } from '../engine/chess-facts.js';
+import { bindCommentary } from '../analysis/commentary-text.js';
 const move = (ply, lossCp, extra = {}) => ({ ply, turn: ply % 2 ? 'w' : 'b', severity: 'good', lossCp, uci: 'a7a8n', bestUci: 'a7a8q', fenBefore: 'fixture', bestSan: 'a8=Q', ...extra });
 const moves = [move(1, 0, { uci: 'a7a8q', isBookMove: true }), move(2, 20), move(3, 40), move(4, 100, { divergenceType: 'intuition_trap', divergenceStatus: 'confirmed' }), move(5, 200), move(6, null, { severity: 'unknown' }), move(7, 0, { isOnlyLegalMove: true }), move(8, 0, { uci: 'a7a8q', divergenceType: 'beyond_intuition', divergenceStatus: 'confirmed' }), move(10, 0, { divergenceType: 'beyond_intuition', isCombinationFollowup: true }), move(11, 0, { divergenceType: 'intuition_trap', divergenceStatus: 'unconfirmed' })];
 assert.equal(moveQuality(moves[1]), 'good', 'Low loss alone is not Best, including different promotions');
@@ -34,6 +35,13 @@ assert.deepEqual(commentaryFacts.bestLine, ['Kf2'], 'Existing cache can supply v
 assert.equal(commentaryFacts.expectedScoreLossPoints, 14);
 assert.equal(intuitionTrapFacts({ ...trap, divergenceStatus: 'unconfirmed' }, { elo: 1500 }), null);
 assert.equal(intuitionTrapFacts(trap, { engineOnly: true }), null);
+const bindings = { played: 'Nc6', cost: '13.2 percentage points of expected score', reply: 'Nxe5, taking a pawn' };
+const required = ['played', 'cost'];
+assert.equal(bindCommentary({ text: 'After [[played]], the opponent had [[reply]]. The choice cost [[cost]].' }, bindings, required),
+  'After Nc6, the opponent had Nxe5, taking a pawn. The choice cost 13.2 percentage points of expected score.');
+for (const extra of ['Qh8+', 'O–O', '12 points', '１２ points', 'a forced mate', '[[unknown]]']) {
+  assert.equal(bindCommentary({ text: `The choice of [[played]] cost [[cost]]. It allowed ${extra}.` }, bindings, required), null);
+}
 
 const dom = new JSDOM('<div id="practice-panel"></div>', { url: 'https://4chess.cc/analysis/' });
 globalThis.window = dom.window; globalThis.document = dom.window.document;
