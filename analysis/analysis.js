@@ -1,9 +1,9 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-review-navigation';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-filter';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261118-review-navigation';
-import { ReviewExplorer } from './review-explorer.js?v=20261118-review-navigation';
+import { IntuitionReview } from './intuition-review.js?v=20261118-precise-filter';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-precise-filter';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-review-navigation';
+import { ReviewPractice } from './review-practice.js?v=20261118-precise-filter';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -15,12 +15,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261117-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-review-policy';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261118-review-navigation';
+import { EvalChart } from './eval-chart.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261118-review-navigation';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-precise-filter';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-review-navigation';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-precise-filter';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -1328,7 +1328,6 @@ class AnalysisStudioApp {
     this.el.progressCard.style.display = 'none';
     this.el.blunderList.replaceChildren();
     this.el.blunderCountBadge.textContent = '0';
-    for (const id of ['filter-count-all', 'filter-count-beyond', 'filter-count-trap']) document.getElementById(id).textContent = '0';
     this.el.divergenceContent.hidden = true;
     this.renderMoveList();
     if (retainedCore) {

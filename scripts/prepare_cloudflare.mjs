@@ -1,5 +1,5 @@
-import { cpSync, mkdirSync, rmSync, readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { cpSync, mkdirSync, rmSync, readdirSync, statSync, readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, resolve, relative } from 'node:path';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = resolve(root, 'dist/site');
@@ -13,19 +13,24 @@ for (const entry of entries) {
 }
 cpSync(resolve(root, 'cloudflare/headers'), resolve(output, '_headers'));
 cpSync(resolve(root, 'cloudflare/redirects'), resolve(output, '_redirects'));
-// Generate complete local module pre-cache coverage, including worker entry points.
-const modules = [];
 function verify(dir) {
   for (const item of readdirSync(dir, { withFileTypes: true })) {
     const file = join(dir, item.name), path = relative(output, file).replaceAll('\\', '/');
     if (item.isDirectory()) { verify(file); continue; }
     if (statSync(file).size > 25 * 1024 * 1024) throw new Error(`Pages size limit exceeded: ${path}`);
     if (path.startsWith('models/') && statSync(file).size > 1024 * 1024) throw new Error(`Large model forbidden: ${path}`);
-    if (/^(analysis|engine|ui)\/.+\.(js|css)$/.test(path) && path !== 'analysis/sw.js') modules.push('../' + path);
   }
 }
 verify(output);
 const swPath = join(output, 'analysis/sw.js');
-writeFileSync(swPath, readFileSync(swPath, 'utf8').replace('// GENERATED_MODULES', `STATIC_ASSETS.push(...${JSON.stringify(modules)});`));
+const assets = JSON.parse(readFileSync(swPath, 'utf8').match(/const STATIC_ASSETS = (\[[^;]+\]);/)[1]);
+const urls = new Set();
+for (const asset of assets) {
+  const url = new URL(asset, pathToFileURL(swPath));
+  const file = fileURLToPath(url);
+  if (!file.startsWith(`${output}/`) || url.hash || urls.has(url.href)) throw new Error(`Invalid or duplicate precache URL: ${asset}`);
+  if (!statSync(file).isFile()) throw new Error(`Precache URL is not a file: ${asset}`);
+  urls.add(url.href);
+}
 // Pages Functions are bundled by Pages from the repository functions/ directory.
-console.log(`Website ready: ${output}; ${modules.length} local module dependencies verified.`);
+console.log(`Website ready: ${output}; ${urls.size} precache URLs verified.`);

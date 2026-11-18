@@ -208,20 +208,14 @@ Object.assign(I18N.en, {
 });
 
 export class IntuitionPanel {
-  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onRetryEngine, onCdnSave, onAnalyzeGame, onCancelReview, onJumpToMove, onSelectBlunder, onClearBlunderDrill, onOpenStandaloneAnalysis }) {
+  constructor({ onEloChange, onToggleChange, onMoveHover, onModelLoaded, onRetryEngine, onCdnSave, onOpenStandaloneAnalysis }) {
     this.onEloChange = onEloChange;
     this.onToggleChange = onToggleChange;
     this.onMoveHover = onMoveHover;
     this.onModelLoaded = onModelLoaded;
     this.onRetryEngine = onRetryEngine;
     this.onCdnSave = onCdnSave;
-    this.onAnalyzeGame = onAnalyzeGame;
-    this.onCancelReview = onCancelReview;
-    this.onJumpToMove = onJumpToMove;
-    this.onSelectBlunder = onSelectBlunder;
-    this.onClearBlunderDrill = onClearBlunderDrill;
     this.onOpenStandaloneAnalysis = onOpenStandaloneAnalysis;
-    this.activeDrill = null;
 
     this.container = null;
     this.fab = null;
@@ -1136,13 +1130,6 @@ export class IntuitionPanel {
       }
     } finally { this.setActionBusy(null); }
   }
-
-
-
-  clearBlunderDrill() {
-    this.activeDrill = null;
-  }
-
   protectionCopy() {
     const live = this.fairPlayPhase === 'live';
     return {

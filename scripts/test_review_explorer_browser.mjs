@@ -41,6 +41,8 @@ try {
   assert.equal(await page.locator('.review-side-controls button[aria-pressed="true"]').getAttribute('data-review-side'), 'b', 'Initial selection follows the entry view');
   assert.equal(await count('b', 'trap').innerText(), '—', 'An unrun intuition scan cannot claim zero traps');
   assert.equal(await count('w', 'precise').innerText(), '—');
+  const preciseFilter = page.getByRole('button', { name: /^Precise intuition\s*\(/ });
+  assert.match(await preciseFilter.innerText(), /—/);
   await page.evaluate(() => { syntheticReview.engineOnly = false; __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }); });
   assert.equal(await count('b', 'trap').innerText(), '1'); assert.equal(await count('b', 'beyond').innerText(), '1');
   assert.equal(await count('b', 'quality:unknown').innerText(), '1'); assert.equal(await count('w', 'quality:forced').innerText(), '1');
@@ -57,8 +59,14 @@ try {
   assert.equal(blunderStyle[2], '700');
   assert.equal(await count('w', 'precise').innerText(), '1');
   await count('w', 'precise').click();
+  assert.equal(await preciseFilter.getAttribute('aria-pressed'), 'true');
+  assert.equal(await preciseFilter.locator('#filter-count-precise').innerText(), '1');
   assert.equal(await page.locator('.review-tag-precise').innerText(), 'Precise intuition');
   assert.match(await page.locator('.review-card-reason').innerText(), /0\.28.*2\.5 percentage points/);
+  await page.locator('.filter-pill[data-filter="moves"]').click();
+  await preciseFilter.click();
+  assert.equal(await page.locator('.blunder-card').count(), 1);
+  assert.equal(await count('w', 'precise').getAttribute('aria-pressed'), 'true');
   await page.locator('#review-clear-filter').click();
   assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [4, 5, 8, 13]);
   assert.equal(await page.locator('.review-turning-point').count(), 3);

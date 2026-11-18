@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261118-review-navigation';
+import { t } from './i18n.js?v=20261118-precise-filter';
 import { REVIEW_QUALITIES, INTUITION_KINDS, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
@@ -106,11 +106,12 @@ export class ReviewExplorer {
       : t({ all: 'reviewKeyMoves', moves: 'reviewAllMoves', mistakes: 'filterMistakes' }[filter] || `reviewQuality_${filter}`);
     const visible = this.visible(moves);
     document.getElementById('review-selection-label').textContent = result ? t('reviewSelected', { side, label, count: visible.length }) : '';
-    for (const key of ['all', 'moves', 'mistakes', 'beyond', 'trap']) {
-      const count = document.getElementById(`filter-count-${key}`);
-      if (count) count.textContent = ['beyond', 'trap'].includes(key) && result?.engineOnly ? '—' : String(selectReviewMoves(moves, this.side, key).length);
-      const pill = document.querySelector(`.filter-pill[data-filter="${key}"]`);
-      pill?.classList.toggle('active', key === filter); pill?.setAttribute('aria-pressed', String(key === filter));
+    for (const pill of document.querySelectorAll('.divergence-filters [data-filter]')) {
+      const key = pill.dataset.filter;
+      const pending = result?.engineOnly && INTUITION_KINDS.includes(key);
+      document.getElementById(`filter-count-${key}`).textContent = pending ? '—' : String(selectReviewMoves(moves, this.side, key).length);
+      pill.classList.toggle('active', key === filter);
+      pill.setAttribute('aria-pressed', String(key === filter));
     }
     const queue = visible.filter(canPractice), batch = document.getElementById('review-practice-batch');
     batch.disabled = !queue.length || !!app.scanSourceLocked;

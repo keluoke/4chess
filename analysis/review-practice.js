@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261118-review-navigation';
+import { t } from './i18n.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { retryVerdict, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 

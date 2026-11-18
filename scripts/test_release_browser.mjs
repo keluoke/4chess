@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { onRequest } from '../functions/api/chesscom.js';
 
 const root = path.resolve(import.meta.dirname, '..');
+const siteRoot = process.env.TEST_SITE_ROOT ? path.resolve(process.env.TEST_SITE_ROOT) : root;
 const output = path.join(root, 'artifacts/delivery-2026-10-25');
 fs.mkdirSync(output, { recursive: true });
 const fetchOriginal = globalThis.fetch;
@@ -24,8 +25,8 @@ const server = http.createServer(async (req, res) => {
   const response = await onRequest({request:new Request(url)});
   res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;
  }
- let file = path.resolve(root, '.' + url.pathname);
- if (!file.startsWith(root + path.sep)) { res.writeHead(404);res.end();return; }
+ let file = path.resolve(siteRoot, '.' + url.pathname);
+ if (!file.startsWith(siteRoot + path.sep)) { res.writeHead(404);res.end();return; }
  if(fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');
  if(!fs.existsSync(file)){res.writeHead(404);res.end();return;}
  const mime={'.html':'text/html','.js':'application/javascript','.mjs':'application/javascript','.css':'text/css','.wasm':'application/wasm','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json','.xml':'application/xml','.txt':'text/plain','.woff2':'font/woff2'};
@@ -280,7 +281,17 @@ try {
  await offlineContext.setOffline(true);await offline.reload();await offline.waitForFunction(()=>!!window.__maiaStudioApp?.positions.length);
  await offline.evaluate(() => document.fonts.ready);
  assert.equal(await offline.evaluate(() => [...document.fonts].some(font => font.family === 'Inter' && font.status === 'loaded')), true, 'Inter is available on first offline reload');
- results.offline={app:true,firstOfflineReload:true,font:true};await offlineContext.close();
+ const offlineAssets = await offline.evaluate(async () => {
+  const cache = await caches.open((await caches.keys()).find(name => name.startsWith('4chess-review-')));
+  const requests = await cache.keys();
+  const paths = ['/engine/maia-worker.js', '/engine/maia-inbrowser.js', '/lib/stockfish-19.js', '/lib/stockfish.wasm', '/lib/stockfish-19-standard.js'];
+  return Promise.all(paths.map(async path => {
+   const matches = requests.filter(request => new URL(request.url).pathname === path);
+   return matches.length === 1 && (await fetch(matches[0].url)).ok;
+  }));
+ });
+ assert(offlineAssets.every(Boolean), 'Each local engine asset has one cached URL and is retrievable offline');
+ results.offline={app:true,firstOfflineReload:true,font:true,engineAssets:true};await offlineContext.close();
 
  // Load exactly the user-facing unpacked directory, not the source tree or an old ZIP.
  const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))).version;

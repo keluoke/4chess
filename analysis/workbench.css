@@ -198,13 +198,10 @@ button,input,select,textarea { font-family:inherit; }
 }
 .insight-column .blunder-list { gap:12px; }
 .insight-column .blunder-card { background:var(--dg-surface);border:1px solid transparent;border-radius:20px;padding:16px;box-shadow:var(--dg-shadow);transition:transform 180ms var(--studio-ease),box-shadow 180ms,border-color 180ms; }
-.insight-column .blunder-card.card-intuition-trap,.insight-column .blunder-card.card-beyond-intuition { background:var(--dg-surface);border-left-width:1px; }
 .insight-column .blunder-card.active { border-color:var(--brand-green);background:var(--dg-surface);box-shadow:0 0 0 3px var(--dg-green-soft); }
 @media(hover:hover) { .insight-column .blunder-card:hover { transform:translateY(-2px);box-shadow:0 8px 26px light-dark(#284d3412,#00000030); } }
-.blunder-card-title { font-size:15px;font-weight:600; }
-.blunder-type-tag,.blunder-loss-tag { font-weight:500;font-size:12px;border:0;border-radius:7px; }
+.blunder-type-tag { font-weight:500;font-size:12px;border:0;border-radius:7px; }
 .practice-start { margin:10px 0 0;width:auto;font-size:12px;border-radius:10px; }
-.blunder-card-main { gap:0; }
 .divergence-filter { font-family:inherit;font-size:12px;border-radius:9px; }
 .studio-layout .eval-chart-wrapper { width:100%;margin:4px 0 0;padding:16px 16px 12px;border:0;border-radius:22px;background:var(--dg-surface);box-shadow:var(--dg-shadow); }
 .eval-chart-header { flex-wrap:wrap;gap:8px 12px;margin-bottom:12px; }
