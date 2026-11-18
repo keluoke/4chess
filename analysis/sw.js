@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261118-floating-review';
+const CACHE_NAME = '4chess-review-20261118-game-summary';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -19,20 +19,20 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261118-precise-filter",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261118-floating-review",
+  "./workbench.css?v=20261118-game-summary",
   "../ui/theme.js?v=20261025-v115",
-  "./analysis.js?v=20261118-floating-review",
+  "./analysis.js?v=20261118-game-summary",
   "./board-ui.js?v=20261117-ui",
   "./chess-pieces.js",
   "./eval-chart.js?v=20261118-precise-filter",
-  "./i18n.js?v=20261118-floating-review",
+  "./i18n.js?v=20261118-game-summary",
   "./intuition-review.js?v=20261118-precise-filter",
   "./maia-elo-trend.js?v=20261118-precise-filter",
-  "./position-analysis.js?v=20261118-floating-review",
-  "./review-explorer.js?v=20261118-floating-review",
-  "./review-practice.js?v=20261118-floating-review",
-  "./review-overview.js?v=20261118-floating-review",
-  "./scan-authorization.js?v=20261118-floating-review",
+  "./position-analysis.js?v=20261118-game-summary",
+  "./review-explorer.js?v=20261118-game-summary",
+  "./review-practice.js?v=20261118-game-summary",
+  "./review-overview.js?v=20261118-game-summary",
+  "./scan-authorization.js?v=20261118-game-summary",
   "./sound-effects.js?v=20261025-v115",
   "./workbench-layout.js?v=20261118-precise-filter",
   "./workbench-motion.js?v=20261103-jade",

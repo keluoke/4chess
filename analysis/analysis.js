@@ -1,11 +1,11 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-filter';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261118-precise-filter';
-import { ReviewExplorer } from './review-explorer.js?v=20261118-floating-review';
-import { ReviewOverview } from './review-overview.js?v=20261118-floating-review';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-game-summary';
+import { ReviewOverview } from './review-overview.js?v=20261118-game-summary';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-floating-review';
-import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-floating-review';
+import { ReviewPractice } from './review-practice.js?v=20261118-game-summary';
+import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-game-summary';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -18,10 +18,10 @@ import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-review-polic
 import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261118-floating-review';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-game-summary';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-floating-review';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-game-summary';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [

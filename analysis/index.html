@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261118-floating-review">
+  <link rel="stylesheet" href="workbench.css?v=20261118-game-summary">
 </head>
 <body class="diverge-ui">
   <script>
@@ -199,7 +199,7 @@
     <div class="review-report-content">
       <header class="review-report-heading">
         <div>
-          <h1 id="review-report-title" tabindex="-1" data-i18n="reviewHeadline">这盘棋下得怎么样？</h1>
+          <h1 id="review-report-title" tabindex="-1" data-i18n="gameOverview">复盘总览</h1>
           <p id="review-report-meta"></p>
         </div>
         <button type="button" class="review-card-close" id="review-card-close" aria-label="关闭复盘总览" data-i18n-aria="reviewClose" data-i18n-title="reviewClose">×</button>
@@ -247,10 +247,10 @@
     </div>
     <footer class="review-card-footer">
       <div class="review-card-countdown" id="review-card-countdown" role="timer" hidden>
-        <span id="review-card-seconds" class="review-card-seconds" aria-hidden="true">5</span>
-        <p aria-hidden="true" data-i18n="reviewCountdownSuffix">秒后自动进入评估工作台</p>
+        <span id="review-card-seconds" class="review-card-seconds" aria-hidden="true">8</span>
+        <p aria-hidden="true" data-i18n="reviewCountdownSuffix">秒后自动进入复盘工作台</p>
       </div>
-      <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">进入评估工作台</button>
+      <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">进入复盘工作台</button>
     </footer>
   </dialog>
 
@@ -349,11 +349,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261118-floating-review"></script>
+  <script type="module" src="analysis.js?v=20261118-game-summary"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261118-floating-review').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261118-game-summary').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

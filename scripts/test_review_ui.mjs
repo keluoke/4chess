@@ -386,7 +386,7 @@ try {
     const app = window.__maiaStudioApp;
     return app.boardUI.chess.getFen() === app.practice.item.fenBefore;
   }), true, 'Retry explicitly returns to the starting position');
-  await page.getByRole('button', { name: 'Back to workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to Studio', exact: true }).click();
   assert.equal(await page.locator('.position-analysis').isVisible(), true);
   assert.equal(await page.locator('#practice-panel').isVisible(), false);
   // Fast navigation and a new game must leave every row bound to the final visible position.

@@ -1,9 +1,9 @@
-import { t } from './i18n.js?v=20261118-floating-review';
+import { t } from './i18n.js?v=20261118-game-summary';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
 const sideLabel = side => t(side === 'w' ? 'reviewWhite' : side === 'b' ? 'reviewBlack' : 'reviewBoth');
-const AUTO_CLOSE_MS = 5000;
+const AUTO_CLOSE_MS = 8000;
 
 function compareImpact(a, b) {
   return (b.expectedScoreLoss ?? 0) - (a.expectedScoreLoss ?? 0) ||
@@ -132,7 +132,7 @@ export class ReviewOverview {
     const moves = this.app.reviewExplorer.available(allMoves);
     const scored = moves.filter(move => Number.isFinite(move.accuracy) && Number.isFinite(move.expectedScoreLoss));
     const turningPoint = scored.filter(move => move.expectedScoreLoss >= 8).sort(compareImpact)[0];
-    this.renderStory(result, scored, turningPoint);
+    this.renderStory(result, score, scored, turningPoint);
     const beyond = selectReviewMoves(moves, 'all', 'beyond').length;
     const traps = selectReviewMoves(moves, 'all', 'trap').length;
     byId('review-report-intuition').textContent = [
@@ -141,30 +141,55 @@ export class ReviewOverview {
     ].filter(Boolean).join(' · ');
   }
 
-  renderStory(result, scored, turningPoint) {
+  renderStory(result, score, scored, turningPoint) {
     const sideScores = (result.positionEvaluations || []).map((evaluation, index) => {
       const turn = result.allMoves[index]?.turn || (result.allMoves.at(-1)?.turn === 'b' ? 'w' : 'b');
       return Number.isFinite(evaluation?.scoreCp) ? evaluation.scoreCp * (turn === 'w' ? 1 : -1) : null;
     });
     const samples = sideScores.filter(Number.isFinite);
     const complete = samples.length >= 3 && samples.length === result.allMoves.length + 1 && !result.isPartial;
+    const finalEvaluation = result.positionEvaluations?.at(-1);
+    const finalScore = sideScores.at(-1);
+    const lead = leadingSide(finalScore);
+    const winner = result.isPartial ? null : score === '1-0' ? 'w' : score === '0-1' ? 'b' : null;
+    const drawn = !result.isPartial && score === '1/2-1/2';
+    const mate = !result.isPartial && !drawn && finalEvaluation?.isMate && finalEvaluation.terminal &&
+      (!winner || winner === lead) ? lead : null;
+    const balanced = complete && samples.every(cp => Math.abs(cp) < 100);
+    const stayedAhead = complete && lead && samples.slice(-Math.min(6, samples.length)).every(cp => leadingSide(cp) === lead);
+    const opponent = winner === 'w' ? 'b' : 'w';
+    const comeback = complete && winner && samples.slice(-3).every(cp => leadingSide(cp) === winner) &&
+      samples.slice(0, -3).some((cp, i, early) => leadingSide(cp) === opponent && leadingSide(early[i + 1]) === opponent);
+    const lastRound = result.allMoves.at(-1)?.moveNumber;
+    const outcome = winner ? t('reviewWinner', { side: sideLabel(winner) }) : drawn ? t('reviewDraw') : t('gameOverview');
+    const move = { round: turningPoint?.moveNumber, side: sideLabel(turningPoint?.turn) };
+    let title = outcome;
+    let turnInTitle = false;
+    if (result.isPartial) {
+      title = turningPoint ? t('reviewPartialTurnHeadline', move) : t('reviewPartialHeadline');
+      turnInTitle = !!turningPoint;
+    }
+    else if (mate && lastRound) title = t('reviewMateHeadline', { side: sideLabel(mate), round: lastRound });
+    else if (comeback) title = t('reviewComebackHeadline', { side: sideLabel(winner) });
+    else if (drawn && balanced) title = t('reviewDrawHeadline');
+    else if (turningPoint) {
+      if (winner === turningPoint.turn) title = t('reviewWinMissHeadline', { outcome, round: move.round });
+      else title = winner || drawn ? t('reviewOutcomeTurnHeadline', { outcome, ...move }) : t('reviewTurnHeadline', move);
+      turnInTitle = true;
+    } else if (winner && lead === winner && stayedAhead) title = t('reviewHoldLeadHeadline', { side: sideLabel(winner) });
+    this.title.textContent = title;
+
     let story = t('reviewScoredPlies', { valid: scored.length, count: result.allMoves.length });
     if (complete) {
-      const end = samples.at(-1);
-      const lead = leadingSide(end);
-      const endPosition = result.positionEvaluations.at(-1);
       const early = leadingSide(samples[Math.min(20, Math.floor(samples.length / 3))]);
-      const stayedAhead = lead && samples.slice(-Math.min(6, samples.length)).every(cp => leadingSide(cp) === lead);
-      if (samples.every(cp => Math.abs(cp) < 100)) story = t('reviewBalanced');
-      else if (endPosition?.isMate && endPosition.terminal && lead) story = t('reviewCheckmated', { side: sideLabel(lead) });
+      if (mate || drawn && balanced) story = '';
+      else if (balanced) story = t('reviewBalanced');
       else if (early && lead && early !== lead) story = t('reviewLeadChanged', { early: sideLabel(early), late: sideLabel(lead) });
       else if (stayedAhead) story = t('reviewClosingLead', { side: sideLabel(lead) });
       else if (lead) story = t('reviewFinalLead', { side: sideLabel(lead) });
       else story = t('reviewBackToBalance');
     }
-    if (turningPoint) {
-      story += ' ' + t('reviewLargestSwing', { side: sideLabel(turningPoint.turn), round: turningPoint.moveNumber });
-    }
+    if (turningPoint && !turnInTitle) story = [story, t('reviewLargestSwing', move)].filter(Boolean).join(' ');
     byId('review-report-story').textContent = story;
     this.turnButton.hidden = !turningPoint;
     if (turningPoint) {

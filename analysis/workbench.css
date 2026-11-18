@@ -393,6 +393,7 @@ button,input,select,textarea { font-family:inherit; }
 .practice-active .insight-column,.practice-active .divider-insight { display:none!important; }
 
 #review-summary {
+  position:fixed;inset:0;margin:auto;height:fit-content;box-sizing:border-box;
   width:min(660px,calc(100% - 28px));max-width:none;max-height:calc(100dvh - 28px);
   padding:0;border:1px solid var(--dg-line);border-radius:26px;overflow:hidden;color:var(--text-main);
   background:var(--dg-surface);box-shadow:0 28px 100px #071b145c;
@@ -407,7 +408,7 @@ button,input,select,textarea { font-family:inherit; }
 }
 .review-report-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px; }
 .review-report-heading h1 {
-  margin:0;font-size:clamp(26px,5vw,39px);font-weight:650;line-height:1.15;letter-spacing:-.035em;
+  margin:0;font-size:clamp(26px,5vw,39px);font-weight:650;line-height:1.15;letter-spacing:-.035em;text-wrap:balance;
 }
 .review-report-heading h1:focus { outline:none; }
 .review-report-heading p { margin:7px 0 0;font-size:14px;color:var(--text-muted);overflow-wrap:anywhere; }
@@ -434,7 +435,7 @@ button,input,select,textarea { font-family:inherit; }
 .review-report-story { margin-block:17px 14px; }
 .review-report-story p { margin:0 0 7px;font-size:clamp(17px,2.6vw,21px);line-height:1.5; }
 #review-report-intuition { color:var(--text-muted);font-size:13px; }
-#review-report-intuition:empty,.review-report-practice:not(:has(button:not([hidden]))) { display:none; }
+#review-report-story:empty,#review-report-intuition:empty,.review-report-practice:not(:has(button:not([hidden]))) { display:none; }
 .review-report-story .btn-header { padding-inline:0;background:transparent;border:0;box-shadow:none;color:var(--brand-green);font-size:14px; }
 .review-report-story .btn-header:hover { text-decoration:underline; }
 .review-report-practice {

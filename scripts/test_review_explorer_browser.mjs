@@ -42,21 +42,63 @@ try {
   const count = (side, quality) => page.locator(`#review-overview button[data-review-side="${side}"][data-review-category="${quality}"]`);
   const overview = page.locator('#review-summary');
   const clock = page.locator('#review-card-countdown');
+  const timerStarted = Date.now();
   assert.equal(await overview.evaluate(el => el.matches(':modal')), true, 'Scores open a floating modal over the workbench');
   assert.equal(await page.locator('#position-score').isVisible(), true);
-  assert.match(await page.locator('#review-report-story').innerText(), /Move 7.*White had a better option/);
-  assert.equal(await page.locator('#review-card-seconds').innerText(), '5');
+  assert.equal(await page.locator('#review-report-title').innerText(), 'White wins, but there was a better option on move 7');
+  assert.equal(await page.locator('#review-card-seconds').innerText(), '8');
+  assert.match(await clock.getAttribute('aria-label'), /Analysis Studio in 8 seconds/);
+  const centered = el => {
+    const { left, width, top, height } = el.getBoundingClientRect();
+    return Math.abs(left + width / 2 - innerWidth / 2) <= 1 && Math.abs(top + height / 2 - innerHeight / 2) <= 1;
+  };
+  assert(await overview.evaluate(centered), 'The modal is centered relative to the full desktop viewport');
   const boardBounds = await page.locator('#board-container').boundingBox();
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 0);
-  await page.waitForFunction(() => document.getElementById('review-card-seconds').textContent === '4');
+  await page.waitForFunction(() => document.getElementById('review-card-seconds').textContent === '7');
   await page.evaluate(() => __maiaStudioApp.applyReviewResult({ ...syntheticReview, engineOnly: false }, { refreshPosition: false }));
-  assert.equal(await page.locator('#review-card-seconds').innerText(), '4', 'Maia enrichment keeps the original deadline');
-  await overview.waitFor({ state: 'hidden', timeout: 5500 });
+  assert.equal(await page.locator('#review-card-seconds').innerText(), '7', 'Maia enrichment keeps the original deadline');
+  await overview.waitFor({ state: 'hidden', timeout: 8500 });
+  assert(Date.now() - timerStarted >= 7300, 'The card stays open for the extended countdown');
   assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBounds, 'Closing the card preserves the workbench layout');
   await page.evaluate(() => __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }));
   await page.locator('#btn-review-overview').click();
   assert.equal(await clock.isVisible(), false, 'A manually reopened review stays available for reading');
+  const headline = page.locator('#review-report-title');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    const balanced = Array.from({ length: syntheticReview.allMoves.length + 1 }, () => ({ scoreCp: 0 }));
+    app.el.metaResult.textContent = '1/2-1/2';
+    app.applyReviewResult({ ...syntheticReview, positionEvaluations: balanced }, { refreshPosition: false });
+  });
+  assert.equal(await headline.innerText(), 'A close game ends in a draw');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    const positions = Array.from({ length: syntheticReview.allMoves.length + 1 }, () => ({ scoreCp: 0 }));
+    positions[positions.length - 1] = { scoreCp: -10000, isMate: true, terminal: true };
+    app.el.metaResult.textContent = '0-1';
+    app.applyReviewResult({ ...syntheticReview, positionEvaluations: positions }, { refreshPosition: false });
+  });
+  assert.equal(await headline.innerText(), 'Black wins by checkmate on move 7');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    const whiteScores = [0, 10, -230, -210, -180, -60, 20, 0, 60, 100, 140, 200, 240, 300, 350];
+    const positions = whiteScores.map((cp, i) => ({ scoreCp: i % 2 ? -cp : cp }));
+    app.el.metaResult.textContent = '1-0';
+    app.applyReviewResult({ ...syntheticReview, positionEvaluations: positions }, { refreshPosition: false });
+  });
+  assert.equal(await headline.innerText(), 'White comes from behind to win');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.applyReviewResult({ ...syntheticReview, isPartial: true }, { refreshPosition: false });
+  });
+  assert.equal(await headline.innerText(), 'In the moves available, White missed a chance on move 7');
+  assert.doesNotMatch(await page.locator('#review-report-meta').innerText(), /1-0/);
+  await page.evaluate(() => {
+    __maiaStudioApp.el.metaResult.textContent = '1-0';
+    __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false });
+  });
   await page.getByRole('button', { name: 'Close game overview' }).click();
   assert.equal(await overview.isVisible(), false);
   assert.equal(await page.locator('#btn-review-overview').evaluate(el => el === document.activeElement), true);
@@ -71,7 +113,7 @@ try {
     __maiaStudioApp.applyReviewResult(enriched, { refreshPosition: false });
   });
   assert.deepEqual(await page.evaluate(() => __maiaStudioApp.practice.queue.map(move => move.ply)), initialQueue);
-  await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
+  await page.locator('#practice-panel').getByRole('button', { name: 'Back to Studio' }).click();
   assert.equal(await overview.isVisible(), false);
   assert.equal(await page.locator('#position-score').isVisible(), true);
   await page.evaluate(() => __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }));
@@ -154,7 +196,7 @@ try {
   await page.getByRole('button', { name: 'Show analysis', exact: true }).click();
   await page.getByRole('button', { name: 'View practice summary' }).click();
   assert.match(await page.locator('#practice-panel').innerText(), /With hints 1.*Revealed 1/);
-  await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
+  await page.locator('#practice-panel').getByRole('button', { name: 'Back to Studio' }).click();
   const branchBefore = await page.evaluate(() => {
     const app = __maiaStudioApp;
     app.goToPly(0);
@@ -167,7 +209,7 @@ try {
     return record();
   });
   await page.locator('#review-practice-batch').click();
-  await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
+  await page.locator('#practice-panel').getByRole('button', { name: 'Back to Studio' }).click();
   assert.deepEqual(await page.evaluate(() => readPracticeOrigin()), branchBefore, 'Leaving practice restores the exact personal branch');
   assert.equal(await page.evaluate(() => __maiaStudioApp.isBranching), true);
   await page.locator('#review-clear-filter').click();
@@ -186,6 +228,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#btn-review-overview').click();
   assert.equal(await overview.isVisible(), true);
+  assert(await overview.evaluate(centered), 'The modal is centered relative to the full mobile viewport');
   assert(await overview.evaluate(el => {
     const { left, right, top, bottom } = el.getBoundingClientRect();
     return left >= 0 && right <= innerWidth && top >= 0 && bottom <= innerHeight &&

@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261118-floating-review';
+import { t, onLanguageChange } from './i18n.js?v=20261118-game-summary';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {
