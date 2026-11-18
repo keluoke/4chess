@@ -1,8 +1,9 @@
-import { t } from './i18n.js?v=20261118-review-overview';
+import { t } from './i18n.js?v=20261118-floating-review';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
 const sideLabel = side => t(side === 'w' ? 'reviewWhite' : side === 'b' ? 'reviewBlack' : 'reviewBoth');
+const AUTO_CLOSE_MS = 5000;
 
 function compareImpact(a, b) {
   return (b.expectedScoreLoss ?? 0) - (a.expectedScoreLoss ?? 0) ||
@@ -18,20 +19,26 @@ export class ReviewOverview {
     this.app = app;
     this.summary = byId('review-summary');
     this.title = byId('review-report-title');
-    this.views = byId('review-views');
     this.overviewButton = byId('btn-review-overview');
-    this.workbenchButton = byId('btn-review-workbench');
+    this.closeButton = byId('review-card-close');
     this.readyButton = byId('review-ready');
     this.practiceButton = byId('review-report-practice');
     this.scoreButton = byId('review-report-workbench');
     this.turnButton = byId('review-report-turn');
     this.sidePicker = byId('review-report-side');
-    this.overviewButton.onclick = this.readyButton.onclick = () => this.show('overview', { focus: true });
-    this.workbenchButton.onclick = () => this.show('workbench');
-    this.scoreButton.onclick = () => this.show('workbench', { focus: true });
+    this.countdown = byId('review-card-countdown');
+    this.seconds = byId('review-card-seconds');
+    this.overviewButton.onclick = this.readyButton.onclick = () => this.show('overview');
+    this.scoreButton.onclick = this.closeButton.onclick = () => this.show('workbench');
+    this.summary.addEventListener('cancel', event => {
+      event.preventDefault();
+      this.show('workbench');
+    });
     this.practiceButton.onclick = () => {
       const queue = this.queue;
-      if (queue.length) app.startPractice(queue[0], queue);
+      if (!queue.length) return;
+      this.show('workbench');
+      app.startPractice(queue[0], queue);
     };
     this.sidePicker.addEventListener('click', event => {
       const button = event.target.closest('[data-practice-side]');
@@ -51,32 +58,57 @@ export class ReviewOverview {
   }
 
   update(result) {
+    this.render(result);
     if (!this.received) {
       this.received = true;
-      this.pending = this.exploring;
-      this.show(this.exploring ? 'workbench' : 'overview');
-      if (!this.exploring) this.title.scrollIntoView({ block: 'nearest' });
+      this.pending = this.exploring || !!document.querySelector('dialog[open]') || this.app.el.pgnModal.classList.contains('open');
+      this.show(this.pending ? 'workbench' : 'overview', { timed: !this.pending });
     } else this.show(this.view);
-    this.render(result);
   }
 
-  show(view, { focus = false } = {}) {
+  show(view, { timed = false } = {}) {
     const available = this.received && !!this.app.reviewResult && !this.app.scanSourceLocked;
-    this.view = view;
-    const overview = available && view === 'overview';
+    const overview = available && view === 'overview' && !this.app.practice?.inProgress;
+    this.view = overview ? 'overview' : 'workbench';
     if (overview) this.pending = false;
-    this.views.hidden = !available;
+    this.overviewButton.hidden = !available;
     this.readyButton.hidden = !available || !this.pending;
     this.readyButton.textContent = t(this.app.reviewResult?.isPartial ? 'reviewPartialReady' : 'reviewReady');
-    this.summary.hidden = !overview;
-    document.body.classList.toggle('show-review-overview', overview);
-    this.overviewButton.setAttribute('aria-pressed', String(overview));
-    this.workbenchButton.setAttribute('aria-pressed', String(!overview));
-    if (focus) {
-      const target = overview ? this.title : this.workbenchButton;
-      target.focus({ preventScroll: true });
-      if (overview) target.scrollIntoView({ block: 'nearest' });
+    if (overview) {
+      if (this.summary.open) return;
+      this.summary.showModal();
+      this.title.focus({ preventScroll: true });
+      if (timed) this.startCountdown();
+    } else {
+      this.stopCountdown();
+      if (this.summary.open) {
+        this.summary.close();
+        if (available && document.activeElement === document.body) this.overviewButton.focus({ preventScroll: true });
+      }
     }
+  }
+
+  startCountdown() {
+    const deadline = performance.now() + AUTO_CLOSE_MS;
+    const update = () => {
+      const remaining = Math.max(0, deadline - performance.now());
+      if (!remaining) {
+        this.show('workbench');
+        return;
+      }
+      const seconds = Math.ceil(remaining / 1000);
+      this.seconds.textContent = String(seconds);
+      this.countdown.setAttribute('aria-label', t('reviewCountdown', { seconds }));
+      this.countdown.style.setProperty('--review-clock-progress', `${100 * remaining / AUTO_CLOSE_MS}%`);
+    };
+    this.countdown.hidden = false;
+    update();
+    this.countdownTimer = setInterval(update, 80);
+  }
+
+  stopCountdown() {
+    clearInterval(this.countdownTimer);
+    this.countdown.hidden = true;
   }
 
   jumpTo(move) {
@@ -131,8 +163,7 @@ export class ReviewOverview {
       else story = t('reviewBackToBalance');
     }
     if (turningPoint) {
-      story += ' ' + t('reviewLargestSwing', { side: sideLabel(turningPoint.turn), round: turningPoint.moveNumber,
-        points: turningPoint.expectedScoreLoss });
+      story += ' ' + t('reviewLargestSwing', { side: sideLabel(turningPoint.turn), round: turningPoint.moveNumber });
     }
     byId('review-report-story').textContent = story;
     this.turnButton.hidden = !turningPoint;

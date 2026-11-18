@@ -134,8 +134,8 @@ try {
  const progress=trend.locator('.maia-trend-status');
  const extras=()=>trendPage.evaluate(()=>trendCalls.filter(call=>call.rating!==1800));
  await openTrend.waitFor();
- assert.deepEqual(await trendPage.locator('main details').evaluateAll(elements => elements.map(el => el.className)),
-  ['review-score-details'],'Only the score methodology has an inline disclosure');
+ assert.equal(await trendPage.locator('main details').count(),0,'The workbench has no scattered help disclosures');
+ assert.equal(await trendPage.locator('#review-summary details.review-score-details').count(),1);
  assert.equal(await trend.getAttribute('open'),null);
  assert.equal(await trend.locator('svg').count(),0);
  assert.deepEqual(await extras(),[],'An unopened trend dialog must not start rating inference');

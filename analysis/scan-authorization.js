@@ -71,6 +71,7 @@ function setWorkspaceAvailable(available) {
 export function setScanAvailability(app, available) {
   if (!app) return;
   app.scanSourceLocked = !available;
+  app.reviewOverview?.show(available ? app.reviewOverview.view : 'workbench');
   setWorkspaceAvailable(available);
   if (available) {
     app.intuitionReview.render();
@@ -90,6 +91,7 @@ export function setScanAvailability(app, available) {
 export function showScanLock(app) {
   if (app) {
     app.scanSourceLocked = true;
+    app.reviewOverview?.show('workbench');
     if (app.isPlaying) app.toggleAutoPlay();
     app.positionAnalysis?.cancel();
     app.analyzer?.cancel();

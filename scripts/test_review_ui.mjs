@@ -107,6 +107,8 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp.reviewResult, null, { timeout: 60000 });
   assert.equal(await page.locator('#review-summary').isVisible(), true);
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.maiaEngine.isReady), false, 'Scores render before delayed Maia initializes');
+  fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
+  await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/review-card-countdown.png') });
   const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
   await page.locator('#review-report-workbench').click();
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
@@ -128,7 +130,6 @@ try {
   assert(await page.locator('#val-accuracy-black').evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 28));
   assert.match(await page.locator('#accuracy-analysis-detail').textContent(), /D12/);
   assert.equal(await page.locator('#review-summary details').count(),1);
-  fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
   await page.locator('#btn-review-overview').click();
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-desktop.png') });
   await page.screenshot({ path: path.join(root, 'artifacts/studio-columns-desktop.png') });
@@ -137,7 +138,7 @@ try {
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-mobile.png') });
   await page.screenshot({path:path.join(root,'artifacts/studio-columns-mobile.png'),fullPage:true});
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.locator('#btn-review-workbench').click();
+  await page.locator('#review-card-close').click();
   await page.locator('#move-ply-4').click();
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3, null, { timeout: 20000 });
   await page.waitForFunction(() => document.querySelectorAll('#maia-candidate-lines .candidate-line').length === 3);
@@ -194,7 +195,10 @@ try {
   await page.screenshot({path:path.join(root,'artifacts/workbench-branch-desktop.png')});
   // Ultra-wide study desk must enlarge the real board without losing chart state.
   await page.setViewportSize({ width:2560, height:1080 });
-  await page.waitForFunction(() => document.querySelector('#eval-chart-container').parentElement.matches('.analysis-column'));
+  await page.waitForFunction(() =>
+    document.querySelector('#eval-chart-container').parentElement.matches('.analysis-column') &&
+    parseInt(document.documentElement.style.getPropertyValue('--studio-header-height'), 10) ===
+      Math.ceil(document.querySelector('.studio-navbar').getBoundingClientRect().height));
   const wideBoard = await page.locator('#board-container').boundingBox();
   assert(wideBoard.width >= 760 && wideBoard.width <= 830, `Ultra-wide board is ${wideBoard.width}px`);
   assert(Math.abs(wideBoard.width - wideBoard.height) < 1, 'Wide board remains square');

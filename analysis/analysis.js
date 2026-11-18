@@ -1,11 +1,11 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-filter';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261118-precise-filter';
-import { ReviewExplorer } from './review-explorer.js?v=20261118-review-overview';
-import { ReviewOverview } from './review-overview.js?v=20261118-review-overview';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-floating-review';
+import { ReviewOverview } from './review-overview.js?v=20261118-floating-review';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-review-overview';
-import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
+import { ReviewPractice } from './review-practice.js?v=20261118-floating-review';
+import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-floating-review';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -18,10 +18,10 @@ import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-review-polic
 import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261118-review-overview';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-floating-review';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-review-overview';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-floating-review';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -444,7 +444,7 @@ class AnalysisStudioApp {
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
-      if (this.el.settingsDialog.open) return;
+      if (this.el.settingsDialog.open || this.reviewOverview.summary.open) return;
       if (this.el.pgnModal.classList.contains('open')) {
         if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
         if (e.key === 'Tab') {
@@ -1394,6 +1394,7 @@ class AnalysisStudioApp {
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
 
+    if (forceRefresh) this.reviewOverview.reset();
     this.positionAnalysis.cancel();
     this.reviewResult = this.coreReview = null;
     this.practiceResults = new Map();
@@ -1575,7 +1576,7 @@ class AnalysisStudioApp {
     const scrollAreas = [document.scrollingElement, ...document.querySelectorAll(
       '.analysis-column, .analysis-scroll, .insight-column, #move-notation-table')];
     return {
-      epoch: this.gameEpoch, view: this.reviewOverview.view, ply: this.currentPly, before: this.isReviewingMove,
+      epoch: this.gameEpoch, ply: this.currentPly, before: this.isReviewingMove,
       branch: this.isBranching ? this.activeBranch : null, cursor: this.activeBranch?.cursor,
       orientation: this.boardUI.orientation, side: this.reviewExplorer.side, filter: this.currentDivergenceFilter,
       focus: document.activeElement, scroll: scrollAreas.map(element => [element, element.scrollTop])
@@ -1592,15 +1593,13 @@ class AnalysisStudioApp {
       this.reviewOverview.jumpTo(move);
       return;
     }
-    this.reviewOverview.show(origin.view);
     this.goToPly(origin.ply, { before: origin.before, silent: true });
     if (origin.branch) {
       this.activeBranch = origin.branch;
       this.showBranchPosition(origin.cursor, { silent: true });
     }
-    const fallback = origin.view === 'overview'
-      ? this.reviewOverview.practiceButton
-      : this.el.blunderList.querySelector(`[data-ply="${origin.ply}"] .practice-start`) || document.getElementById('review-practice-batch');
+    const fallback = this.el.blunderList.querySelector(`[data-ply="${origin.ply}"] .practice-start`) ||
+      document.getElementById('review-practice-batch');
     const focus = origin.focus?.isConnected ? origin.focus : fallback;
     focus?.focus({ preventScroll: true });
     for (const [element, top] of origin.scroll) element.scrollTop = top;

@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261118-review-overview">
+  <link rel="stylesheet" href="workbench.css?v=20261118-floating-review">
 </head>
 <body class="diverge-ui">
   <script>
@@ -58,10 +58,7 @@
     </div>
 
     <div class="studio-header-actions">
-      <nav class="review-views" id="review-views" data-i18n-aria="reviewViews" hidden>
-        <button type="button" class="btn-header" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-pressed="false">复盘总览</button>
-        <button type="button" class="btn-header" id="btn-review-workbench" data-i18n="reviewFullScore" aria-controls="move-notation-table" aria-pressed="true">完整棋谱</button>
-      </nav>
+      <button type="button" class="btn-header review-overview-button" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-haspopup="dialog" hidden>复盘总览</button>
       <!-- Actions -->
       <button type="button" class="btn-header" id="btn-focus" data-i18n="focusMode" aria-controls="insight-column" aria-pressed="false">专注</button>
       <button type="button" class="btn-header btn-import-primary" id="btn-import-pgn" data-i18n="btnImportPgn">
@@ -135,55 +132,6 @@
     </section>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <div class="analysis-scroll">
-      <section class="review-summary" id="review-summary" hidden>
-      <header class="review-report-heading">
-        <h1 id="review-report-title" tabindex="-1" data-i18n="gameOverview">复盘总览</h1>
-        <p id="review-report-meta"></p>
-      </header>
-      <div class="accuracy-heading"><strong data-i18n="accuracyLabel">引擎精度</strong><span data-i18n="accuracyScale">0–100 分</span></div>
-      <!-- Engine Accuracy Summary Card -->
-      <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
-        <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-white" id="metric-side-white" data-i18n="whitePlayer">⚪ 白方</span></div>
-          <div class="metric-group metric-accuracy-group">
-            <span class="metric-value" id="val-accuracy-white">—</span>
-            <small class="accuracy-samples" id="accuracy-detail-white"></small>
-          </div>
-        </div>
-        <div class="metric-divider"></div>
-        <div class="metric-player-row">
-          <div class="metric-side-label"><span class="side-badge side-black" id="metric-side-black" data-i18n="blackPlayer">⚫ 黑方</span></div>
-          <div class="metric-group metric-accuracy-group">
-            <span class="metric-value" id="val-accuracy-black">—</span>
-            <small class="accuracy-samples" id="accuracy-detail-black"></small>
-          </div>
-        </div>
-      </div>
-
-      <details class="review-score-details">
-        <summary data-i18n="reviewScoreMethod">评分说明</summary>
-        <p id="accuracy-analysis-detail" class="accuracy-provenance"></p>
-      </details>
-      <div class="review-report-story">
-        <p id="review-report-story"></p>
-        <p id="review-report-intuition"></p>
-        <button type="button" class="btn-header" id="review-report-turn" hidden></button>
-      </div>
-      <div class="review-report-practice">
-        <fieldset id="review-report-side" hidden>
-          <legend data-i18n="reviewPracticeSide">练习方</legend>
-          <button type="button" class="btn-header" data-practice-side="all" data-i18n="reviewBoth">双方</button>
-          <button type="button" class="btn-header" data-practice-side="w" data-i18n="reviewWhite">白方</button>
-          <button type="button" class="btn-header" data-practice-side="b" data-i18n="reviewBlack">黑方</button>
-        </fieldset>
-        <p id="review-report-practice-status"></p>
-        <div class="review-report-actions">
-          <button type="button" class="btn-header btn-primary" id="review-report-practice"></button>
-          <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">查看完整棋谱</button>
-        </div>
-      </div>
-
-      </section>
       <button type="button" class="btn-header review-ready" id="review-ready" data-i18n="reviewReady" hidden>整盘分析已完成 · 查看总览</button>
       <section id="practice-panel" class="practice-panel" hidden></section>
       <!-- Review Progress Banner (shown during analysis) -->
@@ -246,6 +194,66 @@
       </section>
     </aside>
   </main>
+
+  <dialog class="review-summary" id="review-summary" aria-labelledby="review-report-title">
+    <div class="review-report-content">
+      <header class="review-report-heading">
+        <div>
+          <h1 id="review-report-title" tabindex="-1" data-i18n="reviewHeadline">这盘棋下得怎么样？</h1>
+          <p id="review-report-meta"></p>
+        </div>
+        <button type="button" class="review-card-close" id="review-card-close" aria-label="关闭复盘总览" data-i18n-aria="reviewClose" data-i18n-title="reviewClose">×</button>
+      </header>
+      <div class="accuracy-heading"><strong data-i18n="accuracyLabel">引擎精度</strong><span data-i18n="accuracyScale">0–100 分</span></div>
+      <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
+        <div class="metric-player-row">
+          <div class="metric-side-label"><span class="side-badge side-white" id="metric-side-white" data-i18n="whitePlayer">⚪ 白方</span></div>
+          <div class="metric-group metric-accuracy-group">
+            <span class="metric-value" id="val-accuracy-white">—</span>
+            <small class="accuracy-samples" id="accuracy-detail-white"></small>
+          </div>
+        </div>
+        <div class="metric-player-row">
+          <div class="metric-side-label"><span class="side-badge side-black" id="metric-side-black" data-i18n="blackPlayer">⚫ 黑方</span></div>
+          <div class="metric-group metric-accuracy-group">
+            <span class="metric-value" id="val-accuracy-black">—</span>
+            <small class="accuracy-samples" id="accuracy-detail-black"></small>
+          </div>
+        </div>
+      </div>
+
+      <details class="review-score-details">
+        <summary data-i18n="reviewScoreMethod">评分说明</summary>
+        <p id="accuracy-analysis-detail" class="accuracy-provenance"></p>
+      </details>
+      <div class="review-report-story">
+        <p id="review-report-story"></p>
+        <p id="review-report-intuition"></p>
+        <button type="button" class="btn-header" id="review-report-turn" hidden></button>
+      </div>
+      <div class="review-report-practice">
+        <fieldset id="review-report-side" hidden>
+          <legend data-i18n="reviewPracticeSide">练习方</legend>
+          <button type="button" class="btn-header" data-practice-side="all" data-i18n="reviewBoth">双方</button>
+          <button type="button" class="btn-header" data-practice-side="w" data-i18n="reviewWhite">白方</button>
+          <button type="button" class="btn-header" data-practice-side="b" data-i18n="reviewBlack">黑方</button>
+        </fieldset>
+        <p id="review-report-practice-status"></p>
+        <div class="review-report-actions">
+          <button type="button" class="btn-header btn-primary" id="review-report-practice"></button>
+        </div>
+      </div>
+
+    </div>
+    <footer class="review-card-footer">
+      <div class="review-card-countdown" id="review-card-countdown" role="timer" hidden>
+        <span id="review-card-seconds" class="review-card-seconds" aria-hidden="true">5</span>
+        <p aria-hidden="true" data-i18n="reviewCountdownSuffix">秒后自动进入评估工作台</p>
+      </div>
+      <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">进入评估工作台</button>
+    </footer>
+  </dialog>
+
 
   <dialog id="maia-elo-trend" class="maia-trend-dialog" aria-labelledby="maia-trend-heading">
     <div class="maia-trend-heading">
@@ -341,11 +349,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261118-review-overview"></script>
+  <script type="module" src="analysis.js?v=20261118-floating-review"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261118-review-overview').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261118-floating-review').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

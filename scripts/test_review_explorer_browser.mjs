@@ -40,9 +40,27 @@ try {
     app.applyReviewResult(syntheticReview, { refreshPosition: false });
   });
   const count = (side, quality) => page.locator(`#review-overview button[data-review-side="${side}"][data-review-category="${quality}"]`);
-  assert.equal(await page.locator('#review-summary').isVisible(), true, 'Scores open the overview while the user waits');
-  assert.equal(await page.locator('#position-score').isVisible(), false);
-  assert.match(await page.locator('#review-report-story').innerText(), /move 7.*8.2 percentage points/);
+  const overview = page.locator('#review-summary');
+  const clock = page.locator('#review-card-countdown');
+  assert.equal(await overview.evaluate(el => el.matches(':modal')), true, 'Scores open a floating modal over the workbench');
+  assert.equal(await page.locator('#position-score').isVisible(), true);
+  assert.match(await page.locator('#review-report-story').innerText(), /Move 7.*White had a better option/);
+  assert.equal(await page.locator('#review-card-seconds').innerText(), '5');
+  const boardBounds = await page.locator('#board-container').boundingBox();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 0);
+  await page.waitForFunction(() => document.getElementById('review-card-seconds').textContent === '4');
+  await page.evaluate(() => __maiaStudioApp.applyReviewResult({ ...syntheticReview, engineOnly: false }, { refreshPosition: false }));
+  assert.equal(await page.locator('#review-card-seconds').innerText(), '4', 'Maia enrichment keeps the original deadline');
+  await overview.waitFor({ state: 'hidden', timeout: 5500 });
+  assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBounds, 'Closing the card preserves the workbench layout');
+  await page.evaluate(() => __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }));
+  await page.locator('#btn-review-overview').click();
+  assert.equal(await clock.isVisible(), false, 'A manually reopened review stays available for reading');
+  await page.getByRole('button', { name: 'Close game overview' }).click();
+  assert.equal(await overview.isVisible(), false);
+  assert.equal(await page.locator('#btn-review-overview').evaluate(el => el === document.activeElement), true);
+  await page.locator('#btn-review-overview').click();
   await page.locator('#review-report-side [data-practice-side="all"]').click();
   await page.getByRole('button', { name: 'Replay these 2 positions' }).click();
   assert.equal(await page.locator('#practice-panel').isVisible(), true);
@@ -54,8 +72,10 @@ try {
   });
   assert.deepEqual(await page.evaluate(() => __maiaStudioApp.practice.queue.map(move => move.ply)), initialQueue);
   await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
-  assert.equal(await page.locator('#review-summary').isVisible(), true);
+  assert.equal(await overview.isVisible(), false);
+  assert.equal(await page.locator('#position-score').isVisible(), true);
   await page.evaluate(() => __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }));
+  await page.locator('#btn-review-overview').click();
   await page.locator('#review-report-side [data-practice-side="b"]').click();
   await page.locator('#review-report-workbench').click();
   assert.equal(await page.locator('.review-side-controls button[aria-pressed="true"]').getAttribute('data-review-side'), 'b', 'Initial selection follows the entry view');
@@ -164,6 +184,15 @@ try {
   await count('b', 'quality:mistake').click();
   await page.locator('.blunder-card').screenshot({ path: path.join(output, 'quality-trap-card-zh.png') });
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#btn-review-overview').click();
+  assert.equal(await overview.isVisible(), true);
+  assert(await overview.evaluate(el => {
+    const { left, right, top, bottom } = el.getBoundingClientRect();
+    return left >= 0 && right <= innerWidth && top >= 0 && bottom <= innerHeight &&
+      el.querySelector('footer button').getBoundingClientRect().bottom <= bottom;
+  }), 'Mobile dialog and its close action fit the viewport');
+  await page.keyboard.press('Escape');
+  assert.equal(await overview.isVisible(), false);
   await page.locator('#review-overview').scrollIntoViewIfNeeded();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No page-wide overflow on mobile');
   await page.screenshot({ path: path.join(output, 'mobile-zh.png'), fullPage: true });
