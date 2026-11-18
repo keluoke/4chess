@@ -107,11 +107,12 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp.reviewResult, null, { timeout: 60000 });
   assert.equal(await page.locator('#review-summary').isVisible(), true);
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.maiaEngine.isReady), false, 'Scores render before delayed Maia initializes');
+  const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
+  await page.locator('#review-report-workbench').click();
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
   assert.equal(await page.locator('#engine-candidate-lines').isVisible(), true, 'Engine variations remain visible while Maia waits');
   assert.equal(await page.locator('#position-score').evaluate(el => getComputedStyle(el).fontSize), '48px');
   assert.equal(await page.locator('.candidate-move').first().evaluate(el => getComputedStyle(el).fontSize), '15px');
-  const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
   await page.locator('#intuition-toggle').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'paused');
   assert.equal(await page.locator('#val-accuracy-white').textContent(), coreAccuracy);
@@ -126,8 +127,9 @@ try {
   assert.match(await page.locator('#accuracy-detail-black').textContent(), /\d+\/\d+/);
   assert(await page.locator('#val-accuracy-black').evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 28));
   assert.match(await page.locator('#accuracy-analysis-detail').textContent(), /D12/);
-  assert.equal(await page.locator('#review-summary details').count(),0);
+  assert.equal(await page.locator('#review-summary details').count(),1);
   fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
+  await page.locator('#btn-review-overview').click();
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-desktop.png') });
   await page.screenshot({ path: path.join(root, 'artifacts/studio-columns-desktop.png') });
   await page.setViewportSize({ width: 390, height: 900 });
@@ -135,6 +137,7 @@ try {
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/accuracy-review-mobile.png') });
   await page.screenshot({path:path.join(root,'artifacts/studio-columns-mobile.png'),fullPage:true});
   await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.locator('#btn-review-workbench').click();
   await page.locator('#move-ply-4').click();
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3, null, { timeout: 20000 });
   await page.waitForFunction(() => document.querySelectorAll('#maia-candidate-lines .candidate-line').length === 3);
@@ -212,7 +215,8 @@ try {
   await page.waitForTimeout(280);
   assert.equal(await page.locator('.insight-column').isVisible(), false);
   assert.equal(await page.locator('#eval-chart-container').isVisible(), true);
-  assert((await page.locator('#board-container').boundingBox()).width >= wideBoard.width);
+  const focusBoard = await page.locator('#board-container').boundingBox();
+  assert(focusBoard.width >= wideBoard.width - 1, `Focus view board is ${focusBoard.width}px, full view was ${wideBoard.width}px`);
   await page.locator('#btn-focus').click();
   await page.waitForTimeout(280);
   const divider = page.locator('.divider-board');
@@ -371,10 +375,14 @@ try {
   assert.match(await page.locator('#practice-panel [role="status"]').textContent(), /loses ground/);
   assert.equal(await page.evaluate(() => {
     const app = window.__maiaStudioApp;
+    return app.boardUI.chess.getFen() === app.practice.submittedFen;
+  }), true, 'The attempted move stays on the board beside its feedback');
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  assert.equal(await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
     return app.boardUI.chess.getFen() === app.practice.item.fenBefore;
-  }), true, 'Unsuccessful attempt returns to the original position without revealing answers');
-  await page.getByRole('button', { name: 'End session', exact: true }).click();
-  await page.getByRole('button', { name: 'Back to analysis', exact: true }).click();
+  }), true, 'Retry explicitly returns to the starting position');
+  await page.getByRole('button', { name: 'Back to workspace', exact: true }).click();
   assert.equal(await page.locator('.position-analysis').isVisible(), true);
   assert.equal(await page.locator('#practice-panel').isVisible(), false);
   // Fast navigation and a new game must leave every row bound to the final visible position.

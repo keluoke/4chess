@@ -385,3 +385,56 @@ button,input,select,textarea { font-family:inherit; }
 .practice-controls button { min-height:36px; }
 @media (pointer:coarse) { .review-count-table td button,.review-side-controls button,.practice-controls button,.review-move-jump { min-height:44px; } }
 .review-total-row th,.review-total-row td { border-top:1px solid var(--border-color);padding-top:4px;font-weight:650; }
+
+.review-views { display:flex;flex-wrap:wrap;gap:4px; }
+.review-views[hidden],.review-ready[hidden],.review-report-actions [hidden],.review-report-story [hidden],
+.review-report-practice [hidden],.practice-controls [hidden] { display:none; }
+.review-views [aria-pressed="true"],.review-report-practice [aria-pressed="true"] {
+  background:var(--dg-green-soft);color:var(--brand-green);border-color:var(--dg-line);box-shadow:none;
+}
+.review-ready { align-self:flex-start;max-width:100%;white-space:normal;height:auto;min-height:38px;text-align:left; }
+.show-review-overview:not(.practice-active) .analysis-scroll > :not(#review-summary),
+.show-review-overview .insight-column,.show-review-overview .divider-insight,
+.practice-active .insight-column,.practice-active .divider-insight { display:none!important; }
+.show-review-overview #review-summary { display:block;padding:clamp(18px,3vw,34px); }
+.review-report-heading { padding-bottom:18px;border-bottom:1px solid var(--dg-line);margin-bottom:18px; }
+.review-report-heading h1 { margin:0;color:var(--text-main);font-size:clamp(22px,2.5vw,34px);font-weight:600;line-height:1.2; }
+.review-report-heading p { margin:8px 0 0;font-size:13px;color:var(--text-muted);overflow-wrap:anywhere; }
+#review-summary .review-metrics-card { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#review-summary .metric-player-row {
+  flex-direction:column;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--dg-paper);
+}
+#review-summary .metric-group { flex-wrap:wrap;gap:6px; }
+.review-score-details { margin-top:12px;color:var(--text-muted);font-size:12px; }
+.review-score-details summary { cursor:pointer; }
+.review-report-story { margin-block:18px;max-width:68ch; }
+.review-report-story p { margin:0 0 8px;font-size:15px;line-height:1.65; }
+#review-report-intuition { color:var(--text-muted);font-size:13px; }
+#review-report-intuition:empty { display:none; }
+.review-report-practice { border-top:1px solid var(--dg-line);padding-top:14px; }
+.review-report-practice fieldset { min-width:0;margin:0 0 12px;padding:0;border:0;display:flex;flex-wrap:wrap;gap:6px; }
+.review-report-practice legend { color:var(--text-muted);font-size:12px;margin-bottom:6px; }
+.review-report-practice p { margin:0 0 8px;font-size:13px;color:var(--text-muted); }
+.review-report-practice p:empty { display:none; }
+.review-report-actions { display:flex;flex-wrap:wrap;gap:8px; }
+.practice-context { display:none; }
+.practice-active .studio-header-actions { visibility:hidden; }
+.practice-active .board-column .eval-chart-wrapper { display:none; }
+.practice-active .study-annotations,.show-review-overview .maia-board-svg-overlay { visibility:hidden; }
+.practice-active #board-container[inert] { cursor:default; }
+.practice-panel { background:var(--dg-surface);border:0;border-radius:24px;box-shadow:var(--dg-shadow);padding:clamp(18px,3vw,30px); }
+.practice-comparison:empty { display:none; }
+.practice-comparison { border-top:1px solid var(--dg-line);padding-top:8px; }
+.practice-comparison p { margin:5px 0;font-size:13px;overflow-wrap:anywhere; }
+.practice-summary-list { list-style:none;padding:0;margin:12px 0 18px; }
+.practice-summary-list li { display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:6px 0;font-size:13px; }
+@media(min-width:721px) {
+  .show-review-overview .analysis-column,.practice-active .analysis-column { grid-column:2/-1; }
+}
+@media(max-width:720px) {
+  .show-review-overview:not(.practice-active) .analysis-column { order:-1; }
+  .show-review-overview:not(.practice-active) .studio-header-center { display:none; }
+  .practice-active .studio-header-actions { display:none; }
+  .practice-active .practice-context { display:block;margin:0;font-size:13px;font-weight:600;color:var(--text-main); }
+  .practice-active .board-column .workspace-section-heading,.practice-active .board-controls { display:none; }
+}

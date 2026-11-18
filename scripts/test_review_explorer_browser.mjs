@@ -20,6 +20,8 @@ try {
   await page.route('https://weights.4chess.cc/**', route => route.abort());
   await page.goto(`http://127.0.0.1:${server.address().port}/analysis/?lang=en`);
   await page.waitForFunction(() => window.__maiaStudioApp?.positions.length);
+  assert.equal(await page.title(), 'Diverge · Chess Analysis & Game Review');
+  assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /Compare Stockfish/);
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;
     app.positionAnalysis.refresh = () => {}; app.runFullReview = async () => {};
@@ -38,6 +40,24 @@ try {
     app.applyReviewResult(syntheticReview, { refreshPosition: false });
   });
   const count = (side, quality) => page.locator(`#review-overview button[data-review-side="${side}"][data-review-category="${quality}"]`);
+  assert.equal(await page.locator('#review-summary').isVisible(), true, 'Scores open the overview while the user waits');
+  assert.equal(await page.locator('#position-score').isVisible(), false);
+  assert.match(await page.locator('#review-report-story').innerText(), /move 7.*8.2 percentage points/);
+  await page.locator('#review-report-side [data-practice-side="all"]').click();
+  await page.getByRole('button', { name: 'Replay these 2 positions' }).click();
+  assert.equal(await page.locator('#practice-panel').isVisible(), true);
+  assert.equal(await page.locator('#review-summary').isVisible(), false);
+  const initialQueue = await page.evaluate(() => __maiaStudioApp.practice.queue.map(move => move.ply));
+  await page.evaluate(() => {
+    const enriched = { ...syntheticReview, engineOnly: false };
+    __maiaStudioApp.applyReviewResult(enriched, { refreshPosition: false });
+  });
+  assert.deepEqual(await page.evaluate(() => __maiaStudioApp.practice.queue.map(move => move.ply)), initialQueue);
+  await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
+  assert.equal(await page.locator('#review-summary').isVisible(), true);
+  await page.evaluate(() => __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }));
+  await page.locator('#review-report-side [data-practice-side="b"]').click();
+  await page.locator('#review-report-workbench').click();
   assert.equal(await page.locator('.review-side-controls button[aria-pressed="true"]').getAttribute('data-review-side'), 'b', 'Initial selection follows the entry view');
   assert.equal(await count('b', 'trap').innerText(), '—', 'An unrun intuition scan cannot claim zero traps');
   assert.equal(await count('w', 'precise').innerText(), '—');
@@ -96,9 +116,12 @@ try {
   await page.evaluate(() => __maiaStudioApp.boardUI.moveTo('b8', 'c6'));
   await page.waitForFunction(() => __maiaStudioApp.practiceResults.get(4)?.status === 'independent');
   assert.equal(await page.evaluate(() => __maiaStudioApp.practiceResults.get(4).status), 'independent');
-  await page.locator('.practice-controls button').filter({ hasText: 'Finish practice' }).click();
+  await page.getByRole('button', { name: 'View practice summary' }).click();
   assert.match(await page.locator('#practice-panel').innerText(), /Independent 1/);
-  await page.locator('#practice-panel button').click();
+  assert.equal(await page.locator('.position-analysis').isVisible(), false, 'Keep the focused view through the summary');
+  await page.locator('#practice-panel').getByRole('button', { name: /^Review move 2/ }).click();
+  assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 4, 'The summary can jump to the exact half-move');
+  assert.equal(await page.locator('.position-analysis').isVisible(), true);
   // Multi-position queue provenance and progression use the current side/category selection.
   await page.locator('#review-clear-filter').click();
   await page.locator('.review-side-controls button[data-review-side="w"]').click();
@@ -108,10 +131,25 @@ try {
   await page.evaluate(async () => { await __maiaStudioApp.practice.submit({}, 'synthetic-after'); });
   assert.equal(await page.evaluate(() => __maiaStudioApp.practiceResults.get(5).status), 'hinted');
   await page.locator('.practice-controls button').filter({ hasText: 'Next position' }).click();
-  await page.locator('.practice-controls button').filter({ hasText: 'Show answer' }).click();
-  await page.locator('.practice-controls button').filter({ hasText: 'Finish practice' }).click();
+  await page.getByRole('button', { name: 'Show analysis', exact: true }).click();
+  await page.getByRole('button', { name: 'View practice summary' }).click();
   assert.match(await page.locator('#practice-panel').innerText(), /With hints 1.*Revealed 1/);
-  await page.locator('#practice-panel button').click();
+  await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
+  const branchBefore = await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.goToPly(0);
+    app.boardUI.moveTo('d2', 'd4');
+    const record = () => ({
+      fen: app.boardUI.chess.getFen(), ply: app.currentPly, cursor: app.activeBranch.cursor,
+      side: app.reviewExplorer.side, filter: app.currentDivergenceFilter, orientation: app.boardUI.orientation
+    });
+    window.readPracticeOrigin = record;
+    return record();
+  });
+  await page.locator('#review-practice-batch').click();
+  await page.locator('#practice-panel').getByRole('button', { name: 'Back to workspace' }).click();
+  assert.deepEqual(await page.evaluate(() => readPracticeOrigin()), branchBefore, 'Leaving practice restores the exact personal branch');
+  assert.equal(await page.evaluate(() => __maiaStudioApp.isBranching), true);
   await page.locator('#review-clear-filter').click();
   await page.evaluate(() => { __maiaStudioApp.el.blunderList.closest('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-en.png'), fullPage: true });
@@ -119,6 +157,8 @@ try {
   await page.locator('#review-settings #btn-lang-toggle').click();
   await page.keyboard.press('Escape');
   assert.match(await page.locator('#review-overview h2').innerText(), /双方复盘总览/);
+  assert.equal(await page.title(), '歧路 Diverge · 局面分析与棋局复盘');
+  assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /对比 Stockfish/);
   await page.evaluate(() => { document.querySelector('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-zh.png'), fullPage: true });
   await count('b', 'quality:mistake').click();
@@ -134,7 +174,7 @@ try {
     app.stockfish.evaluate = () => new Promise(resolve => { window.releasePractice = resolve; });
     window.pendingPractice = app.practice.submit({}, 'synthetic-after');
   });
-  await page.locator('.practice-controls button').filter({ hasText: '结束本组' }).click();
+  await page.getByRole('button', { name: '返回工作台', exact: true }).click();
   await page.evaluate(async () => { releasePractice({ scoreCp: 100, depth: 14 }); await pendingPractice; });
   assert.equal(await page.evaluate(() => __maiaStudioApp.practiceResults.has(5)), false, 'Cancelled grading cannot create a practice outcome');
 
@@ -147,10 +187,13 @@ try {
       ...position, fenBefore: app.positions[index].fen, lossCp: 120, severity: 'mistake', accuracy: 70,
       evalBeforeCp: 0, evalAfterCp: 120, expectedScoreLoss: 10.8, bestUci: 'a2a3', bestSan: 'a3'
     }));
+    app.goToPly(3);
     app.applyReviewResult({ ...syntheticReview, allMoves, totalMoves: allMoves.length }, { refreshPosition: false });
     app.reviewExplorer.side = 'all';
     app.renderBlunderCards();
   });
+  assert.equal(await page.locator('#review-ready').isVisible(), true, 'Completion keeps the board and current workspace when the user has explored');
+  assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 3);
   for (const width of [1360, 1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
     const desktop = width >= 1180;

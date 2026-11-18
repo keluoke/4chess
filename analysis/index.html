@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261118-precise-filter">
+  <link rel="stylesheet" href="workbench.css?v=20261118-review-overview">
 </head>
 <body class="diverge-ui">
   <script>
@@ -58,6 +58,10 @@
     </div>
 
     <div class="studio-header-actions">
+      <nav class="review-views" id="review-views" data-i18n-aria="reviewViews" hidden>
+        <button type="button" class="btn-header" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-pressed="false">复盘总览</button>
+        <button type="button" class="btn-header" id="btn-review-workbench" data-i18n="reviewFullScore" aria-controls="move-notation-table" aria-pressed="true">完整棋谱</button>
+      </nav>
       <!-- Actions -->
       <button type="button" class="btn-header" id="btn-focus" data-i18n="focusMode" aria-controls="insight-column" aria-pressed="false">专注</button>
       <button type="button" class="btn-header btn-import-primary" id="btn-import-pgn" data-i18n="btnImportPgn">
@@ -78,6 +82,7 @@
     <section id="empty-study-intro" aria-label="Get started" hidden></section>
     <!-- Left: Chessboard Column -->
     <section class="board-column" aria-label="棋盘与局面走势">
+      <p id="practice-context" class="practice-context"></p>
       <div class="workspace-section-heading"><span data-i18n="boardHeading">棋盘</span></div>
       <div class="board-with-evaluation">
         <div id="evaluation-gauge" class="evaluation-gauge" role="img" aria-label="白方视角得分：未计算">
@@ -131,6 +136,10 @@
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <div class="analysis-scroll">
       <section class="review-summary" id="review-summary" hidden>
+      <header class="review-report-heading">
+        <h1 id="review-report-title" tabindex="-1" data-i18n="gameOverview">复盘总览</h1>
+        <p id="review-report-meta"></p>
+      </header>
       <div class="accuracy-heading"><strong data-i18n="accuracyLabel">引擎精度</strong><span data-i18n="accuracyScale">0–100 分</span></div>
       <!-- Engine Accuracy Summary Card -->
       <div class="review-metrics-card" id="review-metrics-card" style="display: none;">
@@ -151,9 +160,31 @@
         </div>
       </div>
 
+      <details class="review-score-details">
+        <summary data-i18n="reviewScoreMethod">评分说明</summary>
         <p id="accuracy-analysis-detail" class="accuracy-provenance"></p>
+      </details>
+      <div class="review-report-story">
+        <p id="review-report-story"></p>
+        <p id="review-report-intuition"></p>
+        <button type="button" class="btn-header" id="review-report-turn" hidden></button>
+      </div>
+      <div class="review-report-practice">
+        <fieldset id="review-report-side" hidden>
+          <legend data-i18n="reviewPracticeSide">练习方</legend>
+          <button type="button" class="btn-header" data-practice-side="all" data-i18n="reviewBoth">双方</button>
+          <button type="button" class="btn-header" data-practice-side="w" data-i18n="reviewWhite">白方</button>
+          <button type="button" class="btn-header" data-practice-side="b" data-i18n="reviewBlack">黑方</button>
+        </fieldset>
+        <p id="review-report-practice-status"></p>
+        <div class="review-report-actions">
+          <button type="button" class="btn-header btn-primary" id="review-report-practice"></button>
+          <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">查看完整棋谱</button>
+        </div>
+      </div>
 
       </section>
+      <button type="button" class="btn-header review-ready" id="review-ready" data-i18n="reviewReady" hidden>整盘分析已完成 · 查看总览</button>
       <section id="practice-panel" class="practice-panel" hidden></section>
       <!-- Review Progress Banner (shown during analysis) -->
       <div id="analysis-progress-card" class="board-controls" style="display: none; flex-direction: column; gap: 8px; align-items: stretch;">
@@ -168,7 +199,7 @@
       </div>
       <section class="position-analysis">
         <div class="position-heading">
-          <div><span id="position-context" data-i18n="currentPosition">当前局面</span><small data-i18n="whitePerspective">白方视角</small></div>
+          <div><span id="position-context" tabindex="-1" data-i18n="currentPosition">当前局面</span><small data-i18n="whitePerspective">白方视角</small></div>
           <div class="position-score-row"><strong id="position-score">—</strong></div>
         </div>
         <div class="candidate-group">
@@ -310,11 +341,11 @@
   </div>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261118-precise-filter"></script>
+  <script type="module" src="analysis.js?v=20261118-review-overview"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261118-precise-filter').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261118-review-overview').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

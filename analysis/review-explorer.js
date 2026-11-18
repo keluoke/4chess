@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261118-precise-filter';
+import { t } from './i18n.js?v=20261118-review-overview';
 import { REVIEW_QUALITIES, INTUITION_KINDS, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
@@ -17,12 +17,13 @@ export class ReviewExplorer {
       const button = event.target.closest('button[data-review-side]');
       if (!button) return;
       this.side = button.dataset.reviewSide;
+      app.reviewOverview.side = this.side;
       if (button.dataset.reviewCategory) app.currentDivergenceFilter = button.dataset.reviewCategory;
       app.renderBlunderCards();
       if (button.dataset.reviewCategory) this.focusSelection();
     });
     document.getElementById('review-clear-filter').onclick = () => {
-      this.side = 'all'; app.currentDivergenceFilter = 'all'; app.renderBlunderCards(); this.focusSelection();
+      this.side = app.reviewOverview.side = 'all'; app.currentDivergenceFilter = 'all'; app.renderBlunderCards(); this.focusSelection();
     };
     document.getElementById('review-practice-batch').onclick = () => {
       const queue = this.visible().filter(canPractice);

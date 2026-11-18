@@ -1,9 +1,10 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-filter';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261118-precise-filter';
-import { ReviewExplorer } from './review-explorer.js?v=20261118-precise-filter';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-review-overview';
+import { ReviewOverview } from './review-overview.js?v=20261118-review-overview';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-precise-filter';
+import { ReviewPractice } from './review-practice.js?v=20261118-review-overview';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -17,10 +18,10 @@ import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-review-polic
 import { BoardUI } from './board-ui.js?v=20261117-ui';
 import { EvalChart } from './eval-chart.js?v=20261118-precise-filter';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261118-precise-filter';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-review-overview';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-precise-filter';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-review-overview';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -91,6 +92,7 @@ class AnalysisStudioApp {
     this.initEngines();
     this.initUI();
     this.reviewExplorer = new ReviewExplorer(this);
+    this.reviewOverview = new ReviewOverview(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
     subscribePreferences(next => this.applyPreferences(next));
@@ -460,7 +462,10 @@ class AnalysisStudioApp {
       if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey || document.activeElement?.isContentEditable || document.activeElement?.closest('input, textarea, select, [role="textbox"]')) return;
       if (this.scanSourceLocked) return;
 
-      if (this.practice?.active && (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'k'].includes(e.key) || (e.key === ' ' && !document.activeElement?.closest('button, a, summary')))) { e.preventDefault(); return; }
+      if (this.practice?.inProgress) {
+        if (e.key === 'Escape') { e.preventDefault(); this.practice.returnToWorkbench(); }
+        return;
+      }
 
       if (e.key === 'ArrowLeft' || e.key === 'j') {
         e.preventDefault();
@@ -490,7 +495,7 @@ class AnalysisStudioApp {
   refreshAfterLanguageChange() {
     this.intuitionReview?.render();
     this.renderCurrentInsight();
-    if (this.practice?.active) { this.practice.stop(); this.goToPly(this.currentPly, { before: true }); }
+    if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
     this.updatePreferenceNotes();
     for (const [id, key] of [['lbl-filter-all', 'filterAllLabel'], ['lbl-filter-beyond', 'filterBeyondLabel'], ['lbl-filter-trap', 'filterTrapLabel']]) {
@@ -578,6 +583,8 @@ class AnalysisStudioApp {
     } else if (this.reviewResult) {
       this.renderAccuracyDetails();
       this.renderBlunderCards();
+      this.reviewOverview.show(this.reviewOverview.view);
+      this.reviewOverview.render();
       this.annotateMoveList(this.reviewResult?.allMoves);
 
       const elAccW = document.getElementById('val-accuracy-white');
@@ -1113,6 +1120,7 @@ class AnalysisStudioApp {
     this.practice?.stop();
     this.practiceResults = new Map();
     this.reviewExplorer.reset(this.boardUI.orientation);
+    this.reviewOverview.reset();
     this.reviewResult = null;
     this.coreReview = null;
     this.intuitionReview?.render();
@@ -1141,7 +1149,6 @@ class AnalysisStudioApp {
     this.el.blunderCountBadge.textContent = '0';
     this.el.blunderList.replaceChildren();
     this.el.divergenceContent.textContent = '—';
-    document.getElementById('review-summary').hidden = true;
     this.el.progressCard.style.display = 'none';
     this.boardUI.clearArrows();
     this.resetPositionPanel();
@@ -1324,7 +1331,7 @@ class AnalysisStudioApp {
     this.positionAnalysis.cache.clear();
     this.positionAnalysis.active = null;
     this.positionAnalysis.render();
-    document.getElementById('review-summary').hidden = true;
+    this.reviewOverview.show(this.reviewOverview.view);
     this.el.progressCard.style.display = 'none';
     this.el.blunderList.replaceChildren();
     this.el.blunderCountBadge.textContent = '0';
@@ -1393,7 +1400,7 @@ class AnalysisStudioApp {
     this.reviewExplorer.clear();
     this.intuitionReview.render();
     if (forceRefresh) this.positionAnalysis.cache.clear();
-    document.getElementById('review-summary').hidden = true;
+    this.reviewOverview.show(this.reviewOverview.view);
     const targetGameEpoch = this.gameEpoch;
     const targetReviewEpoch = ++this.reviewEpoch;
     const targetGameKey = this.currentGameKey;
@@ -1537,7 +1544,6 @@ class AnalysisStudioApp {
       }
 
       metricsCard.style.display = 'grid';
-      document.getElementById('review-summary').hidden = false;
     }
 
     // 1. Update Chart
@@ -1547,6 +1553,7 @@ class AnalysisStudioApp {
     this.renderCurrentInsight();
 
     this.renderBlunderCards();
+    this.reviewOverview.update(result);
 
     // 3. Annotate Move Notation Table
     this.annotateMoveList(result.allMoves);
@@ -1564,9 +1571,45 @@ class AnalysisStudioApp {
     this.practice.start(item, { queue });
   }
 
+  capturePracticeOrigin() {
+    const scrollAreas = [document.scrollingElement, ...document.querySelectorAll(
+      '.analysis-column, .analysis-scroll, .insight-column, #move-notation-table')];
+    return {
+      epoch: this.gameEpoch, view: this.reviewOverview.view, ply: this.currentPly, before: this.isReviewingMove,
+      branch: this.isBranching ? this.activeBranch : null, cursor: this.activeBranch?.cursor,
+      orientation: this.boardUI.orientation, side: this.reviewExplorer.side, filter: this.currentDivergenceFilter,
+      focus: document.activeElement, scroll: scrollAreas.map(element => [element, element.scrollTop])
+    };
+  }
+
+  restorePracticeOrigin(origin, move) {
+    if (origin?.epoch !== this.gameEpoch || this.scanSourceLocked) return;
+    this.reviewExplorer.side = origin.side;
+    this.currentDivergenceFilter = origin.filter;
+    this.boardUI.setOrientation(origin.orientation);
+    this.renderBlunderCards();
+    if (move) {
+      this.reviewOverview.jumpTo(move);
+      return;
+    }
+    this.reviewOverview.show(origin.view);
+    this.goToPly(origin.ply, { before: origin.before, silent: true });
+    if (origin.branch) {
+      this.activeBranch = origin.branch;
+      this.showBranchPosition(origin.cursor, { silent: true });
+    }
+    const fallback = origin.view === 'overview'
+      ? this.reviewOverview.practiceButton
+      : this.el.blunderList.querySelector(`[data-ply="${origin.ply}"] .practice-start`) || document.getElementById('review-practice-batch');
+    const focus = origin.focus?.isConnected ? origin.focus : fallback;
+    focus?.focus({ preventScroll: true });
+    for (const [element, top] of origin.scroll) element.scrollTop = top;
+  }
+
   renderBlunderCards(moments) {
     const moves = this.reviewResult?.allMoves || moments || [];
     const filtered = this.reviewExplorer.render(moves);
+    this.reviewOverview?.renderPractice(this.reviewExplorer.available(moves));
     this.el.blunderCountBadge.textContent = String(filtered.length);
     document.getElementById('lbl-tab-blunders').textContent = t(this.currentDivergenceFilter === 'all' ? 'reviewKeyMoves' : this.currentDivergenceFilter === 'moves' ? 'reviewAllMoves' : 'reviewSelectedMoves');
     this.el.blunderList.replaceChildren();
@@ -1799,7 +1842,11 @@ class AnalysisStudioApp {
   }
 
   goToPly(ply, options = {}) {
-    if (!options.practice) this.practice?.stop();
+    if (!options.practice) {
+      this.practice?.stop();
+      if (!options.silent) this.reviewOverview.exploring = true;
+      if (options.revealCandidates && this.reviewOverview.view === 'overview') this.reviewOverview.show('workbench');
+    }
     if (!options.silent) this.pauseWholeReview();
     this.exitBranchMode();
 
@@ -1922,7 +1969,11 @@ class AnalysisStudioApp {
     this.showBranchPosition(this.activeBranch.moves.length);
   }
 
-  showBranchPosition(cursor) {
+  showBranchPosition(cursor, { silent = false } = {}) {
+    if (!silent) {
+      this.reviewOverview.exploring = true;
+      if (this.reviewOverview.view === 'overview') this.reviewOverview.show('workbench');
+    }
     const branch = this.activeBranch;
     branch.cursor = Math.max(0, Math.min(cursor, branch.moves.length));
     this.isBranching = true;
@@ -1937,7 +1988,7 @@ class AnalysisStudioApp {
     this.renderStudyBranches();
     this.syncBranchChart();
     this.renderCurrentInsight();
-    if (last) soundEffects.playSoundForMove(last.san);
+    if (last && !silent) soundEffects.playSoundForMove(last.san);
     this.updateActivePositionAnalysis();
   }
 
@@ -2065,7 +2116,10 @@ class AnalysisStudioApp {
   }
 
   handleUserBoardMove(move, newFen) {
-    if (this.practice?.active) { this.practice.submit(move, newFen); return; }
+    if (this.practice?.inProgress) {
+      if (this.practice.active) this.practice.submit(move, newFen);
+      return;
+    }
     const next = this.positions[this.currentPly + (this.isReviewingMove ? 0 : 1)];
     if (!this.isBranching && next?.uci === move.uci) {
       this.goToPly(this.currentPly + (this.isReviewingMove ? 0 : 1));
