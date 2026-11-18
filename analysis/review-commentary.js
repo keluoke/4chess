@@ -1,7 +1,7 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { BuiltInAi } from './built-in-ai.js?v=20261118-summary-ai';
-import { bindCommentary, COMMENTARY_SCHEMA } from './commentary-text.js?v=20261118-summary-ai';
+import { bindCommentary, COMMENTARY_SCHEMA } from './commentary-text.js?v=20261118-recap-reset';
 import { getLang, t } from './i18n.js?v=20261118-summary-ai';
 
 const PREFERENCE = 'diverge_review_commentary';
@@ -39,6 +39,10 @@ export class ReviewCommentary {
     this.status = document.getElementById('review-commentary-status');
     this.download = document.getElementById('review-commentary-download');
     this.progress = document.getElementById('review-commentary-progress');
+    this.studioSummary = document.getElementById('review-studio-summary');
+    this.studioSummaryText = this.studioSummary.querySelector('p');
+    this.reportStory = document.getElementById('review-report-story');
+    this.reportSource = document.getElementById('review-report-source');
     this.model = new BuiltInAi(() => this.onModelChange());
     try { this.toggle.checked = localStorage.getItem(PREFERENCE) === 'true'; } catch { /* Optional storage. */ }
     this.toggle.onchange = () => {
@@ -85,6 +89,12 @@ export class ReviewCommentary {
     this.clearContext();
     this.clearOverview();
     if (this.model.state !== 'idle') this.model.dispose();
+  }
+
+  reset() {
+    this.clearContext();
+    this.clearOverview();
+    this.reportStory.textContent = '';
   }
 
   renderSettings() {
@@ -237,14 +247,14 @@ export class ReviewCommentary {
   }
 
   renderOverview(review, fallback, bindings) {
-    const body = document.getElementById('review-report-story');
-    const source = document.getElementById('review-report-source');
     const key = JSON.stringify([PROMPT_REVISION, 'overview', fallback, bindings]);
     if (this.overview?.review === review && this.overview.key === key) return;
     this.clearOverview();
-    body.textContent = fallback;
+    this.reportStory.textContent = fallback;
     if (!this.modelAllowed() || review.isPartial || !bindings.result) return;
-    const context = this.overview = { key, review, epoch: this.app.gameEpoch, body, source, fallback, bindings };
+    const context = this.overview = {
+      key, review, epoch: this.app.gameEpoch, body: this.reportStory, source: this.reportSource, fallback, bindings
+    };
     const cached = this.cache.get(key);
     if (cached) {
       context.done = true;
@@ -293,17 +303,17 @@ export class ReviewCommentary {
   displayOverview(context, text) {
     this.display(context, text, true);
     context.source.hidden = false;
-    const studio = document.getElementById('review-studio-summary');
-    studio.querySelector('p').textContent = text;
-    studio.hidden = false;
+    this.studioSummaryText.textContent = text;
+    this.studioSummary.hidden = false;
   }
 
   clearOverview() {
     this.cancelOverview();
-    if (!this.overview) return;
-    this.overview.body.textContent = this.overview.fallback;
-    this.overview.source.hidden = true;
-    document.getElementById('review-studio-summary').hidden = true;
+    if (this.overview) this.reportStory.textContent = this.overview.fallback;
+    this.reportSource.textContent = '';
+    this.reportSource.hidden = true;
+    this.studioSummaryText.textContent = '';
+    this.studioSummary.hidden = true;
     this.overview = null;
   }
 

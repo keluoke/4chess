@@ -3,7 +3,7 @@ import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion
 import { IntuitionReview } from './intuition-review.js?v=20261118-summary-ai';
 import { ReviewExplorer } from './review-explorer.js?v=20261118-summary-ai';
 import { ReviewOverview } from './review-overview.js?v=20261118-summary-ai';
-import { ReviewCommentary } from './review-commentary.js?v=20261118-summary-ai';
+import { ReviewCommentary } from './review-commentary.js?v=20261118-recap-reset';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
 import { ReviewPractice } from './review-practice.js?v=20261118-summary-ai';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-summary-ai';
@@ -1102,8 +1102,7 @@ class AnalysisStudioApp {
     positionInput = false
   } = {}) {
     if (this.scanSourceLocked) return false;
-    this.reviewCommentary.clearContext();
-    this.reviewCommentary.clearOverview();
+    this.reviewCommentary.reset();
     this.gameEndedOnTime = false;
     this.importGeneration = (this.importGeneration || 0) + 1;
     this.importController?.abort();
@@ -1309,8 +1308,7 @@ class AnalysisStudioApp {
     if (this.isPlaying) this.toggleAutoPlay();
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
-    this.reviewCommentary.clearContext();
-    this.reviewCommentary.clearOverview();
+    this.reviewCommentary.reset();
     this.reviewEpoch++;
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = this.reviewPendingResume = false;
@@ -1401,8 +1399,7 @@ class AnalysisStudioApp {
 
   async runFullReview(forceRefresh = false) {
     this.practice?.stop();
-    this.reviewCommentary.clearContext();
-    this.reviewCommentary.clearOverview();
+    this.reviewCommentary.reset();
     this.intuitionReview?.dispose();
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;

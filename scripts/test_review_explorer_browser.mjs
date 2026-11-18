@@ -425,7 +425,7 @@ try {
 
   await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
   await page.waitForFunction(() => aiCalls.prompts === 3);
-  await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] gave the opponent [[reply]]. Compared with [[best]], it cost [[cost]]."}'));
+  await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] gave the opponent [[reply]]. Compared with [[best]], it loses [[cost]]."}'));
   await page.waitForFunction(() => document.getElementById('review-commentary').textContent.includes('Chrome local AI'));
   await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
   assert.match(await commentary.innerText(), /gave the opponent Nxe5.*Compared with Nf6/);
@@ -445,6 +445,65 @@ try {
   await page.locator('#btn-lang-toggle').click();
   assert.match(await commentary.innerText(), /Chrome local AI/);
   assert.equal(await page.evaluate(() => aiCalls.creates), 1);
+  await page.keyboard.press('Escape');
+
+  const resetChecks = await page.evaluate(async () => {
+    const app = __maiaStudioApp;
+    const card = document.getElementById('review-studio-summary');
+    const original = '[Result "1-0"]\n[Termination "White won on time"]\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 1-0';
+    window.restoreCommentaryFixture = () => {
+      app.startNewSession({ pgn: original, autoReview: false });
+      app.goToPly(4);
+      app.reviewExplorer.side = 'all';
+      app.applyReviewResult(commentaryReview, { refreshPosition: false });
+    };
+    const actions = {
+      newGame: () => app.startNewSession({ pgn: '[Result "0-1"]\n1. d4 d5 0-1', autoReview: false }),
+      reanalyze: () => {
+        app.analyzer.analyzeGame = async () => null;
+        return Object.getPrototypeOf(app).runFullReview.call(app, true);
+      },
+      switchEngine: () => {
+        document.getElementById('intuition-edition').value = '23m';
+        app.changeEngineVersions({ persist: false, prioritizePosition: true });
+      }
+    };
+    const checks = {};
+    for (const [name, transition] of Object.entries(actions)) {
+      restoreCommentaryFixture();
+      const wasVisible = !card.hidden && card.querySelector('p').textContent.includes('White won');
+      const pending = new AbortController();
+      app.reviewCommentary.overviewRequest = pending;
+      await transition();
+      checks[name] = [wasVisible, card.hidden, card.querySelector('p').textContent === '', pending.signal.aborted];
+    }
+    return checks;
+  });
+  for (const [name, checks] of Object.entries(resetChecks)) {
+    assert.deepEqual(checks, [true, true, true, true], `Recap removal and in-flight abort for ${name}`);
+  }
+  const pendingOverview = await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    restoreCommentaryFixture();
+    app.goToPly(0);
+    const previous = aiCalls.gamePrompts;
+    app.gameEndedOnTime = false;
+    app.applyReviewResult(commentaryReview, { refreshPosition: false });
+    return previous;
+  });
+  await page.waitForFunction(previous => aiCalls.gamePrompts > previous, pendingOverview);
+  const destroyed = await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    const before = aiCalls.childDestroys;
+    app.startNewSession({ pgn: '[Result "0-1"]\n1. c4 e5 0-1', autoReview: false });
+    finishGameCommentary('{"text":"[[result]]. At [[turning]], [[side]] lost ground after [[played]] instead of [[best]]."}');
+    return before;
+  });
+  await page.waitForFunction(before => aiCalls.childDestroys > before, destroyed);
+  assert.equal(await page.locator('#review-studio-summary').isVisible(), false);
+  assert.equal(await page.locator('#review-studio-summary p').textContent(), '');
+  await page.evaluate(() => restoreCommentaryFixture());
+  await page.locator('#btn-settings').click();
   await toggle.uncheck();
   assert.match(await commentary.innerText(), /Verified chess facts/);
   assert.equal(await page.locator('.review-commentary-action').count(), 1);
@@ -463,5 +522,5 @@ try {
   });
   assert.equal(await commentary.count(), 0, 'A result is required to show the new commentary');
   assert.deepEqual(errors, []);
-  console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, invalid and late output rejection, cache, practice isolation and Chinese fallback.');
+  console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, grounded English loss wording, recap cancellation on all review resets, cache, practice isolation and Chinese fallback.');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

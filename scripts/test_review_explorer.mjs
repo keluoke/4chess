@@ -42,6 +42,16 @@ assert.equal(bindCommentary({ text: 'After [[played]], the opponent had [[reply]
 for (const extra of ['Qh8+', 'O–O', '12 points', '１２ points', 'a forced mate', '[[unknown]]']) {
   assert.equal(bindCommentary({ text: `The choice of [[played]] cost [[cost]]. It allowed ${extra}.` }, bindings, required), null);
 }
+assert.equal(bindCommentary({ text: 'With [[played]], Black loses roughly [[cost]].' }, bindings, required),
+  'With Nc6, Black loses roughly 13.2 percentage points of expected score.');
+assert.equal(bindCommentary({ text: 'The choice of [[played]] meant a loss of [[cost]].' }, bindings, required),
+  'The choice of Nc6 meant a loss of 13.2 percentage points of expected score.');
+const recap = { result: 'White won', turning: 'move 16', side: 'Black' };
+assert.equal(bindCommentary({ text: '[[result]]. At [[turning]], [[side]] lost ground.' }, recap, ['result', 'turning']),
+  'White won. At move 16, Black lost ground.');
+assert.equal(bindCommentary({ text: '[[result]]. Before long Black lost ground.' }, recap, ['result']), null);
+assert.equal(bindCommentary({ text: '[[played]] loses a queen and costs [[cost]].' }, bindings, required), null);
+assert.equal(bindCommentary({ text: '[[played]] loses [[cost]]. Black lost the game.' }, bindings, required), null);
 
 const dom = new JSDOM('<div id="practice-panel"></div>', { url: 'https://4chess.cc/analysis/' });
 globalThis.window = dom.window; globalThis.document = dom.window.document;
