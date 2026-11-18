@@ -395,8 +395,8 @@ try {
     window.__maiaStudioApp.goToPly(80, { silent: true });
   });
   assert.equal(await page.locator('#move-ply-80').count(), 1, 'A long game retains its complete notation');
-  assert.equal(await page.locator('#move-notation-table').evaluate(el => el.scrollTop), 0, 'Notation has no independent scrollbar on desktop');
-  assert.equal(await page.locator('.analysis-scroll').evaluate(el => el.scrollTop > 0), true, 'Jumping to a distant move scrolls the middle column');
+  assert.equal(await page.locator('#move-notation-table').evaluate(el => el.scrollTop > 0), true, 'Long notation has an independent scroll region');
+  assert.equal(await page.locator('.analysis-scroll').evaluate(el => el.scrollTop), 0, 'Jumping to a distant move preserves the candidate viewport');
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;

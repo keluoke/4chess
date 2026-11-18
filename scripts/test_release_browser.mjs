@@ -79,11 +79,11 @@ try {
   const table = app.el.moveNotationTable;
   app.goToPly(100);
   const row = table.querySelector('.active').getBoundingClientRect();
-  const viewport = scroll.getBoundingClientRect();
+  const viewport = table.getBoundingClientRect();
   return {outer:scroll.scrollTop,inner:table.scrollTop,visible:row.top >= viewport.top - 1 && row.bottom <= viewport.bottom + 1};
  });
- assert(notation.outer > 0);
- assert.equal(notation.inner,0,'Long jumps scroll the middle column only');
+ assert.equal(notation.outer,0,'Long jumps preserve the middle column position');
+ assert(notation.inner > 0,'Long jumps scroll within the notation only');
  assert.equal(notation.visible,true);
  const trendPage=await context.newPage({viewport:{width:1440,height:900}});
  trendPage.on('pageerror',e=>errors.push(e.message));

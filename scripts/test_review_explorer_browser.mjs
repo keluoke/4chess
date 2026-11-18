@@ -129,6 +129,70 @@ try {
   await page.locator('.practice-controls button').filter({ hasText: '结束本组' }).click();
   await page.evaluate(async () => { releasePractice({ scoreCp: 100, depth: 14 }); await pendingPractice; });
   assert.equal(await page.evaluate(() => __maiaStudioApp.practiceResults.has(5)), false, 'Cancelled grading cannot create a practice outcome');
+
+  // Long reviews keep filters available and isolate notation scrolling from candidate research.
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    const moves = Array.from({ length: 20 }, (_, i) => `${i * 2 + 1}. Nf3 Nf6 ${i * 2 + 2}. Ng1 Ng8`).join(' ');
+    app.startNewSession({ pgn: `[Result "1/2-1/2"]\n${moves} 1/2-1/2`, autoReview: false });
+    const allMoves = app.positions.slice(1).map((position, index) => ({
+      ...position, fenBefore: app.positions[index].fen, lossCp: 120, severity: 'mistake', accuracy: 70,
+      evalBeforeCp: 0, evalAfterCp: 120, expectedScoreLoss: 10.8, bestUci: 'a2a3', bestSan: 'a3'
+    }));
+    app.applyReviewResult({ ...syntheticReview, allMoves, totalMoves: allMoves.length }, { refreshPosition: false });
+    app.reviewExplorer.side = 'all';
+    app.renderBlunderCards();
+  });
+  for (const width of [1360, 1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const desktop = width >= 1180;
+    await page.locator('#blunder-list .blunder-card[data-ply="40"]').evaluate(card => card.scrollIntoView({ block: 'start' }));
+    await page.waitForFunction(() => Number.parseFloat(document.querySelector('#insight-column').style.getPropertyValue('--review-toolbar-height')) > 0);
+    const sticky = await page.evaluate(() => {
+      const column = document.querySelector('.insight-column'), toolbar = document.querySelector('.review-filter-toolbar');
+      const bar = toolbar.getBoundingClientRect(), card = document.querySelector('.blunder-card[data-ply="40"]').getBoundingClientRect();
+      return { barTop: bar.top, barBottom: bar.bottom, columnTop: column.getBoundingClientRect().top,
+        cardTop: card.top, overviewBottom: document.querySelector('#review-overview').getBoundingClientRect().bottom,
+        barHeight: bar.height, recordedHeight: Number.parseFloat(column.style.getPropertyValue('--review-toolbar-height')) };
+    });
+    assert(Math.abs(sticky.barTop - (desktop ? sticky.columnTop : 0)) < 2, `Filter toolbar sticks at ${width}px`);
+    assert(sticky.overviewBottom < sticky.barTop, 'The large overview scrolls above the sticky filters');
+    assert(sticky.cardTop >= sticky.barBottom, 'Jumped card heading stays below the wrapped toolbar');
+    assert(Math.abs(sticky.barHeight - sticky.recordedHeight) < 1, 'Wrapped filter height updates the navigation offset');
+    await page.locator('.filter-pill[data-filter="mistakes"]').click();
+    assert.equal(await page.locator('.filter-pill[data-filter="mistakes"]').getAttribute('aria-pressed'), 'true');
+    const selected = await page.locator('.blunder-card').first().boundingBox();
+    const toolbar = await page.locator('.review-filter-toolbar').boundingBox();
+    assert(selected.y >= toolbar.y + toolbar.height - 1, 'Changing filters exposes the first card below the toolbar');
+    if (desktop) {
+      await page.evaluate(() => {
+        scrollTo(0, 0);
+        const app = __maiaStudioApp, scroll = document.querySelector('.analysis-scroll');
+        scroll.scrollTop = scroll.scrollHeight;
+        app.el.blunderList.querySelector('[data-ply="40"] .review-move-jump').click();
+      });
+      const anchored = await page.evaluate(() => {
+        const scroll = document.querySelector('.analysis-scroll'), section = document.querySelector('.position-analysis');
+        return { y: scroll.scrollTop, top: section.getBoundingClientRect().top, bottom: section.getBoundingClientRect().bottom,
+          viewport: scroll.getBoundingClientRect().top, viewportBottom: scroll.getBoundingClientRect().bottom,
+          inner: __maiaStudioApp.el.moveNotationTable.scrollTop };
+      });
+      assert(anchored.top >= anchored.viewport - 1 && anchored.bottom <= anchored.viewportBottom + 1, `Clicking a key move reveals the candidate panel ${JSON.stringify(anchored)}`);
+      assert(anchored.inner > 0, 'The selected notation row scrolls internally');
+      await page.evaluate(() => { __maiaStudioApp.goToPly(79); __maiaStudioApp.goToPly(0); });
+      assert.equal(await page.locator('.analysis-scroll').evaluate(el => el.scrollTop), anchored.y, 'Navigation and returning to move zero preserve the candidate viewport');
+      await page.evaluate(() => {
+        const app = __maiaStudioApp, scroll = document.querySelector('.analysis-scroll');
+        scroll.scrollTop = scroll.scrollHeight;
+        app.evalChart.select({ point: { ply: 78 }, branch: false });
+      });
+      assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 78);
+      const panel = await page.locator('.position-analysis').boundingBox();
+      const middle = await page.locator('.analysis-scroll').boundingBox();
+      assert(panel.y >= middle.y - 1 && panel.y + panel.height <= middle.y + middle.height + 1, 'Chart selection also reveals engine and intuition candidates');
+    }
+    await page.screenshot({ path: path.join(output, `review-sticky-${width}.png`) });
+  }
   // Starting another input clears counts and retry outcomes, including the completed-session panel.
   await page.evaluate(() => __maiaStudioApp.startNewSession({ fen: '8/8/8/4k3/8/4K3/8/8 b - - 0 42', autoReview: false }));
   assert.equal(await page.locator('#review-overview').isVisible(), false);

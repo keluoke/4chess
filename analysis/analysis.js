@@ -1,9 +1,9 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261117-review-policy';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-review-navigation';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261117-review-policy';
-import { ReviewExplorer } from './review-explorer.js?v=20261117-review-policy';
+import { IntuitionReview } from './intuition-review.js?v=20261118-review-navigation';
+import { ReviewExplorer } from './review-explorer.js?v=20261118-review-navigation';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261117-review-policy';
+import { ReviewPractice } from './review-practice.js?v=20261118-review-navigation';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261103-jade';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -15,12 +15,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261117-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261117-review-policy';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261117-review-policy';
+import { EvalChart } from './eval-chart.js?v=20261118-review-navigation';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261117-review-policy';
+import { PositionAnalysis } from './position-analysis.js?v=20261118-review-navigation';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261117-review-policy';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-review-navigation';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 
 const POSITION_TOGGLES = [
@@ -199,7 +199,7 @@ class AnalysisStudioApp {
 
     // 2. Initialize EvalChart
     this.evalChart = new EvalChart(this.el.evalChartContainer, (selectedPly) => {
-      this.goToPly(selectedPly);
+      this.goToPly(selectedPly, { revealCandidates: true });
     }, (offset) => {
       if (this.isBranching && this.activeBranch) this.showBranchPosition(offset);
     });
@@ -351,6 +351,7 @@ class AnalysisStudioApp {
         pill.classList.add('active');
         this.currentDivergenceFilter = pill.dataset.filter || 'all';
         this.renderBlunderCards();
+        this.reviewExplorer.focusSelection();
       });
     });
 
@@ -1345,8 +1346,22 @@ class AnalysisStudioApp {
     if (!element || !container) return;
     const item = element.getBoundingClientRect();
     const box = container.getBoundingClientRect();
-    const delta = item.top < box.top ? item.top - box.top : item.bottom > box.bottom ? item.bottom - box.bottom : 0;
+    const top = box.top + container.clientTop + (parseFloat(getComputedStyle(container).scrollPaddingTop) || 0);
+    const bottom = box.top + container.clientTop + container.clientHeight;
+    const delta = item.top < top || (item.height > bottom - top && item.bottom > bottom) ? item.top - top
+      : item.bottom > bottom ? item.bottom - bottom : 0;
     if (delta) container.scrollTop += delta;
+  }
+
+  revealPositionCandidates() {
+    if (!matchMedia('(min-width:1180px)').matches) return;
+    const section = document.querySelector('.position-analysis');
+    const container = document.querySelector(matchMedia('(min-width:1360px)').matches ? '.analysis-scroll' : '.analysis-column');
+    const box = container.getBoundingClientRect();
+    const candidates = section.getBoundingClientRect();
+    if (candidates.top < box.top || candidates.top + Math.min(candidates.height, container.clientHeight) > box.bottom) {
+      container.scrollTop += candidates.top - box.top;
+    }
   }
 
   parsePgnHeaders(pgnText) {
@@ -1569,7 +1584,7 @@ class AnalysisStudioApp {
       const jump = document.createElement('button'); jump.type = 'button'; jump.className = 'review-move-jump';
       jump.textContent = `${item.moveNumber}${item.turn === 'w' ? '. ' : '… '}${item.san}`;
       jump.setAttribute('aria-label', `${t(item.turn === 'w' ? 'whitePlayer' : 'blackPlayer')} ${jump.textContent}`);
-      jump.onclick = () => this.goToPly(item.ply, { before: true }); heading.append(jump);
+      jump.onclick = () => this.goToPly(item.ply, { before: true, revealCandidates: true }); heading.append(jump);
       const tags = document.createElement('div'); tags.className = 'blunder-tags-group';
       for (const tag of [quality, ...(kind ? [kind] : []), ...(item.isBookMove ? ['book'] : [])]) {
         const badge = document.createElement('span'); badge.className = `blunder-type-tag review-tag-${tag}`;
@@ -1579,7 +1594,7 @@ class AnalysisStudioApp {
         className: 'review-turning-point', textContent: t('reviewTurningPoint')
       }));
       heading.append(tags); card.append(heading);
-      card.addEventListener('click', event => { if (!event.target.closest('button')) this.goToPly(item.ply, { before: true }); });
+      card.addEventListener('click', event => { if (!event.target.closest('button')) this.goToPly(item.ply, { before: true, revealCandidates: true }); });
       const loss = document.createElement('p'); loss.className = 'review-card-loss';
       loss.textContent = quality === 'unknown' ? t('reviewEvaluationPending') : quality === 'forced' ? t('reviewForcedHelp') : t('reviewLoss', { pawns: (Math.max(0, item.lossCp) / 100).toFixed(2) }); card.append(loss);
       const probability = Number.isFinite(item.humanRawProbability) ? item.humanRawProbability * 100 : item.humanProbability;
@@ -1754,14 +1769,12 @@ class AnalysisStudioApp {
   highlightMoveRow(ply) {
     const table = this.el.moveNotationTable;
     const previous = table.querySelector('.notation-move.active');
-    const scrollContainer = getComputedStyle(table).overflowY === 'auto' ? table
-      : table.closest(matchMedia('(min-width:1360px)').matches ? '.analysis-scroll' : '.analysis-column');
     cancelMotion(this.notationMarker);
     this.notationMarker?.remove();
     const all = table.querySelectorAll('.notation-move');
     all.forEach(el => { cancelMotion(el); el.classList.remove('active'); });
     if (ply === 0) {
-      scrollContainer.scrollTop = 0;
+      table.scrollTop = 0;
     }
 
     if (ply > 0) {
@@ -1772,7 +1785,7 @@ class AnalysisStudioApp {
         this.notationMarker.className = 'notation-selection';
         this.notationMarker.setAttribute('aria-hidden', 'true');
         activeEl.prepend(this.notationMarker);
-        this.scrollWithin(activeEl, scrollContainer);
+        this.scrollWithin(activeEl, table);
         if (previous && previous !== activeEl) {
           const from = previous.getBoundingClientRect(), to = activeEl.getBoundingClientRect();
           // Keep long jumps immediate; adjacent selections carry the highlight only.
@@ -1818,6 +1831,15 @@ class AnalysisStudioApp {
       }
     }
 
+    if (clampedPly === 0) {
+      this.el.boardStatusText.textContent = t('startingPosition');
+    } else {
+      const sideText = currentPos.turn === 'w' ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
+      this.el.boardStatusText.textContent = this.isReviewingMove ? t('reviewMoveBefore', { move: currentPos.san, number: currentPos.moveNumber }) : t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
+    }
+    this.updateActivePositionAnalysis();
+    this.renderCurrentInsight();
+    this.renderStudyBranches();
     // Sync active blunder card if present
     const blunderCards = this.el.blunderList.querySelectorAll('.blunder-card');
     blunderCards.forEach(c => {
@@ -1832,15 +1854,7 @@ class AnalysisStudioApp {
       }
     });
 
-    if (clampedPly === 0) {
-      this.el.boardStatusText.textContent = t('startingPosition');
-    } else {
-      const sideText = currentPos.turn === 'w' ? t('whitePlayer').replace('⚪ ', '') : t('blackPlayer').replace('⚫ ', '');
-      this.el.boardStatusText.textContent = this.isReviewingMove ? t('reviewMoveBefore', { move: currentPos.san, number: currentPos.moveNumber }) : t('moveIndicator', { move: currentPos.moveNumber, side: sideText, san: currentPos.san });
-    }
-    this.updateActivePositionAnalysis();
-    this.renderCurrentInsight();
-    this.renderStudyBranches();
+    if (options.revealCandidates) this.revealPositionCandidates();
     if (!options.silent) this.scheduleReviewResume();
   }
 

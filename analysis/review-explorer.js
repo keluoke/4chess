@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261117-review-policy';
+import { t } from './i18n.js?v=20261118-review-navigation';
 import { REVIEW_QUALITIES, INTUITION_KINDS, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
@@ -7,6 +7,12 @@ export class ReviewExplorer {
     this.app = app;
     this.root = document.getElementById('review-overview');
     this.side = 'all';
+    const toolbar = document.querySelector('.review-filter-toolbar');
+    const column = document.getElementById('insight-column');
+    this.toolbarObserver = new ResizeObserver(() => {
+      column.style.setProperty('--review-toolbar-height', `${toolbar.getBoundingClientRect().height}px`);
+    });
+    this.toolbarObserver.observe(toolbar);
     this.root.addEventListener('click', event => {
       const button = event.target.closest('button[data-review-side]');
       if (!button) return;
@@ -15,7 +21,9 @@ export class ReviewExplorer {
       app.renderBlunderCards();
       if (button.dataset.reviewCategory) this.focusSelection();
     });
-    document.getElementById('review-clear-filter').onclick = () => { this.side = 'all'; app.currentDivergenceFilter = 'all'; app.renderBlunderCards(); };
+    document.getElementById('review-clear-filter').onclick = () => {
+      this.side = 'all'; app.currentDivergenceFilter = 'all'; app.renderBlunderCards(); this.focusSelection();
+    };
     document.getElementById('review-practice-batch').onclick = () => {
       const queue = this.visible().filter(canPractice);
       if (queue.length) app.startPractice(queue[0], queue);
@@ -36,8 +44,10 @@ export class ReviewExplorer {
   focusSelection() {
     const focus = this.app.el.blunderList.querySelector('.review-move-jump') || document.getElementById('review-selection-label');
     const target = focus.closest('.blunder-card') || focus;
-    if (matchMedia('(min-width:1180px)').matches) this.app.scrollWithin(target, document.querySelector('.insight-column'));
-    else target.scrollIntoView({ block: 'nearest' });
+    if (focus !== target) {
+      if (matchMedia('(min-width:1180px)').matches) this.app.scrollWithin(target, document.querySelector('.insight-column'));
+      else target.scrollIntoView({ block: 'nearest' });
+    }
     focus.tabIndex = focus.tagName === 'BUTTON' ? 0 : -1; focus.focus({ preventScroll: true });
   }
   available(moves) {

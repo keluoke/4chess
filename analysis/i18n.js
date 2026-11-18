@@ -76,7 +76,8 @@ export const DICTIONARY = {
     branchComparison: "分支对比",
     branchScoreNote: "走势保留实战作参照，试走不改变对局成绩。",
 
-    intuitionTitle: "直觉盲区",
+    gameReview: "棋局复盘",
+    intuitionTitle: "Maia 直觉扫描",
     intuitionIdle: "评分完成后独立扫描",
     intuitionScanning: "准备直觉模型…",
     intuitionPaused: "已暂停 · 评分仍可查看",
@@ -436,7 +437,8 @@ export const DICTIONARY = {
     branchComparison: "Compare variation",
     branchScoreNote: "The game remains on the timeline. Exploration does not change game accuracy.",
 
-    intuitionTitle: "Intuition blind spots",
+    gameReview: "Game review",
+    intuitionTitle: "Maia intuition scan",
     intuitionIdle: "Scans independently after scoring",
     intuitionScanning: "Preparing intuition model…",
     intuitionPaused: "Paused · Scores remain available",
