@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { buildTrapRecord, detectPhase, normalizeAlias } from './study-store.js?v=20261118-v12-p0';
+import { buildTrapRecord, detectPhase, normalizeAlias, trapId } from './study-store.js?v=20261118-v12-p0';
 import { t } from './i18n.js?v=20261118-summary-ai';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
@@ -153,7 +153,7 @@ export async function fetchChesscomRecentGames(username, { max = MAX_FETCH_GAMES
   const archResp = await fetchImpl(`https://api.chess.com/pub/player/${encodeURIComponent(clean)}/games/archives`, { signal });
   if (!archResp.ok) throw new Error(`Chess.com HTTP ${archResp.status}`);
   const archData = await archResp.json();
-  const archives = Array.isArray(archData?.archives) ? archData.archives.slice(-2).reverse() : [];
+  const archives = Array.isArray(archData?.archives) ? archData.archives.slice(-6).reverse() : [];
   const games = [];
   for (const archiveUrl of archives) {
     const resp = await fetchImpl(archiveUrl, { signal });
@@ -231,12 +231,29 @@ export async function runIntuitionCheckup({
     analyzedMoves: 0,
     eloFit: Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0])),
     closestElo: null,
+    screenElo: elo,
     phaseTraps: { opening: 0, middlegame: 0, endgame: 0 },
     topTrapIds: [],
     topTraps: [],
     partial,
     createdAt: now
   });
+
+  const batch = games.slice(0, MAX_LOCAL_GAMES)
+    .map(entry => {
+      const meta = entry.meta || parsePgnMeta(entry.pgn || '');
+      const wKey = normalizeAlias(meta.white);
+      const bKey = normalizeAlias(meta.black);
+      const userSide = wKey === targetKey ? 'w' : bKey === targetKey ? 'b' : null;
+      if (!userSide) return null;
+      const parsedMoves = GameAnalyzer.parsePgn(entry.pgn || '');
+      if (!parsedMoves?.length) return null;
+      const positions = GameAnalyzer.buildPositionChain(parsedMoves);
+      if (!positions || positions.length <= 1 || positions.isPartial) return null;
+      return { entry, meta, userSide, positions };
+    })
+    .filter(Boolean);
+  if (!batch.length) return emptyResult(false);
 
   if (cancelled()) return emptyResult(true);
   onProgress({ phase: 'stockfish' });
@@ -247,7 +264,6 @@ export async function runIntuitionCheckup({
   await initializeCheckupEngine(maiaEngine, signal);
   if (cancelled()) return emptyResult(true);
 
-  const batch = games.slice(0, MAX_LOCAL_GAMES);
   const phaseTraps = { opening: 0, middlegame: 0, endgame: 0 };
   const eloLogSums = Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0]));
   const collectedTraps = [];
@@ -258,17 +274,7 @@ export async function runIntuitionCheckup({
 
   for (let gi = 0; gi < batch.length; gi++) {
     if (cancelled()) { partial = true; break; }
-    const entry = batch[gi];
-    const meta = entry.meta || parsePgnMeta(entry.pgn || '');
-    const wKey = normalizeAlias(meta.white);
-    const bKey = normalizeAlias(meta.black);
-    const userSide = wKey === targetKey ? 'w' : bKey === targetKey ? 'b' : null;
-    if (!userSide) continue;
-
-    const parsedMoves = GameAnalyzer.parsePgn(entry.pgn || '');
-    if (!parsedMoves?.length) continue;
-    const positions = GameAnalyzer.buildPositionChain(parsedMoves);
-    if (!positions || positions.length <= 1) continue;
+    const { meta, userSide, positions } = batch[gi];
 
     const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
       phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
@@ -433,12 +439,57 @@ export async function runIntuitionCheckup({
     analyzedMoves,
     eloFit,
     closestElo,
+    screenElo: elo,
     phaseTraps,
     topTrapIds: topTraps.map(item => item.id),
     topTraps,
     partial,
     createdAt: now
   };
+}
+
+export function checkupSourceType(sourceLabel = '') {
+  if (sourceLabel === 'local-pgn-batch') return 'local';
+  const prefix = String(sourceLabel || '').split(':')[0];
+  return ['lichess', 'chesscom'].includes(prefix) ? prefix : 'local';
+}
+
+export function selectCheckupHistory(history = [], { source = 'lichess', gameContext = null, suggestedPlayer = '' } = {}) {
+  const list = Array.isArray(history) ? history : [];
+  const scoped = list.filter(item => checkupSourceType(item?.sourceLabel) === source);
+  if (gameContext && source !== 'local') {
+    const targetKey = normalizeAlias(suggestedPlayer);
+    const matched = targetKey
+      ? scoped.filter(item => normalizeAlias(item?.playerName) === targetKey)
+      : [];
+    return {
+      primary: matched[0] || null,
+      scopedHistory: matched,
+      fallbackReport: matched.length ? null : (list[0] || null)
+    };
+  }
+  return {
+    primary: scoped[0] || null,
+    scopedHistory: scoped,
+    fallbackReport: scoped.length ? null : (list[0] || null)
+  };
+}
+
+function formatRelativeTime(createdAt) {
+  if (!Number.isFinite(createdAt)) return '';
+  const diffMin = Math.max(0, Math.floor((Date.now() - createdAt) / 60000));
+  if (diffMin < 1) return t('checkupJustNow');
+  if (diffMin < 60) return t('checkupMinutesAgo', { n: diffMin });
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return t('checkupHoursAgo', { n: diffHr });
+  return t('checkupDaysAgo', { n: Math.floor(diffHr / 24) });
+}
+
+function formatSourceBadge(sourceLabel = '') {
+  const type = checkupSourceType(sourceLabel);
+  if (type === 'lichess') return 'Lichess';
+  if (type === 'chesscom') return 'Chess.com';
+  return t('checkupSourceLocal');
 }
 
 export class IntuitionCheckup {
@@ -449,6 +500,9 @@ export class IntuitionCheckup {
   fetching = false;
   pendingBatch = null;
   latestReport = null;
+  history = [];
+  scopedHistory = [];
+  fallbackReport = null;
 
   constructor(app) {
     this.app = app;
@@ -473,6 +527,7 @@ export class IntuitionCheckup {
     this.progressText = document.getElementById('checkup-progress-text');
     this.progressBar = document.getElementById('checkup-progress-bar');
     this.btnCancelRun = document.getElementById('btn-checkup-cancel');
+    this.historyHintEl = document.getElementById('checkup-history-hint');
     this.reportBox = document.getElementById('checkup-report-box');
     this.statusEl = document.getElementById('checkup-status');
 
@@ -549,10 +604,19 @@ export class IntuitionCheckup {
           this.usernameInput.value = this.suggestUsername(this.app.mistakeBank?.activeProfile);
         }
         this.setStatus('');
+        this.applyHistoryContext();
         this.renderSourceControls();
+        this.renderReport(this.latestReport);
       };
     }
-    if (this.usernameInput) this.usernameInput.oninput = () => this.setStatus('');
+    if (this.usernameInput) {
+      this.usernameInput.oninput = () => {
+        this.setStatus('');
+        this.applyHistoryContext();
+        this.renderSourceControls();
+        this.renderReport(this.latestReport);
+      };
+    }
     if (this.btnSelectFiles && this.localFilesInput) {
       this.btnSelectFiles.onclick = () => this.localFilesInput.click();
       this.localFilesInput.onchange = async event => {
@@ -618,9 +682,11 @@ export class IntuitionCheckup {
     if (this.pendingBatch && this.pendingBatch.profileId !== profileId) {
       this.pendingBatch = null;
     }
-    const history = profile ? await this.app.mistakeBank.store.listCheckups(profile.id) : [];
-    if (generation !== this.openGeneration || !this.allowed()) return;
-    this.latestReport = history[0] || null;
+    const loadedHistory = profile ? await this.app.mistakeBank.store.listCheckups(profile.id) : [];
+    const currentProfileId = this.app.mistakeBank?.activeProfile?.id || 'default';
+    if (generation !== this.openGeneration || currentProfileId !== profileId || !this.allowed()) return;
+    this.history = loadedHistory;
+    this.applyHistoryContext();
     this.renderSourceControls();
     this.renderReport(this.latestReport);
     if (!this.dialog.open) this.dialog.showModal();
@@ -632,6 +698,19 @@ export class IntuitionCheckup {
     this.openGeneration++;
     this.cancelRun();
     if (this.dialog?.open) this.dialog.close();
+  }
+
+  applyHistoryContext() {
+    const profile = this.app.mistakeBank?.activeProfile;
+    const suggestedPlayer = this.usernameInput ? this.usernameInput.value.trim() : this.suggestUsername(profile);
+    const selection = selectCheckupHistory(this.history, {
+      source: this.source,
+      gameContext: this.gameContext,
+      suggestedPlayer
+    });
+    this.latestReport = selection.primary;
+    this.scopedHistory = selection.scopedHistory;
+    this.fallbackReport = selection.fallbackReport;
   }
 
   suggestUsername(profile) {
@@ -833,26 +912,34 @@ export class IntuitionCheckup {
       if (!current()) return;
 
       if (report.gameCount > 0) {
-        this.latestReport = report;
+        const savedRecord = {
+          id: report.id,
+          profileId: report.profileId,
+          sourceLabel: report.sourceLabel,
+          playerName: report.playerName,
+          gameCount: report.gameCount,
+          analyzedMoves: report.analyzedMoves,
+          eloFit: report.eloFit,
+          closestElo: report.closestElo,
+          screenElo: report.screenElo ?? (this.app.currentElo || 1900),
+          phaseTraps: report.phaseTraps,
+          topTrapIds: report.topTrapIds,
+          topTraps: report.topTraps,
+          partial: !!report.partial,
+          createdAt: report.createdAt
+        };
+        this.history = [savedRecord, ...this.history.filter(item => item.id !== report.id)];
+        this.applyHistoryContext();
+        if (!this.scopedHistory.some(item => item.id === savedRecord.id)) {
+          this.scopedHistory = [savedRecord, ...this.scopedHistory];
+        }
+        this.latestReport = savedRecord;
+        this.fallbackReport = null;
         if (this.app.mistakeBank?.store) {
-          await this.app.mistakeBank.store.saveCheckup({
-            id: report.id,
-            profileId: report.profileId,
-            sourceLabel: report.sourceLabel,
-            playerName: report.playerName,
-            gameCount: report.gameCount,
-            analyzedMoves: report.analyzedMoves,
-            eloFit: report.eloFit,
-            closestElo: report.closestElo,
-            phaseTraps: report.phaseTraps,
-            topTrapIds: report.topTrapIds,
-            topTraps: report.topTraps,
-            partial: !!report.partial,
-            createdAt: report.createdAt
-          });
+          await this.app.mistakeBank.store.saveCheckup(savedRecord);
         }
         if (!current()) return;
-        this.renderReport(report);
+        this.renderReport(savedRecord);
         this.setStatus(report.partial ? t('checkupCancelledPartial') : t('checkupDone'));
       } else if (this.cancelled || report.partial) {
         this.setStatus(t('checkupCancelledEmpty'));
@@ -886,6 +973,26 @@ export class IntuitionCheckup {
   }
 
   renderReport(report) {
+    if (this.historyHintEl) {
+      this.historyHintEl.replaceChildren();
+      const showFallback = !report && this.fallbackReport && !this.running && !this.fetching;
+      this.historyHintEl.hidden = !showFallback;
+      if (showFallback) {
+        const item = this.fallbackReport;
+        const time = formatRelativeTime(item.createdAt);
+        const label = `${item.playerName} (${formatSourceBadge(item.sourceLabel)}${time ? ` · ${time}` : ''})`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-header checkup-history-btn';
+        btn.textContent = t('checkupHistoryView', { label });
+        btn.onclick = () => {
+          this.latestReport = item;
+          this.renderReport(item);
+        };
+        this.historyHintEl.append(btn);
+      }
+    }
+
     if (!this.reportBox) return;
     this.reportBox.replaceChildren();
     if (!report) {
@@ -896,6 +1003,57 @@ export class IntuitionCheckup {
 
     const summary = document.createElement('div');
     summary.className = 'checkup-summary-card';
+
+    const metaRow = document.createElement('div');
+    metaRow.className = 'checkup-report-meta';
+    const badge = document.createElement('span');
+    badge.className = 'checkup-source-badge';
+    const timeStr = formatRelativeTime(report.createdAt);
+    badge.textContent = `${formatSourceBadge(report.sourceLabel)}${timeStr ? ` · ${timeStr}` : ''}`;
+    metaRow.append(badge);
+
+    const metaActions = document.createElement('div');
+    metaActions.className = 'checkup-meta-actions';
+    const switcherList = this.scopedHistory.length > 1 ? this.scopedHistory : this.history;
+    if (switcherList.length > 1) {
+      const select = document.createElement('select');
+      select.className = 'btn-header checkup-history-select';
+      select.setAttribute('aria-label', t('checkupHistorySelect'));
+      for (const item of switcherList.slice(0, 8)) {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        const rel = formatRelativeTime(item.createdAt);
+        opt.textContent = `${item.playerName} · ${formatSourceBadge(item.sourceLabel)}${rel ? ` (${rel})` : ''}`;
+        if (item.id === report.id) opt.selected = true;
+        select.append(opt);
+      }
+      select.onchange = () => {
+        const picked = switcherList.find(item => item.id === select.value);
+        if (picked) {
+          this.latestReport = picked;
+          this.renderReport(picked);
+        }
+      };
+      metaActions.append(select);
+    }
+    if (this.app.mistakeBank?.store) {
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn-header checkup-delete-btn';
+      delBtn.textContent = '×';
+      delBtn.title = t('checkupDeleteReport');
+      delBtn.setAttribute('aria-label', t('checkupDeleteReport'));
+      delBtn.onclick = async () => {
+        await this.app.mistakeBank.store.deleteCheckup(report.id);
+        this.history = this.history.filter(item => item.id !== report.id);
+        this.applyHistoryContext();
+        this.renderReport(this.latestReport);
+      };
+      metaActions.append(delBtn);
+    }
+    metaRow.append(metaActions);
+    summary.append(metaRow);
+
     const title = document.createElement('strong');
     title.textContent = t('checkupSummaryTitle', {
       player: report.playerName,
@@ -917,18 +1075,30 @@ export class IntuitionCheckup {
         cell.textContent = `${r}: ${((report.eloFit?.[r] || 0) * 100).toFixed(1)}%`;
         eloGrid.append(cell);
       }
-      summary.append(eloGrid);
+      const eloNote = document.createElement('small');
+      eloNote.className = 'checkup-elo-note';
+      eloNote.textContent = t('checkupEloFitNote');
+      summary.append(eloGrid, eloNote);
     }
 
     const phaseLine = document.createElement('p');
     phaseLine.className = 'checkup-phase-line';
-    phaseLine.textContent = t('checkupPhaseBreakdown', {
+    const phaseText = t('checkupPhaseBreakdown', {
       opening: report.phaseTraps?.opening || 0,
       middlegame: report.phaseTraps?.middlegame || 0,
       endgame: report.phaseTraps?.endgame || 0
     });
+    phaseLine.textContent = Number.isFinite(report.screenElo)
+      ? `${phaseText} · ${t('checkupScreenElo', { elo: report.screenElo })}`
+      : phaseText;
     summary.append(phaseLine);
     this.reportBox.append(summary);
+
+    const scopeTrap = (trap, activeId) => {
+      if (trap.profileId === activeId && String(trap.id || '').startsWith(`${activeId}|`)) return trap;
+      const playedUci = trap.playedUci || trap.uci;
+      return { ...trap, profileId: activeId, id: trapId(activeId, trap.fenBefore, playedUci) };
+    };
 
     const traps = report.topTraps || [];
     if (traps.length) {
@@ -937,11 +1107,34 @@ export class IntuitionCheckup {
       for (const trap of traps) {
         const row = document.createElement('div');
         row.className = 'checkup-trap-row';
+        const main = document.createElement('div');
+        main.className = 'checkup-trap-main';
         const left = document.createElement('strong');
         left.textContent = `${trap.moveNumber}${trap.turn === 'w' ? '. ' : '… '}${trap.playedSan} → ${trap.bestSan}`;
-        const right = document.createElement('span');
-        right.textContent = `${t(`bankPhase_${trap.phase || 'middlegame'}`)} · -${(trap.eslLoss || 0).toFixed(1)}%`;
-        row.append(left, right);
+        const opp = [trap.source?.white, trap.source?.black].find(name => name && normalizeAlias(name) !== normalizeAlias(report.playerName)) || '';
+        const sub = document.createElement('small');
+        sub.textContent = [t(`bankPhase_${trap.phase || 'middlegame'}`), `-${(trap.eslLoss || 0).toFixed(1)}%`, opp ? `vs ${opp}` : '', trap.source?.date || ''].filter(Boolean).join(' · ');
+        main.append(left, sub);
+        const oneBtn = document.createElement('button');
+        oneBtn.type = 'button';
+        oneBtn.className = 'btn-header checkup-trap-practice-btn';
+        oneBtn.textContent = t('checkupTrapPracticeOne');
+        oneBtn.onclick = async () => {
+          const bank = this.app.mistakeBank;
+          const startGen = this.openGeneration;
+          const activeId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
+          if (report.profileId && report.profileId !== activeId) return;
+          const scoped = scopeTrap(trap, activeId);
+          if (bank) {
+            await bank.store.upsertTrap(scoped);
+            await bank.refreshState();
+          }
+          const currentId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
+          if (!this.allowed() || !this.dialog?.open || startGen !== this.openGeneration || currentId !== activeId) return;
+          this.close();
+          bank?.startPracticeQueue([scoped], scoped);
+        };
+        row.append(main, oneBtn);
         list.append(row);
       }
       this.reportBox.append(list);
@@ -956,11 +1149,11 @@ export class IntuitionCheckup {
       btnSaveTop.onclick = async () => {
         const bank = this.app.mistakeBank;
         if (!bank) return;
-        const activeId = bank.activeProfile?.id || report.profileId;
+        const activeId = bank.activeProfile?.id || this.activeProfileId || report.profileId;
+        if (report.profileId && report.profileId !== activeId) return;
         let added = 0;
         for (const trap of traps) {
-          const scoped = trap.profileId === activeId ? trap : { ...trap, profileId: activeId };
-          const res = await bank.store.upsertTrap(scoped);
+          const res = await bank.store.upsertTrap(scopeTrap(trap, activeId));
           if (res?.added) added++;
         }
         await bank.refreshState();
@@ -973,14 +1166,18 @@ export class IntuitionCheckup {
       btnPracticeTop.textContent = t('checkupPracticeTop', { count: traps.length });
       btnPracticeTop.onclick = async () => {
         const bank = this.app.mistakeBank;
-        const activeId = bank?.activeProfile?.id || report.profileId;
-        const scopedTraps = traps.map(trap => trap.profileId === activeId ? trap : { ...trap, profileId: activeId });
+        const startGen = this.openGeneration;
+        const activeId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
+        if (report.profileId && report.profileId !== activeId) return;
+        const scopedTraps = traps.map(trap => scopeTrap(trap, activeId));
         if (bank) {
           for (const trap of scopedTraps) await bank.store.upsertTrap(trap);
           await bank.refreshState();
         }
+        const currentId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
+        if (!this.allowed() || !this.dialog?.open || startGen !== this.openGeneration || currentId !== activeId) return;
         this.close();
-        this.app.mistakeBank?.startPracticeQueue(scopedTraps, scopedTraps[0]);
+        bank?.startPracticeQueue(scopedTraps, scopedTraps[0]);
       };
 
       actions.append(btnSaveTop, btnPracticeTop);

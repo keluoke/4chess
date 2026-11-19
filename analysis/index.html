@@ -59,7 +59,7 @@
 
     <div class="studio-header-actions">
       <button type="button" class="btn-header review-overview-button" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-haspopup="dialog" hidden>复盘总览</button>
-      <button type="button" class="btn-header" id="btn-intuition-checkup" aria-controls="checkup-dialog" aria-haspopup="dialog" data-i18n="checkupBtn" hidden>10 盘体检</button>
+      <button type="button" class="btn-header" id="btn-intuition-checkup" aria-controls="checkup-dialog" aria-haspopup="dialog" data-i18n="checkupBtn" hidden>近期诊断</button>
       <button type="button" class="btn-header" id="btn-mistake-bank" aria-controls="mistake-bank-dialog" aria-haspopup="dialog" hidden><span data-i18n="mistakeBankBtn">错题本</span><span class="bank-due-badge" id="mistake-bank-due-badge" hidden>0</span></button>
       <!-- Actions -->
       <button type="button" class="btn-header" id="btn-focus" data-i18n="focusMode" aria-controls="insight-column" aria-pressed="false">专注</button>
@@ -415,7 +415,10 @@
 
   <dialog class="checkup-dialog" id="checkup-dialog" aria-labelledby="checkup-title">
     <div class="bank-heading">
-      <h2 id="checkup-title" data-i18n="checkupTitle">最近 10 盘直觉体检</h2>
+      <div>
+        <h2 id="checkup-title" data-i18n="checkupTitle">近期对局直觉诊断</h2>
+        <p class="checkup-subtitle" data-i18n="checkupSubtitle">自动拉取最近 10 盘完赛标准棋，或导入最多 15 盘本地 PGN。</p>
+      </div>
       <button type="button" class="btn-header" id="btn-close-checkup" data-i18n="btnClose">关闭</button>
     </div>
     <div class="checkup-sources" role="group">
@@ -452,6 +455,7 @@
       <button type="button" class="btn-header" id="btn-checkup-cancel" data-i18n="btnCancel">取消</button>
     </div>
     <p id="checkup-status" class="bank-status-note" role="status"></p>
+    <div id="checkup-history-hint" class="checkup-history-hint" hidden></div>
     <div id="checkup-report-box" class="checkup-report-box" hidden></div>
   </dialog>
 

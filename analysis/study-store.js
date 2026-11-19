@@ -430,6 +430,13 @@ export class StudyStore {
       .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
   }
 
+  async deleteCheckup(id) {
+    await this.init();
+    if (!id) return false;
+    await this.delete('checkups', id);
+    return true;
+  }
+
   async exportBackup(now = Date.now()) {
     await this.init();
     return {

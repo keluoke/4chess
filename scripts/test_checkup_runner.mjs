@@ -6,6 +6,7 @@ import {
   fetchChesscomRecentGames,
   fetchLichessRecentGames,
   runIntuitionCheckup,
+  selectCheckupHistory,
   splitMultiPgn,
   suggestCheckupPlayer
 } from '../analysis/checkup-runner.js';
@@ -302,4 +303,86 @@ assert.equal(postResp.status, 405);
 const badUserResp = await lichessProxy({ request: new Request('https://example.invalid/api/lichess?username=bad/user') });
 assert.equal(badUserResp.status, 400);
 
-console.log('PASS checkup runner: multi-PGN split, platform filtering, single-player perspective isolation, Elo fit, lock/cancel safety, verification gates, cap and proxy.');
+// 7. Fast-fail when no games match targetPlayer (must NOT start engines)
+const noMatchReport = await runIntuitionCheckup({
+  games: [{ pgn: pgn1, meta: { white: 'KidPlayer', black: 'OppA', result: '1-0' } }],
+  targetPlayer: 'NonExistentPlayer',
+  stockfish: { initialize() { assert.fail('Must not initialize Stockfish when zero games match targetPlayer'); } },
+  maiaEngine: { initialize() { assert.fail('Must not initialize Maia when zero games match targetPlayer'); } }
+});
+assert.equal(noMatchReport.gameCount, 0);
+assert.equal(noMatchReport.partial, false);
+
+// 8. Cross-entry history isolation & StudyStore.deleteCheckup()
+const historySample = [
+  { id: 'c_chesscom', sourceLabel: 'chesscom:hikaru', playerName: 'Hikaru', createdAt: 200 },
+  { id: 'c_lichess', sourceLabel: 'lichess:kidplayer', playerName: 'KidPlayer', createdAt: 100 }
+];
+const mismatchCtx = selectCheckupHistory(historySample, {
+  source: 'lichess',
+  gameContext: { platform: 'lichess', white: 'KidPlayer', black: 'OppA' },
+  suggestedPlayer: 'KidPlayer'
+});
+assert.equal(mismatchCtx.primary.id, 'c_lichess', 'Game context selects matching platform + player');
+
+const otherPlayerCtx = selectCheckupHistory(historySample, {
+  source: 'chesscom',
+  gameContext: { platform: 'chesscom', white: 'Magnus', black: 'Fabiano' },
+  suggestedPlayer: 'Magnus'
+});
+assert.equal(otherPlayerCtx.primary, null, 'Different player must not auto-display stale report');
+assert.equal(otherPlayerCtx.fallbackReport.id, 'c_chesscom', 'Fallback exposes latest report for optional reveal');
+
+const blankLocalTab = selectCheckupHistory(historySample, { source: 'local' });
+assert.equal(blankLocalTab.primary, null, 'Switching to local tab must not show online report');
+
+const tabSwitchFromGame = selectCheckupHistory(historySample, {
+  source: 'lichess',
+  gameContext: { platform: 'chesscom', white: 'Hikaru', black: 'OppA' },
+  suggestedPlayer: 'Hikaru'
+});
+assert.equal(tabSwitchFromGame.primary, null, 'Switching tab from game context must filter by active source tab');
+
+const clearedPlayerFromGame = selectCheckupHistory(historySample, {
+  source: 'chesscom',
+  gameContext: { platform: 'chesscom', white: 'Hikaru', black: 'OppA' },
+  suggestedPlayer: ''
+});
+assert.equal(clearedPlayerFromGame.primary, null, 'Empty player input from game context must keep history collapsed');
+
+// 9. Bad PGN pre-validation (no engine startup on all-bad/partial PGNs; accurate denominator on mixed batch)
+const badPgn = '[White "KidPlayer"]\n[Black "OppA"]\n[Result "1-0"]\n\n1. Kxe8# 1-0';
+const partialBadPgn = '[White "KidPlayer"]\n[Black "OppA"]\n[Result "1-0"]\n\n1. e4 e5 2. Kxe8# 1-0';
+const allBadReport = await runIntuitionCheckup({
+  games: [
+    { pgn: badPgn, meta: { white: 'KidPlayer', black: 'OppA', result: '1-0' } },
+    { pgn: partialBadPgn, meta: { white: 'KidPlayer', black: 'OppA', result: '1-0' } }
+  ],
+  targetPlayer: 'KidPlayer',
+  stockfish: { initialize() { assert.fail('Must not initialize Stockfish when matching PGNs cannot replay'); } },
+  maiaEngine: { initialize() { assert.fail('Must not initialize Maia when matching PGNs cannot replay'); } }
+});
+assert.equal(allBadReport.gameCount, 0);
+
+const mixedProgress = [];
+const mixedReport = await runIntuitionCheckup({
+  games: [
+    { pgn: partialBadPgn, meta: { white: 'KidPlayer', black: 'OppA', result: '1-0' } },
+    { pgn: pgn1, meta: { white: 'KidPlayer', black: 'OppA', result: '1-0' } }
+  ],
+  targetPlayer: 'KidPlayer',
+  elo: 1500,
+  stockfish: mockStockfish,
+  maiaEngine: mockMaia,
+  onProgress: entry => mixedProgress.push(entry)
+});
+assert.equal(mixedReport.gameCount, 1);
+assert.equal(mixedReport.screenElo, 1500);
+const analyzingEvents = mixedProgress.filter(entry => entry.phase === 'analyzing');
+assert.equal(analyzingEvents[0].gameIndex, 1);
+assert.equal(analyzingEvents[0].totalGames, 1, 'Progress denominator must reflect complete replayable matched games only');
+
+await store.deleteCheckup('cap_21');
+assert.equal((await store.listCheckups('kid')).some(item => item.id === 'cap_21'), false, 'deleteCheckup removes report');
+
+console.log('PASS checkup runner: multi-PGN split, platform filtering, single-player perspective isolation, Elo fit, lock/cancel safety, verification gates, cap, proxy, fast-fail and history isolation.');

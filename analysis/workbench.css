@@ -537,34 +537,46 @@ button,input,select,textarea { font-family:inherit; }
 .bank-trap-actions .btn-header { height:32px;padding:0 12px;font-size:12px;box-shadow:none;border-color:var(--dg-line); }
 .bank-empty { margin:18px 0;font-size:13px;color:var(--text-muted);text-align:center; }
 
-/* v1.2 P1: 10-game Intuition Checkup */
+/* v1.2 P1: Recent Games Intuition Checkup */
 #btn-intuition-checkup[hidden],#checkup-username-row[hidden],#checkup-local-row[hidden],
-#checkup-confirm-box[hidden],#checkup-progress-box[hidden],#checkup-report-box[hidden] { display:none; }
+#checkup-confirm-box[hidden],#checkup-progress-box[hidden],#checkup-report-box[hidden],#checkup-history-hint[hidden] { display:none; }
 #btn-intuition-checkup { border-color:var(--dg-line);box-shadow:none; }
 .checkup-dialog { width:min(680px,calc(100% - 28px));max-width:none;max-height:calc(100dvh - 28px);margin:auto;padding:22px 24px;border:1px solid var(--dg-line);border-radius:20px;background:var(--dg-surface);color:var(--text-main);box-shadow:var(--dg-shadow);overscroll-behavior:contain; }
 .checkup-dialog::backdrop { background:light-dark(#23392a55,#030d09a0);backdrop-filter:blur(3px); }
+.checkup-subtitle { margin:4px 0 0;font-size:12px;color:var(--text-muted); }
 .checkup-sources,.checkup-confirm-row,.checkup-progress-box,.checkup-report-actions { display:flex;flex-wrap:wrap;gap:8px;align-items:center; }
 .checkup-sources { margin-bottom:12px; }
 .checkup-player-choices { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
 .checkup-player-choices[hidden] { display:none; }
 .checkup-player-choices .btn-header { height:30px;box-shadow:none;border-color:var(--dg-line); }
-.checkup-sources .btn-header,.checkup-local-actions .btn-header,.checkup-progress-box .btn-header,.checkup-report-actions .btn-header:not(.btn-primary) { height:34px;box-shadow:none;border-color:var(--dg-line); }
+.checkup-sources .btn-header,.checkup-local-actions .btn-header,.checkup-progress-box .btn-header,.checkup-report-actions .btn-header:not(.btn-primary),.checkup-history-btn,.checkup-trap-practice-btn,.checkup-delete-btn,.checkup-history-select { height:34px;box-shadow:none;border-color:var(--dg-line); }
 .checkup-sources button[aria-pressed="true"] { background:var(--dg-green-soft);color:var(--brand-green);border-color:transparent; }
 .checkup-input-row input,.checkup-confirm-row input,.checkup-local-row textarea { width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--dg-line);border-radius:10px;background:var(--dg-paper);color:var(--text-main);font-size:13px;font-family:inherit; }
 .checkup-local-row { display:grid;gap:8px; }
 .checkup-fetch-row { margin-top:10px;margin-bottom:10px; }
+.checkup-history-hint { margin:4px 0 10px; }
+.checkup-history-btn { font-size:12px;color:var(--text-muted); }
 .checkup-confirm-box,.checkup-summary-card { padding:12px 14px;border-radius:14px;background:var(--dg-paper);border:1px solid var(--dg-line);margin-bottom:12px; }
 .checkup-confirm-box p { margin:0 0 8px;font-size:13px; }
 .checkup-confirm-row input { flex:1 1 200px; }
+.checkup-report-meta { display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px; }
+.checkup-source-badge { font-size:11px;color:var(--text-muted);padding:2px 8px;border-radius:999px;background:var(--dg-surface);border:1px solid var(--dg-line); }
+.checkup-meta-actions { display:flex;align-items:center;gap:6px; }
+.checkup-history-select { height:28px;font-size:11px;padding:0 8px;max-width:220px; }
+.checkup-delete-btn { height:28px;width:28px;padding:0;justify-content:center;font-size:15px;line-height:1;color:var(--text-muted); }
 .checkup-progress-box { justify-content:space-between;padding:10px 12px;border-radius:12px;background:var(--dg-green-soft);font-size:12px;margin-bottom:10px; }
 .checkup-progress-info { display:grid;gap:6px;flex:1 1 210px; }
 .checkup-progress-info progress { width:100%;height:6px;accent-color:var(--brand-green); }
-.checkup-elo-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0; }
+.checkup-elo-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0 4px; }
 .checkup-elo-pill { padding:6px 8px;border-radius:8px;background:var(--dg-surface);border:1px solid var(--dg-line);font-size:12px;text-align:center;font-variant-numeric:tabular-nums; }
 .checkup-elo-pill.best { border-color:var(--brand-green);color:var(--brand-green);font-weight:650;background:var(--dg-green-soft); }
+.checkup-elo-note { display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px; }
 .checkup-phase-line { margin:6px 0 0;font-size:12px;color:var(--text-muted); }
 .checkup-top-traps { display:grid;gap:6px;margin-bottom:12px; }
-.checkup-trap-row { display:flex;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;background:var(--dg-paper);border:1px solid var(--dg-line);font-size:12px; }
+.checkup-trap-row { display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:var(--dg-paper);border:1px solid var(--dg-line);font-size:12px; }
+.checkup-trap-main { display:grid;gap:2px;min-width:0; }
+.checkup-trap-main small { font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.checkup-trap-practice-btn { height:28px;padding:0 10px;font-size:11px;flex-shrink:0; }
 .share-card-dialog { width:min(760px,calc(100vw - 32px));max-height:88vh;margin:auto;border:1px solid var(--dg-line);border-radius:18px;background:var(--dg-surface);color:var(--text-main);padding:20px 22px;box-shadow:var(--dg-shadow);overflow:auto; }
 .share-card-dialog::backdrop { background:light-dark(#23392a55,#030d09a0);backdrop-filter:blur(3px); }
 .share-card-toolbar { display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:12px 0; }

@@ -1086,6 +1086,7 @@ class AnalysisStudioApp {
           </svg>
           ${t('btnImportCompleted')} →
         </button>
+        ${this.checkup?.allowed() ? `<button type="button" class="btn-home-primary" id="btn-home-checkup">${t('checkupBtn')} →</button>` : ''}
       </div>
 
       <div class="home-hero-samples">
@@ -1104,6 +1105,9 @@ class AnalysisStudioApp {
 
     heroCard.querySelector('#btn-home-import')?.addEventListener('click', () => {
       this.openPgnModal();
+    });
+    heroCard.querySelector('#btn-home-checkup')?.addEventListener('click', () => {
+      this.checkup?.open();
     });
     heroCard.querySelector('#btn-chip-fischer')?.addEventListener('click', () => {
       this.el.sampleFischer?.click();
