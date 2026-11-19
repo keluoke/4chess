@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import {
   CHECKUP_ELOS,
+  checkupGameContext,
   detectBatchPlayer,
   fetchChesscomRecentGames,
   fetchLichessRecentGames,
   runIntuitionCheckup,
-  splitMultiPgn
+  splitMultiPgn,
+  suggestCheckupPlayer
 } from '../analysis/checkup-runner.js';
 import { StudyStore } from '../analysis/study-store.js';
 
@@ -28,6 +30,18 @@ assert.equal(chunks.length, 2);
 
 const detected = detectBatchPlayer(chunks.map(pgn => ({ pgn })));
 assert.equal(detected.suggestedName, 'KidPlayer', 'Most frequent player across batch is suggested');
+
+const chesscomPgn = '[Site "Chess.com"]\n' + pgn1;
+const chesscomContext = checkupGameContext(chesscomPgn, { orientation: 'black' });
+assert.equal(chesscomContext.platform, 'chesscom');
+assert.equal(suggestCheckupPlayer(chesscomContext), 'OppA');
+assert.equal(suggestCheckupPlayer(chesscomContext, { aliases: ['kidplayer'] }), 'KidPlayer');
+assert.equal(suggestCheckupPlayer(chesscomContext, { aliases: ['OPPa', 'kidplayer'] }), '');
+const lichessContext = checkupGameContext('[Site "https://lichess.org/AbCd1234"]\n' + pgn2);
+assert.equal(lichessContext.platform, 'lichess');
+assert.equal(suggestCheckupPlayer(lichessContext), '', 'A platform URL alone supplies no player perspective');
+assert.equal(checkupGameContext(chesscomPgn.replaceAll('1-0', '*')), null);
+assert.equal(checkupGameContext('[Site "https://fakechess.com/AbCd1234"]\n' + pgn1), null);
 
 const lichessNdjson = [
   JSON.stringify({ id: 'live1', variant: 'standard', status: 'started', pgn: '[Result "*"]\n1. e4 e5 *' }),
@@ -102,6 +116,42 @@ assert.equal(Object.keys(report.eloFit).length, CHECKUP_ELOS.length);
 assert.equal(report.topTraps.length, 1);
 assert.equal(report.topTraps[0].playedSan, 'Bb3');
 assert.equal(report.topTraps[0].turn, 'w', 'Only targetPlayer moves are collected');
+
+const progress = [];
+const lowProbabilityReport = await runIntuitionCheckup({
+  games: [{ pgn: pgn1 }],
+  targetPlayer: 'KidPlayer',
+  stockfish: {
+    async initialize() { return true; },
+    async evaluate() { assert.fail('No Stockfish search is needed for moves below the trap probability threshold'); }
+  },
+  maiaEngine: {
+    async initialize() { return true; },
+    async predict() {
+      return { moves: [{ uci: 'a4b3', rawProb: 0.08 }, { uci: 'c2c3', rawProb: 0.08 }] };
+    }
+  },
+  onProgress: entry => progress.push(entry)
+});
+assert.equal(lowProbabilityReport.gameCount, 1);
+assert.equal(lowProbabilityReport.analyzedMoves, 2);
+assert.equal(lowProbabilityReport.eloFit[1900], 0.08);
+assert.deepEqual(progress.slice(0, 3).map(entry => entry.phase), ['stockfish', 'maia', 'analyzing']);
+assert(progress.some(entry => entry.analyzedMoves === 1 && entry.workDone > 0 && entry.workDone < 1), 'Move progress arrives before the first game finishes');
+assert.equal(progress.at(-1).workDone, 1);
+
+const abort = new AbortController();
+let releaseStockfish;
+const abortedStartup = runIntuitionCheckup({
+  games: [{ pgn: pgn1 }],
+  targetPlayer: 'KidPlayer',
+  signal: abort.signal,
+  stockfish: { initialize: () => new Promise(resolve => { releaseStockfish = resolve; }) },
+  maiaEngine: { initialize() { assert.fail('Cancelling startup must not start Maia'); } }
+});
+abort.abort();
+assert.equal((await abortedStartup).partial, true, 'Cancellation returns even while startup is still pending');
+releaseStockfish(true);
 
 // 1. P0 regression: cancellation between stockfish.initialize() and maiaEngine.initialize() must NOT start Maia
 let maiaInitCalls = 0;

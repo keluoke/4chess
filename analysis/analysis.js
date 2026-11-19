@@ -6,7 +6,7 @@ import { ReviewOverview } from './review-overview.js?v=20261118-v12-p0';
 import { ReviewCommentary } from './review-commentary.js?v=20261118-recap-reset';
 import { ConsequencePlayer } from './consequence-player.js?v=20261118-v12-p0';
 import { MistakeBank } from './mistake-bank.js?v=20261118-v12-p0-fix2';
-import { IntuitionCheckup } from './checkup-runner.js?v=20261118-v12-p1';
+import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261119-checkup';
 import { ShareCardModal } from './share-card.js?v=20261118-v12-p2';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
 import { ReviewPractice } from './review-practice.js?v=20261118-v12-p0';
@@ -263,6 +263,7 @@ class AnalysisStudioApp {
     }
     this.positionAnalysis?.renderLoadingStatuses();
     this.intuitionReview?.render();
+    this.checkup?.renderProgress();
   }
 
   flipBoard() {
@@ -765,7 +766,7 @@ class AnalysisStudioApp {
           }
           if (data.pgn && data.pgn.includes('1.')) {
             this.showToast(t('toastLoadedLichess', { gameId }));
-            commit({ pgn: data.pgn, autoReview: true });
+            commit({ pgn: data.pgn, checkupSource: 'lichess', autoReview: true });
             return true;
           }
         }
@@ -850,7 +851,7 @@ class AnalysisStudioApp {
         let pgn = gameObj.pgn || fetchedData.pgn;
         if (pgn && typeof pgn === 'string' && pgn.includes('1.')) {
           this.showToast(t('toastLoadedChesscom', { gameId }));
-          commit({ pgn, autoReview: true });
+          commit({ pgn, checkupSource: 'chesscom', autoReview: true });
           return true;
         }
 
@@ -876,6 +877,7 @@ class AnalysisStudioApp {
               white,
               black,
               result,
+              checkupSource: 'chesscom',
               autoReview: true
             });
             return true;
@@ -957,6 +959,8 @@ class AnalysisStudioApp {
               white: whiteParam,
               black: blackParam,
               result: resultParam,
+              checkupSource: hashParams.get('checkupSource'),
+              checkupOrientation: openingOrientation,
               autoReview: true
             });
             loaded = true;
@@ -1013,6 +1017,7 @@ class AnalysisStudioApp {
               white: game.white,
               black: game.black,
               result: game.result,
+              checkupOrientation: openingOrientation || game.orientation,
               cachedReview: game.cachedReview,
               autoReview: !game.cachedReview
             });
@@ -1125,9 +1130,13 @@ class AnalysisStudioApp {
     result = null,
     cachedReview = null,
     autoReview = true,
-    positionInput = false
+    positionInput = false,
+    checkupSource = null,
+    checkupOrientation = null
   } = {}) {
     if (this.scanSourceLocked) return false;
+    if (this.checkup?.dialog?.open) this.checkup.close();
+    this.checkupGame = null;
     this.consequencePlayer?.stop();
     this.reviewCommentary.reset();
     this.isSampleGame = !!pgn && (pgn.trim() === SAMPLE_GAMES.fischer.trim() || pgn.trim() === SAMPLE_GAMES.kasparov.trim());
@@ -1256,6 +1265,7 @@ class AnalysisStudioApp {
     }
 
     this.positions = positions;
+    this.checkupGame = checkupGameContext(pgn, { source: checkupSource, orientation: checkupOrientation, white, black });
     this.el.btnReanalyze.disabled = false;
     this.currentGameKey = this.getReviewKey();
 
@@ -1427,6 +1437,7 @@ class AnalysisStudioApp {
   }
 
   async runFullReview(forceRefresh = false) {
+    if (this.checkup?.ownsEngines) return;
     this.consequencePlayer?.stop();
     this.practice?.stop();
     this.reviewCommentary.reset();
@@ -1967,7 +1978,7 @@ class AnalysisStudioApp {
   }
 
   updateActivePositionAnalysis() {
-    if (!this.practice?.active) this.positionAnalysis.refresh();
+    if (!this.practice?.active && !this.checkup?.ownsEngines) this.positionAnalysis.refresh();
   }
 
   updatePreferenceNotes() {
@@ -2183,12 +2194,27 @@ class AnalysisStudioApp {
     if (detail) { detail.textContent = t('reviewResumeHint'); if (detail.previousElementSibling) detail.previousElementSibling.textContent = t('reviewPausedForPosition'); }
   }
 
+  pauseForCheckup() {
+    const epoch = this.gameEpoch;
+    const intuitionWasRunning = this.intuitionReview.state === 'running';
+    if (this.isPlaying) this.toggleAutoPlay();
+    this.pauseWholeReview();
+    this.positionAnalysis.cancel();
+    if (intuitionWasRunning) this.intuitionReview.pause();
+    return () => {
+      if (epoch !== this.gameEpoch || !this.checkup.allowed()) return;
+      this.updateActivePositionAnalysis();
+      this.scheduleReviewResume();
+      if (intuitionWasRunning && this.intuitionReview.state === 'paused') this.intuitionReview.start();
+    };
+  }
+
   scheduleReviewResume() {
-    if (!this.reviewPendingResume || this.isBranching || this.positionAnalysis.eloTrend?.isOpen) return;
+    if (!this.reviewPendingResume || this.isBranching || this.positionAnalysis.eloTrend?.isOpen || this.checkup?.ownsEngines) return;
     clearTimeout(this.resumeReviewTimer);
     this.resumeReviewTimer = setTimeout(async () => {
       await this.positionAnalysis.pending;
-      if (this.reviewPendingResume && !this.isBranching && !this.fullReviewRunning && !this.positionAnalysis.eloTrend?.isOpen) this.runFullReview();
+      if (this.reviewPendingResume && !this.isBranching && !this.fullReviewRunning && !this.positionAnalysis.eloTrend?.isOpen && !this.checkup?.ownsEngines) this.runFullReview();
     }, 1800);
   }
 

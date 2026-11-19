@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261119-v121';
+const CACHE_NAME = '4chess-review-20261119-checkup';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -19,16 +19,16 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261118-precise-filter",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261119-v121",
+  "./workbench.css?v=20261119-checkup",
   "../ui/theme.js?v=20261025-v115",
-  "./analysis.js?v=20261118-v12-p2",
+  "./analysis.js?v=20261119-checkup",
   "./commentary-text.js?v=20261118-recap-reset",
   "./built-in-ai.js?v=20261118-summary-ai",
   "./review-commentary.js?v=20261118-recap-reset",
   "./study-store.js?v=20261118-v12-p0",
   "./consequence-player.js?v=20261118-v12-p0",
   "./mistake-bank.js?v=20261118-v12-p0-fix2",
-  "./checkup-runner.js?v=20261118-v12-p1",
+  "./checkup-runner.js?v=20261119-checkup",
   "./share-card.js?v=20261118-v12-p2",
   "../engine/chess-facts.js?v=20261118-summary-ai",
   "./board-ui.js?v=20261117-ui",

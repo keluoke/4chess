@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261119-v121">
+  <link rel="stylesheet" href="workbench.css?v=20261119-checkup">
 </head>
 <body class="diverge-ui">
   <script>
@@ -425,6 +425,7 @@
     </div>
     <div id="checkup-username-row" class="checkup-input-row">
       <input type="text" id="checkup-username" data-i18n-placeholder="checkupUsernamePlaceholder" placeholder="输入用户名（自动拉取最近 10 盘完赛标准棋）">
+      <div id="checkup-player-choices" class="checkup-player-choices" role="group" data-i18n-aria="checkupPlayersFromGame" aria-label="本局棋手" hidden></div>
     </div>
     <div id="checkup-local-row" class="checkup-local-row" hidden>
       <div class="checkup-local-actions">
@@ -444,7 +445,10 @@
       </div>
     </div>
     <div id="checkup-progress-box" class="checkup-progress-box" hidden>
-      <span id="checkup-progress-text" role="status"></span>
+      <div class="checkup-progress-info">
+        <span id="checkup-progress-text" role="status"></span>
+        <progress id="checkup-progress-bar" data-i18n-aria="checkupProgressLabel" aria-label="体检进度"></progress>
+      </div>
       <button type="button" class="btn-header" id="btn-checkup-cancel" data-i18n="btnCancel">取消</button>
     </div>
     <p id="checkup-status" class="bank-status-note" role="status"></p>
@@ -473,7 +477,7 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261118-v12-p2"></script>
+  <script type="module" src="analysis.js?v=20261119-checkup"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {

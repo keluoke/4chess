@@ -134,6 +134,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'OPEN_ANALYSIS_TAB') {
     const gameData = msg.gameData || {};
     const orientation = ['white', 'black'].includes(gameData.orientation) ? gameData.orientation : null;
+    const sourceUrl = sender.tab?.url || sender.url || '';
+    const platform = /^https:\/\/(?:[\w-]+\.)*lichess\.org\//i.test(sourceUrl) ? 'lichess'
+      : /^https:\/\/(?:[\w-]+\.)*chess\.com\//i.test(sourceUrl) ? 'chesscom' : null;
     if (gameData.fen) {
       const board = new ChessBoard();
       if (typeof gameData.fen !== 'string' || !board.load(gameData.fen)) {
@@ -146,6 +149,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Ensure PGN text is generated if moves are present
     if (!gameData.pgn && gameData.moves && gameData.moves.length > 0) {
       gameData.pgn = movesToPgn(gameData.moves, {
+        Site: platform === 'lichess' ? 'Lichess' : platform === 'chesscom' ? 'Chess.com' : '?',
         White: (gameData.white && gameData.white !== '白方') ? gameData.white : (gameData.white || 'White'),
         Black: (gameData.black && gameData.black !== '黑方') ? gameData.black : (gameData.black || 'Black'),
         Result: gameData.result || '*'
@@ -173,6 +177,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (gameData.result && gameData.result !== '*') extra += `&result=${encodeURIComponent(gameData.result)}`;
           if (lang) extra += `&lang=${encodeURIComponent(lang)}`;
           if (orientation || gameData.fen) extra += `&orientation=${orientation || 'white'}`;
+          if (gameData.pgn && platform) extra += `&checkupSource=${platform}`;
           const prefs = normalizeEnginePreferences(settings);
           const sf = prefs.stockfishVariant;
           const maia = prefs.maiaVariant;

@@ -15,13 +15,47 @@ const LOG_PROB_FLOOR = 1e-4;
 
 export function parsePgnMeta(pgnText = '') {
   const read = tag => pgnText.match(new RegExp(`^\\[${tag}\\s+"([^"]*)"\\]`, 'im'))?.[1]?.trim() || '';
+  const site = read('Site');
   return {
     white: read('White'),
     black: read('Black'),
     result: read('Result') || '*',
     date: read('Date'),
-    url: read('Site').startsWith('http') ? read('Site') : ''
+    url: site.startsWith('http') ? site : '',
+    site
   };
+}
+
+export function checkupGameContext(pgn, { source, orientation, white, black } = {}) {
+  if (!pgn || !FairPlayGuard.verifyConcludedGame(pgn).ok) return null;
+  const meta = parsePgnMeta(pgn);
+  let site = meta.site.toLowerCase();
+  if (meta.url) {
+    try { site = new URL(meta.url).hostname.toLowerCase(); } catch { site = ''; }
+  }
+  const platform = ['chesscom', 'lichess'].includes(source) ? source
+    : /(^|\.)chess\.com$/.test(site) ? 'chesscom'
+    : /(^|\.)lichess\.org$|^lichess$/.test(site) ? 'lichess' : null;
+  if (!platform) return null;
+  const cleanName = name => {
+    const value = String(name || '').trim();
+    return /^[a-z0-9][a-z0-9_-]*$/i.test(value) && !/^(?:white|black|anonymous|guest)$/i.test(value) ? value : '';
+  };
+  return {
+    platform,
+    orientation,
+    white: cleanName(meta.white) || cleanName(white),
+    black: cleanName(meta.black) || cleanName(black)
+  };
+}
+
+export function suggestCheckupPlayer(game, profile) {
+  if (!game) return '';
+  const aliases = new Set((profile?.aliases || []).map(normalizeAlias));
+  const matches = [game.white, game.black].filter(name => name && aliases.has(normalizeAlias(name)));
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) return '';
+  return ['white', 'black'].includes(game.orientation) ? game[game.orientation] : '';
 }
 
 export function splitMultiPgn(text = '') {
@@ -157,6 +191,19 @@ function isReliableVerificationReply(res) {
   );
 }
 
+async function initializeCheckupEngine(engine, signal) {
+  if (!signal) return engine.initialize?.();
+  if (signal.aborted) return;
+  let abort;
+  const cancelled = new Promise(resolve => { abort = () => resolve(); });
+  signal.addEventListener('abort', abort, { once: true });
+  try {
+    return await Promise.race([engine.initialize?.(), cancelled]);
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
+}
+
 export async function runIntuitionCheckup({
   games = [],
   targetPlayer = '',
@@ -167,11 +214,13 @@ export async function runIntuitionCheckup({
   maiaEngine,
   onProgress = () => {},
   isCancelled = () => false,
+  signal,
   now = Date.now()
 } = {}) {
   const targetKey = normalizeAlias(targetPlayer);
   if (!targetKey) throw new Error('Target player name is required');
   if (!stockfish || !maiaEngine) throw new Error('Engines are required');
+  const cancelled = () => signal?.aborted || isCancelled();
 
   const emptyResult = (partial = true) => ({
     id: `checkup_${now}_${Math.random().toString(36).slice(2, 7)}`,
@@ -189,11 +238,14 @@ export async function runIntuitionCheckup({
     createdAt: now
   });
 
-  if (isCancelled()) return emptyResult(true);
-  await stockfish.initialize?.();
-  if (isCancelled()) return emptyResult(true);
-  await maiaEngine.initialize?.();
-  if (isCancelled()) return emptyResult(true);
+  if (cancelled()) return emptyResult(true);
+  onProgress({ phase: 'stockfish' });
+  const stockfishReady = await initializeCheckupEngine(stockfish, signal);
+  if (cancelled()) return emptyResult(true);
+  if (stockfishReady === false) throw new Error(stockfish.lastError || 'Stockfish failed to start');
+  onProgress({ phase: 'maia' });
+  await initializeCheckupEngine(maiaEngine, signal);
+  if (cancelled()) return emptyResult(true);
 
   const batch = games.slice(0, MAX_LOCAL_GAMES);
   const phaseTraps = { opening: 0, middlegame: 0, endgame: 0 };
@@ -205,7 +257,7 @@ export async function runIntuitionCheckup({
   let partial = false;
 
   for (let gi = 0; gi < batch.length; gi++) {
-    if (isCancelled()) { partial = true; break; }
+    if (cancelled()) { partial = true; break; }
     const entry = batch[gi];
     const meta = entry.meta || parsePgnMeta(entry.pgn || '');
     const wKey = normalizeAlias(meta.white);
@@ -218,7 +270,11 @@ export async function runIntuitionCheckup({
     const positions = GameAnalyzer.buildPositionChain(parsedMoves);
     if (!positions || positions.length <= 1) continue;
 
-    onProgress({ gameIndex: gi + 1, totalGames: batch.length, analyzedMoves });
+    const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
+      phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
+      workDone: gi + checkedPlies / (positions.length - 1)
+    });
+    reportProgress('analyzing', 0);
 
     let gameMoves = 0;
     let gameEloSamples = 0;
@@ -229,7 +285,7 @@ export async function runIntuitionCheckup({
 
     const historyFens = [positions[0].fen];
     for (let mi = 0; mi < positions.length - 1; mi++) {
-      if (isCancelled()) { gameCancelled = true; break; }
+      if (cancelled()) { gameCancelled = true; break; }
       const move = positions[mi + 1];
       const fenBefore = positions[mi].fen;
       const fenAfter = move.fen;
@@ -249,12 +305,9 @@ export async function runIntuitionCheckup({
         continue;
       }
 
-      gameMoves++;
-      const sfBefore = await stockfish.evaluate(fenBefore, 10, 4000, 2);
-      if (isCancelled()) { gameCancelled = true; break; }
       const historySlice = historyFens.slice(0, -1).slice(-7);
-      const maiaPred = await maiaEngine.predict(fenBefore, elo, sfBefore, isCancelled, historySlice);
-      if (isCancelled()) { gameCancelled = true; break; }
+      const maiaPred = await maiaEngine.predict(fenBefore, elo, null, cancelled, historySlice);
+      if (cancelled()) { gameCancelled = true; break; }
 
       const playedCandidate = maiaPred?.moves?.find(m => m.uci === move.uci);
       const humanRawProb = playedCandidate ? (playedCandidate.rawProb ?? (playedCandidate.prob / 100)) : 0;
@@ -267,8 +320,8 @@ export async function runIntuitionCheckup({
           if (r === elo) {
             sampleProbs[r] = humanRawProb;
           } else {
-            const pred = await maiaEngine.predict(fenBefore, r, sfBefore, isCancelled, historySlice);
-            if (isCancelled()) { gameCancelled = true; break; }
+            const pred = await maiaEngine.predict(fenBefore, r, null, cancelled, historySlice);
+            if (cancelled()) { gameCancelled = true; break; }
             if (!pred?.moves?.length) { validAll = false; continue; }
             const hit = pred.moves.find(m => m.uci === move.uci);
             sampleProbs[r] = hit ? (hit.rawProb ?? (hit.prob / 100)) : 0;
@@ -283,18 +336,22 @@ export async function runIntuitionCheckup({
         }
       }
 
-      if (sfBefore?.bestMove && sfBefore.bestMove.uci !== move.uci && humanRawProb >= 0.12) {
+      // Stockfish is only needed for moves eligible for trap verification.
+      const sfBefore = humanRawProb >= 0.12 ? await stockfish.evaluate(fenBefore, 10, 4000, 2) : null;
+      if (cancelled()) { gameCancelled = true; break; }
+      if (sfBefore?.bestMove && sfBefore.bestMove.uci !== move.uci) {
         const sfAfter = await stockfish.evaluate(fenAfter, 10, 4000, 1);
-        if (isCancelled()) { gameCancelled = true; break; }
+        if (cancelled()) { gameCancelled = true; break; }
         if (sfAfter && Number.isFinite(sfAfter.scoreCp)) {
           const playedScoreCp = -sfAfter.scoreCp;
           const screenEsl = Math.max(0, expectedScore(sfBefore.scoreCp) - expectedScore(playedScoreCp)) * 100;
           if (screenEsl >= 6) {
+            reportProgress('verifying', gameMoves, mi);
             const verifyRoot = await stockfish.evaluate(fenBefore, 14, 6000, 2);
-            if (isCancelled()) { gameCancelled = true; break; }
+            if (cancelled()) { gameCancelled = true; break; }
             if (isReliableVerificationRoot(verifyRoot) && verifyRoot.bestMove.uci !== move.uci) {
               const verifyAfter = await stockfish.evaluate(fenAfter, 14, 6000, 1);
-              if (isCancelled()) { gameCancelled = true; break; }
+              if (cancelled()) { gameCancelled = true; break; }
               if (isReliableVerificationReply(verifyAfter)) {
                 const verifiedPlayedCp = -verifyAfter.scoreCp;
                 const verifiedEsl = Math.max(0, expectedScore(verifyRoot.scoreCp) - expectedScore(verifiedPlayedCp)) * 100;
@@ -329,6 +386,7 @@ export async function runIntuitionCheckup({
           }
         }
       }
+      reportProgress('analyzing', ++gameMoves, mi + 1);
       historyFens.push(fenAfter);
     }
 
@@ -337,6 +395,7 @@ export async function runIntuitionCheckup({
       break;
     }
 
+    reportProgress('analyzing', gameMoves, positions.length - 1);
     analyzedGames++;
     analyzedMoves += gameMoves;
     eloSampleCount += gameEloSamples;
@@ -387,6 +446,7 @@ export class IntuitionCheckup {
   openGeneration = 0;
   fileReadGeneration = 0;
   running = false;
+  fetching = false;
   pendingBatch = null;
   latestReport = null;
 
@@ -399,6 +459,7 @@ export class IntuitionCheckup {
     this.sourceTabs = [...document.querySelectorAll('#checkup-dialog [data-checkup-source]')];
     this.usernameRow = document.getElementById('checkup-username-row');
     this.usernameInput = document.getElementById('checkup-username');
+    this.playerChoices = document.getElementById('checkup-player-choices');
     this.localRow = document.getElementById('checkup-local-row');
     this.localFilesInput = document.getElementById('checkup-pgn-files');
     this.btnSelectFiles = document.getElementById('btn-checkup-files');
@@ -410,6 +471,7 @@ export class IntuitionCheckup {
     this.btnStart = document.getElementById('btn-checkup-start');
     this.progressBox = document.getElementById('checkup-progress-box');
     this.progressText = document.getElementById('checkup-progress-text');
+    this.progressBar = document.getElementById('checkup-progress-bar');
     this.btnCancelRun = document.getElementById('btn-checkup-cancel');
     this.reportBox = document.getElementById('checkup-report-box');
     this.statusEl = document.getElementById('checkup-status');
@@ -424,6 +486,10 @@ export class IntuitionCheckup {
 
   allowed() {
     return this.supported && !this.app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress();
+  }
+
+  get ownsEngines() {
+    return this.running && !this.cancelled;
   }
 
   syncVisibility() {
@@ -475,12 +541,18 @@ export class IntuitionCheckup {
     }
     for (const tab of this.sourceTabs) {
       tab.onclick = () => {
-        if (this.running) return;
-        this.source = tab.dataset.checkupSource || 'lichess';
+        const source = tab.dataset.checkupSource;
+        if (this.running || this.fetching || source === this.source) return;
+        this.source = source;
         this.pendingBatch = null;
+        if (this.usernameInput) {
+          this.usernameInput.value = this.suggestUsername(this.app.mistakeBank?.activeProfile);
+        }
+        this.setStatus('');
         this.renderSourceControls();
       };
     }
+    if (this.usernameInput) this.usernameInput.oninput = () => this.setStatus('');
     if (this.btnSelectFiles && this.localFilesInput) {
       this.btnSelectFiles.onclick = () => this.localFilesInput.click();
       this.localFilesInput.onchange = async event => {
@@ -496,13 +568,13 @@ export class IntuitionCheckup {
   }
 
   async readFilesForBatch(files, { autoPrepare = false } = {}) {
-    if (this.running || !this.allowed() || !files?.length) return;
+    if (this.running || this.fetching || !this.allowed() || !files?.length) return;
     const generation = this.openGeneration;
     const readToken = ++this.fileReadGeneration;
     const profileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
     const texts = await Promise.all([...files].slice(0, MAX_LOCAL_GAMES).map(file => file.text()));
     const currentProfileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
-    if (readToken !== this.fileReadGeneration || generation !== this.openGeneration || profileId !== currentProfileId || this.running || !this.allowed()) {
+    if (readToken !== this.fileReadGeneration || generation !== this.openGeneration || profileId !== currentProfileId || this.running || this.fetching || !this.allowed()) {
       return;
     }
     this.source = 'local';
@@ -513,7 +585,7 @@ export class IntuitionCheckup {
   }
 
   async receiveDroppedPgn(text) {
-    if (this.running || !this.allowed()) return;
+    if (this.running || this.fetching || !this.allowed()) return;
     this.fileReadGeneration++;
     this.source = 'local';
     this.pendingBatch = null;
@@ -530,19 +602,21 @@ export class IntuitionCheckup {
     if (generation !== this.openGeneration || !this.allowed()) return;
     const profile = this.app.mistakeBank?.activeProfile;
     const profileId = profile?.id || 'default';
-    if (this.activeProfileId && this.activeProfileId !== profileId) {
+    const gameChanged = this.gameContext !== this.app.checkupGame;
+    const profileChanged = this.activeProfileId !== profileId;
+    if (gameChanged || profileChanged) {
       this.latestReport = null;
       this.pendingBatch = null;
       this.setStatus('');
-      if (this.localPgnInput) this.localPgnInput.value = '';
+      if (profileChanged && this.localPgnInput) this.localPgnInput.value = '';
       if (this.confirmNameInput) this.confirmNameInput.value = '';
+      this.gameContext = this.app.checkupGame;
+      if (this.gameContext) this.source = this.gameContext.platform;
+      if (this.usernameInput) this.usernameInput.value = this.suggestUsername(profile);
     }
     this.activeProfileId = profileId;
     if (this.pendingBatch && this.pendingBatch.profileId !== profileId) {
       this.pendingBatch = null;
-    }
-    if (this.usernameInput) {
-      this.usernameInput.value = profile?.aliases?.[0] || '';
     }
     const history = profile ? await this.app.mistakeBank.store.listCheckups(profile.id) : [];
     if (generation !== this.openGeneration || !this.allowed()) return;
@@ -550,7 +624,8 @@ export class IntuitionCheckup {
     this.renderSourceControls();
     this.renderReport(this.latestReport);
     if (!this.dialog.open) this.dialog.showModal();
-    this.closeBtn?.focus();
+    const focus = this.usernameInput?.value && this.source !== 'local' ? this.btnFetch : this.usernameInput;
+    (this.source === 'local' ? this.btnFetch : focus)?.focus();
   }
 
   close() {
@@ -559,18 +634,86 @@ export class IntuitionCheckup {
     if (this.dialog?.open) this.dialog.close();
   }
 
+  suggestUsername(profile) {
+    if (this.gameContext?.platform === this.source) return suggestCheckupPlayer(this.gameContext, profile);
+    return this.gameContext ? '' : (profile?.aliases?.[0] || '');
+  }
+
   renderSourceControls() {
+    const busy = this.running || this.fetching;
     for (const tab of this.sourceTabs) {
       tab.setAttribute('aria-pressed', String(tab.dataset.checkupSource === this.source));
+      tab.disabled = busy;
     }
     const isLocal = this.source === 'local';
     if (this.usernameRow) this.usernameRow.hidden = isLocal;
     if (this.localRow) this.localRow.hidden = !isLocal;
-    if (this.confirmBox) this.confirmBox.hidden = !this.pendingBatch;
-    if (this.progressBox) this.progressBox.hidden = !this.running;
+    if (this.confirmBox) this.confirmBox.hidden = busy || !this.pendingBatch;
+    if (this.progressBox) this.progressBox.hidden = !busy;
+    if (this.reportBox) this.reportBox.hidden = busy || !this.latestReport;
+    if (this.usernameInput) this.usernameInput.disabled = busy;
+    if (this.localPgnInput) this.localPgnInput.disabled = busy;
+    if (this.btnSelectFiles) this.btnSelectFiles.disabled = busy;
     if (this.btnFetch) {
-      this.btnFetch.disabled = this.running;
+      this.btnFetch.disabled = busy;
       this.btnFetch.textContent = t(isLocal ? 'checkupParseLocal' : 'checkupFetchGames');
+    }
+    if (this.playerChoices) {
+      this.playerChoices.replaceChildren();
+      this.playerChoices.hidden = busy || this.gameContext?.platform !== this.source
+        || !!this.suggestUsername(this.app.mistakeBank?.activeProfile);
+      if (!this.playerChoices.hidden) {
+        for (const name of new Set([this.gameContext.white, this.gameContext.black].filter(Boolean))) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn-header';
+          button.textContent = t('checkupPlayerAction', { player: name });
+          button.onclick = () => {
+            this.usernameInput.value = name;
+            this.prepareBatch();
+          };
+          this.playerChoices.append(button);
+        }
+        this.playerChoices.hidden = !this.playerChoices.childElementCount;
+      }
+    }
+    this.renderProgress();
+  }
+
+  renderProgress() {
+    if (!this.progressText || !this.progress) return;
+    const { phase, gameIndex, totalGames, analyzedMoves, workDone } = this.progress;
+    const stockfish = this.app.stockfish?.downloadProgress;
+    const maia = this.app.maiaEngine?.status?.maia;
+    let label;
+    let downloadPercent;
+    if (phase === 'stockfish' && Number.isFinite(stockfish?.percent)) {
+      downloadPercent = Math.round(stockfish.percent);
+      label = t('checkupDownloadingStockfish', { percent: downloadPercent });
+    } else if (phase === 'maia' && maia?.stage === 'download') {
+      if (Number.isFinite(maia.percent)) downloadPercent = Math.round(maia.percent);
+      label = downloadPercent === undefined
+        ? t('checkupDownloadingMaiaUnknown') : t('checkupDownloadingMaia', { percent: downloadPercent });
+    } else if (phase === 'maia' && maia?.stage === 'preparing') {
+      label = t('checkupPreparingMaia');
+    } else {
+      const key = {
+        fetching: 'checkupFetching', stockfish: 'checkupStartingStockfish', maia: 'checkupStartingMaia',
+        analyzing: 'checkupProgress', verifying: 'checkupVerifying', cancelling: 'checkupCancelling'
+      }[phase];
+      label = t(key, { current: gameIndex, total: totalGames, moves: analyzedMoves });
+    }
+    if (this.progressText.textContent !== label) this.progressText.textContent = label;
+    if (this.progressBar) {
+      if (totalGames) {
+        this.progressBar.max = totalGames;
+        this.progressBar.value = workDone;
+      } else if (downloadPercent !== undefined) {
+        this.progressBar.max = 100;
+        this.progressBar.value = downloadPercent;
+      } else {
+        this.progressBar.removeAttribute('value');
+      }
     }
   }
 
@@ -579,18 +722,20 @@ export class IntuitionCheckup {
   }
 
   async prepareBatch() {
-    if (this.running || !this.allowed()) return;
+    if (this.running || this.fetching || !this.allowed()) return;
     const generation = this.openGeneration;
+    const source = this.source;
     const startProfileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
-    this.abortController?.abort();
     const controller = this.abortController = new AbortController();
+    const current = () => this.abortController === controller && generation === this.openGeneration
+      && startProfileId === (this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default') && this.allowed();
     this.setStatus('');
     this.pendingBatch = null;
     try {
       let games = [];
       let sourceLabel = 'local-pgn-batch';
       let suggestedName = '';
-      if (this.source === 'local') {
+      if (source === 'local') {
         const raw = this.localPgnInput?.value?.trim() || '';
         const chunks = splitMultiPgn(raw).slice(0, MAX_LOCAL_GAMES);
         games = chunks
@@ -604,16 +749,17 @@ export class IntuitionCheckup {
           this.setStatus(t('checkupNeedUsername'));
           return;
         }
-        this.setStatus(t('checkupFetching'));
-        games = this.source === 'lichess'
+        this.fetching = true;
+        this.progress = { phase: 'fetching' };
+        this.renderSourceControls();
+        games = source === 'lichess'
           ? await fetchLichessRecentGames(username, { signal: controller.signal })
           : await fetchChesscomRecentGames(username, { signal: controller.signal });
-        sourceLabel = `${this.source}:${username}`;
+        sourceLabel = `${source}:${username}`;
         suggestedName = username;
       }
 
-      const currentProfileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
-      if (generation !== this.openGeneration || startProfileId !== currentProfileId || !this.allowed()) return;
+      if (!current()) return;
 
       if (!games.length) {
         this.setStatus(t('checkupNoGames'));
@@ -621,7 +767,12 @@ export class IntuitionCheckup {
         return;
       }
 
-      this.pendingBatch = { games, sourceLabel, profileId: currentProfileId };
+      if (source !== 'local') {
+        this.fetching = false;
+        await this.startRun({ games, sourceLabel, profileId: startProfileId }, suggestedName);
+        return;
+      }
+      this.pendingBatch = { games, sourceLabel, profileId: startProfileId };
       if (this.confirmPrompt) {
         this.confirmPrompt.textContent = t('checkupConfirmPerspective', { count: games.length });
       }
@@ -630,47 +781,56 @@ export class IntuitionCheckup {
       }
       this.setStatus('');
       this.renderSourceControls();
-      if (this.source !== 'local' && suggestedName) {
-        await this.startRun();
-      }
     } catch (err) {
-      if (err?.name !== 'AbortError') {
+      if (current() && err?.name !== 'AbortError') {
         this.setStatus(t('checkupFetchFailed', { error: err.message }));
+      }
+    } finally {
+      if (this.abortController === controller) {
+        this.abortController = null;
+        this.fetching = false;
+        this.renderSourceControls();
       }
     }
   }
 
-  async startRun() {
-    if (this.running || !this.allowed() || !this.pendingBatch) return;
-    const targetPlayer = this.confirmNameInput?.value?.trim() || '';
+  async startRun(batch = this.pendingBatch, targetPlayer = this.confirmNameInput?.value?.trim() || '') {
+    if (this.running || this.fetching || !this.allowed() || !batch) return;
+    const activeId = () => this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
+    if (batch.profileId !== activeId()) return;
     if (!targetPlayer) {
       this.setStatus(t('checkupNeedPlayerName'));
       return;
     }
     this.running = true;
     this.cancelled = false;
+    const controller = this.runController = new AbortController();
     const runGeneration = ++this.openGeneration;
+    const current = () => this.allowed() && runGeneration === this.openGeneration && batch.profileId === activeId();
+    this.progress = { phase: 'stockfish' };
     this.renderSourceControls();
     this.setStatus('');
+    let restoreReview;
     try {
-      const profile = this.app.mistakeBank?.activeProfile;
+      restoreReview = this.app.pauseForCheckup?.();
       const report = await runIntuitionCheckup({
-        games: this.pendingBatch.games,
+        games: batch.games,
         targetPlayer,
-        profileId: profile?.id || 'default',
-        sourceLabel: this.pendingBatch.sourceLabel,
+        profileId: batch.profileId,
+        sourceLabel: batch.sourceLabel,
         elo: this.app.currentElo || 1900,
         stockfish: this.app.stockfish,
         maiaEngine: this.app.maiaEngine,
-        isCancelled: () => this.cancelled || !this.allowed() || runGeneration !== this.openGeneration,
-        onProgress: ({ gameIndex, totalGames, analyzedMoves }) => {
-          if (this.progressText) {
-            this.progressText.textContent = t('checkupProgress', { current: gameIndex, total: totalGames, moves: analyzedMoves });
-          }
+        signal: controller.signal,
+        isCancelled: () => this.cancelled || !current(),
+        onProgress: progress => {
+          if (!current() || this.cancelled) return;
+          this.progress = progress;
+          this.renderProgress();
         }
       });
 
-      if (!this.allowed() || runGeneration !== this.openGeneration) return;
+      if (!current()) return;
 
       if (report.gameCount > 0) {
         this.latestReport = report;
@@ -691,6 +851,7 @@ export class IntuitionCheckup {
             createdAt: report.createdAt
           });
         }
+        if (!current()) return;
         this.renderReport(report);
         this.setStatus(report.partial ? t('checkupCancelledPartial') : t('checkupDone'));
       } else if (this.cancelled || report.partial) {
@@ -699,19 +860,29 @@ export class IntuitionCheckup {
         this.setStatus(t('checkupNoMatchedSide', { player: targetPlayer }));
       }
     } catch (err) {
-      this.setStatus(t('checkupRunFailed', { error: err.message }));
+      if (current()) this.setStatus(t('checkupRunFailed', { error: err.message }));
     } finally {
+      this.runController = null;
       this.running = false;
       this.renderSourceControls();
+      restoreReview?.();
     }
   }
 
   cancelRun() {
     this.cancelled = true;
     this.abortController?.abort();
+    this.abortController = null;
+    if (this.fetching) {
+      this.fetching = false;
+      this.setStatus(t('checkupFetchCancelled'));
+    }
     if (this.running) {
+      this.progress = { phase: 'cancelling' };
+      this.runController?.abort();
       this.app.stockfish?.stop?.();
     }
+    this.renderSourceControls();
   }
 
   renderReport(report) {
@@ -721,7 +892,7 @@ export class IntuitionCheckup {
       this.reportBox.hidden = true;
       return;
     }
-    this.reportBox.hidden = false;
+    this.reportBox.hidden = this.running || this.fetching;
 
     const summary = document.createElement('div');
     summary.className = 'checkup-summary-card';

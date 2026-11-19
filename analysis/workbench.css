@@ -545,6 +545,9 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-dialog::backdrop { background:light-dark(#23392a55,#030d09a0);backdrop-filter:blur(3px); }
 .checkup-sources,.checkup-confirm-row,.checkup-progress-box,.checkup-report-actions { display:flex;flex-wrap:wrap;gap:8px;align-items:center; }
 .checkup-sources { margin-bottom:12px; }
+.checkup-player-choices { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
+.checkup-player-choices[hidden] { display:none; }
+.checkup-player-choices .btn-header { height:30px;box-shadow:none;border-color:var(--dg-line); }
 .checkup-sources .btn-header,.checkup-local-actions .btn-header,.checkup-progress-box .btn-header,.checkup-report-actions .btn-header:not(.btn-primary) { height:34px;box-shadow:none;border-color:var(--dg-line); }
 .checkup-sources button[aria-pressed="true"] { background:var(--dg-green-soft);color:var(--brand-green);border-color:transparent; }
 .checkup-input-row input,.checkup-confirm-row input,.checkup-local-row textarea { width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--dg-line);border-radius:10px;background:var(--dg-paper);color:var(--text-main);font-size:13px;font-family:inherit; }
@@ -554,6 +557,8 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-confirm-box p { margin:0 0 8px;font-size:13px; }
 .checkup-confirm-row input { flex:1 1 200px; }
 .checkup-progress-box { justify-content:space-between;padding:10px 12px;border-radius:12px;background:var(--dg-green-soft);font-size:12px;margin-bottom:10px; }
+.checkup-progress-info { display:grid;gap:6px;flex:1 1 210px; }
+.checkup-progress-info progress { width:100%;height:6px;accent-color:var(--brand-green); }
 .checkup-elo-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0; }
 .checkup-elo-pill { padding:6px 8px;border-radius:8px;background:var(--dg-surface);border:1px solid var(--dg-line);font-size:12px;text-align:center;font-variant-numeric:tabular-nums; }
 .checkup-elo-pill.best { border-color:var(--brand-green);color:var(--brand-green);font-weight:650;background:var(--dg-green-soft); }

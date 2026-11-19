@@ -95,10 +95,15 @@ try {
         board.classList.remove(flipped); // The view changes during async extraction.
         release();
       }, args: [{ id, platform, pgn }] });
-    }, { tabId, id, platform, pgn });
+    }, { tabId, id, platform, pgn: pgn.replace('UX White', 'UX-White').replace('UX Black', 'UX-Black') });
     const opened = await openedPage; await opened.goto(await worker.evaluate(() => globalThis.handoffTargetUrl));
     await opened.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
     assert.equal(await opened.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black', `${platform}: preserve the direction at click time, before the flip observer/PGN completion`);
+    assert.equal(new URLSearchParams(new URL(opened.url()).hash.slice(1)).get('checkupSource'), platform);
+    await opened.locator('#btn-intuition-checkup').click();
+    await opened.locator('#checkup-dialog').waitFor();
+    assert.equal(await opened.locator(`[data-checkup-source="${platform}"]`).getAttribute('aria-pressed'), 'true');
+    assert.equal(await opened.locator('#checkup-username').inputValue(), 'UX-Black');
     await opened.close(); await host.close();
   }
 
