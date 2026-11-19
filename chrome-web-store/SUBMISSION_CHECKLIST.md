@@ -1,8 +1,8 @@
-# 1.1.4 商店提交说明
+# 1.2.1 商店提交说明
 
-使用 `npm run package` 生成的 `releases/diverge-extension-v1.1.4.zip`，直接上传 ZIP；不要上传整个源码文件夹或重新套一层目录。本次同步扩展元数据、双语商品介绍和网页棋图分析的产品定位。详细说明分别使用 `listing-en.txt` 与 `listing-zh-CN.txt`；标题、摘要见 `STORE_LISTING.md`。
+直接上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.1.zip`。本版英文详情新增分享卡片、网页错题本和直觉体检，并加入[分享卡片截图](english/5-share-card.png)。详细说明分别使用 `listing-en.txt` 与 `listing-zh-CN.txt`，标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
 
-- 根目录只有一个 manifest.json，MV3 / 1.1.4，原生 popup 与本地 Worker / WASM；包约 2 MiB。
+- 根目录只有一个 manifest.json，MV3 / 1.2.1，使用原生 popup 与本地 Worker / WASM。
 - Maia 5M / 23M / 79M 权重仅从 CDN 加载，作为固定本地推理实现的数值数据；不包含下载执行的 JS / WASM。SF19 标准版仅在独立网页运行，扩展强制使用 Lite。
 - 轻量识别资产随包：chess-cnn.wasm、chessimg2pos_weights.bin、chessimg2pos_manifest.json；大权重不入包。
 - 公开隐私政策填写 https://4chess.cc/privacy/ 。数据声明必须说明局面、记谱、公开玩家标签、本地复盘缓存和 UI 设置同步；不能声称一切关闭页面即删除，也不能声称所有网络请求都不涉及公开棋局数据。
@@ -14,6 +14,8 @@
 ## 可填入审核说明的英文内容
 
 Diverge provides local chess study and post-game review using packaged Stockfish Lite WASM and a packaged JavaScript Maia inference implementation. Remote .bin files contain numeric weights and metadata only; they do not contain executable JS or WASM. The full SF19 executable is web-studio-only and is not downloaded or executed by the extension. To test scanning, open a webpage with a visible static chess diagram and click Scan page. Confirm the position to get interactive SF19 Lite lines, then use Explore engine vs intuition to open the current FEN in the first-party studio. For platform review, open a permitted analysis board or completed game. Choose Maia 5M for a smaller first download. Confirm candidate moves and model status. Active games automatically disable inference, arrows and heatmaps. Preferences can be synchronized with the first-party web studio in the same Chrome profile; game data is not transmitted by the preferences bridge. No account or payment is required.
+
+To test share cards, open a finished game in the analysis studio and run a review. Open Share card on a key move, then copy the image or download a landscape or portrait PNG. Card generation runs locally. Mistake Bank and Intuition Checkup are available in the web studio at 4chess.cc.
 
 Publishing instructions: https://developer.chrome.com/docs/webstore/publish/
 MV3 policy: https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements

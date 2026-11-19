@@ -7,16 +7,23 @@ export class ReviewPractice {
   constructor(app) { this.app = app; this.generation = 0; app.practiceResults ||= new Map(); }
   get inProgress() { return this.active || this.finished; }
   allowed() { return !this.app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress(); }
-  start(item, { queue = [item] } = {}) {
+  itemKey(item) { return this.mode === 'bank' ? (item?.id || item?.fenBefore) : item?.ply; }
+  start(item, { queue = [item], mode = 'game', onItemResult = null } = {}) {
     this.stop();
     if (!this.allowed()) return;
-    this.queue = queue.filter(canPractice).slice();
+    this.mode = mode;
+    this.onItemResult = typeof onItemResult === 'function' ? onItemResult : null;
+    this.queue = mode === 'bank'
+      ? queue.filter(entry => !!entry?.fenBefore).slice()
+      : queue.filter(canPractice).slice();
     if (!this.queue.length) return;
     this.origin = this.app.capturePracticeOrigin?.();
-    this.index = Math.max(0, this.queue.findIndex(move => move.ply === item.ply));
+    const targetKey = this.itemKey(item);
+    this.index = Math.max(0, this.queue.findIndex(entry => this.itemKey(entry) === targetKey));
     this.epoch = this.app.gameEpoch;
     this.results = new Map();
     if (this.app.isPlaying) this.app.toggleAutoPlay();
+    this.app.consequencePlayer?.stop?.();
     this.showItem();
   }
   showItem() {
@@ -27,15 +34,25 @@ export class ReviewPractice {
     this.hinted = this.revealed = this.hasAttempt = false;
     this.submittedMove = null;
     this.verdict = null; this.attempts = 0; this.referenceResult = null;
-    app.goToPly(this.item.ply, { before: true, practice: true, silent: true });
+    if (this.mode === 'bank') {
+      document.body.classList.remove('empty-study');
+      const intro = document.getElementById('empty-study-intro');
+      if (intro) intro.hidden = true;
+      app.boardUI?.setOrientation?.(this.item.turn === 'b' ? 'black' : 'white');
+      app.boardUI?.setPosition?.(this.item.fenBefore, null);
+    } else {
+      app.goToPly(this.item.ply, { before: true, practice: true, silent: true });
+    }
     clearTimeout(app.resumeReviewTimer);
-    app.positionAnalysis.cancel();
+    app.positionAnalysis?.cancel?.();
     document.body.classList.add('practice-active');
-    app.boardUI.clearArrows?.(); app.positionAnalysis.clearOverlays();
+    app.boardUI?.clearArrows?.(); app.positionAnalysis?.clearOverlays?.();
     const side = t(this.item.turn === 'w' ? 'reviewWhite' : 'reviewBlack');
-    app.el.boardStatusText.textContent = t('practiceRound', { side, round: this.item.moveNumber });
+    if (app.el?.boardStatusText) {
+      app.el.boardStatusText.textContent = t('practiceRound', { side, round: this.item.moveNumber || 1 });
+    }
     const mobileContext = document.getElementById('practice-context');
-    if (mobileContext) mobileContext.textContent = `${t('practiceProgress', { current: this.index + 1, total: this.queue.length })} · ${app.el.boardStatusText.textContent}`;
+    if (mobileContext) mobileContext.textContent = `${t('practiceProgress', { current: this.index + 1, total: this.queue.length })} · ${app.el?.boardStatusText?.textContent || ''}`;
     this.panel = document.getElementById('practice-panel');
     this.panel.hidden = false; this.panel.replaceChildren();
     const title = document.createElement('h2'); title.textContent = t('practiceProgress', { current: this.index + 1, total: this.queue.length });
@@ -58,7 +75,10 @@ export class ReviewPractice {
     if (mobileContext?.getClientRects().length) mobileContext.scrollIntoView({ block: 'start' });
     else this.panel.scrollIntoView({ block: 'nearest' });
   }
-  canAdvance() { return this.revealed || this.verdict === 'retryGood' || ['independent', 'hinted', 'revealed'].includes(this.results?.get(this.item?.ply)?.status); }
+  canAdvance() {
+    const key = this.itemKey(this.item);
+    return this.revealed || this.verdict === 'retryGood' || ['independent', 'hinted', 'revealed'].includes(this.results?.get(key)?.status);
+  }
   syncControls() {
     if (!this.controls) return;
     const ready = this.canAdvance();
@@ -68,7 +88,7 @@ export class ReviewPractice {
     this.controls.reveal.hidden = ready;
     this.controls.skip.hidden = ready;
     for (const [key, button] of Object.entries(this.controls)) button.disabled = (this.busy && key !== 'exit') || key === 'next' && !ready;
-    if (this.app.el.boardContainer) this.app.el.boardContainer.inert = this.busy || this.hasAttempt || ready;
+    if (this.app.el?.boardContainer) this.app.el.boardContainer.inert = this.busy || this.hasAttempt || ready;
   }
   retry() {
     this.hasAttempt = false;
@@ -84,7 +104,8 @@ export class ReviewPractice {
     const showComparison = this.revealed || this.verdict === 'retryGood';
     const before = this.item.fenBefore;
     if (move?.san) rows.push(['practiceYourMove', move.san]);
-    if (showComparison && this.item.san) rows.push(['practicePlayedMove', this.item.san]);
+    const playedSan = this.item.san || this.item.playedSan;
+    if (showComparison && playedSan) rows.push(['practicePlayedMove', playedSan]);
     if (showComparison && best?.bestMove?.san) {
       const pv = best.pv?.[0] === best.bestMove.uci ? best.pv : [best.bestMove.uci];
       const line = this.formatLine(before, pv);
@@ -108,11 +129,13 @@ export class ReviewPractice {
     return legalVariation(fen, pv, 3).map(move => move.label).join(' ');
   }
   record(status) {
-    const achieved = this.results?.get(this.item.ply)?.status;
+    const key = this.itemKey(this.item);
+    const achieved = this.results?.get(key)?.status;
     if (['independent', 'hinted'].includes(achieved)) status = achieved;
     const record = { status, attempts: this.attempts || 0 };
-    this.results?.set(this.item.ply, record);
-    this.app.practiceResults.set(this.item.ply, record);
+    this.results?.set(key, record);
+    if (this.mode !== 'bank') this.app.practiceResults.set(this.item.ply, record);
+    this.onItemResult?.(this.item, status, record);
   }
   referenceReady(best) { return Number.isFinite(best?.scoreCp) && !best.isBound && (best.terminal || best.depth >= 12); }
   async reference(current) {
@@ -149,16 +172,17 @@ export class ReviewPractice {
     if (!this.active || this.busy) return;
     if (!this.allowed() || this.epoch !== this.app.gameEpoch) { this.stop(); return; }
     if (!skip && !this.canAdvance()) return;
-    if (skip && !this.results.has(this.item.ply)) this.record('skipped');
+    const key = this.itemKey(this.item);
+    if (skip && !this.results.has(key)) this.record('skipped');
     if (++this.index >= this.queue.length) this.finish(); else this.showItem();
   }
   finish() {
     if (!this.active || !this.allowed() || this.epoch !== this.app.gameEpoch) { this.stop(); return; }
-    const results = this.results, queue = this.queue;
+    const results = this.results, queue = this.queue, mode = this.mode;
     this.generation++;
     this.active = false;
     this.finished = true;
-    if (this.app.el.boardContainer) this.app.el.boardContainer.inert = true;
+    if (this.app.el?.boardContainer) this.app.el.boardContainer.inert = true;
     const mobileContext = document.getElementById('practice-context');
     if (mobileContext) mobileContext.textContent = t('practiceSummary');
     this.panel.hidden = false; this.panel.replaceChildren();
@@ -166,37 +190,59 @@ export class ReviewPractice {
     const counts = Object.fromEntries(['independent', 'hinted', 'revealed'].map(status => [status, [...results.values()].filter(record => record.status === status).length]));
     counts.remaining = queue.length - counts.independent - counts.hinted - counts.revealed;
     const summary = document.createElement('p'); summary.setAttribute('role', 'status'); summary.textContent = t('practiceSummaryCounts', counts); this.panel.append(summary);
-    const note = document.createElement('p'); note.className = 'review-count-note'; note.textContent = t('practiceSessionNote'); this.panel.append(note);
+    const note = document.createElement('p'); note.className = 'review-count-note'; note.textContent = t(mode === 'bank' ? 'bankPracticeSavedNote' : 'practiceSessionNote'); this.panel.append(note);
     const list = document.createElement('ul'); list.className = 'practice-summary-list';
     for (const move of queue) {
-      const status = results.get(move.ply)?.status || 'skipped';
+      const key = mode === 'bank' ? (move.id || move.fenBefore) : move.ply;
+      const status = results.get(key)?.status || 'skipped';
       const entry = document.createElement('li');
       const jump = document.createElement('button'); jump.type = 'button'; jump.className = 'btn-header';
-      jump.textContent = t('reviewInspectRound', { round: move.moveNumber });
+      jump.textContent = mode === 'bank'
+        ? `${move.moveNumber || 1}${move.turn === 'w' ? '. ' : '… '}${move.playedSan || move.san || ''}`.trim()
+        : t('reviewInspectRound', { round: move.moveNumber });
       jump.setAttribute('aria-label', `${jump.textContent} · ${t(move.turn === 'w' ? 'reviewWhite' : 'reviewBlack')}`);
       jump.onclick = () => this.returnToWorkbench(move);
       entry.append(jump, document.createTextNode(t(`practiceStatus_${status}`)));
       list.append(entry);
     }
     this.panel.append(list);
-    const back = document.createElement('button'); back.type = 'button'; back.className = 'btn-header btn-primary'; back.textContent = t('practiceBack');
+    const back = document.createElement('button'); back.type = 'button'; back.className = 'btn-header btn-primary'; back.textContent = t(mode === 'bank' ? 'bankBackToBank' : 'practiceBack');
     back.onclick = () => this.returnToWorkbench(); this.panel.append(back);
     back.focus({ preventScroll: true });
   }
   returnToWorkbench(move) {
     const origin = this.origin;
+    const mode = this.mode;
     this.stop();
+    if (mode === 'bank') {
+      if (move?.fenBefore) {
+        this.app.startNewSession?.({
+          fen: move.fenBefore,
+          white: move.source?.white || t('freeAnalysisBoard'),
+          black: move.source?.black || 'FEN',
+          result: move.source?.result || '*',
+          autoReview: false,
+          positionInput: true
+        });
+      } else {
+        this.app.restorePracticeOrigin?.(origin);
+        this.app.mistakeBank?.open?.();
+      }
+      return;
+    }
     this.app.restorePracticeOrigin?.(origin, move);
   }
   stop() {
     if (!this.inProgress) return;
     this.generation++;
     this.active = this.finished = false;
-    if (this.busy) this.app.stockfish.stop();
+    if (this.busy) this.app.stockfish?.stop?.();
     this.busy = false;
     document.body.classList.remove('practice-active');
     if (this.app.el?.boardContainer) this.app.el.boardContainer.inert = false;
     this.origin = null;
+    this.mode = 'game';
+    this.onItemResult = null;
     if (this.panel) this.panel.hidden = true;
     if (this.app.reviewResult) this.app.renderBlunderCards?.();
   }

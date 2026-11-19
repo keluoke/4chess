@@ -15,6 +15,7 @@ export class StockfishInBrowser {
     this.engineKey = STOCKFISH_VARIANTS[this.variant].key;
     this.lifecycleEpoch = 0;
     this.searchEpoch = 0;
+    this.scriptBlobUrl = null;
     this.wasmBlobUrl = null;
     this.isReady = false;
     this.engineName = this.variant === 'standard' ? 'Stockfish 19 WASM' : 'Stockfish 19 Lite WASM';
@@ -70,18 +71,26 @@ export class StockfishInBrowser {
       const isHostPage = window.location.hostname.includes('chess.com') || window.location.hostname.includes('lichess.org');
 
       if (typeof Worker !== 'undefined' && (isExtensionPage || !isHostPage)) {
-        try {
-          const wasmUrl = isExtensionPage
-            ? chrome.runtime.getURL('lib/stockfish.wasm')
-            : (typeof import.meta !== 'undefined' && import.meta.url ? new URL('../lib/stockfish.wasm', import.meta.url).href : (window.location.pathname.includes('/analysis') ? '../lib/stockfish.wasm' : 'lib/stockfish.wasm'));
-          const sf19Url = isExtensionPage
-            ? chrome.runtime.getURL('lib/stockfish-19.js#' + encodeURIComponent(wasmUrl))
-            : (typeof import.meta !== 'undefined' && import.meta.url ? new URL('../lib/stockfish-19.js', import.meta.url).href + '#' + encodeURIComponent(wasmUrl) : (window.location.pathname.includes('/analysis') ? `../lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}` : `lib/stockfish-19.js#${encodeURIComponent(wasmUrl)}`));
+        const epoch = this.lifecycleEpoch;
+        const wasmUrl = isExtensionPage
+          ? chrome.runtime.getURL('lib/stockfish.wasm')
+          : (typeof import.meta !== 'undefined' && import.meta.url ? new URL('../lib/stockfish.wasm', import.meta.url).href : (window.location.pathname.includes('/analysis') ? '../lib/stockfish.wasm' : 'lib/stockfish.wasm'));
+        const scriptUrl = isExtensionPage
+          ? chrome.runtime.getURL('lib/stockfish-19.js')
+          : (typeof import.meta !== 'undefined' && import.meta.url ? new URL('../lib/stockfish-19.js', import.meta.url).href : (window.location.pathname.includes('/analysis') ? '../lib/stockfish-19.js' : 'lib/stockfish-19.js'));
+        const directUrl = `${scriptUrl}#${encodeURIComponent(wasmUrl)}`;
 
-          this.initDirectWorker(sf19Url);
+        if (isExtensionPage) {
+          try {
+            this.initDirectWorker(directUrl);
+            return;
+          } catch (e) {
+            console.warn('[Stockfish In-Browser] Direct worker fallback to iframe bridge:', e);
+          }
+        } else {
+          // Fetch through the controlled /analysis/ page so /analysis/sw.js serves both assets offline.
+          this.initControlledLiteWorker(scriptUrl, wasmUrl, directUrl, epoch);
           return;
-        } catch (e) {
-          console.warn('[Stockfish In-Browser] Direct worker fallback to iframe bridge:', e);
         }
       }
 
@@ -96,6 +105,29 @@ export class StockfishInBrowser {
     if (globalThis.chrome?.runtime?.id || location.protocol === 'chrome-extension:') throw new Error('Standard Stockfish is available in the web studio');
     const { loadStandardWorker } = await import('./stockfish-standard-web.js');
     return loadStandardWorker(this, epoch);
+  }
+
+  async initControlledLiteWorker(scriptUrl, wasmUrl, fallbackDirectUrl, epoch) {
+    try {
+      if (typeof fetch === 'function' && typeof URL?.createObjectURL === 'function' && typeof Blob !== 'undefined') {
+        const [scriptRes, wasmRes] = await Promise.all([fetch(scriptUrl), fetch(wasmUrl)]);
+        if (epoch !== this.lifecycleEpoch) return;
+        if (scriptRes.ok && wasmRes.ok) {
+          const [scriptBuf, wasmBuf] = await Promise.all([scriptRes.arrayBuffer(), wasmRes.arrayBuffer()]);
+          if (epoch !== this.lifecycleEpoch) return;
+          if (this.scriptBlobUrl) URL.revokeObjectURL(this.scriptBlobUrl);
+          if (this.wasmBlobUrl) URL.revokeObjectURL(this.wasmBlobUrl);
+          this.scriptBlobUrl = URL.createObjectURL(new Blob([scriptBuf], { type: 'application/javascript' }));
+          this.wasmBlobUrl = URL.createObjectURL(new Blob([wasmBuf], { type: 'application/wasm' }));
+          this.initDirectWorker(`${this.scriptBlobUrl}#${encodeURIComponent(this.wasmBlobUrl)}`);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[Stockfish In-Browser] Controlled Blob worker load failed, trying direct URL:', e);
+    }
+    if (epoch !== this.lifecycleEpoch) return;
+    this.initDirectWorker(fallbackDirectUrl);
   }
 
   initDirectWorker(scriptUrl) {
@@ -646,6 +678,8 @@ export class StockfishInBrowser {
     this.isStopping = false;
     this.multiPvMap.clear();
     this.lastInfo = null;
+    if (this.scriptBlobUrl) URL.revokeObjectURL(this.scriptBlobUrl);
+    this.scriptBlobUrl = null;
     if (this.wasmBlobUrl) URL.revokeObjectURL(this.wasmBlobUrl);
     this.wasmBlobUrl = null;
     if (this._initTimeout) {

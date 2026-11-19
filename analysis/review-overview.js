@@ -143,6 +143,7 @@ export class ReviewOverview {
       beyond ? t('reviewConfirmedBeyond', { count: beyond }) : '',
       traps ? t('reviewConfirmedTraps', { count: traps }) : ''
     ].filter(Boolean).join(' · ');
+    this.app.mistakeBank?.renderOverviewSave?.(byId('review-report-save-bank'), result);
   }
 
   renderStory(result, score, scored, turningPoint, verified) {

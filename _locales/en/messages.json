@@ -1,10 +1,10 @@
 {
   "extensionName": {
-    "message": "Diverge: Chess Analysis, Scanner & Human Intuition",
+    "message": "Diverge: Chess.com & Lichess Game Review, Stockfish, Maia & FEN Scanner",
     "description": "Extension title"
   },
   "extensionDescription": {
-    "message": "Scan chess diagrams and compare Stockfish analysis with Maia human moves. Study positions and review finished games.",
+    "message": "Free Chess.com & Lichess game review with Stockfish 19 and Maia. Scan chess diagrams to FEN. Analysis locks during live games.",
     "description": "Short description"
   },
   "actionTitle": {

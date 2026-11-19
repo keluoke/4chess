@@ -279,6 +279,22 @@ try {
  assert.equal(first.cache,'no-store');assert.equal(first.body.game.isFinished,false);assert.equal(second.game.isFinished,true);assert(upstreamCalls>=2);
  const cachedApi=await offline.evaluate(async()=>(await Promise.all((await caches.keys()).map(async k=>(await(await caches.open(k)).keys()).filter(r=>new URL(r.url).pathname.startsWith('/api/'))))).flat().length);
  assert.equal(cachedApi,0);results.api={upstreamCalls,cachedApi};
+ await offline.evaluate(async () => {
+  const bank = window.__maiaStudioApp.mistakeBank;
+  await bank.ready;
+  await bank.store.upsertTrap({
+   id: 'default|6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1|g1f1',
+   profileId: 'default',
+   fenBefore: '6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1',
+   turn: 'w', moveNumber: 21, ply: 41, uci: 'g1f1', playedUci: 'g1f1', san: 'Kf1', playedSan: 'Kf1',
+   bestUci: 'e1e8', bestSan: 'Re8#', verifiedBestUci: 'e1e8', verifiedBestSan: 'Re8#',
+   playedPv: ['g1f1', 'g7g6'], verifiedPlayedPv: ['g1f1', 'g7g6'], bestPv: ['e1e8'], verifiedBestPv: ['e1e8'],
+   divergenceType: 'intuition_trap', divergenceStatus: 'confirmed', elo: 1500, humanProb: 0.25,
+   eslLoss: 50, lossCp: 900, phase: 'endgame', source: { white: 'Offline', black: 'Test', result: '1-0' },
+   srs: { stage: 0, streak: 0, attempts: 0, nextReviewAt: Date.now() - 1000, lastStatus: 'new', lastReviewedAt: null },
+   createdAt: Date.now() - 1000
+  });
+ });
  await offlineContext.setOffline(true);await offline.reload();await offline.waitForFunction(()=>!!window.__maiaStudioApp?.positions.length);
  await offline.evaluate(() => document.fonts.ready);
  assert.equal(await offline.evaluate(() => [...document.fonts].some(font => font.family === 'Inter' && font.status === 'loaded')), true, 'Inter is available on first offline reload');
@@ -292,7 +308,22 @@ try {
   }));
  });
  assert(offlineAssets.every(Boolean), 'Each local engine asset has one cached URL and is retrievable offline');
- results.offline={app:true,firstOfflineReload:true,font:true,engineAssets:true};await offlineContext.close();
+ await offline.locator('#btn-mistake-bank').click();
+ await offline.locator('#btn-bank-practice').click();
+ await offline.waitForFunction(() => window.__maiaStudioApp.practice?.active === true);
+ await offline.evaluate(() => {
+  const app = window.__maiaStudioApp;
+  const move = app.boardUI.chess.getLegalMoves().find(m => m.uci === 'e1e8');
+  app.boardUI.chess.makeMove(move);
+  app.handleUserBoardMove(move, app.boardUI.chess.getFen());
+ });
+ await offline.waitForFunction(() => window.__maiaStudioApp.practice?.verdict === 'retryGood', null, { timeout: 15000 });
+ const offlineSrs = await offline.evaluate(async () => {
+  const traps = await window.__maiaStudioApp.mistakeBank.store.listTraps('default', { filter: 'all' });
+  return traps[0]?.srs;
+ });
+ assert.equal(offlineSrs?.stage, 1, 'Offline Stockfish grading advances SRS stage in IndexedDB');
+ results.offline={app:true,firstOfflineReload:true,font:true,engineAssets:true,offlineStockfishGraded:true,srsStage:offlineSrs.stage};await offlineContext.close();
 
  // Load exactly the user-facing unpacked directory, not the source tree or an old ZIP.
  const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))).version;

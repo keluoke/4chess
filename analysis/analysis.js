@@ -2,10 +2,14 @@ import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-fi
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261118-summary-ai';
 import { ReviewExplorer } from './review-explorer.js?v=20261118-summary-ai';
-import { ReviewOverview } from './review-overview.js?v=20261118-summary-ai';
+import { ReviewOverview } from './review-overview.js?v=20261118-v12-p0';
 import { ReviewCommentary } from './review-commentary.js?v=20261118-recap-reset';
+import { ConsequencePlayer } from './consequence-player.js?v=20261118-v12-p0';
+import { MistakeBank } from './mistake-bank.js?v=20261118-v12-p0-fix2';
+import { IntuitionCheckup } from './checkup-runner.js?v=20261118-v12-p1';
+import { ShareCardModal } from './share-card.js?v=20261118-v12-p2';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
-import { ReviewPractice } from './review-practice.js?v=20261118-summary-ai';
+import { ReviewPractice } from './review-practice.js?v=20261118-v12-p0';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-summary-ai';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -95,6 +99,10 @@ class AnalysisStudioApp {
     this.reviewExplorer = new ReviewExplorer(this);
     this.reviewOverview = new ReviewOverview(this);
     this.reviewCommentary = new ReviewCommentary(this);
+    this.consequencePlayer = new ConsequencePlayer(this);
+    this.mistakeBank = new MistakeBank(this);
+    this.checkup = new IntuitionCheckup(this);
+    this.shareCard = new ShareCardModal(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
     subscribePreferences(next => this.applyPreferences(next));
@@ -398,6 +406,7 @@ class AnalysisStudioApp {
     window.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
+      if (this.checkup?.dialog?.open) return;
       if (this.el.dropOverlay) this.el.dropOverlay.style.display = 'flex';
     });
 
@@ -407,9 +416,19 @@ class AnalysisStudioApp {
       }
     });
 
-    window.addEventListener('drop', (e) => {
+    window.addEventListener('drop', async (e) => {
       e.preventDefault();
       if (this.el.dropOverlay) this.el.dropOverlay.style.display = 'none';
+      if (this.checkup?.dialog?.open) {
+        const files = [...(e.dataTransfer?.files || [])];
+        if (files.length) {
+          await this.checkup.readFilesForBatch(files, { autoPrepare: true });
+          return;
+        }
+        const droppedText = e.dataTransfer?.getData('text');
+        if (droppedText) await this.checkup.receiveDroppedPgn(droppedText);
+        return;
+      }
       const file = e.dataTransfer?.files?.[0];
       if (file) {
         this.handleFileUpload(file);
@@ -447,7 +466,7 @@ class AnalysisStudioApp {
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
-      if (this.el.settingsDialog.open || this.reviewOverview.summary.open) return;
+      if (this.el.settingsDialog.open || this.reviewOverview.summary.open || this.mistakeBank?.dialog?.open || this.checkup?.dialog?.open || this.shareCard?.dialog?.open) return;
       if (this.el.pgnModal.classList.contains('open')) {
         if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
         if (e.key === 'Tab') {
@@ -498,6 +517,13 @@ class AnalysisStudioApp {
   refreshAfterLanguageChange() {
     this.intuitionReview?.render();
     this.reviewCommentary?.sync();
+    this.mistakeBank?.refreshState?.();
+    if (this.mistakeBank?.dialog?.open) this.mistakeBank.renderDialog();
+    if (this.checkup?.dialog?.open) {
+      this.checkup.renderSourceControls();
+      this.checkup.renderReport(this.checkup.latestReport);
+    }
+    if (this.shareCard?.dialog?.open) this.shareCard.renderPreview();
     this.renderCurrentInsight();
     if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
@@ -1102,7 +1128,9 @@ class AnalysisStudioApp {
     positionInput = false
   } = {}) {
     if (this.scanSourceLocked) return false;
+    this.consequencePlayer?.stop();
     this.reviewCommentary.reset();
+    this.isSampleGame = !!pgn && (pgn.trim() === SAMPLE_GAMES.fischer.trim() || pgn.trim() === SAMPLE_GAMES.kasparov.trim());
     this.gameEndedOnTime = false;
     this.importGeneration = (this.importGeneration || 0) + 1;
     this.importController?.abort();
@@ -1306,6 +1334,7 @@ class AnalysisStudioApp {
     const engineChanged = engine !== this.engineVariant;
     const retainedCore = !engineChanged ? this.coreReview : null;
     if (this.isPlaying) this.toggleAutoPlay();
+    this.consequencePlayer?.stop();
     this.positionAnalysis.cancel();
     this.analyzer.cancel();
     this.reviewCommentary.reset();
@@ -1398,6 +1427,7 @@ class AnalysisStudioApp {
   }
 
   async runFullReview(forceRefresh = false) {
+    this.consequencePlayer?.stop();
     this.practice?.stop();
     this.reviewCommentary.reset();
     this.intuitionReview?.dispose();
@@ -1577,9 +1607,11 @@ class AnalysisStudioApp {
     }
   }
 
-  startPractice(item, queue = [item]) {
+  startPractice(item, options = [item]) {
+    this.consequencePlayer?.stop();
     this.practice ||= new ReviewPractice(this);
-    this.practice.start(item, { queue });
+    const config = Array.isArray(options) ? { queue: options } : (options || { queue: [item] });
+    this.practice.start(item, config);
     if (this.practice.inProgress) this.reviewCommentary.cancelOverview();
   }
 
@@ -1590,6 +1622,7 @@ class AnalysisStudioApp {
       epoch: this.gameEpoch, ply: this.currentPly, before: this.isReviewingMove,
       branch: this.isBranching ? this.activeBranch : null, cursor: this.activeBranch?.cursor,
       orientation: this.boardUI.orientation, side: this.reviewExplorer.side, filter: this.currentDivergenceFilter,
+      emptyStudy: document.body.classList.contains('empty-study'),
       focus: document.activeElement, scroll: scrollAreas.map(element => [element, element.scrollTop])
     };
   }
@@ -1600,6 +1633,13 @@ class AnalysisStudioApp {
     this.reviewExplorer.side = origin.side;
     this.currentDivergenceFilter = origin.filter;
     this.boardUI.setOrientation(origin.orientation);
+    if (origin.emptyStudy) {
+      document.body.classList.add('empty-study');
+      const intro = document.getElementById('empty-study-intro');
+      if (intro) intro.hidden = false;
+      this.goToPly(0, { silent: true });
+      return;
+    }
     this.renderBlunderCards();
     if (move) {
       this.reviewOverview.jumpTo(move);
@@ -1679,6 +1719,15 @@ class AnalysisStudioApp {
         retry.onclick = () => this.startPractice(item); card.append(retry);
       }
       this.reviewCommentary.addCardAction(card, item, this.reviewResult);
+      this.mistakeBank?.addCardActions(card, item, this.reviewResult);
+      if (item.bestUci || item.maiaTopUci) {
+        const shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
+        shareBtn.className = 'btn-header';
+        shareBtn.textContent = t('shareCardBtn');
+        shareBtn.onclick = () => this.shareCard?.open(item, { elo: this.reviewResult?.elo || this.currentElo });
+        card.append(shareBtn);
+      }
       const status = this.practiceResults?.get(item.ply)?.status;
       if (status) { const note = document.createElement('span'); note.className = 'review-practice-status'; note.textContent = t(`practiceStatus_${status}`); card.append(note); }
       if (item.ply === this.currentPly) card.classList.add('active');
@@ -1854,6 +1903,7 @@ class AnalysisStudioApp {
   }
 
   goToPly(ply, options = {}) {
+    this.consequencePlayer?.stop();
     if (!options.practice) {
       this.practice?.stop();
       if (!options.silent) this.reviewOverview.exploring = true;
@@ -1970,6 +2020,7 @@ class AnalysisStudioApp {
   }
 
   previewCandidate(context, variation) {
+    this.consequencePlayer?.stop();
     if (this.isPlaying) this.toggleAutoPlay();
     this.pauseWholeReview();
     this.hasAnalysisInput = true;
@@ -2105,6 +2156,14 @@ class AnalysisStudioApp {
       if (canPractice(move)) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header btn-primary'; button.textContent = t('retryMove');
         button.onclick = () => this.startPractice(move); panel.append(button);
+      }
+      if (move.bestUci || move.maiaTopUci) {
+        const shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
+        shareBtn.className = 'btn-header';
+        shareBtn.textContent = t('shareCardBtn');
+        shareBtn.onclick = () => this.shareCard?.open(move, { elo: this.reviewResult?.elo || this.currentElo });
+        panel.append(shareBtn);
       }
       this.reviewCommentary.render(panel, move, this.reviewResult);
     }

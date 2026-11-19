@@ -74,10 +74,18 @@ export function setScanAvailability(app, available) {
   app.reviewOverview?.show(available ? app.reviewOverview.view : 'workbench');
   setWorkspaceAvailable(available);
   if (available) {
+    app.mistakeBank?.refreshState?.();
+    app.checkup?.syncVisibility?.();
     app.intuitionReview.render();
     app.updateActivePositionAnalysis();
     app.scheduleReviewResume();
   } else {
+    app.mistakeBank?.close?.();
+    app.mistakeBank?.refreshState?.();
+    app.checkup?.close?.();
+    app.checkup?.syncVisibility?.();
+    app.shareCard?.close?.();
+    app.consequencePlayer?.stop?.();
     app.reviewCommentary?.suspend();
     if (app.isPlaying) app.toggleAutoPlay();
     app.boardUI.cancelGesture();
@@ -92,6 +100,12 @@ export function setScanAvailability(app, available) {
 export function showScanLock(app) {
   if (app) {
     app.scanSourceLocked = true;
+    app.mistakeBank?.close?.();
+    app.mistakeBank?.refreshState?.();
+    app.checkup?.close?.();
+    app.checkup?.syncVisibility?.();
+    app.shareCard?.close?.();
+    app.consequencePlayer?.stop?.();
     app.reviewCommentary?.suspend();
     app.reviewOverview?.show('workbench');
     if (app.isPlaying) app.toggleAutoPlay();
@@ -109,6 +123,16 @@ export function showScanLock(app) {
     app.boardUI?.clearAnnotations(true);
     app.resetPositionPanel();
   }
+  const bankDialog = document.getElementById('mistake-bank-dialog');
+  if (bankDialog?.open) bankDialog.close();
+  const bankButton = document.getElementById('btn-mistake-bank');
+  if (bankButton) bankButton.hidden = true;
+  const checkupDialog = document.getElementById('checkup-dialog');
+  if (checkupDialog?.open) checkupDialog.close();
+  const checkupButton = document.getElementById('btn-intuition-checkup');
+  if (checkupButton) checkupButton.hidden = true;
+  const shareDialog = document.getElementById('share-card-dialog');
+  if (shareDialog?.open) shareDialog.close();
   document.querySelector(".studio-workspace")?.setAttribute("inert", "");
   setWorkspaceAvailable(false);
   document.getElementById("engine-candidate-lines")?.replaceChildren();

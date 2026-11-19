@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261118-summary-ai">
+  <link rel="stylesheet" href="workbench.css?v=20261119-v121">
 </head>
 <body class="diverge-ui">
   <script>
@@ -59,6 +59,8 @@
 
     <div class="studio-header-actions">
       <button type="button" class="btn-header review-overview-button" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-haspopup="dialog" hidden>复盘总览</button>
+      <button type="button" class="btn-header" id="btn-intuition-checkup" aria-controls="checkup-dialog" aria-haspopup="dialog" data-i18n="checkupBtn" hidden>10 盘体检</button>
+      <button type="button" class="btn-header" id="btn-mistake-bank" aria-controls="mistake-bank-dialog" aria-haspopup="dialog" hidden><span data-i18n="mistakeBankBtn">错题本</span><span class="bank-due-badge" id="mistake-bank-due-badge" hidden>0</span></button>
       <!-- Actions -->
       <button type="button" class="btn-header" id="btn-focus" data-i18n="focusMode" aria-controls="insight-column" aria-pressed="false">专注</button>
       <button type="button" class="btn-header btn-import-primary" id="btn-import-pgn" data-i18n="btnImportPgn">
@@ -125,6 +127,13 @@
         </div>
         <div id="board-status-text" data-i18n="startingPosition" style="font-size: 12px; font-weight: 600; color: var(--text-muted);">
           开局局面
+        </div>
+      </div>
+      <div id="consequence-bar" class="consequence-bar" hidden>
+        <span id="consequence-bar-text" role="status"></span>
+        <div class="consequence-bar-actions">
+          <button type="button" class="btn-header" id="btn-consequence-best" data-i18n="consequenceBestBtn" hidden>看引擎正解</button>
+          <button type="button" class="btn-header" id="btn-consequence-exit" data-i18n="consequenceExitBtn">返回局面</button>
         </div>
       </div>
 
@@ -247,6 +256,7 @@
         <p id="review-report-practice-status"></p>
         <div class="review-report-actions">
           <button type="button" class="btn-header btn-primary" id="review-report-practice"></button>
+          <button type="button" class="btn-header" id="review-report-save-bank" hidden></button>
         </div>
       </div>
 
@@ -361,12 +371,113 @@
     </div>
   </div>
 
+  <dialog class="mistake-bank-dialog" id="mistake-bank-dialog" aria-labelledby="mistake-bank-title">
+    <div class="bank-heading">
+      <h2 id="mistake-bank-title" data-i18n="mistakeBankTitle">直觉错题本</h2>
+      <button type="button" class="btn-header" id="btn-close-mistake-bank" data-i18n="btnClose">关闭</button>
+    </div>
+    <div class="bank-profile-bar">
+      <select id="bank-profile-select" class="btn-header" aria-label="Profile"></select>
+      <button type="button" class="btn-header" id="btn-bank-edit-profile" data-i18n="bankEditProfile">编辑常用名</button>
+      <button type="button" class="btn-header" id="btn-bank-new-profile" data-i18n="bankNewProfile">新建档案</button>
+      <button type="button" class="btn-header" id="btn-bank-delete-profile" data-i18n="bankDeleteProfile" hidden>删除档案</button>
+    </div>
+    <form id="bank-profile-form" class="bank-profile-form" hidden>
+      <input type="text" id="bank-profile-name" maxlength="40" required data-i18n-placeholder="bankProfileNamePlaceholder" placeholder="档案名称（如：孩子 / 自己）">
+      <input type="text" id="bank-profile-aliases" data-i18n-placeholder="bankProfileAliasesPlaceholder" placeholder="常用棋手名或平台 ID，用逗号分隔">
+      <div class="bank-profile-form-actions">
+        <button type="button" class="btn-header" id="btn-bank-profile-cancel" data-i18n="btnCancel">取消</button>
+        <button type="submit" class="btn-header btn-primary" data-i18n="bankSaveProfile">保存档案</button>
+      </div>
+    </form>
+    <p class="bank-status-note" id="bank-status-note" role="status"></p>
+    <div class="bank-toolbar">
+      <div class="bank-filters" role="group">
+        <button type="button" class="btn-header" data-bank-filter="due" aria-pressed="true" data-i18n="bankFilterDue">今日待练</button>
+        <button type="button" class="btn-header" data-bank-filter="all" aria-pressed="false" data-i18n="bankFilterAll">全部错题</button>
+        <button type="button" class="btn-header" data-bank-filter="mastered" aria-pressed="false" data-i18n="bankFilterMastered">已掌握</button>
+      </div>
+      <select id="bank-phase-filter" class="btn-header">
+        <option value="all" data-i18n="bankPhaseAll">全部阶段</option>
+        <option value="opening" data-i18n="bankPhase_opening">开局</option>
+        <option value="middlegame" data-i18n="bankPhase_middlegame">中局</option>
+        <option value="endgame" data-i18n="bankPhase_endgame">残局</option>
+      </select>
+    </div>
+    <div class="bank-primary-actions">
+      <button type="button" class="btn-header btn-primary" id="btn-bank-practice" disabled></button>
+      <button type="button" class="btn-header" id="btn-bank-export" data-i18n="bankExport">导出备份</button>
+      <button type="button" class="btn-header" id="btn-bank-import" data-i18n="bankImport">导入备份</button>
+      <input type="file" id="bank-import-file" accept=".json,application/json" hidden>
+    </div>
+    <div class="bank-trap-list" id="bank-trap-list"></div>
+  </dialog>
+
+  <dialog class="checkup-dialog" id="checkup-dialog" aria-labelledby="checkup-title">
+    <div class="bank-heading">
+      <h2 id="checkup-title" data-i18n="checkupTitle">最近 10 盘直觉体检</h2>
+      <button type="button" class="btn-header" id="btn-close-checkup" data-i18n="btnClose">关闭</button>
+    </div>
+    <div class="checkup-sources" role="group">
+      <button type="button" class="btn-header" data-checkup-source="lichess" aria-pressed="true">Lichess</button>
+      <button type="button" class="btn-header" data-checkup-source="chesscom" aria-pressed="false">Chess.com</button>
+      <button type="button" class="btn-header" data-checkup-source="local" aria-pressed="false" data-i18n="checkupSourceLocal">本地多盘 PGN</button>
+    </div>
+    <div id="checkup-username-row" class="checkup-input-row">
+      <input type="text" id="checkup-username" data-i18n-placeholder="checkupUsernamePlaceholder" placeholder="输入用户名（自动拉取最近 10 盘完赛标准棋）">
+    </div>
+    <div id="checkup-local-row" class="checkup-local-row" hidden>
+      <div class="checkup-local-actions">
+        <input type="file" id="checkup-pgn-files" accept=".pgn,.txt" multiple hidden>
+        <button type="button" class="btn-header" id="btn-checkup-files" data-i18n="checkupSelectFiles">选择多个 .pgn 文件</button>
+      </div>
+      <textarea id="checkup-pgn-text" rows="4" data-i18n-placeholder="checkupLocalPlaceholder" placeholder="或在此粘贴多盘 PGN 文本（最多 15 盘）"></textarea>
+    </div>
+    <div class="checkup-fetch-row">
+      <button type="button" class="btn-header btn-primary" id="btn-checkup-fetch" data-i18n="checkupFetchGames">拉取并体检</button>
+    </div>
+    <div id="checkup-confirm-box" class="checkup-confirm-box" hidden>
+      <p id="checkup-confirm-prompt"></p>
+      <div class="checkup-confirm-row">
+        <input type="text" id="checkup-confirm-name" data-i18n-placeholder="checkupConfirmNamePlaceholder" placeholder="确认统计的棋手名">
+        <button type="button" class="btn-header btn-primary" id="btn-checkup-start" data-i18n="checkupStart">开始体检</button>
+      </div>
+    </div>
+    <div id="checkup-progress-box" class="checkup-progress-box" hidden>
+      <span id="checkup-progress-text" role="status"></span>
+      <button type="button" class="btn-header" id="btn-checkup-cancel" data-i18n="btnCancel">取消</button>
+    </div>
+    <p id="checkup-status" class="bank-status-note" role="status"></p>
+    <div id="checkup-report-box" class="checkup-report-box" hidden></div>
+  </dialog>
+
+  <dialog class="share-card-dialog" id="share-card-dialog" aria-labelledby="share-card-title">
+    <div class="bank-heading">
+      <h2 id="share-card-title" data-i18n="shareCardTitle">单步分歧分享卡</h2>
+      <button type="button" class="btn-header" id="btn-close-share-card" data-i18n="btnClose">关闭</button>
+    </div>
+    <div class="share-card-toolbar">
+      <div class="share-card-formats" role="group">
+        <button type="button" class="btn-header" data-share-format="landscape" aria-pressed="true" data-i18n="shareCardLandscape">16:9 横版</button>
+        <button type="button" class="btn-header" data-share-format="portrait" aria-pressed="false" data-i18n="shareCardPortrait">3:4 竖版</button>
+      </div>
+      <div class="share-card-actions">
+        <button type="button" class="btn-header" id="btn-share-card-copy" data-i18n="shareCardCopy">复制图片</button>
+        <button type="button" class="btn-header btn-primary" id="btn-share-card-download" data-i18n="shareCardDownload">下载 PNG</button>
+      </div>
+    </div>
+    <div class="share-card-preview-wrap">
+      <canvas id="share-card-canvas"></canvas>
+    </div>
+    <p id="share-card-status" class="bank-status-note" role="status"></p>
+  </dialog>
+
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261118-recap-reset"></script>
+  <script type="module" src="analysis.js?v=20261118-v12-p2"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261118-recap-reset').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261118-v12-p2').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

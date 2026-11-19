@@ -1,26 +1,30 @@
-Diverge is a chess analysis and chessboard scanner extension that shows where Stockfish engine recommendations and Maia human move predictions disagree. Explore positions found in webpage images, or review completed Chess.com and Lichess games.
+Diverge is a free, open-source chess study tool. Analysis runs locally in your browser and locks automatically during live games.
+Review a finished Chess.com or Lichess game to see what Stockfish recommends and what Maia predicts a human would play.
 
-ENGINE ANALYSIS AND HUMAN INTUITION
-See which moves the engine recommends and which moves people at a selected rating are likely to choose. Compare position scores, candidate variations and move probabilities. Maia probabilities describe predicted human choices, not winning chances or a personal rating assessment.
+Game review with Stockfish 19 and Maia
+Open the Fischer sample and go to 17. Kf1. Black can take a rook on d1, Maia’s first choice at 1900 Elo with the 5M model. Stockfish 19 Lite prefers 17…Be6, the bishop move Fischer played. Try either line on the board. Blue arrows show the engine’s choice and amber arrows show Maia’s candidates. Maia’s percentages estimate how often a player at the selected rating would choose each move.
 
-SCAN A CHESS DIAGRAM ON A WEBPAGE
-Find a position in a post, article, forum or study image? Click Scan page in the toolbar popup. A packaged local recognition model automatically finds the board and opens an interactive position. If detection fails or you want a different board, select a crop. Check the pieces, orientation and side to move; correct the board before confirming.
+Free PGN analyzer and mistake practice
+Import a PGN, paste a game or open a supported public game link. Follow the evaluation chart to a turning point, then filter key moves by side and move quality. Replay your mistakes from the position before your move. Try a different continuation on the board, ask for a hint or reveal the line.
 
-The popup then provides SF19 Lite analysis with up to three legal engine lines. Click or drag pieces to explore a variation, draw thought arrows, switch the viewing angle and copy the FEN. Choose Explore engine vs intuition to open the current position in the 4chess web studio and compare it with Maia candidates. The scanner reads visible static images; images cannot recover a complete game history, and the side to move may need confirmation.
+Share a chess position as a PNG
+From a key move in the analysis studio, open Share card to show the position and compare Stockfish’s recommendation with the played move or Maia’s first choice. Copy the image or download a landscape or portrait PNG. The card is generated on your device.
 
-REVIEW COMPLETED GAMES
-On supported analysis boards and finished games, the floating panel compares human candidates with engine recommendations. Optional move arrows and a destination heatmap make the difference easier to see. Import a PGN file, paste PGN or FEN, or open a supported public game link in the studio. Full-game review adds accuracy scores, an evaluation chart, notation and key moves. A single diagram has no full-game accuracy score or game chart.
+Mistake Bank and Intuition Checkup in the web studio
+On 4chess.cc, save intuition traps to a local Mistake Bank and revisit them with spaced practice. Intuition Checkup looks for patterns across up to 10 recent finished Chess.com or Lichess games. You can also import a PGN with multiple games. Study profiles and reports stay in the browser.
 
-EXPLORE YOUR OWN IDEAS
-Play moves on the analysis board to create variations. Navigate with the keyboard, annotate with right-drag arrows and compare concise candidate lines. Settings include English and Simplified Chinese, light and dark themes, an intuition rating, and Maia-3 5M, 23M or 79M. The popup and floating panel use SF19 Lite; SF19 Standard is a separate web-studio option. Larger models need larger initial downloads and more computation time. Saved preferences are shared with the first-party studio in the same Chrome profile.
+Image to FEN
+Found a diagram in an article or a forum post? Open the extension and choose Scan page. Check the pieces and whose turn it is, then correct any square before confirming. Play a move on the recognized board, copy its FEN or open it in the studio. The scanner reads visible static diagrams. A diagram alone may leave castling and en passant rights unclear. You can edit the FEN to supply them.
 
-LOCAL COMPUTATION AND FAIR PLAY
-Recognition and engine inference run in your browser. Screenshots are not uploaded. Model weights download when needed and can be cached locally. Public game imports contact the chess platform, and opening the studio passes your chosen game or position in the browser. See the privacy policy for storage and network details.
+On-device AI commentary
+On supported Chrome installations, opt in to local AI commentary for an English game recap and notes on key moves. Chrome may need to download its model first. Standard review explanations are available without this option.
 
-For study and post-game review. Active games lock engine analysis, candidate moves, arrows and heatmaps. Unknown interactive game pages and live broadcasts stay locked. This is an independent project, with no official affiliation to the chess platforms or engine authors.
+Local analysis and fair play
+Diagram recognition, Stockfish analysis and Maia inference run in your browser. Screenshots stay on your device. Maia downloads the selected model on demand and caches it for reuse. Importing a public game link contacts the chess platform. During live games, Diverge disables analysis and clears candidate moves, arrows and heatmaps. Review unlocks when it detects a confirmed finish.
 
-Guide and credits: https://4chess.cc/guide/
-Analysis studio: https://4chess.cc/analysis/
-Privacy policy: https://4chess.cc/privacy/
-Open source and support: https://github.com/keluoke/4chess
-Maintainer: keluoke
+Diverge is an independent project. Chess.com and Lichess are supported platforms.
+
+Guide: https://4chess.cc/guide/
+Studio: https://4chess.cc/analysis/?lang=en
+Privacy: https://4chess.cc/privacy/
+Source and support: https://github.com/keluoke/4chess
