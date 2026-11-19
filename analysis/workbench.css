@@ -485,8 +485,16 @@ button,input,select,textarea { font-family:inherit; }
 .practice-context { display:none; }
 .practice-active .studio-header-actions { visibility:hidden; }
 .practice-active .board-column .eval-chart-wrapper { display:none; }
-.practice-active .study-annotations { visibility:hidden; }
 .practice-active #board-container[inert] { cursor:default; }
+.practice-trigger-note { margin:0 0 8px;font-size:12px;color:var(--brand-green);font-weight:500; }
+.practice-stepper { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:10px 0;padding:8px 10px;border-radius:12px;background:var(--dg-paper);border:1px solid var(--dg-line); }
+.practice-stepper[hidden],.practice-branch-note[hidden],.temp-analysis-banner[hidden],.bank-stats-bar[hidden] { display:none; }
+.practice-stepper-label { font-size:12px;color:var(--text-main);font-variant-numeric:tabular-nums; }
+.practice-stepper-btns { display:flex;gap:6px; }
+.practice-stepper-btns .btn-header { height:30px;padding:0 10px;font-size:12px;box-shadow:none;border-color:var(--dg-line); }
+.practice-branch-note { margin:0 0 8px;font-size:12px;color:var(--brand-gold); }
+.temp-analysis-banner { margin-bottom:10px;background:var(--dg-green-soft); }
+.temp-position-analysis .insight-column,.temp-position-analysis .divider-insight,.temp-position-analysis .notation-section,.temp-position-analysis .eval-chart-wrapper { display:none; }
 .practice-panel { background:var(--dg-surface);border:0;border-radius:24px;box-shadow:var(--dg-shadow);padding:clamp(18px,3vw,30px); }
 .practice-comparison:empty { display:none; }
 .practice-comparison { border-top:1px solid var(--dg-line);padding-top:8px; }
@@ -523,8 +531,11 @@ button,input,select,textarea { font-family:inherit; }
 .bank-profile-form { display:grid;gap:8px;padding:12px;margin-bottom:10px;border-radius:12px;background:var(--dg-paper); }
 .bank-profile-form input { width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--dg-line);border-radius:8px;background:var(--dg-surface);color:var(--text-main);font-size:13px; }
 .bank-profile-form-actions { display:flex;justify-content:flex-end;gap:8px; }
-.bank-status-note { margin:0 0 12px;font-size:12px;color:var(--text-muted); }
+.bank-status-note { margin:0 0 10px;font-size:12px;color:var(--text-muted); }
+.bank-stats-bar { display:grid;gap:4px;padding:10px 12px;margin-bottom:12px;border-radius:12px;background:var(--dg-paper);border:1px solid var(--dg-line);font-size:12px;color:var(--text-main); }
+.bank-stats-bar small { font-size:11px;color:var(--text-muted); }
 .bank-toolbar { justify-content:space-between;margin-bottom:12px; }
+.bank-selects { display:flex;gap:6px;flex-wrap:wrap; }
 .bank-filters { display:flex;gap:6px;flex-wrap:wrap; }
 .bank-filters button[aria-pressed="true"] { background:var(--dg-green-soft);color:var(--brand-green);border-color:transparent; }
 .bank-primary-actions { margin-bottom:14px; }

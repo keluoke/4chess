@@ -485,8 +485,19 @@ class AnalysisStudioApp {
       if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey || document.activeElement?.isContentEditable || document.activeElement?.closest('input, textarea, select, [role="textbox"]')) return;
       if (this.scanSourceLocked) return;
 
+      if (this.tempAnalysisFen) {
+        if (e.key === 'Escape') { e.preventDefault(); this.exitTemporaryPositionAnalysis(); }
+        else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.flipBoard(); }
+        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); this.el.btnSound?.click(); }
+        return;
+      }
+
       if (this.practice?.inProgress) {
         if (e.key === 'Escape') { e.preventDefault(); this.practice.returnToWorkbench(); }
+        else if (e.key === 'ArrowLeft' || e.key === 'j') { e.preventDefault(); this.practice.stepVariation(-1); }
+        else if (e.key === 'ArrowRight' || e.key === 'k') { e.preventDefault(); this.practice.stepVariation(1); }
+        else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); this.flipBoard(); }
+        else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); this.el.btnSound?.click(); }
         return;
       }
 
@@ -1140,6 +1151,11 @@ class AnalysisStudioApp {
   } = {}) {
     if (this.scanSourceLocked) return false;
     if (this.checkup?.dialog?.open) this.checkup.close();
+    this.tempAnalysisFen = null;
+    this.tempPositionReturn = null;
+    document.body.classList.remove('temp-position-analysis');
+    const tempBanner = document.getElementById('temp-analysis-banner');
+    if (tempBanner) tempBanner.hidden = true;
     this.checkupGame = null;
     this.consequencePlayer?.stop();
     this.reviewCommentary.reset();
@@ -1630,6 +1646,77 @@ class AnalysisStudioApp {
     if (this.practice.inProgress) this.reviewCommentary.cancelOverview();
   }
 
+  enterTemporaryPositionAnalysis(item, { returnTo = 'practice' } = {}) {
+    if (this.scanSourceLocked || !item?.fenBefore) return;
+    if (this.isPlaying) this.toggleAutoPlay();
+    this.consequencePlayer?.stop();
+    clearTimeout(this.resumeReviewTimer);
+    this.positionAnalysis.cancel();
+    const origin = returnTo === 'practice' ? null : this.capturePracticeOrigin();
+    this.tempPositionReturn = {
+      returnTo,
+      epoch: this.gameEpoch,
+      orientation: this.boardUI.orientation,
+      hasAnalysisInput: this.hasAnalysisInput,
+      isBranching: this.isBranching,
+      activeBranch: this.activeBranch,
+      branchFen: this.branchFen,
+      branchHistory: this.branchHistory ? [...this.branchHistory] : [],
+      savedBranchCount: this.savedBranches.length,
+      origin
+    };
+    if (returnTo === 'practice') this.practice?.suspendForTempAnalysis?.();
+    if (this.isBranching) {
+      this.isBranching = false;
+      document.body.classList.remove('exploring-branch');
+      if (this.el.branchBanner) this.el.branchBanner.style.display = 'none';
+    }
+    this.tempAnalysisFen = item.fenBefore;
+    document.body.classList.remove('empty-study');
+    document.body.classList.add('temp-position-analysis');
+    const intro = document.getElementById('empty-study-intro');
+    if (intro) intro.hidden = true;
+    const banner = document.getElementById('temp-analysis-banner');
+    const backBtn = document.getElementById('btn-temp-analysis-back');
+    if (banner) banner.hidden = false;
+    if (backBtn) {
+      backBtn.textContent = t(returnTo === 'practice' ? 'tempAnalysisBackPractice' : 'tempAnalysisBackBank');
+      backBtn.onclick = () => this.exitTemporaryPositionAnalysis();
+    }
+    this.boardUI.setOrientation(returnTo === 'practice' ? this.boardUI.orientation : (item.turn === 'b' ? 'black' : 'white'));
+    const trig = item.triggerMove?.from && item.triggerMove?.to ? { from: item.triggerMove.from, to: item.triggerMove.to } : null;
+    this.boardUI.setPosition(item.fenBefore, trig);
+    this.positionAnalysis.refresh();
+  }
+
+  exitTemporaryPositionAnalysis() {
+    const ret = this.tempPositionReturn;
+    this.tempAnalysisFen = null;
+    this.tempPositionReturn = null;
+    document.body.classList.remove('temp-position-analysis');
+    const banner = document.getElementById('temp-analysis-banner');
+    if (banner) banner.hidden = true;
+    this.positionAnalysis.cancel();
+    if (!ret || ret.epoch !== this.gameEpoch) return;
+    this.hasAnalysisInput = !!ret.hasAnalysisInput;
+    this.savedBranches.length = Math.min(this.savedBranches.length, ret.savedBranchCount ?? 0);
+    this.isBranching = !!ret.isBranching;
+    this.activeBranch = ret.activeBranch || null;
+    this.branchFen = ret.branchFen || null;
+    this.branchHistory = ret.branchHistory || [];
+    document.body.classList.toggle('exploring-branch', this.isBranching);
+    if (this.el.branchBanner) this.el.branchBanner.style.display = this.isBranching ? 'flex' : 'none';
+    this.renderStudyBranches();
+    this.syncBranchChart();
+    this.boardUI.setOrientation(ret.orientation);
+    if (ret.returnTo === 'practice' && this.practice?.suspended) {
+      this.practice.resumeFromTempAnalysis(ret.orientation);
+      return;
+    }
+    this.restorePracticeOrigin(ret.origin);
+    if (ret.returnTo === 'bank') this.mistakeBank?.open?.();
+  }
+
   capturePracticeOrigin() {
     const scrollAreas = [document.scrollingElement, ...document.querySelectorAll(
       '.analysis-column, .analysis-scroll, .insight-column, #move-notation-table')];
@@ -2038,7 +2125,7 @@ class AnalysisStudioApp {
     this.consequencePlayer?.stop();
     if (this.isPlaying) this.toggleAutoPlay();
     this.pauseWholeReview();
-    this.hasAnalysisInput = true;
+    if (!this.tempAnalysisFen) this.hasAnalysisInput = true;
     if (!this.isBranching) {
       this.activeBranch = { base: { ...context, history: [...context.history] }, anchor: this.currentPly, moves: [], cursor: 0, evaluations: new Map() };
       this.savedBranches.push(this.activeBranch);
@@ -2223,12 +2310,12 @@ class AnalysisStudioApp {
   }
 
   handleUserBoardMove(move, newFen) {
-    if (this.practice?.inProgress) {
-      if (this.practice.active) this.practice.submit(move, newFen);
+    if (!this.tempAnalysisFen && this.practice?.inProgress) {
+      if (this.practice.active) this.practice.handleBoardMove(move, newFen);
       return;
     }
     const next = this.positions[this.currentPly + (this.isReviewingMove ? 0 : 1)];
-    if (!this.isBranching && next?.uci === move.uci) {
+    if (!this.tempAnalysisFen && !this.isBranching && next?.uci === move.uci) {
       this.goToPly(this.currentPly + (this.isReviewingMove ? 0 : 1));
       return;
     }

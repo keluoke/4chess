@@ -12,6 +12,7 @@ import { t } from './i18n.js?v=20261118-summary-ai';
 export class MistakeBank {
   filter = 'due';
   phase = 'all';
+  sort = 'due';
   openGeneration = 0;
   savedIds = new Set();
   profiles = [];
@@ -38,6 +39,8 @@ export class MistakeBank {
     this.btnImport = document.getElementById('btn-bank-import');
     this.importInput = document.getElementById('bank-import-file');
     this.phaseSelect = document.getElementById('bank-phase-filter');
+    this.sortSelect = document.getElementById('bank-sort-filter');
+    this.statsEl = document.getElementById('bank-stats-bar');
     this.statusEl = document.getElementById('bank-status-note');
     this.listEl = document.getElementById('bank-trap-list');
     this.filterButtons = [...document.querySelectorAll('#mistake-bank-dialog [data-bank-filter]')];
@@ -133,6 +136,12 @@ export class MistakeBank {
         this.renderDialog();
       };
     }
+    if (this.sortSelect) {
+      this.sortSelect.onchange = () => {
+        this.sort = this.sortSelect.value || 'due';
+        this.renderDialog();
+      };
+    }
     if (this.btnPractice) {
       this.btnPractice.onclick = () => this.startDailyPractice();
     }
@@ -225,12 +234,19 @@ export class MistakeBank {
       Number.isFinite(move.verifiedExpectedScoreLoss);
   }
 
+  triggerMoveFor(move) {
+    if (!Number.isInteger(move?.ply) || move.ply <= 1) return null;
+    const prev = this.app.positions?.[move.ply - 1];
+    return prev?.from && prev?.to ? { from: prev.from, to: prev.to, san: prev.san || '' } : null;
+  }
+
   async saveMove(move, review) {
     if (!this.eligibleMove(move, review)) return null;
     await this.refreshState();
     const record = buildTrapRecord(move, review, {
       profileId: this.activeProfile.id,
-      source: this.currentMeta()
+      source: this.currentMeta(),
+      triggerMove: this.triggerMoveFor(move)
     });
     if (!record) return null;
     const outcome = await this.store.upsertTrap(record);
@@ -249,7 +265,8 @@ export class MistakeBank {
       if (!this.eligibleMove(move, review)) continue;
       const record = buildTrapRecord(move, review, {
         profileId: this.activeProfile.id,
-        source: this.currentMeta()
+        source: this.currentMeta(),
+        triggerMove: this.triggerMoveFor(move)
       });
       if (!record) continue;
       const outcome = await this.store.upsertTrap(record);
@@ -403,9 +420,34 @@ export class MistakeBank {
       btn.setAttribute('aria-pressed', String(btn.dataset.bankFilter === this.filter));
     }
     if (this.phaseSelect) this.phaseSelect.value = this.phase;
+    if (this.sortSelect) this.sortSelect.value = this.sort;
 
-    const traps = await this.store.listTraps(this.activeProfile.id, { filter: this.filter, phase: this.phase });
-    const dueCount = await this.store.countDue(this.activeProfile.id);
+    const traps = await this.store.listTraps(this.activeProfile.id, { filter: this.filter, phase: this.phase, sort: this.sort });
+    const stats = await this.store.getProfileStats(this.activeProfile.id);
+    const dueCount = stats.dueTotal;
+    const checkups = await this.store.listCheckups(this.activeProfile.id);
+
+    if (this.statsEl) {
+      this.statsEl.hidden = !stats.total && !checkups.length;
+      if (!this.statsEl.hidden) {
+        this.statsEl.replaceChildren();
+        const summaryLine = document.createElement('span');
+        summaryLine.textContent = t('bankStatsSummary', {
+          due: stats.dueTotal,
+          mastered: stats.masteredTotal,
+          opening: stats.dueByPhase.opening,
+          middlegame: stats.dueByPhase.middlegame,
+          endgame: stats.dueByPhase.endgame
+        });
+        this.statsEl.append(summaryLine);
+        const eloSeries = checkups.filter(c => Number.isFinite(c?.closestElo)).slice(0, 3).reverse().map(c => c.closestElo);
+        if (eloSeries.length) {
+          const trendLine = document.createElement('small');
+          trendLine.textContent = t('bankCheckupTrendNote', { trend: eloSeries.join(' → ') });
+          this.statsEl.append(trendLine);
+        }
+      }
+    }
 
     if (this.statusEl) {
       const aliases = this.activeProfile.aliases?.length
@@ -446,7 +488,6 @@ export class MistakeBank {
       meta.className = 'bank-trap-meta';
       const parts = [
         t(`bankPhase_${trap.phase || 'middlegame'}`),
-        Number.isFinite(trap.eslLoss) ? `-${trap.eslLoss.toFixed(1)}%` : '',
         this.formatDue(trap)
       ].filter(Boolean);
       meta.textContent = parts.join(' · ');
@@ -455,7 +496,11 @@ export class MistakeBank {
       const sub = document.createElement('p');
       sub.className = 'bank-trap-sub';
       const players = [trap.source?.white, trap.source?.black].filter(Boolean).join(' vs ');
-      sub.textContent = [players, trap.elo ? `Maia ${trap.elo}` : '', trap.srs?.streak ? t('bankStreak', { count: trap.srs.streak }) : ''].filter(Boolean).join(' · ');
+      const lossStr = Number.isFinite(trap.eslLoss) ? trap.eslLoss.toFixed(1) : null;
+      const temptation = Number.isFinite(trap.humanProb) && trap.elo && lossStr
+        ? t('bankTrapTemptation', { elo: trap.elo, prob: Math.round(trap.humanProb * 100), loss: lossStr })
+        : lossStr ? t('bankTrapLossOnly', { loss: lossStr }) : '';
+      sub.textContent = [temptation, players, trap.srs?.streak ? t('bankStreak', { count: trap.srs.streak }) : ''].filter(Boolean).join(' · ');
 
       const actions = document.createElement('div');
       actions.className = 'bank-trap-actions';
@@ -466,6 +511,16 @@ export class MistakeBank {
       btnRetry.textContent = t('retryMove');
       btnRetry.onclick = () => this.startPracticeQueue([trap], trap);
       actions.append(btnRetry);
+
+      const btnDual = document.createElement('button');
+      btnDual.type = 'button';
+      btnDual.className = 'btn-header';
+      btnDual.textContent = t('practiceDualEngine');
+      btnDual.onclick = () => {
+        this.close();
+        this.app.enterTemporaryPositionAnalysis?.(trap, { returnTo: 'bank' });
+      };
+      actions.append(btnDual);
 
       if (this.app.consequencePlayer?.canPlay(trap)) {
         const btnWatch = document.createElement('button');

@@ -381,7 +381,9 @@ export async function runIntuitionCheckup({
                     humanRawProbability: humanRawProb,
                     maiaTopSan: maiaTop?.san || null
                   };
-                  const trap = buildTrapRecord(enrichedMove, { elo }, { profileId, source: meta, now });
+                  const prevMove = mi > 0 ? positions[mi] : null;
+                  const triggerMove = prevMove?.from && prevMove?.to ? { from: prevMove.from, to: prevMove.to, san: prevMove.san || '' } : null;
+                  const trap = buildTrapRecord(enrichedMove, { elo }, { profileId, source: meta, triggerMove, now });
                   if (trap) {
                     gamePhaseTraps[trap.phase || detectPhase(enrichedMove)]++;
                     gameTraps.push(trap);

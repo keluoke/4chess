@@ -262,8 +262,111 @@ try {
   await flushReads();
   await openPromise2;
   assert.equal(dialogEl.open, false, 'Final scan revoke during async open() must keep mistake bank closed');
+  sixStore.listTraps = originalListTraps;
 
-  console.log('PASS offline bank practice: real bundled Stockfish WASM graded wrong + winning moves offline, 6th card retry, mid-open scan lock, origin restore and SRS.');
+  // 5. Post-answer unlock, free branch isolation, variation stepping, triggerMove highlight, sort:'loss' & stats
+  const trigTrap = buildTrapRecord({
+    ply: 41, moveNumber: 21, turn: 'w',
+    fenBefore, uci: 'g1f1', san: 'Kf1',
+    divergenceType: 'intuition_trap', divergenceStatus: 'confirmed',
+    verifiedBestUci: 'e1e8', verifiedBestSan: 'Re8#',
+    verifiedPlayedPv: ['g1f1', 'g7g6'], verifiedBestPv: ['e1e8'],
+    verifiedExpectedScoreLoss: 50, verifiedLossCp: 900, humanRawProbability: 0.25
+  }, { elo: 1500 }, { profileId: DEFAULT_PROFILE_ID, triggerMove: { from: 'g8', to: 'g7', san: 'Kg7' }, now });
+  assert.deepEqual(trigTrap.triggerMove, { from: 'g8', to: 'g7', san: 'Kg7' });
+
+  const lossSorted = await sixStore.listTraps(DEFAULT_PROFILE_ID, { filter: 'all', sort: 'loss', now: now + 1000 });
+  assert(lossSorted[0].eslLoss >= lossSorted[1].eslLoss, 'sort: loss orders highest eslLoss first');
+  const profileStats = await sixStore.getProfileStats(DEFAULT_PROFILE_ID, now + 1000);
+  assert.equal(profileStats.total, 6);
+  assert.equal(profileStats.dueTotal, 6);
+
+  let lastHighlight = null;
+  const stepApp = {
+    gameEpoch: 1,
+    positions: [],
+    scanSourceLocked: false,
+    stockfish: sf,
+    el: {
+      boardContainer: document.getElementById('board-container'),
+      boardStatusText: document.getElementById('board-status-text')
+    },
+    boardUI: {
+      setOrientation() {},
+      setPosition(fen, lastMove) { boardFen = fen; lastHighlight = lastMove || null; },
+      clearArrows() {}
+    },
+    positionAnalysis: { cancel() {}, clearOverlays() {} }
+  };
+  const stepPractice = new ReviewPractice(stepApp);
+  const stepRecorded = [];
+  stepPractice.start(trigTrap, {
+    queue: [trigTrap],
+    mode: 'bank',
+    onItemResult: (_item, status) => stepRecorded.push(status)
+  });
+  assert.deepEqual(lastHighlight, { from: 'g8', to: 'g7' }, 'Trigger move highlighted on question open');
+
+  const bWrong = new ChessBoard(fenBefore);
+  const mWrong = bWrong.getLegalMoves().find(m => m.uci === 'g1f1');
+  bWrong.makeMove(mWrong);
+  await stepPractice.handleBoardMove(mWrong, bWrong.getFen());
+  assert.equal(stepPractice.verdict, 'retryAgain');
+  assert.equal(stepApp.el.boardContainer.inert, false, 'Board unlocks after grading for variation/branching');
+
+  const countBeforeBranch = stepRecorded.length;
+  const bBranch = new ChessBoard(bWrong.getFen());
+  const mBranch = bBranch.getLegalMoves()[0];
+  bBranch.makeMove(mBranch);
+  await stepPractice.handleBoardMove(mBranch, bBranch.getFen());
+  assert.equal(stepRecorded.length, countBeforeBranch, 'Free exploration branch must not re-grade or write SRS');
+  assert.equal(stepPractice.verdict, 'retryAgain', 'Free exploration branch preserves original verdict');
+
+  stepPractice.stepVariation(-1);
+  assert.equal(stepPractice.branchMoves.length, 0, 'Stepping back from branch move 1 exits branch');
+
+  stepPractice.retry();
+  assert.deepEqual(lastHighlight, { from: 'g8', to: 'g7' }, 'Retry restores trigger move highlight');
+  await stepPractice.handleBoardMove(mWrong, bWrong.getFen());
+  await stepPractice.reveal();
+  assert.equal(stepPractice.revealed, true);
+  assert.equal(boardFen, fenBefore, 'Reveal after wrong move syncs board back to variation cursor 0 (fenBefore)');
+  assert.equal(stepPractice.controls.retry.hidden, false, 'Retry button stays visible after reveal');
+  // Simulate suspend & resume from temp dual-engine analysis at cursor 0
+  stepPractice.suspendForTempAnalysis();
+  boardFen = bWrong.getFen();
+  stepPractice.resumeFromTempAnalysis();
+  assert.equal(boardFen, fenBefore, 'Resuming at cursor 0 after reveal restores variationBaseFen, not stale wrong move');
+  stepPractice.stepVariation(1);
+  assert.equal(stepPractice.variationCursor, 1, 'ArrowRight / stepVariation(1) steps into engine best line');
+  stepPractice.retry();
+  const attemptsBeforeRetry = stepPractice.attempts;
+  const bBest = new ChessBoard(fenBefore);
+  const mBest = bBest.getLegalMoves().find(m => m.uci === 'e1e8');
+  bBest.makeMove(mBest);
+  await stepPractice.handleBoardMove(mBest, bBest.getFen());
+  assert.equal(stepPractice.attempts, attemptsBeforeRetry + 1, 'Move after retry() following reveal must trigger formal grading');
+  assert.equal(stepPractice.verdict, 'retryGood', 'Formal grading after reveal+retry evaluates Re8# as retryGood');
+  assert.equal(stepRecorded.at(-1), 'revealed', 'Playing best move after reveal keeps revealed status');
+
+  stepPractice.stop();
+
+  // 6. Legacy bank trap without triggerMove must not borrow unrelated game's positions; sort:'due' in 'all' filter
+  const legacyTrap = { ...trigTrap, triggerMove: null, ply: 2 };
+  stepApp.positions = [{ fen: 'start' }, { fen: 'after_e4', from: 'e2', to: 'e4', san: 'e4' }, { fen: 'after_e5', from: 'e7', to: 'e5', san: 'e5' }];
+  lastHighlight = 'unchanged';
+  stepPractice.start(legacyTrap, { queue: [legacyTrap], mode: 'bank' });
+  assert.equal(lastHighlight, null, 'Legacy bank trap without triggerMove must not borrow unrelated game move');
+  stepPractice.stop();
+
+  const dueSortStore = new StudyStore({ useIndexedDb: false });
+  await dueSortStore.init();
+  await dueSortStore.upsertTrap({ ...trigTrap, id: `${DEFAULT_PROFILE_ID}|${fenBefore}|g1f1`, createdAt: 100, srs: { ...trigTrap.srs, nextReviewAt: 100 } });
+  await dueSortStore.upsertTrap({ ...trigTrap, id: `${DEFAULT_PROFILE_ID}|${fenBefore}|g1h1`, fenBefore: `6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 1 1`, playedUci: 'g1h1', createdAt: 999999, srs: { ...trigTrap.srs, nextReviewAt: 999999 } });
+  const dueInAll = await dueSortStore.listTraps(DEFAULT_PROFILE_ID, { filter: 'all', sort: 'due', now: 500 });
+  assert.equal(dueInAll[0].srs.nextReviewAt, 100, 'sort: due orders earliest nextReviewAt first even in all filter');
+
+  console.log('PASS offline bank practice: real bundled Stockfish WASM graded wrong + winning moves offline, 6th card retry, mid-open scan lock, origin restore, post-answer branching, triggerMove, loss/due sort and SRS.');
 } finally {
   sf.reset();
   globalThis.fetch = originalFetch;

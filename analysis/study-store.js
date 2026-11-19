@@ -115,7 +115,7 @@ export function trapId(profileId, fenBefore, playedUci) {
   return `${profileId || DEFAULT_PROFILE_ID}|${fenBefore}|${playedUci}`;
 }
 
-export function buildTrapRecord(move, review, { profileId = DEFAULT_PROFILE_ID, source = {}, now = Date.now() } = {}) {
+export function buildTrapRecord(move, review, { profileId = DEFAULT_PROFILE_ID, source = {}, triggerMove = null, now = Date.now() } = {}) {
   if (!move?.fenBefore || !move?.uci) return null;
   if (move.divergenceType !== 'intuition_trap' || move.divergenceStatus !== 'confirmed') return null;
   if (!Number.isFinite(move.verifiedExpectedScoreLoss)) return null;
@@ -126,6 +126,9 @@ export function buildTrapRecord(move, review, { profileId = DEFAULT_PROFILE_ID, 
     ? move.verifiedPlayedPv.slice(0, 3) : [move.uci];
   const bestPv = Array.isArray(move.verifiedBestPv) && move.verifiedBestPv.length
     ? move.verifiedBestPv.slice(0, 3) : (bestUci ? [bestUci] : []);
+  const cleanTrigger = triggerMove?.from && triggerMove?.to
+    ? { from: String(triggerMove.from), to: String(triggerMove.to), san: String(triggerMove.san || '') }
+    : null;
   return {
     id: trapId(profileId, move.fenBefore, move.uci),
     profileId,
@@ -146,6 +149,7 @@ export function buildTrapRecord(move, review, { profileId = DEFAULT_PROFILE_ID, 
     bestPv,
     verifiedBestPv: bestPv,
     maiaTopSan: move.maiaTopSan || null,
+    triggerMove: cleanTrigger,
     divergenceType: 'intuition_trap',
     divergenceStatus: 'confirmed',
     elo: Number.isInteger(review?.elo) ? review.elo : null,
@@ -349,7 +353,7 @@ export class StudyStore {
     return true;
   }
 
-  async listTraps(profileId = this.getActiveProfileId(), { filter = 'all', phase = 'all', now = Date.now() } = {}) {
+  async listTraps(profileId = this.getActiveProfileId(), { filter = 'all', phase = 'all', sort = 'due', now = Date.now() } = {}) {
     await this.init();
     const all = (await this.getAll('traps')).filter(item => item.profileId === profileId);
     const filtered = all.filter(item => {
@@ -359,9 +363,26 @@ export class StudyStore {
       return true;
     });
     return filtered.sort((a, b) => {
-      if (filter === 'due') return (a.srs?.nextReviewAt ?? 0) - (b.srs?.nextReviewAt ?? 0) || (b.eslLoss ?? 0) - (a.eslLoss ?? 0);
-      return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      if (sort === 'loss') return (b.eslLoss ?? 0) - (a.eslLoss ?? 0) || (a.srs?.nextReviewAt ?? 0) - (b.srs?.nextReviewAt ?? 0);
+      return (a.srs?.nextReviewAt ?? 0) - (b.srs?.nextReviewAt ?? 0) || (b.eslLoss ?? 0) - (a.eslLoss ?? 0) || (b.createdAt ?? 0) - (a.createdAt ?? 0);
     });
+  }
+
+  async getProfileStats(profileId = this.getActiveProfileId(), now = Date.now()) {
+    await this.init();
+    const all = (await this.getAll('traps')).filter(item => item.profileId === profileId);
+    const dueByPhase = { opening: 0, middlegame: 0, endgame: 0 };
+    let dueTotal = 0;
+    let masteredTotal = 0;
+    for (const item of all) {
+      if ((item.srs?.nextReviewAt ?? 0) <= now) {
+        dueTotal++;
+        const p = item.phase || 'middlegame';
+        if (p in dueByPhase) dueByPhase[p]++;
+      }
+      if ((item.srs?.stage ?? 0) >= 2 && (item.srs?.streak ?? 0) >= 2) masteredTotal++;
+    }
+    return { total: all.length, dueTotal, masteredTotal, dueByPhase };
   }
 
   async countDue(profileId = this.getActiveProfileId(), now = Date.now()) {

@@ -80,6 +80,10 @@ export class PositionAnalysis {
 
   context() {
     const app = this.app;
+    if (app.tempAnalysisFen && !app.isBranching) {
+      const depth = Number(app.el.positionDepth.value);
+      return { fen: app.tempAnalysisFen, ply: 0, history: [], depth, elo: app.currentElo, epoch: app.gameEpoch, temp: true, key: `temp|${app.tempAnalysisFen}|${app.currentElo}|${depth}|${app.stockfish.engineKey}|${app.maiaEngine.modelKey}` };
+    }
     const ply = app.isBranching ? app.activeBranch.base.ply + app.activeBranch.cursor : app.isReviewingMove ? app.currentPly - 1 : app.currentPly;
     const fen = app.isBranching ? app.branchFen : app.positions[ply]?.fen;
     if (!fen) return null;
@@ -100,7 +104,7 @@ export class PositionAnalysis {
       this.cache.set(ctx.key, entry);
       if (this.cache.size > 64) this.cache.delete(this.cache.keys().next().value);
     }
-    if (!this.app.isBranching) {
+    if (!this.app.isBranching && !this.app.tempAnalysisFen) {
       const report = this.app.reviewResult;
       const next = report?.allMoves?.find(m => m.ply === ctx.ply + 1 && m.fenBefore === ctx.fen);
       const previous = report?.allMoves?.find(m => m.ply === ctx.ply && m.fenAfter === ctx.fen);
@@ -108,12 +112,12 @@ export class PositionAnalysis {
       if (!entry.prediction && report?.elo === ctx.elo && report.modelKey === this.app.maiaEngine.modelKey && next?._predMoves?.length) {
         entry.prediction = { moves: next._predMoves };
       }
-    } else {
+    } else if (this.app.isBranching) {
       entry.reportEvaluation = this.app.activeBranch.evaluations.get(this.app.branchEvaluationKey(ctx.fen, ctx.depth)) || null;
     }
     this.active = { ctx, entry, generation };
     this.render();
-    if (!calculate || (!this.app.moves.length && !this.app.hasAnalysisInput)) return;
+    if (!calculate || (!this.app.moves.length && !this.app.hasAnalysisInput && !this.app.tempAnalysisFen)) return;
     if (this.app.analyzer.isAnalyzing) return; // Full-game review owns the engine until completion.
     this.timer = setTimeout(() => { this.pending = this.compute(this.active); }, 140);
   }
@@ -275,16 +279,16 @@ export class PositionAnalysis {
     const maiaContainer = document.getElementById('maia-candidate-lines');
     engineContainer.replaceChildren(); maiaContainer.replaceChildren();
     const placeholder = (container, key) => { const el = document.createElement('div'); el.className = 'candidate-placeholder'; el.textContent = t(key); container.append(el); };
-    if (!lines.length) placeholder(engineContainer, terminal ? 'noLegalMoves' : entry.sfFailed ? 'positionUnavailable' : (!app.moves.length && !app.hasAnalysisInput) ? 'engineNotStarted' : pending);
+    if (!lines.length) placeholder(engineContainer, terminal ? 'noLegalMoves' : entry.sfFailed ? 'positionUnavailable' : (!app.moves.length && !app.hasAnalysisInput && !app.tempAnalysisFen) ? 'engineNotStarted' : pending);
     lines.forEach(line => this.renderRow(engineContainer, line.evaluation, line.variation, null, 'blue'));
     const valid = new Set(legal.map(m => m.uci));
     const moves = (entry.prediction?.moves || []).filter(m => valid.has(m.uci)).slice(0, 3);
-    if (!moves.length) placeholder(maiaContainer, terminal ? 'noLegalMoves' : entry.maiaFailed ? 'intuitionUnavailable' : (!app.moves.length && !app.hasAnalysisInput) ? 'engineNotStarted' : pending);
+    if (!moves.length) placeholder(maiaContainer, terminal ? 'noLegalMoves' : entry.maiaFailed ? 'intuitionUnavailable' : (!app.moves.length && !app.hasAnalysisInput && !app.tempAnalysisFen) ? 'engineNotStarted' : pending);
     moves.forEach(move => {
       const match = lines.find(line => line.uci === move.uci);
       this.renderRow(maiaContainer, match?.evaluation || entry.maiaEvaluations.get(move.uci), match?.variation || legalVariation(ctx.fen, [move.uci]), app.settings.probability && Number.isFinite(move.prob) ? `${move.prob.toFixed(1)}%` : null, 'gold');
     });
-    this.eloTrend?.update(this.current(this.active) && (app.moves.length || app.hasAnalysisInput) ? this.active : null, moves, lines);
+    this.eloTrend?.update(this.current(this.active) && (app.moves.length || app.hasAnalysisInput || app.tempAnalysisFen) ? this.active : null, moves, lines);
     this.renderOverlays(lines, moves);
   }
 
