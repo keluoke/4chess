@@ -398,9 +398,14 @@ button,input,select,textarea { font-family:inherit; }
 @media (pointer:coarse) { .review-count-table td button,.review-side-controls button,.practice-controls button,.review-move-jump { min-height:44px; } }
 .review-total-row th,.review-total-row td { border-top:1px solid var(--border-color);padding-top:4px;font-weight:650; }
 
-#btn-review-overview[hidden],.review-ready[hidden],.review-card-countdown[hidden],
+#btn-review-overview[hidden],.review-ready[hidden],.review-card-footer [hidden],
 .review-report-actions [hidden],.review-report-story [hidden],
 .review-report-practice [hidden],.practice-controls [hidden] { display:none; }
+#review-report-context[hidden] { display:none; }
+.review-observations { display:grid;gap:8px;margin-top:12px;color:var(--text-muted); }
+.review-observations h3,.review-observations p { margin:0;font-size:13px; }
+.review-observations > div { padding:10px;border:1px solid var(--dg-line);border-radius:8px; }
+.review-observations p { margin-top:6px; }
 .review-ready { align-self:flex-start;max-width:100%;white-space:normal;height:auto;min-height:38px;text-align:left; }
 .practice-active .insight-column,.practice-active .divider-insight { display:none!important; }
 
@@ -466,21 +471,15 @@ button,input,select,textarea { font-family:inherit; }
   padding:11px clamp(14px,4vw,32px);border-top:1px solid var(--dg-line);background:var(--dg-green-soft);
 }
 .review-card-footer button { margin-inline-start:auto;border-color:var(--dg-line);box-shadow:none; }
-.review-card-countdown { display:flex;align-items:center;gap:10px;color:var(--brand-green); }
-.review-card-countdown p { margin:0;font-size:clamp(14px,2.3vw,17px);font-weight:650;line-height:1.3; }
-.review-card-seconds {
-  display:grid;place-items:center;position:relative;isolation:isolate;flex:0 0 42px;width:42px;height:42px;
-  font-size:23px;font-weight:650;font-variant-numeric:tabular-nums;border-radius:50%;
-  background:conic-gradient(var(--brand-green) var(--review-clock-progress,100%),var(--dg-line) 0);
+#review-game-link-field {
+  min-width:0;flex:1 1 180px;padding:8px;border:1px solid var(--dg-line);border-radius:8px;
+  background:var(--dg-surface);color:var(--text-main);
 }
-.review-card-seconds::before { content:'';position:absolute;inset:3px;background:var(--dg-surface);border-radius:inherit;z-index:-1; }
 @media(max-width:480px) {
   .review-report-heading { margin-bottom:15px; }
   .review-report-practice [data-practice-side] { padding-inline:10px; }
   .review-card-footer { gap:6px 8px; }
   .review-card-footer button { padding-inline:10px; }
-  .review-card-countdown { gap:6px; }
-  .review-card-seconds { width:36px;height:36px;flex-basis:36px;font-size:19px; }
 }
 .practice-context { display:none; }
 .practice-active .studio-header-actions { visibility:hidden; }

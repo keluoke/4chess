@@ -105,10 +105,11 @@ try {
   await page.locator('#pgn-input').fill('[White "Whitehouse"]\n[Black "Blackwell"]\n[Result "1-0"]\n1. e4 e5 2. Nf3 f6 3. Nxe5 fxe5 4. Qh5+ Ke7 1-0');
   await page.locator('#btn-submit-pgn').click();
   await page.waitForFunction(() => window.__maiaStudioApp.reviewResult, null, { timeout: 60000 });
-  assert.equal(await page.locator('#review-summary').isVisible(), true);
+  assert.equal(await page.locator('#review-summary').isVisible(), false);
+  await page.locator('#review-ready').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.maiaEngine.isReady), false, 'Scores render before delayed Maia initializes');
   fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
-  await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/review-card-countdown.png') });
+  await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/review-card.png') });
   const coreAccuracy = await page.locator('#val-accuracy-white').textContent();
   await page.locator('#review-report-workbench').click();
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);

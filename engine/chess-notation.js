@@ -1,6 +1,58 @@
 // Shared Chess.com TCN and PGN serialization for background and studio.
 import { ChessBoard } from './chess-core.js';
 
+function pgnTags(pgn) {
+  const tag = /\s*\[([a-z][a-z0-9_]*)\s+"((?:\\[^\r\n]|[^"\\\r\n])*)"\s*\]/iy;
+  const tags = [];
+  while (true) {
+    const match = tag.exec(pgn);
+    if (!match) return tags;
+    tags.push({ key: match[1].toLowerCase(), value: match[2].replace(/\\(["\\])/g, '$1').trim(), raw: match[0].trim(), end: tag.lastIndex });
+  }
+}
+
+export function readPgnTags(pgn = '') {
+  return Object.fromEntries(pgnTags(pgn).map(({ key, value }) => [key, value]));
+}
+
+export function withPgnTermination(pgn, status) {
+  const reason = String(status?.name || status || '').toLowerCase();
+  const termination = ['resign', 'resigned', 'resignation'].includes(reason) ? 'Resignation'
+    : ['outoftime', 'timeout'].includes(reason) ? 'Time forfeit' : null;
+  if (!termination) return pgn;
+  const tags = pgnTags(pgn);
+  const existing = tags.find(({ key }) => key === 'termination');
+  if (existing && !/^(?:normal|\?)$/i.test(existing.value)) return pgn;
+  const header = tags.filter(({ key }) => key !== 'termination').map(({ raw }) => raw);
+  header.push('[Termination "' + termination + '"]');
+  return header.join('\n') + '\n\n' + pgn.slice(tags.at(-1)?.end || 0).trimStart();
+}
+
+export function parseStudioElo(value) {
+  const elo = Number(value);
+  return Number.isInteger(elo) && elo >= 600 && elo <= 2600 ? elo : null;
+}
+
+export function gameLinkInput(pgn, fallback = {}) {
+  const tags = pgnTags(pgn);
+  const values = Object.fromEntries(tags.map(({ key, value }) => [key, value]));
+  const fens = tags.filter(({ key }) => key === 'fen');
+  const standardStart = fens.length === 1 && fens[0].value.split(/\s+/).join(' ') === ChessBoard.INITIAL_FEN &&
+    tags.filter(({ key }) => key === 'variant').every(({ value }) => /^(standard|chess)$/i.test(value));
+  const header = tags.filter(({ key, value }) => key !== 'endtime' &&
+    !(standardStart && (key === 'fen' || key === 'setup' && value === '1'))).map(({ raw }) => raw);
+  const moves = pgn.slice(tags.at(-1)?.end || 0).trim();
+  const params = new URLSearchParams({ pgn: header.length ? `${header.join('\n')}\n\n${moves}` : moves });
+  const end = moves.replace(/\{[^}]*\}/g, '').trim().match(/(?:^|\s)(1-0|0-1|1\/2-1\/2)\s*$/)?.[1];
+  for (const key of ['white', 'black', 'result']) {
+    if (key === 'result' && end) continue;
+    if ((!values[key] || values[key] === '?' || (key === 'result' && values[key] === '*')) && fallback[key] && fallback[key] !== '*') {
+      params.set(key, fallback[key]);
+    }
+  }
+  return params;
+}
+
 export function decodeTcn(tcnString) {
     if (!tcnString || typeof tcnString !== 'string') return [];
     const ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?{~}(^)[_]@#$,./&-*++=";

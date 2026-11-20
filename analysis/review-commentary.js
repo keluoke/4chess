@@ -3,10 +3,37 @@ import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-
 import { BuiltInAi } from './built-in-ai.js?v=20261118-summary-ai';
 import { bindCommentary, COMMENTARY_SCHEMA } from './commentary-text.js?v=20261118-recap-reset';
 import { getLang, t } from './i18n.js?v=20261118-summary-ai';
+import { intuitionKind, isKeyMoment } from '../engine/review-policy.js?v=20261120-review';
 
 const PREFERENCE = 'diverge_review_commentary';
 const FINISHED = new Set(['1-0', '0-1', '1/2-1/2']);
 const PROMPT_REVISION = 2;
+
+export function turningPointWording(move, context, { facts, trigger, observation } = {}) {
+  if (!move) return '';
+  if (facts?.best) return t(trigger ? 'reviewLinkedTurning' : 'reviewVerifiedTurning', {
+    ...context, played: facts.played.san, best: facts.best.san, trigger
+  });
+  if (observation) return t('reviewObservationTurning', { ...context, played: move.san, best: move.bestSan });
+  const best = move.bestSan;
+  if (best && best !== '?' && best !== move.san) {
+    return t('reviewEngineTurning', { ...context, played: move.san, best });
+  }
+  return t('reviewLargestSwing', context);
+}
+
+function moveWording(move) {
+  if (!move || !isKeyMoment(move) || !move.bestSan || move.bestSan === '?') return '';
+  const kind = intuitionKind(move);
+  if (kind === 'trap') return '';
+  if (kind === 'beyond' && move.maiaTopSan && move.maiaTopSan !== move.bestSan && move.san === move.bestSan) {
+    return t('commentaryCompareChoices', { played: move.san, maia: move.maiaTopSan });
+  }
+  if (move.bestSan !== move.san && Number.isFinite(move.expectedScoreLoss) && move.expectedScoreLoss > 0) {
+    return t('commentaryEngineLoss', { played: move.san, best: move.bestSan, points: move.expectedScoreLoss.toFixed(1) });
+  }
+  return '';
+}
 
 function wording(facts) {
   const params = {
@@ -125,13 +152,16 @@ export class ReviewCommentary {
   }
 
   eligible(move, review) {
-    return !!review && this.allowed() && !review.isPartial && !review.engineOnly &&
-      FINISHED.has(this.app.el.metaResult.textContent) && move?.divergenceType === 'intuition_trap' &&
+    return this.finishedReview(review) && !review.engineOnly && move?.divergenceType === 'intuition_trap' &&
       move.divergenceStatus === 'confirmed' && Number.isFinite(move.verifiedExpectedScoreLoss);
   }
 
+  finishedReview(review) {
+    return !!review && this.allowed() && !review.isPartial && FINISHED.has(this.app.el.metaResult.textContent);
+  }
+
   addCardAction(card, move, review) {
-    if (!this.eligible(move, review)) return;
+    if (!this.finishedReview(review) || !this.eligible(move, review) && !moveWording(move)) return;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn-header review-commentary-action';
@@ -147,9 +177,10 @@ export class ReviewCommentary {
 
   render(panel, move, review) {
     this.clearContext();
-    if (this.app.isBranching || this.app.practice?.inProgress || !this.eligible(move, review)) return;
-    const facts = intuitionTrapFacts(move, review);
-    if (!facts) return;
+    if (this.app.isBranching || this.app.practice?.inProgress || !this.finishedReview(review)) return;
+    const facts = this.eligible(move, review) ? intuitionTrapFacts(move, review) : null;
+    const template = facts ? '' : moveWording(move);
+    if (!facts && !template) return;
 
     const section = document.createElement('section');
     section.id = 'review-commentary';
@@ -162,6 +193,11 @@ export class ReviewCommentary {
     section.append(heading, body, source);
     panel.append(section);
 
+    if (template) {
+      this.context = { section, done: true };
+      this.display({ body, source }, template, false);
+      return;
+    }
     const { fallback, playedAction, replyAction } = wording(facts);
     const key = JSON.stringify([PROMPT_REVISION, getLang(), move.fenBefore, move.uci, review.engineKey, review.modelKey, facts]);
     const cached = this.modelAllowed() ? this.cache.get(key) : null;
@@ -246,12 +282,12 @@ export class ReviewCommentary {
     if (this.cache.size > 40) this.cache.delete(this.cache.keys().next().value);
   }
 
-  renderOverview(review, fallback, bindings) {
+  renderOverview(review, fallback, bindings, { deterministic = false } = {}) {
     const key = JSON.stringify([PROMPT_REVISION, 'overview', fallback, bindings]);
     if (this.overview?.review === review && this.overview.key === key) return;
     this.clearOverview();
     this.reportStory.textContent = fallback;
-    if (!this.modelAllowed() || review.isPartial || !bindings.result) return;
+    if (deterministic || !this.modelAllowed() || review.isPartial || !bindings.result) return;
     const context = this.overview = {
       key, review, epoch: this.app.gameEpoch, body: this.reportStory, source: this.reportSource, fallback, bindings
     };

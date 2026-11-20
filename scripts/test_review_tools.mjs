@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { coreTurningPoints, expectedScore, isKeyMoment, moveQuality, positiveIntuition, qualifiesTrap, retryVerdict, selectReviewMoves } from '../engine/review-policy.js';
+import { canPractice, coreTurningPoints, expectedScore, isKeyMoment, moveQuality, positiveIntuition, qualifiesTrap, retryVerdict, selectReviewMoves, selectReviewObservations } from '../engine/review-policy.js';
 import { ReviewPractice } from '../analysis/review-practice.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { ChessBoard } from '../engine/chess-core.js';
+import { gameLinkInput, readPgnTags, withPgnTermination } from '../engine/chess-notation.js';
 import { JSDOM } from 'jsdom';
 function scored(ply, before, after, extra = {}) {
   const lossCp = Math.max(0, before - after);
@@ -22,6 +23,35 @@ const order = [conversion, balanced, scored(3, 0, 0, { divergenceType: 'precise_
 assert.deepEqual(selectReviewMoves(order).map(move => move.ply), [2, 4, 5, 6]);
 assert.deepEqual([...coreTurningPoints(order)], [6, 5, 4]);
 assert.deepEqual(selectReviewMoves(order, 'all', 'precise').map(move => move.ply), [3]);
+const narrow = [2, 4, 6, 10].map((ply, i) => scored(ply, 22, -10 - i, {
+  san: 'Nf6', bestSan: 'd5', fenBefore: ChessBoard.INITIAL_FEN
+}));
+const evaluations = Array.from({ length: 11 }, () => ({ scoreCp: 10, pv: ['d7d5', 'c2c4'] }));
+evaluations[9] = { ...evaluations[9], isBound: true };
+assert.deepEqual(selectReviewMoves(narrow, 'b'), []);
+const observations = selectReviewObservations(narrow, 'b', evaluations);
+assert.deepEqual(observations.map(move => move.ply), [6, 2], 'Observations skip bounded scores and avoid adjacent suggestions');
+assert(observations.every(move => !canPractice(move)));
+assert.deepEqual(selectReviewObservations([...narrow, small, big], 'b', evaluations), []);
+assert.deepEqual(selectReviewObservations(narrow, 'w', evaluations), []);
+
+const start = ChessBoard.INITIAL_FEN;
+const sharePgn = '[White "A \\"quoted\\" 100%20"]\n[Black "B"]\n[Result "1-0"]\n[ECO "A80"]\n[TimeControl "180+2"]\n'
+  + '[FEN "' + start + '"]\n[SetUp "1"]\n[EndTime "12:34:56"]\n\n1. d4 f5 {[%clk 0:02:19]} 1-0';
+const compactLink = gameLinkInput(sharePgn, { white: 'A', black: 'B', result: '1-0' });
+assert.deepEqual([...compactLink.keys()], ['pgn']);
+const compactPgn = compactLink.get('pgn');
+assert.deepEqual(readPgnTags(compactPgn), { white: 'A "quoted" 100%20', black: 'B', result: '1-0', eco: 'A80', timecontrol: '180+2' });
+assert.match(compactPgn, /\[%clk 0:02:19\]/);
+assert.deepEqual(GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(compactPgn)).map(pos => pos.fen),
+  GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(sharePgn)).map(pos => pos.fen));
+for (const input of [sharePgn.replace(' w KQkq - 0 1', ' w KQkq - 3 4'), '[Variant "Chess960"]\n' + sharePgn]) {
+  assert.equal(readPgnTags(gameLinkInput(input).get('pgn')).setup, '1');
+  assert.ok(readPgnTags(gameLinkInput(input).get('pgn')).fen);
+}
+assert.equal(readPgnTags(withPgnTermination('[Termination "Normal"]\n\n1. d4 f5 1-0', 'resign')).termination, 'Resignation');
+assert.equal(readPgnTags(withPgnTermination('[Termination "Black won by checkmate"]\n\n1. d4 f5 0-1', 'resign')).termination, 'Black won by checkmate');
+
 const evidence = { lossCp: 0, maiaAdvantageCp: 90, maiaESL: 8.2, probability: .08, maiaProbability: .35, stableBest: true };
 assert.equal(positiveIntuition(evidence), 'beyond_intuition');
 assert.equal(positiveIntuition({ ...evidence, lossCp: 12, stableBest: false, maiaAdvantageCp: 29, maiaESL: 2.6, probability: .21 }), 'precise_intuition');

@@ -2,13 +2,13 @@ import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-fi
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261118-summary-ai';
 import { ReviewExplorer } from './review-explorer.js?v=20261118-summary-ai';
-import { ReviewOverview } from './review-overview.js?v=20261118-v12-p0';
-import { ReviewCommentary } from './review-commentary.js?v=20261118-recap-reset';
+import { ReviewOverview } from './review-overview.js?v=20261120-review';
+import { ReviewCommentary } from './review-commentary.js?v=20261120-review';
 import { ConsequencePlayer } from './consequence-player.js?v=20261118-v12-p0';
 import { MistakeBank } from './mistake-bank.js?v=20261118-v12-p0-fix2';
 import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261119-checkup';
 import { ShareCardModal } from './share-card.js?v=20261118-v12-p2';
-import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS } from '../engine/review-policy.js?v=20261117-review-policy';
+import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
 import { ReviewPractice } from './review-practice.js?v=20261118-v12-p0';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-summary-ai';
 /**
@@ -28,6 +28,10 @@ import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
 import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261118-summary-ai';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
+import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
+
+const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource'];
+const STUDIO_SESSION = 'divergeStudioSession';
 
 const POSITION_TOGGLES = [
   ['setting-maia-arrows', 'maiaArrows', 'showArrows'],
@@ -121,6 +125,9 @@ class AnalysisStudioApp {
       metaBlack: document.getElementById('meta-black'),
       metaResult: document.getElementById('meta-result'),
       eloSelector: document.getElementById('elo-selector'),
+      eloHint: document.getElementById('studio-elo-hint'),
+      copyGameLink: document.getElementById('review-copy-game-link'),
+      gameLinkField: document.getElementById('review-game-link-field'),
       dotMaia: document.getElementById('dot-maia'),
       dotSf: document.getElementById('dot-sf'),
       btnImportPgn: document.getElementById('btn-import-pgn'),
@@ -270,10 +277,15 @@ class AnalysisStudioApp {
     this.boardUI.flip();
     document.getElementById('setting-orientation').value = this.boardUI.orientation;
     this.positionAnalysis.render();
+    if (this.sessionOrientation) {
+      this.sessionOrientation = this.boardUI.orientation;
+      this.rememberSession();
+    }
     savePreferences({ studio_orientation: this.boardUI.orientation });
   }
 
   bindEvents() {
+    this.el.copyGameLink.onclick = () => this.copyGameLink();
     for (const id of ['engine-edition', 'intuition-edition']) {
       document.getElementById(id).addEventListener('change', () => this.changeEngineVersions());
     }
@@ -287,7 +299,11 @@ class AnalysisStudioApp {
 
     // Elo selector
     this.el.eloSelector.addEventListener('change', (e) => {
-      this.currentElo = parseInt(e.target.value, 10);
+      const elo = parseStudioElo(e.target.value);
+      if (!elo) return;
+      this.sessionElo = this.hasAnalysisInput ? { value: elo, explicit: true } : null;
+      this.setSessionElo(elo);
+      this.rememberSession();
       savePreferences({ defaultElo: this.currentElo });
       try {
         localStorage.setItem('maia3_target_elo', String(this.currentElo));
@@ -353,6 +369,10 @@ class AnalysisStudioApp {
     }
     document.getElementById('setting-orientation').addEventListener('change', event => {
       this.boardUI.setOrientation(event.target.value);
+      if (this.sessionOrientation) {
+        this.sessionOrientation = event.target.value;
+        this.rememberSession();
+      }
       savePreferences({ studio_orientation: event.target.value });
       this.positionAnalysis.render();
     });
@@ -527,6 +547,7 @@ class AnalysisStudioApp {
   }
 
   refreshAfterLanguageChange() {
+    this.renderEloHint();
     this.intuitionReview?.render();
     this.reviewCommentary?.sync();
     this.mistakeBank?.refreshState?.();
@@ -678,10 +699,12 @@ class AnalysisStudioApp {
 
   handleFileUpload(file) {
     if (!file) return;
+    const generation = this.importGeneration = (this.importGeneration || 0) + 1;
+    this.importController?.abort();
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result;
-      if (typeof content === 'string') {
+      if (generation === this.importGeneration && typeof content === 'string') {
         this.smartLoadInput(content, file.name);
       }
     };
@@ -711,13 +734,13 @@ class AnalysisStudioApp {
     }
   }
 
-  async smartLoadInput(input, sourceName = '') {
+  async smartLoadInput(input, sourceName = '', options = {}) {
     if (!input || typeof input !== 'string') return false;
     const generation = this.importGeneration = (this.importGeneration || 0) + 1;
     this.importController?.abort();
     const controller = this.importController = new AbortController();
     const current = () => generation === this.importGeneration && !controller.signal.aborted;
-    const commit = data => current() && this.startNewSession(data);
+    const commit = data => current() && this.startNewSession({ ...options, ...data });
     const text = input.trim();
     if (!text) return false;
 
@@ -729,6 +752,7 @@ class AnalysisStudioApp {
         white: t('freeAnalysisBoard'),
         black: 'FEN',
         result: '*',
+        positionInput: true,
         autoReview: false
       });
       if (ok) {
@@ -738,7 +762,8 @@ class AnalysisStudioApp {
     }
 
     // 4. Default: Standard PGN text
-    if (text.includes('1.') || text.includes('[Event')) {
+    if (!/^(?:https?:\/\/|(?:www\.)?(?:lichess\.org|chess\.com)\/)/i.test(text) &&
+        (text.includes('1.') || /^\s*(?:\[|\d+\.)/.test(text))) {
       const v = FairPlayGuard.verifyConcludedGame(text);
       if (!v.ok) {
         this.analyzer.cancel();
@@ -775,9 +800,8 @@ class AnalysisStudioApp {
             this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
             return false;
           }
-          if (data.pgn && data.pgn.includes('1.')) {
+          if (data.pgn && commit({ pgn: withPgnTermination(data.pgn, data.status), checkupSource: 'lichess', landAtEnd: true })) {
             this.showToast(t('toastLoadedLichess', { gameId }));
-            commit({ pgn: data.pgn, checkupSource: 'lichess', autoReview: true });
             return true;
           }
         }
@@ -860,9 +884,8 @@ class AnalysisStudioApp {
 
         // 1. Direct PGN string
         let pgn = gameObj.pgn || fetchedData.pgn;
-        if (pgn && typeof pgn === 'string' && pgn.includes('1.')) {
+        if (typeof pgn === 'string' && pgn && commit({ pgn: withPgnTermination(pgn, gameObj.status), checkupSource: 'chesscom', landAtEnd: true })) {
           this.showToast(t('toastLoadedChesscom', { gameId }));
-          commit({ pgn, checkupSource: 'chesscom', autoReview: true });
           return true;
         }
 
@@ -870,7 +893,7 @@ class AnalysisStudioApp {
         const moveList = gameObj.moveList || fetchedData.moveList;
         if (moveList) {
           const moves = GameAnalyzer.tcnToSanMoves(moveList);
-          if (moves && moves.length > 0) {
+          if (moves?.length && moves.length * 2 === moveList.length) {
             const headers = gameObj.pgnHeaders || fetchedData.pgnHeaders || {};
             const white = headers.White || fetchedData.players?.bottom?.username || gameObj.whiteUser || 'White';
             const black = headers.Black || fetchedData.players?.top?.username || gameObj.blackUser || 'Black';
@@ -881,17 +904,18 @@ class AnalysisStudioApp {
               Black: black,
               Result: result
             });
-            this.showToast(t('toastLoadedChesscom', { gameId }));
-            commit({
-              pgn: generatedPgn,
+            if (commit({
+              pgn: withPgnTermination(generatedPgn, gameObj.status),
               moves,
               white,
               black,
               result,
               checkupSource: 'chesscom',
-              autoReview: true
-            });
-            return true;
+              landAtEnd: true
+            })) {
+              this.showToast(t('toastLoadedChesscom', { gameId }));
+              return true;
+            }
           }
         }
       }
@@ -905,150 +929,69 @@ class AnalysisStudioApp {
   }
 
   async loadInitialGame() {
-    let loaded = false;
-    let openingOrientation = null;
-
-    // 1. Try URL parameters (Hash # or Search ?)
+    const url = new URL(location.href);
+    const hash = new URLSearchParams(url.hash.slice(1));
+    const value = key => hash.get(key) || url.searchParams.get(key);
+    const orientation = value('orientation');
+    const elo = parseStudioElo(value('elo'));
+    const fallbackElo = parseStudioElo(value('fallbackElo'));
+    const checkupSource = value('checkupSource');
+    const generation = this.importGeneration;
+    const text = value('text');
+    let pgn = value('pgn') || (text && !/^https?(?::|%3a)/i.test(text) ? text : null);
+    const fen = value('fen');
+    const sourceUrl = value('url') || (text && /^https?(?::|%3a)/i.test(text) ? text : null);
+    const empty = value('empty') === '1';
+    const external = { orientation, elo, fallbackElo, checkupSource, landAtEnd: true };
     try {
-      const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
-      const hashParams = new URLSearchParams(hash);
-      const searchParams = new URLSearchParams(window.location.search);
-
-      const langParam = hashParams.get('lang') || searchParams.get('lang');
-      if (langParam === 'zh' || langParam === 'en') {
-        setLanguage(langParam);
-      }
-      const orientation = hashParams.get('orientation') || searchParams.get('orientation');
-      if (['white', 'black'].includes(orientation)) {
-        openingOrientation = orientation;
-        this.boardUI.setOrientation(orientation);
-        document.getElementById('setting-orientation').value = orientation;
+      if (fen) {
+        if (this.startNewSession({ ...external, fen, positionInput: true, autoReview: false })) return;
+        this.showToast(t('errorIllegalFen'));
       }
 
-      // Rating must be applied before the FEN branch starts its analysis session.
-      const eloParam = hashParams.get('elo') || searchParams.get('elo');
-      const parsedElo = Number(eloParam);
-      if (Number.isInteger(parsedElo) && parsedElo >= 600 && parsedElo <= 2600) {
-        this.currentElo = parsedElo;
-        if (![...this.el.eloSelector.options].some(option => option.value === String(parsedElo))) {
-          this.el.eloSelector.add(new Option(String(parsedElo), String(parsedElo)));
+      if (pgn) {
+        // Older links sometimes encoded the entire PGN twice. Preserve percent escapes in actual PGN text.
+        if (/^(?:%0[ad]|%20)*(?:%5b|\d+\.(?:%20|%0a))/i.test(pgn)) pgn = decodeURIComponent(pgn);
+        const conclusion = FairPlayGuard.verifyConcludedGame(pgn);
+        if (!conclusion.ok) this.showToast(t('toastFairPlay', { reason: conclusion.reason }), 7000);
+        else if (this.startNewSession({ ...external, pgn, white: value('white'), black: value('black'), result: conclusion.result })) return;
+      }
+
+      if (sourceUrl) {
+        const loading = this.smartLoadInput(/^https?%3a/i.test(sourceUrl) ? decodeURIComponent(sourceUrl) : sourceUrl, '', external);
+        const sourceGeneration = this.importGeneration;
+        if (await loading || sourceGeneration !== this.importGeneration) return;
+      }
+
+      if (!fen && !pgn && !sourceUrl && !empty) {
+        const session = hash.has('scan') ? null : history.state?.[STUDIO_SESSION];
+        if (session) {
+          const { input, orientation: savedOrientation, elo: savedElo, fallbackElo: savedFallback, ratingMatch } = session;
+          const restored = { ...input, orientation: orientation || savedOrientation, elo: elo || savedElo, fallbackElo: fallbackElo || savedFallback, ratingMatch };
+          if (restored.moves && restored.startFen) restored.moves.startFen = restored.startFen;
+          if ((restored.fen || FairPlayGuard.verifyConcludedGame(restored).ok) && this.startNewSession(restored)) return;
         }
-        this.el.eloSelector.value = String(parsedElo);
-      }
 
-      const fenParam = hashParams.get('fen') || searchParams.get('fen');
-      if (fenParam) {
-        const validBoard = new ChessBoard();
-        if (!validBoard.load(fenParam)) throw new Error('Invalid FEN');
-        this.startNewSession({ fen: validBoard.getFen(), white: t('freeAnalysisBoard'), black: 'FEN', result: '*', autoReview: false, positionInput: true });
-        this.positionAnalysis.renderGauge(null);
-        return;
-      }
-      const textParam = hashParams.get('text') || searchParams.get('text');
-      const pgnParam = hashParams.get('pgn') || searchParams.get('pgn') || (textParam && (textParam.includes('1.') || textParam.includes('[Event')) ? textParam : null);
-      const urlParam = hashParams.get('url') || searchParams.get('url') || (textParam && textParam.startsWith('http') ? textParam : null);
-
-      const whiteParam = hashParams.get('white') || searchParams.get('white');
-      const blackParam = hashParams.get('black') || searchParams.get('black');
-      const resultParam = hashParams.get('result') || searchParams.get('result');
-
-      if (pgnParam) {
-        let cleanPgn = pgnParam;
-        if (cleanPgn.includes('%')) {
-          try {
-            const reDecoded = decodeURIComponent(cleanPgn);
-            if (reDecoded) cleanPgn = reDecoded;
-          } catch (e) {}
-        }
-        if (cleanPgn) {
-          const v = FairPlayGuard.verifyConcludedGame(cleanPgn);
-          if (!v.ok && v.isLive) {
-            this.showToast(t('toastFairPlay', { reason: v.reason }), 7000);
-          } else {
-            this.startNewSession({
-              pgn: cleanPgn,
-              white: whiteParam,
-              black: blackParam,
-              result: resultParam,
-              checkupSource: hashParams.get('checkupSource'),
-              checkupOrientation: openingOrientation,
-              autoReview: true
-            });
-            loaded = true;
-            return;
+        if (typeof chrome !== 'undefined' && chrome.storage?.local && !hash.has('scan')) {
+          const stored = await new Promise(resolve => chrome.storage.local.get(['active_analysis_game', 'defaultElo'], resolve));
+          if (generation !== this.importGeneration) return;
+          const game = stored?.active_analysis_game;
+          if (game && (game.moves?.length > 0 || game.pgn)) {
+            const conclusion = FairPlayGuard.verifyConcludedGame(game);
+            if (!conclusion.ok) this.showToast(t('toastFairPlay', { reason: conclusion.reason }), 7000);
+            else if (this.startNewSession({
+              ...game, ...external, orientation: orientation || game.orientation, result: conclusion.result,
+              fallbackElo: fallbackElo || parseStudioElo(stored.defaultElo), autoReview: !game.cachedReview
+            })) return;
           }
         }
       }
-
-      if (urlParam) {
-        let cleanUrl = urlParam;
-        if (cleanUrl.includes('%')) {
-          try {
-            const reDecoded = decodeURIComponent(cleanUrl);
-            if (reDecoded) cleanUrl = reDecoded;
-          } catch (e) {}
-        }
-        if (cleanUrl) {
-          const ok = await this.smartLoadInput(cleanUrl);
-          if (ok) {
-            loaded = true;
-            return;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[Analysis Studio] Error parsing URL parameters:', e);
+    } catch (error) {
+      console.warn('[Analysis Studio] Could not load the opening input:', error);
     }
 
-    // 2. Try reading from chrome.storage.local (when opened from Chrome extension)
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      try {
-        const stored = await new Promise(res => {
-          chrome.storage.local.get(['active_analysis_game', 'defaultElo'], res);
-        });
-
-        if (stored?.defaultElo) {
-          this.currentElo = stored.defaultElo;
-          if (this.el.eloSelector) this.el.eloSelector.value = String(this.currentElo);
-        }
-
-        const game = stored?.active_analysis_game;
-        if (game && (game.moves?.length > 0 || game.pgn)) {
-          const v = FairPlayGuard.verifyConcludedGame(game);
-          if (!v.ok && v.isLive) {
-            this.showToast(t('toastFairPlay', { reason: v.reason }), 7000);
-          } else {
-            if (!openingOrientation && ['white', 'black'].includes(game.orientation)) {
-              this.boardUI.setOrientation(game.orientation);
-              document.getElementById('setting-orientation').value = game.orientation;
-            }
-            this.startNewSession({
-              pgn: game.pgn,
-              moves: game.moves,
-              white: game.white,
-              black: game.black,
-              result: game.result,
-              checkupOrientation: openingOrientation || game.orientation,
-              cachedReview: game.cachedReview,
-              autoReview: !game.cachedReview
-            });
-            loaded = true;
-          }
-        }
-      } catch (err) {
-        console.warn('[Analysis Studio] Storage load error:', err);
-      }
-    }
-
-    // 3. Clean On-Demand Initial State (Do NOT auto-burn CPU or download weights on empty visits!)
-    if (!loaded) {
-      this.startNewSession({
-        fen: ChessBoard.INITIAL_FEN,
-        white: t('whitePlayer').replace('⚪ ', ''),
-        black: t('blackPlayer').replace('⚫ ', ''),
-        result: '*',
-        autoReview: false
-      });
+    if (!this.positions.length) {
+      this.startNewSession({ fen: ChessBoard.INITIAL_FEN, orientation, elo, fallbackElo, autoReview: false });
       if (this.el.boardStatusText) {
         this.el.boardStatusText.textContent = t('startingPosition');
       }
@@ -1147,9 +1090,49 @@ class AnalysisStudioApp {
     autoReview = true,
     positionInput = false,
     checkupSource = null,
-    checkupOrientation = null
+    checkupOrientation = null,
+    orientation = null,
+    elo = null,
+    fallbackElo = null,
+    ratingMatch = null,
+    landAtEnd = false
   } = {}) {
     if (this.scanSourceLocked) return false;
+    const positionOnly = !!fen && !pgn && !moves?.length;
+    let positionBoard, parsedMoves, positions;
+    if (positionOnly) {
+      positionBoard = new ChessBoard();
+      if (!positionBoard.load(fen)) return false;
+    } else {
+      parsedMoves = moves?.length ? moves : GameAnalyzer.parsePgn(pgn);
+      if (!parsedMoves?.length) {
+        alert(t('errorParseMove'));
+        return false;
+      }
+      if (parsedMoves.startFen && !new ChessBoard().load(parsedMoves.startFen)) {
+        alert(t('errorIllegalFen'));
+        return false;
+      }
+      positions = GameAnalyzer.buildPositionChain(parsedMoves);
+      if (!positions || positions.length <= 1) {
+        alert(t('errorBuildChain'));
+        return false;
+      }
+    }
+
+    const entryOrientation = ['white', 'black'].includes(orientation) ? orientation : this.sessionOrientation || this.boardUI.orientation;
+    this.boardUI.setOrientation(entryOrientation);
+    document.getElementById('setting-orientation').value = this.boardUI.orientation;
+    const tags = pgn ? readPgnTags(pgn) : {};
+    const conclusion = positionOnly ? null : FairPlayGuard.verifyConcludedGame(pgn || { result });
+    const matchedElo = conclusion?.ok ? ratingMatch || this.matchPgnElo(tags) : null;
+    const explicitElo = parseStudioElo(elo);
+    this.sessionElo = explicitElo ? { value: explicitElo, explicit: true } : matchedElo || (fallbackElo ? { value: fallbackElo } : null);
+    this.setSessionElo(this.sessionElo?.value ?? getPreferences().defaultElo);
+    this.pgnTags = tags;
+    const termination = tags.termination || '';
+    this.terminationType = /(?:^resign|^resignation|\bwon by resignation|\bresigned)[.!]?$/i.test(termination) ? 'resignation'
+      : /(?:\bwon on time|^time forfeit|^timeout)[.!]?$/i.test(termination) ? 'time' : null;
     if (this.checkup?.dialog?.open) this.checkup.close();
     this.tempAnalysisFen = null;
     this.tempPositionReturn = null;
@@ -1160,7 +1143,6 @@ class AnalysisStudioApp {
     this.consequencePlayer?.stop();
     this.reviewCommentary.reset();
     this.isSampleGame = !!pgn && (pgn.trim() === SAMPLE_GAMES.fischer.trim() || pgn.trim() === SAMPLE_GAMES.kasparov.trim());
-    this.gameEndedOnTime = false;
     this.importGeneration = (this.importGeneration || 0) + 1;
     this.importController?.abort();
     clearInterval(this.playTimer);
@@ -1183,11 +1165,19 @@ class AnalysisStudioApp {
     this.practice?.stop();
     this.practiceResults = new Map();
     this.reviewExplorer.reset(this.boardUI.orientation);
-    this.reviewOverview.reset();
+    this.reviewOverview.reset(this.reviewExplorer.side);
     this.reviewResult = null;
     this.coreReview = null;
     this.intuitionReview?.render();
     this.hasAnalysisInput = !!pgn || !!moves?.length || (!!fen && (fen !== ChessBoard.INITIAL_FEN || positionInput));
+    this.sessionOrientation = this.hasAnalysisInput ? this.boardUI.orientation : null;
+    this.sessionFallbackElo = fallbackElo;
+    this.sessionInput = this.hasAnalysisInput ? {
+      pgn, fen, white, black, result, checkupSource, landAtEnd,
+      positionInput: positionOnly,
+      moves: !pgn && !positionOnly ? parsedMoves.map(({ element, ...move }) => move) : null,
+      startFen: !pgn && !positionOnly ? parsedMoves.startFen : null
+    } : null;
     document.body.classList.toggle('empty-study', !this.hasAnalysisInput);
     document.getElementById('empty-study-intro').hidden = this.hasAnalysisInput;
     if (this.hasAnalysisInput && !this.workspaceEntered) {
@@ -1197,7 +1187,7 @@ class AnalysisStudioApp {
       });
     }
 
-    document.body.classList.toggle('position-only', !!fen && !pgn && !moves?.length && this.hasAnalysisInput);
+    document.body.classList.toggle('position-only', positionOnly && this.hasAnalysisInput);
     this.isReviewingMove = false;
     this.isBranching = false;
     document.body.classList.remove('exploring-branch');
@@ -1217,59 +1207,27 @@ class AnalysisStudioApp {
     this.resetPositionPanel();
 
     // 3. Single FEN setup mode (puzzle, free board, initial start)
-    if (fen && (!moves || moves.length === 0) && !pgn) {
-      const testBoard = new ChessBoard();
-      if (!testBoard.load(fen)) {
-        console.warn('[Analysis Studio] Invalid start FEN in session:', fen);
-        return false;
-      }
+    if (positionOnly) {
       this.moves = [];
       this.positions = [{
         ply: 0,
-        moveNumber: testBoard.fullMoves || 1,
-        turn: testBoard.turn,
+        moveNumber: positionBoard.fullMoves || 1,
+        turn: positionBoard.turn,
         san: 'Start',
-        fen: testBoard.getFen(),
+        fen: positionBoard.getFen(),
         moveEl: null
       }];
       this.currentGameKey = `fen_${fen.replace(/\s+/g, '_')}`;
-      this.el.metaWhite.textContent = `⚪ ${white || t('whitePlayer').replace('⚪ ', '')}`;
-      this.el.metaBlack.textContent = `⚫ ${black || t('blackPlayer').replace('⚫ ', '')}`;
-      this.el.metaResult.textContent = result || '*';
+      this.renderGameMetadata({ white: white || (positionInput ? t('freeAnalysisBoard') : null), black: black || (positionInput ? 'FEN' : null), result });
       this.el.moveCountBadge.textContent = '0';
       this.renderMoveList();
       this.goToPly(0, { silent: true });
+      this.rememberSession();
+      this.syncGameLink();
       if (autoReview) {
         this.runFullReview(false);
       }
       return true;
-    }
-
-    // 4. Game mode (structured moves array or PGN text)
-    let parsedMoves = [];
-    if (moves && moves.length > 0) {
-      parsedMoves = moves;
-    } else if (pgn) {
-      parsedMoves = GameAnalyzer.parsePgn(pgn);
-    }
-
-    if (!parsedMoves || parsedMoves.length === 0) {
-      alert(t('errorParseMove'));
-      return false;
-    }
-
-    if (parsedMoves.startFen) {
-      const testBoard = new ChessBoard();
-      if (!testBoard.load(parsedMoves.startFen)) {
-        alert(t('errorIllegalFen'));
-        return false;
-      }
-    }
-
-    const positions = GameAnalyzer.buildPositionChain(parsedMoves);
-    if (!positions || positions.length <= 1) {
-      alert(t('errorBuildChain'));
-      return false;
     }
 
     if (positions.isPartial) {
@@ -1285,34 +1243,20 @@ class AnalysisStudioApp {
     }
 
     this.positions = positions;
-    this.checkupGame = checkupGameContext(pgn, { source: checkupSource, orientation: checkupOrientation, white, black });
+    this.checkupGame = checkupGameContext(pgn, { source: checkupSource, orientation: checkupOrientation || this.boardUI.orientation, white, black });
     this.el.btnReanalyze.disabled = false;
     this.currentGameKey = this.getReviewKey();
 
-    // Update metadata headers
-    if (pgn) {
-      this.parsePgnHeaders(pgn);
-      if (white && (this.el.metaWhite.textContent.includes('白方') || this.el.metaWhite.textContent.includes('White') || this.el.metaWhite.textContent === '⚪ ')) {
-        this.el.metaWhite.textContent = `⚪ ${white}`;
-      }
-      if (black && (this.el.metaBlack.textContent.includes('黑方') || this.el.metaBlack.textContent.includes('Black') || this.el.metaBlack.textContent === '⚫ ')) {
-        this.el.metaBlack.textContent = `⚫ ${black}`;
-      }
-      if (result && (!this.el.metaResult.textContent || this.el.metaResult.textContent === '*')) {
-        this.el.metaResult.textContent = result;
-      }
-    } else {
-      if (white) this.el.metaWhite.textContent = `⚪ ${white}`;
-      if (black) this.el.metaBlack.textContent = `⚫ ${black}`;
-      if (result) this.el.metaResult.textContent = result;
-    }
+    this.renderGameMetadata({ white, black, result: conclusion.ok ? conclusion.result : result });
 
     this.el.moveCountBadge.textContent = this.moves.isPartial
       ? t('errorTruncated', { count: this.moves.length })
       : String(this.moves.length);
 
     this.renderMoveList();
-    this.goToPly(0, { silent: true });
+    this.goToPly(landAtEnd && conclusion.ok && !positions.isPartial ? positions.length - 1 : 0, { silent: true });
+    this.rememberSession();
+    this.syncGameLink();
 
     const compatibleReview = cachedReview && GameAnalyzer.isValidReviewCache(cachedReview) &&
       (cachedReview.engineKey || 'sf19lite') === this.stockfish.engineKey &&
@@ -1340,6 +1284,8 @@ class AnalysisStudioApp {
       white: game.white,
       black: game.black,
       result: game.result,
+      orientation: game.orientation,
+      elo: game.elo,
       cachedReview: game.cachedReview,
       autoReview: !game.cachedReview
     });
@@ -1384,14 +1330,15 @@ class AnalysisStudioApp {
     if (url.searchParams.has('sf') || url.searchParams.has('maia')) {
       url.searchParams.set('sf', engine);
       url.searchParams.set('maia', model);
-      history.replaceState(null, '', url);
+      history.replaceState(history.state, '', url);
     }
     this.initEngines({ keepStockfish: !engineChanged });
     this.coreReview = retainedCore;
     this.currentGameKey = this.getReviewKey();
     this.practice?.stop();
     this.practiceResults = new Map();
-    this.reviewExplorer.reset(this.boardUI.orientation);
+    this.reviewExplorer.reset(this.sessionOrientation || this.boardUI.orientation);
+    this.reviewOverview.side = this.reviewExplorer.side;
     this.reviewResult = null;
     this.lastProgress = null;
     this.positionAnalysis.cache.clear();
@@ -1436,24 +1383,96 @@ class AnalysisStudioApp {
     }
   }
 
-  parsePgnHeaders(pgnText) {
-    const whiteMatch = pgnText.match(/\[White\s+"([^"]+)"\]/i);
-    const blackMatch = pgnText.match(/\[Black\s+"([^"]+)"\]/i);
-    const whiteEloMatch = pgnText.match(/\[WhiteElo\s+"([^"]+)"\]/i);
-    const blackEloMatch = pgnText.match(/\[BlackElo\s+"([^"]+)"\]/i);
-    const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
-    const termination = pgnText.match(/^\s*\[Termination\s+"([^"\r\n]+)"\]/im)?.[1]?.trim();
-    this.gameEndedOnTime = /(?:\bwon on time|^time forfeit|^timeout)\.?$/i.test(termination || '');
+  matchPgnElo(tags) {
+    const rating = value => /^\d{3,4}$/.test(value || '') ? Number(value) : null;
+    const white = rating(tags.whiteelo);
+    const black = rating(tags.blackelo);
+    const preferred = this.boardUI.orientation === 'black' ? 'b' : 'w';
+    const source = (preferred === 'b' ? black : white) ? preferred : white ? 'w' : black ? 'b' : null;
+    if (!source) return null;
+    const raw = source === 'b' ? black : white;
+    return { source, raw, value: Math.max(600, Math.min(2600, Math.round(raw / 100) * 100)) };
+  }
 
-    const whiteName = whiteMatch ? whiteMatch[1] : t('whitePlayer').replace('⚪ ', '');
-    const blackName = blackMatch ? blackMatch[1] : t('blackPlayer').replace('⚫ ', '');
-    const whiteElo = whiteEloMatch ? ` (${whiteEloMatch[1]})` : '';
-    const blackElo = blackEloMatch ? ` (${blackEloMatch[1]})` : '';
-    const result = resultMatch ? resultMatch[1] : '*';
+  setSessionElo(elo) {
+    this.currentElo = elo;
+    const select = this.el.eloSelector;
+    const value = String(elo);
+    if (![...select.options].some(option => option.value === value)) select.add(new Option(value, value));
+    select.value = value;
+    this.renderEloHint();
+  }
 
-    this.el.metaWhite.textContent = `⚪ ${whiteName}${whiteElo}`;
-    this.el.metaBlack.textContent = `⚫ ${blackName}${blackElo}`;
-    this.el.metaResult.textContent = result;
+  renderEloHint() {
+    const match = this.sessionElo;
+    this.el.eloHint.hidden = !match?.source;
+    this.el.eloHint.textContent = match?.source ? t('reviewMatchedElo', {
+      side: t(match.source === 'w' ? 'reviewWhite' : 'reviewBlack'), rating: match.raw, elo: match.value
+    }) : '';
+  }
+
+  renderGameMetadata({ white, black, result } = {}) {
+    const tags = this.pgnTags || {};
+    const name = (tag, fallback, key) => tag && tag !== '?' ? tag : fallback || t(key).slice(3);
+    this.el.metaWhite.textContent = `⚪ ${name(tags.white, white, 'whitePlayer')}${tags.whiteelo && tags.whiteelo !== '?' ? ` (${tags.whiteelo})` : ''}`;
+    this.el.metaBlack.textContent = `⚫ ${name(tags.black, black, 'blackPlayer')}${tags.blackelo && tags.blackelo !== '?' ? ` (${tags.blackelo})` : ''}`;
+    this.el.metaResult.textContent = result || tags.result || '*';
+  }
+
+  rememberSession() {
+    if (!this.sessionInput) return;
+    const url = new URL(location.href);
+    const hash = new URLSearchParams(url.hash.slice(1));
+    if (hash.has('scan')) return;
+    for (const key of STUDIO_INPUT_PARAMS) {
+      url.searchParams.delete(key);
+      hash.delete(key);
+    }
+    url.hash = hash.toString();
+    const session = {
+      input: this.sessionInput,
+      orientation: this.sessionOrientation,
+      elo: this.sessionElo?.explicit ? this.sessionElo.value : null,
+      fallbackElo: this.sessionFallbackElo,
+      ratingMatch: this.sessionElo?.source ? this.sessionElo : null
+    };
+    try {
+      history.replaceState({ ...history.state, [STUDIO_SESSION]: session }, '', url);
+    } catch (error) {
+      console.warn('[Analysis Studio] Could not save the current tab’s input:', error);
+    }
+  }
+
+  syncGameLink() {
+    const pgn = this.sessionInput?.pgn;
+    const scan = new URLSearchParams(location.hash.slice(1)).has('scan');
+    this.el.copyGameLink.hidden = !pgn || this.moves.isPartial || scan || !!this.scanSourceLocked ||
+      !FairPlayGuard.verifyConcludedGame(pgn).ok || FairPlayGuard.isLiveGameInProgress();
+    this.el.gameLinkField.hidden = true;
+  }
+
+  async copyGameLink() {
+    if (this.el.copyGameLink.hidden || this.scanSourceLocked || FairPlayGuard.isLiveGameInProgress()) return;
+    const input = this.sessionInput;
+    const epoch = this.gameEpoch;
+    const params = gameLinkInput(input.pgn, input);
+    params.set('orientation', this.sessionOrientation || this.boardUI.orientation);
+    params.set('elo', this.currentElo);
+    params.set('lang', getLang());
+    if (input.checkupSource) params.set('checkupSource', input.checkupSource);
+    const url = new URL(location.protocol === 'chrome-extension:' ? 'https://4chess.cc/analysis/' : location.href);
+    url.search = '';
+    url.hash = params.toString();
+    try {
+      await navigator.clipboard.writeText(url.href);
+      if (this.gameEpoch === epoch) this.showToast(t('reviewGameLinkCopied'));
+    } catch {
+      if (this.gameEpoch !== epoch || !this.reviewOverview.summary.open) return;
+      this.el.gameLinkField.value = url.href;
+      this.el.gameLinkField.hidden = false;
+      this.el.gameLinkField.focus();
+      this.el.gameLinkField.select();
+    }
   }
 
   async runFullReview(forceRefresh = false) {
@@ -1766,7 +1785,9 @@ class AnalysisStudioApp {
     this.el.blunderCountBadge.textContent = String(filtered.length);
     document.getElementById('lbl-tab-blunders').textContent = t(this.currentDivergenceFilter === 'all' ? 'reviewKeyMoves' : this.currentDivergenceFilter === 'moves' ? 'reviewAllMoves' : 'reviewSelectedMoves');
     this.el.blunderList.replaceChildren();
-    if (!filtered.length) {
+    const observations = this.currentDivergenceFilter === 'all' && this.reviewResult && !this.reviewResult.isPartial
+      ? selectReviewObservations(this.reviewExplorer.available(moves), this.reviewExplorer.side, this.reviewResult.positionEvaluations) : [];
+    if (!filtered.length && !observations.length) {
       const empty = document.createElement('p'); empty.className = 'review-empty';
       empty.textContent = t(this.reviewResult?.engineOnly && INTUITION_KINDS.includes(this.currentDivergenceFilter) ? 'reviewIntuitionPending' : 'reviewNoSelection');
       this.el.blunderList.append(empty); return;
@@ -1834,6 +1855,26 @@ class AnalysisStudioApp {
       if (status) { const note = document.createElement('span'); note.className = 'review-practice-status'; note.textContent = t(`practiceStatus_${status}`); card.append(note); }
       if (item.ply === this.currentPly) card.classList.add('active');
       this.el.blunderList.append(card);
+    }
+    if (observations.length) {
+      const section = document.createElement('section');
+      section.className = 'review-observations';
+      const title = document.createElement('h3');
+      title.textContent = t('reviewObservations');
+      section.append(title);
+      for (const move of observations) {
+        const row = document.createElement('div');
+        const jump = document.createElement('button');
+        jump.type = 'button';
+        jump.className = 'btn-header';
+        jump.textContent = t('reviewInspectRound', { round: move.moveNumber });
+        jump.onclick = () => this.goToPly(move.ply, { before: true, revealCandidates: true });
+        const note = document.createElement('p');
+        note.textContent = t('reviewObservationMoves', { played: move.san, best: move.bestSan });
+        row.append(jump, note);
+        section.append(row);
+      }
+      this.el.blunderList.append(section);
     }
   }
 
@@ -2008,7 +2049,6 @@ class AnalysisStudioApp {
     this.consequencePlayer?.stop();
     if (!options.practice) {
       this.practice?.stop();
-      if (!options.silent) this.reviewOverview.exploring = true;
       if (options.revealCandidates && this.reviewOverview.view === 'overview') this.reviewOverview.show('workbench');
     }
     if (!options.silent) this.pauseWholeReview();
@@ -2085,19 +2125,19 @@ class AnalysisStudioApp {
     try {
       const engine = location.protocol === 'chrome-extension:' ? 'lite' : prefs.stockfishVariant;
       const versionsChanged = engine !== this.engineVariant || prefs.maiaVariant !== this.modelVariant;
-      const eloChanged = this.currentElo !== prefs.defaultElo;
+      const effectiveElo = this.sessionElo?.value ?? prefs.defaultElo;
+      const eloChanged = this.currentElo !== effectiveElo;
       const calculate = eloChanged || this.settings.heatmap !== prefs.showHeatmap || Number(this.el.positionDepth.value) !== prefs.studio_depth;
       if (getLang() !== prefs.maia3_lang) setLanguage(prefs.maia3_lang);
-      this.currentElo = prefs.defaultElo;
-      if (![...this.el.eloSelector.options].some(option => option.value === String(prefs.defaultElo))) this.el.eloSelector.add(new Option(String(prefs.defaultElo), String(prefs.defaultElo)));
-      this.el.eloSelector.value = String(prefs.defaultElo);
+      this.setSessionElo(effectiveElo);
       for (const [id, key, preference] of POSITION_TOGGLES) {
         this.settings[key] = prefs[preference];
         document.getElementById(id).checked = prefs[preference];
       }
       this.el.positionDepth.value = String(prefs.studio_depth);
-      this.boardUI.setOrientation(prefs.studio_orientation);
-      document.getElementById('setting-orientation').value = prefs.studio_orientation;
+      const orientation = this.sessionOrientation || prefs.studio_orientation;
+      this.boardUI.setOrientation(orientation);
+      document.getElementById('setting-orientation').value = orientation;
       soundEffects.enabled = prefs.diverge_sound_enabled;
       this.updateSoundToggleUI();
       this.updatePreferenceNotes();
@@ -2136,7 +2176,6 @@ class AnalysisStudioApp {
 
   showBranchPosition(cursor, { silent = false } = {}) {
     if (!silent) {
-      this.reviewOverview.exploring = true;
       if (this.reviewOverview.view === 'overview') this.reviewOverview.show('workbench');
     }
     const branch = this.activeBranch;
@@ -2345,12 +2384,10 @@ async function initApp() {
   if (value('sf')) intent.stockfishVariant = value('sf');
   if (value('maia')) intent.maiaVariant = value('maia');
   if (value('lang')) intent.maia3_lang = value('lang');
-  if (value('elo')) intent.defaultElo = Number(value('elo'));
-  if (['white', 'black'].includes(value('orientation'))) intent.studio_orientation = value('orientation');
   if (Object.keys(intent).length) {
     await savePreferences(intent);
-    for (const key of ['sf', 'maia', 'lang', 'elo']) { url.searchParams.delete(key); hash.delete(key); }
-    url.hash = hash.toString(); history.replaceState(null, '', url);
+    for (const key of ['sf', 'maia', 'lang']) { url.searchParams.delete(key); hash.delete(key); }
+    url.hash = hash.toString(); history.replaceState(history.state, '', url);
   }
   const scanToken = hash.get('scan');
   if (scanToken) { setLanguage(getPreferences().maia3_lang); initI18n(); }

@@ -93,7 +93,6 @@ try {
  await trendPage.evaluate(async()=>{
   const app=window.__maiaStudioApp;
   const {ChessBoard}=await import('../engine/chess-core.js');
-  app.currentElo=1800;
   window.trendCalls=[];
   const mockEngines=()=>{
    const model=app.maiaEngine.variant;
@@ -126,7 +125,7 @@ try {
   mockEngines();
   window.reviewResumeCount=0;
   app.runFullReview=()=>{window.reviewResumeCount++;app.reviewPendingResume=false;};
-  app.startNewSession({pgn:'[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 1-0',autoReview:false});
+  app.startNewSession({pgn:'[Result "1-0"]\n1. e4 e5 2. Nf3 Nc6 1-0',elo:1800,autoReview:false});
  });
  const trend=trendPage.locator('#maia-elo-trend');
  const openTrend=trendPage.locator('#maia-trend-open');
@@ -201,7 +200,13 @@ try {
  assert.equal((await extras()).filter(call=>call.fen===priorFen&&call.rating===1400).length,1,'A completed pre-cancellation sample is reused');
  await closeTrend.click();
  const beforeOffGrid=(await extras()).length;
- await trendPage.evaluate(()=>{const app=window.__maiaStudioApp;app.currentElo=1900;app.updateActivePositionAnalysis();});
+ await trendPage.evaluate(()=>{
+  const app=window.__maiaStudioApp;
+  app.el.eloSelector.value='1900';
+  app.el.eloSelector.dispatchEvent(new Event('change'));
+  window.reviewResumeCount=0;
+  app.updateActivePositionAnalysis();
+ });
  await openTrend.click();
  await trendPage.waitForFunction(()=>document.querySelector('circle[data-elo="1900"]'));
  assert.equal((await extras()).length,beforeOffGrid+1,'Off-grid marker uses the actual current prediction and reuses all six sampled ratings');

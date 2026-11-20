@@ -8,7 +8,7 @@
 import { expectedScore, isKeyMoment, errorSeverity, moveQuality, isLessLikelyChoice, positiveIntuition, isHighTendency, qualifiesTrap } from './review-policy.js?v=20261117-review-policy';
 import { ChessBoard } from './chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { decodeTcn, tcnToSanMoves, movesToPgn } from './chess-notation.js';
+import { decodeTcn, tcnToSanMoves, movesToPgn, withPgnTermination } from './chess-notation.js';
 import { OpeningBook } from './opening-book.js';
 
 export class GameAnalyzer {
@@ -52,11 +52,17 @@ export class GameAnalyzer {
     const resultMatch = pgnText.match(/\[Result\s+"([^"]+)"\]/i);
 
     // Keep the main line while skipping nested RAVs and both PGN comment forms.
-    let clean = '', variation = 0, brace = false, lineComment = false, header = false, quoted = false;
+    let clean = '', variation = 0, brace = false, lineComment = false, header = false, quoted = false, escaped = false;
     for (const char of pgnText) {
       if (lineComment) { if (char === '\n' || char === '\r') { lineComment = false; clean += ' '; } continue; }
       if (brace) { if (char === '}') brace = false; continue; }
-      if (header) { if (char === '"') quoted = !quoted; if (char === ']' && !quoted) header = false; continue; }
+      if (header) {
+        if (escaped) escaped = false;
+        else if (quoted && char === '\\') escaped = true;
+        else if (char === '"') quoted = !quoted;
+        else if (char === ']' && !quoted) header = false;
+        continue;
+      }
       if (char === '{') { brace = true; clean += ' '; continue; }
       if (char === ';') { lineComment = true; continue; }
       if (char === '[') { header = true; continue; }
@@ -215,7 +221,7 @@ export class GameAnalyzer {
           if (!moves.length || moves.length * 2 !== game.moveList.length) continue;
           pgn = GameAnalyzer.movesToPgn(moves, { ...game.pgnHeaders, Result: conclusion.result });
         }
-        const moves = GameAnalyzer.parsePgn(pgn);
+        const moves = GameAnalyzer.parsePgn(withPgnTermination(pgn, game.status));
         if (moves.length && !GameAnalyzer.buildPositionChain(moves).isPartial) return moves;
       } catch (error) {
         console.debug('[GameAnalyzer] Game export unavailable:', error.message);

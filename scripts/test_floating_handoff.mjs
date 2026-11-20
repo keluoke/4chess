@@ -59,6 +59,7 @@ try {
   await worker.evaluate(() => chrome.storage.local.set({ studio_orientation: 'white' }));
   const game = await open({ pgn, orientation: 'black', white: 'UX White', black: 'UX Black', result: '1-0', lang: 'en' });
   assert.match(game.response.targetUrl, /#pgn=/);
+  assert.doesNotMatch(game.response.targetUrl, /&(?:white|black|result|elo)=/);
   assert.equal(new URLSearchParams(new URL(game.response.targetUrl).hash.slice(1)).get('orientation'), 'black');
   assert.equal(await game.page.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
   assert.equal(await game.page.locator('#setting-orientation').inputValue(), 'black');
@@ -99,7 +100,7 @@ try {
     const opened = await openedPage; await opened.goto(await worker.evaluate(() => globalThis.handoffTargetUrl));
     await opened.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
     assert.equal(await opened.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black', `${platform}: preserve the direction at click time, before the flip observer/PGN completion`);
-    assert.equal(new URLSearchParams(new URL(opened.url()).hash.slice(1)).get('checkupSource'), platform);
+    assert.equal(await opened.evaluate(() => __maiaStudioApp.checkupGame?.platform), platform);
     await opened.locator('#btn-intuition-checkup').click();
     await opened.locator('#checkup-dialog').waitFor();
     assert.equal(await opened.locator(`[data-checkup-source="${platform}"]`).getAttribute('aria-pressed'), 'true');
@@ -166,6 +167,14 @@ try {
   const localGame = await open({ pgn, orientation: 'black' });
   assert.equal(await localGame.page.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
   assert.equal(await localGame.page.locator('#setting-orientation').inputValue(), 'black');
+  assert.equal(await localGame.page.evaluate(() => __maiaStudioApp.currentPly), 4);
+  const replacement = '[White "New Local Game"]\n[BlackElo "1412"]\n[Result "1-0"]\n1. d4 f5 1-0';
+  assert(await localGame.page.evaluate(pgn => __maiaStudioApp.smartLoadInput(pgn), replacement));
+  assert.match(await localGame.page.locator('#meta-white').innerText(), /New Local Game/);
+  await localGame.page.reload();
+  await localGame.page.waitForFunction(() => window.__maiaStudioApp?.positions.length === 3);
+  assert.equal(await localGame.page.evaluate(() => __maiaStudioApp.currentElo), 1400);
+  assert.match(await localGame.page.locator('#meta-white').innerText(), /New Local Game/, 'The current local session supersedes the previous shared-storage handoff after reload');
   await localGame.page.close();
   // Storage-only launch (legacy/offline): a stored game can carry its own view without URL intent.
   await worker.evaluate(() => chrome.storage.local.set({ studio_orientation: 'white' }));

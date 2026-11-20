@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261119-checkup';
+const CACHE_NAME = '4chess-review-20261120-review';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -19,12 +19,12 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261118-precise-filter",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261119-checkup",
+  "./workbench.css?v=20261120-review",
   "../ui/theme.js?v=20261025-v115",
-  "./analysis.js?v=20261119-checkup",
+  "./analysis.js?v=20261120-review",
   "./commentary-text.js?v=20261118-recap-reset",
   "./built-in-ai.js?v=20261118-summary-ai",
-  "./review-commentary.js?v=20261118-recap-reset",
+  "./review-commentary.js?v=20261120-review",
   "./study-store.js?v=20261118-v12-p0",
   "./consequence-player.js?v=20261118-v12-p0",
   "./mistake-bank.js?v=20261118-v12-p0-fix2",
@@ -40,7 +40,7 @@ const STATIC_ASSETS = [
   "./position-analysis.js?v=20261118-summary-ai",
   "./review-explorer.js?v=20261118-summary-ai",
   "./review-practice.js?v=20261118-v12-p0",
-  "./review-overview.js?v=20261118-v12-p0",
+  "./review-overview.js?v=20261120-review",
   "./scan-authorization.js?v=20261118-summary-ai",
   "./sound-effects.js?v=20261025-v115",
   "./workbench-layout.js?v=20261118-precise-filter",
@@ -51,6 +51,7 @@ const STATIC_ASSETS = [
   "../engine/chess-core.js",
   "../engine/chess-core.js?v=20261025-v115",
   "../engine/chess-notation.js",
+  "../engine/chess-notation.js?v=20261120-import",
   "../engine/engine-preferences.js",
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
@@ -64,6 +65,7 @@ const STATIC_ASSETS = [
   "../engine/model-sources.js",
   "../engine/opening-book.js",
   "../engine/review-policy.js?v=20261117-review-policy",
+  "../engine/review-policy.js?v=20261120-review",
   "../engine/stockfish-inbrowser.js",
   "../engine/stockfish-inbrowser.js?v=20261117-review-policy",
   "../engine/stockfish-sandbox.html",

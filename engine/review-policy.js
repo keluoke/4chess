@@ -67,6 +67,26 @@ export function selectReviewMoves(moves, side = 'all', filter = 'all') {
   )).sort((a, b) => a.ply - b.ply);
 }
 
+export function selectReviewObservations(moves, side, evaluations) {
+  const remaining = 2 - selectReviewMoves(moves, side).length;
+  if (remaining <= 0 || !evaluations?.length) return [];
+  const candidates = selectReviewMoves(moves, side, 'moves').filter(move => {
+    const before = evaluations[move.ply - 1], after = evaluations[move.ply];
+    return !isKeyMoment(move) && !move.isBookMove && !move.isCombinationFollowup &&
+      !['unknown', 'forced', 'best'].includes(moveQuality(move)) && Number.isFinite(move.expectedScoreLoss) && move.expectedScoreLoss >= 1.5 &&
+      !!move.bestSan && move.bestSan !== '?' && move.san !== move.bestSan &&
+      Array.isArray(before?.pv) && before.pv.length >= 2 && Array.isArray(after?.pv) && after.pv.length >= 1 &&
+      [before, after].every(score =>
+        Number.isFinite(score.scoreCp) && !score.isMate && !score.isBound);
+  }).sort((a, b) => b.expectedScoreLoss - a.expectedScoreLoss || b.lossCp - a.lossCp || a.ply - b.ply);
+  const observations = [];
+  for (const move of candidates) {
+    if (observations.every(other => Math.abs(move.ply - other.ply) >= 4)) observations.push(move);
+    if (observations.length === remaining) break;
+  }
+  return observations;
+}
+
 export function reviewCounts(moves) {
   const counts = {};
   for (const side of ['w', 'b']) {

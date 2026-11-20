@@ -41,30 +41,28 @@ try {
   });
   const count = (side, quality) => page.locator(`#review-overview button[data-review-side="${side}"][data-review-category="${quality}"]`);
   const overview = page.locator('#review-summary');
-  const clock = page.locator('#review-card-countdown');
-  const timerStarted = Date.now();
-  assert.equal(await overview.evaluate(el => el.matches(':modal')), true, 'Scores open a floating modal over the workbench');
+  assert.equal(await overview.isVisible(), false, 'Completion leaves the board visible');
+  assert.equal(await page.locator('#review-ready').isVisible(), true);
+  const boardBounds = await page.locator('#board-container').boundingBox();
+  await page.locator('#review-ready').click();
+  assert.equal(await overview.evaluate(el => el.matches(':modal')), true);
   assert.equal(await page.locator('#position-score').isVisible(), true);
   assert.equal(await page.locator('#review-report-title').innerText(), 'White wins, but there was a better option on move 7');
-  assert.equal(await page.locator('#review-card-seconds').innerText(), '8');
-  assert.match(await clock.getAttribute('aria-label'), /Analysis Studio in 8 seconds/);
+  assert.equal(await page.locator('#review-report-side [aria-pressed="true"]').getAttribute('data-practice-side'), 'b');
   const centered = el => {
     const { left, width, top, height } = el.getBoundingClientRect();
     return Math.abs(left + width / 2 - innerWidth / 2) <= 1 && Math.abs(top + height / 2 - innerHeight / 2) <= 1;
   };
   assert(await overview.evaluate(centered), 'The modal is centered relative to the full desktop viewport');
-  const boardBounds = await page.locator('#board-container').boundingBox();
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 0);
-  await page.waitForFunction(() => document.getElementById('review-card-seconds').textContent === '7');
   await page.evaluate(() => __maiaStudioApp.applyReviewResult({ ...syntheticReview, engineOnly: false }, { refreshPosition: false }));
-  assert.equal(await page.locator('#review-card-seconds').innerText(), '7', 'Maia enrichment keeps the original deadline');
-  await overview.waitFor({ state: 'hidden', timeout: 8500 });
-  assert(Date.now() - timerStarted >= 7300, 'The card stays open for the extended countdown');
-  assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBounds, 'Closing the card preserves the workbench layout');
-  await page.evaluate(() => __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }));
+  assert.equal(await overview.isVisible(), true, 'Maia enrichment preserves the open overview');
+  assert.equal(await page.locator('#review-card-countdown').count(), 0);
+  await page.keyboard.press('Escape');
+  assert.equal(await overview.isVisible(), false);
+  assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBounds);
   await page.locator('#btn-review-overview').click();
-  assert.equal(await clock.isVisible(), false, 'A manually reopened review stays available for reading');
   const headline = page.locator('#review-report-title');
   await page.evaluate(() => {
     const app = __maiaStudioApp;
@@ -487,7 +485,7 @@ try {
     restoreCommentaryFixture();
     app.goToPly(0);
     const previous = aiCalls.gamePrompts;
-    app.gameEndedOnTime = false;
+    app.terminationType = null;
     app.applyReviewResult(commentaryReview, { refreshPosition: false });
     return previous;
   });
@@ -521,6 +519,94 @@ try {
     app.applyReviewResult(commentaryReview, { refreshPosition: false });
   });
   assert.equal(await commentary.count(), 0, 'A result is required to show the new commentary');
+  const incoming = await browser.newPage({ locale: 'zh-CN' });
+  incoming.on('pageerror', error => errors.push(error.message));
+  await incoming.route('https://weights.4chess.cc/**', route => route.abort());
+  await incoming.addInitScript(() => Object.defineProperty(navigator, 'clipboard', {
+    value: { async writeText(text) { window.copiedGame = text; } }
+  }));
+  const base = 'http://127.0.0.1:' + server.address().port + '/analysis/';
+  const importPgn = '[White "Player 100%20"]\n[Black "Guest"]\n[WhiteElo "1819"]\n[BlackElo "1412"]\n'
+    + '[Result "1-0"]\n[Termination "White won by resignation"]\n[ECO "A80"]\n[TimeControl "180+2"]\n\n'
+    + '1. d4 f5 2. c4 Nf6 1-0';
+  await incoming.goto(base + '#' + new URLSearchParams({ pgn: importPgn, orientation: 'black', lang: 'zh' }));
+  await incoming.waitForFunction(() => window.__maiaStudioApp?.positions.length === 5);
+  const readSession = target => target.evaluate(() => {
+    const app = __maiaStudioApp;
+    return [app.currentPly, app.boardUI.orientation, app.currentElo, app.reviewExplorer.side, app.reviewOverview.side];
+  });
+  assert.deepEqual(await readSession(incoming), [4, 'black', 1400, 'b', 'b']);
+  assert.match(await incoming.locator('#meta-white').textContent(), /100%20/);
+  assert.match(await incoming.locator('#studio-elo-hint').textContent(), /黑方 PGN 评分 1412.*Maia 1400/);
+  assert.equal(new URL(incoming.url()).hash, '');
+  await incoming.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.pauseWholeReview();
+    app.runFullReview = async () => {};
+    app.positionAnalysis.refresh = () => {};
+    const moves = app.positions.slice(1).map((position, i) => ({
+      ...position, accuracy: 99, severity: 'good', lossCp: i === 1 ? 28 : 0,
+      expectedScoreLoss: i === 1 ? 2.6 : 0, bestSan: i === 1 ? 'Nf6' : position.san,
+      fenBefore: app.positions[i].fen
+    }));
+    const pv = [[], ['g8f6','c2c4'], ['c2c4'], [], []];
+    window.closeGameReview = {
+      allMoves: moves, positionEvaluations: pv.map(pv => ({ scoreCp: 0, pv })),
+      totalMoves: moves.length, engineOnly: true, engineKey: 'sf19lite', depth: 10
+    };
+    app.applyReviewResult(closeGameReview, { refreshPosition: false });
+  });
+  assert.equal(await incoming.locator('.blunder-card').count(), 0);
+  assert.equal(await incoming.locator('.review-observations button').count(), 1);
+  assert.match(await incoming.locator('.review-observations').innerText(), /f5.*Nf6/s);
+  assert.equal(await incoming.locator('#review-practice-batch').isDisabled(), true);
+  await incoming.locator('#review-ready').click();
+  assert.match(await incoming.locator('#review-report-title').innerText(), /黑方在第 2 回合后认输/);
+  assert.match(await incoming.locator('#review-report-story').innerText(), /仍接近均势/);
+  assert.match(await incoming.locator('#review-report-context').innerText(), /荷兰防御.*3\+2 闪电棋/);
+  await incoming.evaluate(() => {
+    const positionEvaluations = closeGameReview.positionEvaluations.slice();
+    positionEvaluations[4] = { scoreCp: 9980, isMate: true, terminal: false };
+    __maiaStudioApp.applyReviewResult({ ...closeGameReview, positionEvaluations }, { refreshPosition: false });
+  });
+  assert.match(await incoming.locator('#review-report-title').innerText(), /认输/);
+  assert.match(await incoming.locator('#review-report-story').innerText(), /找到白方可以强制将杀/);
+  await incoming.locator('#review-copy-game-link').click();
+  const shareUrl = await incoming.evaluate(() => copiedGame);
+  assert.ok(shareUrl.startsWith(base + '#pgn='));
+  const recipient = await browser.newPage();
+  recipient.on('pageerror', error => errors.push(error.message));
+  await recipient.route('https://weights.4chess.cc/**', route => route.abort());
+  await recipient.goto(shareUrl);
+  await recipient.waitForFunction(() => window.__maiaStudioApp?.positions.length === 5);
+  assert.deepEqual(await readSession(recipient), [4, 'black', 1400, 'b', 'b']);
+  assert.match(await recipient.locator('#meta-white').innerText(), /100%20/);
+  assert.equal(await recipient.evaluate(async () => (await import('/engine/engine-preferences.js')).getPreferences().defaultElo), 1900);
+  assert.equal(await recipient.locator('#studio-elo-hint').getAttribute('hidden'), '', 'The copied rating is explicit');
+  await recipient.close();
+
+  await incoming.keyboard.press('Escape');
+  const nextPgn = '[White "Replacement"]\n[BlackElo "1175"]\n[Result "0-1"]\n1. e4 e5 0-1';
+  await incoming.locator('#pgn-file-input').setInputFiles({ name: 'replacement.pgn', mimeType: 'text/plain', buffer: Buffer.from(nextPgn) });
+  await incoming.waitForFunction(() => document.getElementById('meta-white').textContent.includes('Replacement'));
+  assert.deepEqual(await readSession(incoming), [0, 'black', 1200, 'b', 'b']);
+  await incoming.reload();
+  await incoming.waitForFunction(() => window.__maiaStudioApp?.positions.length === 3);
+  assert.deepEqual(await readSession(incoming), [0, 'black', 1200, 'b', 'b']);
+  assert.match(await incoming.locator('#meta-white').innerText(), /Replacement/);
+  assert(await incoming.evaluate(() => __maiaStudioApp.smartLoadInput('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')));
+  await incoming.reload();
+  await incoming.waitForFunction(() => window.__maiaStudioApp?.positions.length === 1);
+  assert.equal(await incoming.evaluate(() => __maiaStudioApp.hasAnalysisInput), true, 'An explicitly imported initial position supersedes the last PGN');
+
+  const denied = await browser.newPage();
+  denied.on('pageerror', error => errors.push(error.message));
+  await denied.goto(base + '#' + new URLSearchParams({ pgn: '[Result "*"]\n1. e4 *', orientation: 'black' }));
+  await denied.waitForFunction(() => window.__maiaStudioApp?.positions.length === 1);
+  assert.equal(await denied.evaluate(() => __maiaStudioApp.hasAnalysisInput || __maiaStudioApp.stockfish.isReady), false);
+  await denied.close();
+  await incoming.close();
+  console.log('PASS review links: final position, rating provenance, bilingual context, resignation, observation isolation, fresh-profile sharing, replacement and reload; unfinished PGNs are blocked.');
   assert.deepEqual(errors, []);
   console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, grounded English loss wording, recap cancellation on all review resets, cache, practice isolation and Chinese fallback.');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

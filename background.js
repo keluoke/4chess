@@ -7,7 +7,7 @@ import './scan/controller.js';
 import { ChessBoard } from './engine/chess-core.js';
 import { normalizeEnginePreferences } from './engine/engine-preferences.js';
 
-import { tcnToSanMoves, movesToPgn } from './engine/chess-notation.js';
+import { gameLinkInput, parseStudioElo, tcnToSanMoves, movesToPgn } from './engine/chess-notation.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[Maia-3 Extension] Installed successfully.');
@@ -169,24 +169,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!base.endsWith('/analysis')) {
             base = `${base}/analysis`;
           }
-          const elo = settings?.defaultElo || 1900;
           const lang = settings?.maia3_lang || gameData.lang;
-          let extra = '';
-          if (gameData.white && gameData.white !== '白方') extra += `&white=${encodeURIComponent(gameData.white)}`;
-          if (gameData.black && gameData.black !== '黑方') extra += `&black=${encodeURIComponent(gameData.black)}`;
-          if (gameData.result && gameData.result !== '*') extra += `&result=${encodeURIComponent(gameData.result)}`;
-          if (lang) extra += `&lang=${encodeURIComponent(lang)}`;
-          if (orientation || gameData.fen) extra += `&orientation=${orientation || 'white'}`;
-          if (gameData.pgn && platform) extra += `&checkupSource=${platform}`;
+          const params = gameData.fen ? new URLSearchParams({ fen: gameData.fen })
+            : gameData.pgn ? gameLinkInput(gameData.pgn, gameData) : new URLSearchParams({ empty: '1' });
+          const elo = parseStudioElo(gameData.elo);
+          const defaultElo = parseStudioElo(settings?.defaultElo);
+          if (elo) params.set('elo', elo);
+          else if (defaultElo && (gameData.fen || defaultElo !== 1900)) params.set(gameData.fen ? 'elo' : 'fallbackElo', defaultElo);
+          if (lang) params.set('lang', lang);
+          if (orientation || gameData.fen) params.set('orientation', orientation || 'white');
+          if (gameData.pgn && platform) params.set('checkupSource', platform);
           const prefs = normalizeEnginePreferences(settings);
           const sf = prefs.stockfishVariant;
           const maia = prefs.maiaVariant;
-          const input = gameData.fen ? `fen=${encodeURIComponent(gameData.fen)}` : gameData.pgn ? `pgn=${encodeURIComponent(gameData.pgn)}` : 'empty=1';
-          targetUrl = `${base}/?sf=${sf}&maia=${maia}#${input}&elo=${elo}${extra}`;
+          targetUrl = `${base}/?sf=${sf}&maia=${maia}#${params}`;
         } else {
-          const params = new URLSearchParams({ elo: String(settings?.defaultElo || 1900), lang: settings?.maia3_lang || gameData.lang || 'en' });
+          const params = new URLSearchParams({ lang: settings?.maia3_lang || gameData.lang || 'en' });
+          const elo = parseStudioElo(gameData.elo) || (gameData.fen && parseStudioElo(settings?.defaultElo));
+          if (elo) params.set('elo', elo);
           if (gameData.fen) params.set('fen', gameData.fen);
           if (orientation || gameData.fen) params.set('orientation', orientation || 'white');
+          if (gameData.pgn && platform) params.set('checkupSource', platform);
           if (gameData.empty) params.set('empty', '1');
           targetUrl += `#${params}`;
         }
