@@ -2,8 +2,8 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-checkup-accounts';
-import { t } from './i18n.js?v=20261118-summary-ai';
+import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-checkup-accounts-r2';
+import { t } from './i18n.js?v=20261121-checkup-accounts';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
 const MAX_FETCH_GAMES = 10;
@@ -83,7 +83,8 @@ export function detectBatchPlayer(games = [], profile = null) {
     .map(([key, count]) => ({ key, name: display.get(key), count }))
     .sort((a, b) => b.count - a.count);
 
-  const aliasKeys = new Set((profile?.aliases || []).map(normalizeAlias).filter(Boolean));
+  const profileNames = [...(profile?.aliases || []), ...(profile?.accounts || []).map(account => account.username)];
+  const aliasKeys = new Set(profileNames.map(normalizeAlias).filter(Boolean));
   const aliasMatch = candidates.find(item => aliasKeys.has(item.key));
   return {
     suggestedName: aliasMatch?.name || candidates[0]?.name || '',

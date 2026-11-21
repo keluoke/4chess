@@ -54,10 +54,8 @@ function mergeAccounts(...lists) {
 }
 
 export function perspectiveNames(profile, platform) {
-  if (platform && profile?.accounts?.length) {
-    return profile.accounts.filter(account => account.platform === platform).map(account => account.username);
-  }
-  return profile?.aliases || [];
+  const linked = (profile?.accounts || []).filter(account => account.platform === platform);
+  return linked.length ? linked.map(account => account.username) : (profile?.aliases || []);
 }
 
 export function resolvePerspective(meta = {}, profile = null) {

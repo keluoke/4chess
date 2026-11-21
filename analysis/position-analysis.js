@@ -1,6 +1,6 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261118-summary-ai';
-import { MaiaEloTrend } from './maia-elo-trend.js?v=20261118-precise-filter';
+import { t } from './i18n.js?v=20261121-checkup-accounts';
+import { MaiaEloTrend } from './maia-elo-trend.js?v=20261121-checkup-accounts-r2';
 
 // All displayed evaluations share White's perspective, regardless of orientation.
 export function whiteEvaluation(result, fen) {

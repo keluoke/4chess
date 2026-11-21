@@ -31,6 +31,11 @@ assert.equal(chunks.length, 2);
 
 const detected = detectBatchPlayer(chunks.map(pgn => ({ pgn })));
 assert.equal(detected.suggestedName, 'KidPlayer', 'Most frequent player across batch is suggested');
+const boundBatch = detectBatchPlayer(chunks.map(pgn => ({ pgn })), {
+  accounts: [{ platform: 'lichess', username: 'oppa' }]
+});
+assert.equal(boundBatch.suggestedName, 'OppA', 'A bound account takes precedence over the most frequent player in a local PGN batch');
+assert.equal(boundBatch.matchedAlias, 'OppA');
 
 const chesscomPgn = '[Site "Chess.com"]\n' + pgn1;
 const chesscomContext = checkupGameContext(chesscomPgn, { orientation: 'black' });
@@ -41,6 +46,10 @@ assert.equal(suggestCheckupPlayer(chesscomContext, { aliases: ['OPPa', 'kidplaye
 const lichessContext = checkupGameContext('[Site "https://lichess.org/AbCd1234"]\n' + pgn2);
 assert.equal(lichessContext.platform, 'lichess');
 assert.equal(suggestCheckupPlayer(lichessContext), '', 'A platform URL alone supplies no player perspective');
+assert.equal(suggestCheckupPlayer(lichessContext, {
+  aliases: ['KidPlayer'],
+  accounts: [{ platform: 'chesscom', username: 'OppB' }]
+}), 'KidPlayer', 'An unbound platform still recognizes its legacy alias');
 assert.equal(checkupGameContext(chesscomPgn.replaceAll('1-0', '*')), null);
 assert.equal(checkupGameContext('[Site "https://fakechess.com/AbCd1234"]\n' + pgn1), null);
 

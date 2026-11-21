@@ -70,6 +70,9 @@ assert.deepEqual(linkedSon.accounts, [
 assert.equal(resolvePerspective({ platform: 'chesscom', white: 'KidChess', black: 'OtherName' }, linkedSon).side, 'b');
 assert.equal(resolvePerspective({ platform: 'chesscom', white: 'KidChess' }, linkedSon).side, null);
 assert.equal(resolvePerspective({ white: 'KidChess' }, linkedSon).side, 'w', 'Local PGN aliases still match');
+const chesscomOnly = { ...linkedSon, accounts: [{ platform: 'chesscom', username: 'OtherName' }] };
+assert.equal(resolvePerspective({ platform: 'lichess', white: 'OtherName', black: 'KidChess' }, chesscomOnly).side, 'b',
+  'When the current platform has no linked account, use legacy aliases without importing the other platform’s account');
 
 const move = {
   ply: 34,
