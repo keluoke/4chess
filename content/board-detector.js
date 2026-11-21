@@ -32,32 +32,29 @@ export class BoardDetector {
   }
 
   start() {
-    this.findBoard();
-    if (!this.boardEl) {
-      const retryInterval = setInterval(() => {
-        if (this.findBoard()) {
-          clearInterval(retryInterval);
-          this.attachObserver();
-          this.checkUpdate();
-        }
-      }, 300);
-    } else {
-      this.attachObserver();
-      this.checkUpdate();
-    }
+    // A Chess.com SPA can replace the entire board when opening analysis.
+    this.mountObserver = new MutationObserver(() => {
+      if ((!this.boardEl?.isConnected || !this.containerEl?.isConnected) && this.debounceTimer === null) {
+        this.scheduleUpdate();
+      }
+    });
+    this.mountObserver.observe(document.body, { childList: true, subtree: true });
+    this.bindNavigation();
+    this.checkUpdate();
   }
 
   findBoard() {
     if (this.platform === 'lichess') {
-      const cgBoard = document.querySelector('cg-board');
-      const cgWrap = document.querySelector('.cg-wrap') || document.querySelector('cg-container') || cgBoard?.parentElement;
+      const cgBoard = document.querySelector('.main-board cg-board') || document.querySelector('cg-board');
+      const cgWrap = cgBoard?.closest('.cg-wrap') || cgBoard?.parentElement;
       if (cgBoard && cgWrap) {
         this.boardEl = cgBoard;
         this.containerEl = cgWrap;
         return true;
       }
     } else if (this.platform === 'chesscom') {
-      const board = document.querySelector('wc-chess-board') ||
+      const board = document.querySelector('#board-single:is(wc-chess-board, chess-board)') ||
+                    document.querySelector('wc-chess-board') ||
                     document.querySelector('chess-board') ||
                     document.querySelector('.board-layout-chessboard');
       if (board) {
@@ -66,6 +63,7 @@ export class BoardDetector {
         return true;
       }
     }
+    this.boardEl = this.containerEl = null;
     return false;
   }
 
@@ -92,7 +90,9 @@ export class BoardDetector {
     moveLists.forEach(el => {
       this.observer.observe(el, { childList: true, subtree: true, attributes: true });
     });
+  }
 
+  bindNavigation() {
     // Listen to keyboard navigation
     window.addEventListener('keydown', (e) => {
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'j', 'k', 'h', 'l', 'f'].includes(e.key)) {
@@ -121,22 +121,17 @@ export class BoardDetector {
   scheduleUpdate(delay = 20) {
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
       this.checkUpdate();
     }, delay);
   }
 
   detectOrientation() {
     if (this.platform === 'lichess') {
-      const blackOrientationEl = document.querySelector('.cg-wrap.orientation-black') ||
-                                 document.querySelector('.orientation-black') ||
-                                 (this.containerEl && this.containerEl.classList.contains('orientation-black'));
+      const blackOrientationEl = this.boardEl?.closest('.orientation-black');
       this.orientation = blackOrientationEl ? 'black' : 'white';
     } else if (this.platform === 'chesscom') {
-      const isFlipped = document.querySelector('wc-chess-board.flipped') ||
-                        document.querySelector('chess-board.flipped') ||
-                        document.querySelector('.board-layout-chessboard.flipped') ||
-                        document.querySelector('.board.flipped') ||
-                        (this.boardEl && (this.boardEl.classList.contains('flipped') || this.boardEl.getAttribute('flipped') === 'true'));
+      const isFlipped = this.boardEl?.closest('.flipped, [flipped="true"]');
       this.orientation = isFlipped ? 'black' : 'white';
     }
   }
@@ -280,6 +275,15 @@ export class BoardDetector {
   }
 
   checkUpdate() {
+    const needsBoard = !this.boardEl?.isConnected || !this.containerEl?.isConnected ||
+      this.boardEl.matches('.board-layout-chessboard');
+    if (needsBoard && !this.findBoard()) return;
+    if (this.observedBoard !== this.boardEl || this.observedContainer !== this.containerEl) {
+      this.observedBoard = this.boardEl;
+      this.observedContainer = this.containerEl;
+      this.lastFen = '';
+      this.attachObserver();
+    }
     // 1. First, detect the actual orientation from DOM
     this.detectOrientation();
 

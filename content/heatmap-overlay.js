@@ -8,12 +8,16 @@
 
 import { boardColors, arrowMarkers, drawBoardArrow, drawMoveBadge } from '../ui/board-visuals.js';
 import { FairPlayGuard } from './fair-play-guard.js';
+import { visibleBoardGrid } from './board-grid.js';
+
+const BOARD_SIZE = 800;
 
 export class HeatmapOverlay {
   constructor() {
     this.svg = null;
     this.heatmapSvg = null;
     this.boardEl = null;
+    this.gridEl = null;
     this.orientation = 'white';
     this.showHeatmap = true;
     this.showArrows = true;
@@ -22,16 +26,30 @@ export class HeatmapOverlay {
     this.showStockfishArrows = true;
     this.currentData = null;
     this.activeHoverMove = null;
+    this.geometryFrame = null;
+    this.scheduleGeometry = () => {
+      if (this.geometryFrame !== null) return;
+      this.geometryFrame = requestAnimationFrame(() => {
+        this.geometryFrame = null;
+        if (!this.currentData) return;
+        if (FairPlayGuard.isLiveGameInProgress() || !this.liveEvaluationEnabled) this.clear();
+        else this.alignGeometry();
+      });
+    };
   }
 
-  attach(boardEl, orientation = 'white') {
+  attach(boardEl, orientation = 'white', gridEl = boardEl) {
     this.orientation = orientation;
-    if (this.boardEl === boardEl && this.svg && boardEl.contains(this.svg) && this.heatmapSvg && boardEl.contains(this.heatmapSvg)) {
-      return;
-    }
+    if (this.boardEl === boardEl && this.gridEl === gridEl &&
+        boardEl.contains(this.svg) && boardEl.contains(this.heatmapSvg)) return;
     this.svg?.remove();
     this.heatmapSvg?.remove();
+    this.resizeObserver?.disconnect();
+    this.layoutObserver?.disconnect();
+    this.gridEl?.removeEventListener('transitionend', this.scheduleGeometry);
+    this.gridEl?.removeEventListener('transitioncancel', this.scheduleGeometry);
     this.boardEl = boardEl;
+    this.gridEl = gridEl;
 
     const computedStyle = window.getComputedStyle(boardEl);
     if (computedStyle.position === 'static') {
@@ -53,6 +71,7 @@ export class HeatmapOverlay {
     this.svg.style.pointerEvents = 'none';
     this.svg.style.zIndex = '15';
     this.svg.style.transition = 'opacity 0.2s ease';
+    this.svg.style.visibility = 'hidden';
 
     this.svg.setAttribute('preserveAspectRatio', 'none');
     this.svg.style.display = 'block';
@@ -69,6 +88,40 @@ export class HeatmapOverlay {
     this.heatmapSvg.style.zIndex = '0';
     this.heatmapSvg.innerHTML = '<g id="maia-heatmap-layer"></g>';
     boardEl.append(this.heatmapSvg, this.svg);
+
+    this.resizeObserver ||= new ResizeObserver(this.scheduleGeometry);
+    this.layoutObserver ||= new MutationObserver(records => {
+      if (records.some(({ target }) => !this.svg.contains(target) && !this.heatmapSvg.contains(target))) {
+        this.scheduleGeometry();
+      }
+    });
+    for (const element of new Set([boardEl, gridEl])) {
+      this.resizeObserver.observe(element);
+      this.layoutObserver.observe(element, {
+        attributes: true, attributeFilter: ['class', 'style', 'flipped'],
+        childList: element === gridEl, subtree: element === gridEl
+      });
+    }
+    gridEl.addEventListener('transitionend', this.scheduleGeometry);
+    gridEl.addEventListener('transitioncancel', this.scheduleGeometry);
+    window.addEventListener('resize', this.scheduleGeometry);
+  }
+
+  alignGeometry() {
+    const grid = visibleBoardGrid(this.gridEl, this.orientation);
+    const viewport = this.svg.getBoundingClientRect();
+    // Keep the native stacking order and remap the SVG canvas to the measured grid.
+    let viewBox = null;
+    if (grid && viewport.width && viewport.height) {
+      const x = BOARD_SIZE / grid.width, y = BOARD_SIZE / grid.height;
+      viewBox = [(viewport.left - grid.left) * x, (viewport.top - grid.top) * y,
+        viewport.width * x, viewport.height * y].join(' ');
+    }
+    for (const layer of [this.svg, this.heatmapSvg]) {
+      if (viewBox && layer.getAttribute('viewBox') !== viewBox) layer.setAttribute('viewBox', viewBox);
+      const visibility = viewBox ? '' : 'hidden';
+      if (layer.style.visibility !== visibility) layer.style.visibility = visibility;
+    }
   }
 
   setOrientation(orientation) {
@@ -124,7 +177,7 @@ export class HeatmapOverlay {
       row = r; // Black orientation: rank 1 is top row 0
     }
 
-    const sqSize = 100;
+    const sqSize = BOARD_SIZE / 8;
     const x = col * sqSize;
     const y = row * sqSize;
     return {
@@ -143,6 +196,7 @@ export class HeatmapOverlay {
       return;
     }
     this.currentData = predictionData;
+    if (predictionData) this.alignGeometry();
     this.svg.querySelector('defs').outerHTML = arrowMarkers('maia-arrow', { ...boardColors(), 'gold-secondary': boardColors().gold, sf: boardColors().blue, consensus: boardColors().green, blunder: boardColors().red });
     // Engine scores arrive in the side-to-move perspective; labels use White's perspective.
     if (predictionData?.stockfish && predictionData.turn === 'b') {

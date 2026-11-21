@@ -1,8 +1,8 @@
-# 1.2.5 商店提交说明
+# 1.2.6 商店提交说明
 
-上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.5.zip`。本版保留线上 1.2.4 的悬浮窗双引擎线路、箭头预览与截图识别，加入工作台档案切换、完赛棋手绑定提示和可选后台提醒。标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
+上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.6.zip`。本版修复 Chess.com 和 Lichess 在缩放、翻转与棋盘重挂载时的箭头与热力图对齐，保留悬浮窗候选线路预览和可选后台提醒。标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
 
-- 根目录只有一个 manifest.json，MV3 / 1.2.5，使用原生 popup 与本地 Worker / WASM。
+- 根目录只有一个 manifest.json，MV3 / 1.2.6，使用原生 popup 与本地 Worker / WASM。
 - Maia 5M / 23M / 79M 权重仅从 CDN 加载，作为固定本地推理实现的数值数据；不包含下载执行的 JS / WASM。SF19 标准版仅在独立网页运行，扩展强制使用 Lite。
 - 轻量识别资产随包：chess-cnn.wasm、chessimg2pos_weights.bin、chessimg2pos_manifest.json；大权重不入包。
 - 公开隐私政策填写 https://4chess.cc/privacy/ 。数据声明必须说明局面、记谱、公开玩家标签、本地复盘缓存和 UI 设置同步；不能声称一切关闭页面即删除，也不能声称所有网络请求都不涉及公开棋局数据。

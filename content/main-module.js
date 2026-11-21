@@ -508,11 +508,7 @@ export async function initMaiaExtension() {
     }
 
     // Attach overlay to current board container
-    if (detector.containerEl) {
-      overlay.attach(detector.containerEl, orientation);
-    } else if (detector.boardEl) {
-      overlay.attach(detector.boardEl, orientation);
-    }
+    if (detector.boardEl) overlay.attach(detector.containerEl || detector.boardEl, orientation, detector.boardEl);
 
     // Fair Play check on position change
     if (FairPlayGuard.isLiveGameInProgress()) {
