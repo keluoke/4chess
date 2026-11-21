@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { buildTrapRecord, detectPhase, normalizeAlias, trapId } from './study-store.js?v=20261118-v12-p0';
+import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-checkup-accounts';
 import { t } from './i18n.js?v=20261118-summary-ai';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
@@ -51,7 +51,7 @@ export function checkupGameContext(pgn, { source, orientation, white, black } = 
 
 export function suggestCheckupPlayer(game, profile) {
   if (!game) return '';
-  const aliases = new Set((profile?.aliases || []).map(normalizeAlias));
+  const aliases = new Set(perspectiveNames(profile, game.platform).map(normalizeAlias));
   const matches = [game.white, game.black].filter(name => name && aliases.has(normalizeAlias(name)));
   if (matches.length === 1) return matches[0];
   if (matches.length > 1) return '';
@@ -459,7 +459,7 @@ export function checkupSourceType(sourceLabel = '') {
 export function selectCheckupHistory(history = [], { source = 'lichess', gameContext = null, suggestedPlayer = '' } = {}) {
   const list = Array.isArray(history) ? history : [];
   const scoped = list.filter(item => checkupSourceType(item?.sourceLabel) === source);
-  if (gameContext && source !== 'local') {
+  if (source !== 'local' && (gameContext || suggestedPlayer)) {
     const targetKey = normalizeAlias(suggestedPlayer);
     const matched = targetKey
       ? scoped.filter(item => normalizeAlias(item?.playerName) === targetKey)
@@ -500,6 +500,7 @@ export class IntuitionCheckup {
   fileReadGeneration = 0;
   running = false;
   fetching = false;
+  updatingProfile = false;
   pendingBatch = null;
   latestReport = null;
   history = [];
@@ -512,6 +513,9 @@ export class IntuitionCheckup {
     this.button = document.getElementById('btn-intuition-checkup');
     this.dialog = document.getElementById('checkup-dialog');
     this.closeBtn = document.getElementById('btn-close-checkup');
+    this.profileSelect = document.getElementById('checkup-profile-select');
+    this.accountList = document.getElementById('checkup-accounts');
+    this.btnSaveAccount = document.getElementById('btn-checkup-save-account');
     this.sourceTabs = [...document.querySelectorAll('#checkup-dialog [data-checkup-source]')];
     this.usernameRow = document.getElementById('checkup-username-row');
     this.usernameInput = document.getElementById('checkup-username');
@@ -549,6 +553,10 @@ export class IntuitionCheckup {
     return this.running && !this.cancelled;
   }
 
+  get busy() {
+    return this.running || this.fetching || this.updatingProfile;
+  }
+
   syncVisibility() {
     if (this.button) this.button.hidden = !this.allowed();
   }
@@ -559,6 +567,10 @@ export class IntuitionCheckup {
       this.button.onclick = () => this.open();
     }
     if (this.closeBtn) this.closeBtn.onclick = () => this.close();
+    if (this.profileSelect) this.profileSelect.onchange = () => this.switchProfile(this.profileSelect.value);
+    if (this.btnSaveAccount) {
+      this.btnSaveAccount.onclick = () => this.updateAccount(this.source, this.usernameInput.value);
+    }
     if (this.dialog) {
       this.dialog.addEventListener('click', event => {
         if (event.target === this.dialog) {
@@ -599,7 +611,7 @@ export class IntuitionCheckup {
     for (const tab of this.sourceTabs) {
       tab.onclick = () => {
         const source = tab.dataset.checkupSource;
-        if (this.running || this.fetching || source === this.source) return;
+        if (this.busy || source === this.source) return;
         this.source = source;
         this.pendingBatch = null;
         if (this.usernameInput) {
@@ -634,13 +646,13 @@ export class IntuitionCheckup {
   }
 
   async readFilesForBatch(files, { autoPrepare = false } = {}) {
-    if (this.running || this.fetching || !this.allowed() || !files?.length) return;
+    if (this.busy || !this.allowed() || !files?.length) return;
     const generation = this.openGeneration;
     const readToken = ++this.fileReadGeneration;
     const profileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
     const texts = await Promise.all([...files].slice(0, MAX_LOCAL_GAMES).map(file => file.text()));
     const currentProfileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
-    if (readToken !== this.fileReadGeneration || generation !== this.openGeneration || profileId !== currentProfileId || this.running || this.fetching || !this.allowed()) {
+    if (readToken !== this.fileReadGeneration || generation !== this.openGeneration || profileId !== currentProfileId || this.busy || !this.allowed()) {
       return;
     }
     this.source = 'local';
@@ -651,7 +663,7 @@ export class IntuitionCheckup {
   }
 
   async receiveDroppedPgn(text) {
-    if (this.running || this.fetching || !this.allowed()) return;
+    if (this.busy || !this.allowed()) return;
     this.fileReadGeneration++;
     this.source = 'local';
     this.pendingBatch = null;
@@ -663,10 +675,13 @@ export class IntuitionCheckup {
   async open() {
     if (!this.allowed() || !this.dialog) return;
     const generation = ++this.openGeneration;
+    const epoch = this.app.gameEpoch;
     this.fileReadGeneration++;
-    await this.app.mistakeBank?.ready;
-    if (generation !== this.openGeneration || !this.allowed()) return;
-    const profile = this.app.mistakeBank?.activeProfile;
+    const bank = this.app.mistakeBank;
+    await bank?.ready;
+    if (!this.dialog.open) await bank?.refreshState();
+    if (generation !== this.openGeneration || epoch !== this.app.gameEpoch || !this.allowed()) return;
+    const profile = bank?.activeProfile;
     const profileId = profile?.id || 'default';
     const gameChanged = this.gameContext !== this.app.checkupGame;
     const profileChanged = this.activeProfileId !== profileId;
@@ -677,7 +692,7 @@ export class IntuitionCheckup {
       if (profileChanged && this.localPgnInput) this.localPgnInput.value = '';
       if (this.confirmNameInput) this.confirmNameInput.value = '';
       this.gameContext = this.app.checkupGame;
-      if (this.gameContext) this.source = this.gameContext.platform;
+      this.source = this.gameContext?.platform || profile?.accounts?.[0]?.platform || 'lichess';
       if (this.usernameInput) this.usernameInput.value = this.suggestUsername(profile);
     }
     this.activeProfileId = profileId;
@@ -686,14 +701,68 @@ export class IntuitionCheckup {
     }
     const loadedHistory = profile ? await this.app.mistakeBank.store.listCheckups(profile.id) : [];
     const currentProfileId = this.app.mistakeBank?.activeProfile?.id || 'default';
-    if (generation !== this.openGeneration || currentProfileId !== profileId || !this.allowed()) return;
+    if (generation !== this.openGeneration || epoch !== this.app.gameEpoch || currentProfileId !== profileId || !this.allowed()) return;
     this.history = loadedHistory;
     this.applyHistoryContext();
+    this.renderAccounts();
     this.renderSourceControls();
     this.renderReport(this.latestReport);
-    if (!this.dialog.open) this.dialog.showModal();
-    const focus = this.usernameInput?.value && this.source !== 'local' ? this.btnFetch : this.usernameInput;
-    (this.source === 'local' ? this.btnFetch : focus)?.focus();
+    if (!this.dialog.open) {
+      this.dialog.showModal();
+      (this.accountList?.querySelector('button') || (this.usernameInput?.value ? this.btnFetch : this.usernameInput))?.focus();
+    }
+  }
+
+  async switchProfile(id) {
+    const bank = this.app.mistakeBank;
+    if (!bank || this.busy || !this.allowed() || id === this.activeProfileId) return;
+    const generation = ++this.openGeneration;
+    this.updatingProfile = true;
+    this.renderSourceControls();
+    this.renderReport(null);
+    try {
+      await bank.selectProfile(id);
+      if (generation === this.openGeneration && this.dialog.open) await this.open();
+    } catch {
+      if (generation === this.openGeneration) {
+        this.renderAccounts();
+        this.setStatus(t('checkupAccountError'));
+      }
+    } finally {
+      this.updatingProfile = false;
+      this.renderSourceControls();
+      this.renderReport(this.latestReport);
+    }
+  }
+
+  async updateAccount(platform, username, { remove = false } = {}) {
+    const bank = this.app.mistakeBank;
+    const id = this.activeProfileId;
+    const account = normalizeAccount(platform, username);
+    if (!account || !id || !bank || this.busy || !this.dialog?.open || !this.allowed()) return;
+    const generation = this.openGeneration;
+    this.updatingProfile = true;
+    this.renderSourceControls();
+    try {
+      const saved = await bank.store.setProfileAccount(id, platform, username, { remove });
+      await bank.refreshState();
+      this.app.renderBlunderCards?.();
+      this.app.reviewOverview?.render?.();
+      if (generation !== this.openGeneration || !this.allowed()) return;
+      if (bank.activeProfile?.id !== id) {
+        await this.open();
+        return;
+      }
+      if (!saved) throw new Error('Profile does not exist');
+      this.renderAccounts();
+      const key = remove ? 'checkupAccountRemoved' : 'checkupAccountSaved';
+      this.setStatus(t(key, { account: this.accountLabel(account) }));
+    } catch {
+      if (generation === this.openGeneration) this.setStatus(t('checkupAccountError'));
+    } finally {
+      this.updatingProfile = false;
+      this.renderSourceControls();
+    }
   }
 
   close() {
@@ -717,11 +786,55 @@ export class IntuitionCheckup {
 
   suggestUsername(profile) {
     if (this.gameContext?.platform === this.source) return suggestCheckupPlayer(this.gameContext, profile);
-    return this.gameContext ? '' : (profile?.aliases?.[0] || '');
+    const preferred = profile?.accounts?.find(account => account.platform === this.source);
+    return preferred?.username || (!this.gameContext && !profile?.accounts?.length ? profile?.aliases?.[0] : '') || '';
+  }
+
+  accountLabel(account) {
+    return `${formatSourceBadge(account.platform)} · ${account.username}`;
+  }
+
+  renderAccounts() {
+    const bank = this.app.mistakeBank;
+    bank?.renderProfileOptions(this.profileSelect);
+    if (!this.accountList) return;
+    const accounts = bank?.activeProfile?.accounts || [];
+    this.accountList.hidden = !accounts.length;
+    this.accountList.replaceChildren();
+    for (const account of accounts) {
+      const label = this.accountLabel(account);
+      const row = document.createElement('li');
+      const name = document.createElement('strong');
+      name.className = 'checkup-account-name';
+      name.textContent = label;
+      const run = document.createElement('button');
+      run.type = 'button';
+      run.className = 'btn-header';
+      run.textContent = t('checkupRunAccount');
+      run.setAttribute('aria-label', t('checkupRunAccountLabel', { account: label }));
+      run.onclick = () => {
+        if (this.busy || !this.allowed()) return;
+        this.source = account.platform;
+        this.usernameInput.value = account.username;
+        this.applyHistoryContext();
+        this.renderReport(this.latestReport);
+        this.prepareBatch();
+      };
+      const unlink = document.createElement('button');
+      unlink.type = 'button';
+      unlink.className = 'btn-header';
+      unlink.textContent = t('checkupRemoveAccount');
+      unlink.setAttribute('aria-label', t('checkupRemoveAccountLabel', { account: label }));
+      unlink.onclick = () => this.updateAccount(account.platform, account.username, { remove: true });
+      row.append(name, run, unlink);
+      this.accountList.append(row);
+    }
   }
 
   renderSourceControls() {
-    const busy = this.running || this.fetching;
+    const busy = this.busy;
+    if (this.profileSelect) this.profileSelect.disabled = busy;
+    for (const button of this.accountList?.querySelectorAll('button') || []) button.disabled = busy;
     for (const tab of this.sourceTabs) {
       tab.setAttribute('aria-pressed', String(tab.dataset.checkupSource === this.source));
       tab.disabled = busy;
@@ -730,28 +843,35 @@ export class IntuitionCheckup {
     if (this.usernameRow) this.usernameRow.hidden = isLocal;
     if (this.localRow) this.localRow.hidden = !isLocal;
     if (this.confirmBox) this.confirmBox.hidden = busy || !this.pendingBatch;
-    if (this.progressBox) this.progressBox.hidden = !busy;
+    if (this.progressBox) this.progressBox.hidden = !this.running && !this.fetching;
     if (this.reportBox) this.reportBox.hidden = busy || !this.latestReport;
     if (this.usernameInput) this.usernameInput.disabled = busy;
     if (this.localPgnInput) this.localPgnInput.disabled = busy;
     if (this.btnSelectFiles) this.btnSelectFiles.disabled = busy;
+    if (this.btnSaveAccount) {
+      const account = normalizeAccount(this.source, this.usernameInput?.value);
+      const accounts = this.app.mistakeBank?.activeProfile?.accounts || [];
+      this.btnSaveAccount.hidden = isLocal;
+      this.btnSaveAccount.disabled = busy || !account || accounts.some(item => accountKey(item) === accountKey(account));
+      this.btnSaveAccount.textContent = account ? t('checkupSaveNamedAccount', { player: account.username }) : t('checkupSaveAccount');
+    }
     if (this.btnFetch) {
       this.btnFetch.disabled = busy;
       this.btnFetch.textContent = t(isLocal ? 'checkupParseLocal' : 'checkupFetchGames');
     }
     if (this.playerChoices) {
       this.playerChoices.replaceChildren();
-      this.playerChoices.hidden = busy || this.gameContext?.platform !== this.source
-        || !!this.suggestUsername(this.app.mistakeBank?.activeProfile);
+      this.playerChoices.hidden = busy || this.gameContext?.platform !== this.source;
       if (!this.playerChoices.hidden) {
         for (const name of new Set([this.gameContext.white, this.gameContext.black].filter(Boolean))) {
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'btn-header';
-          button.textContent = t('checkupPlayerAction', { player: name });
+          button.textContent = t('checkupChoosePlayer', { player: name });
           button.onclick = () => {
             this.usernameInput.value = name;
-            this.prepareBatch();
+            this.usernameInput.oninput();
+            this.usernameInput.focus();
           };
           this.playerChoices.append(button);
         }
@@ -803,7 +923,7 @@ export class IntuitionCheckup {
   }
 
   async prepareBatch() {
-    if (this.running || this.fetching || !this.allowed()) return;
+    if (this.busy || !this.allowed()) return;
     const generation = this.openGeneration;
     const source = this.source;
     const startProfileId = this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
@@ -876,7 +996,7 @@ export class IntuitionCheckup {
   }
 
   async startRun(batch = this.pendingBatch, targetPlayer = this.confirmNameInput?.value?.trim() || '') {
-    if (this.running || this.fetching || !this.allowed() || !batch) return;
+    if (this.busy || !this.allowed() || !batch) return;
     const activeId = () => this.app.mistakeBank?.activeProfile?.id || this.activeProfileId || 'default';
     if (batch.profileId !== activeId()) return;
     if (!targetPlayer) {
@@ -977,7 +1097,7 @@ export class IntuitionCheckup {
   renderReport(report) {
     if (this.historyHintEl) {
       this.historyHintEl.replaceChildren();
-      const showFallback = !report && this.fallbackReport && !this.running && !this.fetching;
+      const showFallback = !report && this.fallbackReport && !this.busy;
       this.historyHintEl.hidden = !showFallback;
       if (showFallback) {
         const item = this.fallbackReport;
@@ -1001,7 +1121,7 @@ export class IntuitionCheckup {
       this.reportBox.hidden = true;
       return;
     }
-    this.reportBox.hidden = this.running || this.fetching;
+    this.reportBox.hidden = this.busy;
 
     const summary = document.createElement('div');
     summary.className = 'checkup-summary-card';

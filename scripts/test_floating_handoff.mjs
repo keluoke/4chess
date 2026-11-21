@@ -97,7 +97,10 @@ try {
         release();
       }, args: [{ id, platform, pgn }] });
     }, { tabId, id, platform, pgn: pgn.replace('UX White', 'UX-White').replace('UX Black', 'UX-Black') });
-    const opened = await openedPage; await opened.goto(await worker.evaluate(() => globalThis.handoffTargetUrl));
+    const opened = await openedPage;
+    const handoff = await worker.evaluate(() => globalThis.handoffTargetUrl);
+    assert.equal(new URLSearchParams(new URL(handoff).hash.slice(1)).get('overview'), '1', 'The explicit completed-game action requests an overview');
+    await opened.goto(handoff);
     await opened.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
     assert.equal(await opened.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black', `${platform}: preserve the direction at click time, before the flip observer/PGN completion`);
     assert.equal(await opened.evaluate(() => __maiaStudioApp.checkupGame?.platform), platform);

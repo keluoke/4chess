@@ -554,6 +554,14 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-dialog { width:min(680px,calc(100% - 28px));max-width:none;max-height:calc(100dvh - 28px);margin:auto;padding:22px 24px;border:1px solid var(--dg-line);border-radius:20px;background:var(--dg-surface);color:var(--text-main);box-shadow:var(--dg-shadow);overscroll-behavior:contain; }
 .checkup-dialog::backdrop { background:light-dark(#23392a55,#030d09a0);backdrop-filter:blur(3px); }
 .checkup-subtitle { margin:4px 0 0;font-size:12px;color:var(--text-muted); }
+.checkup-profile,.checkup-fetch-row { display:flex;flex-wrap:wrap;align-items:center;gap:8px; }
+.checkup-profile { margin:0 0 12px;font-size:13px; }
+.checkup-profile select { max-width:min(100%,240px);height:34px; }
+.checkup-accounts { display:grid;gap:6px;margin:0 0 12px;padding:0;list-style:none; }
+.checkup-accounts[hidden],#btn-checkup-save-account[hidden] { display:none; }
+.checkup-accounts li { display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 8px;border:1px solid var(--dg-line);border-radius:10px;background:var(--dg-paper); }
+.checkup-account-name { flex:1 1 160px;min-width:0;overflow-wrap:anywhere;font-size:13px; }
+.checkup-accounts .btn-header { height:32px;box-shadow:none; }
 .checkup-sources,.checkup-confirm-row,.checkup-progress-box,.checkup-report-actions { display:flex;flex-wrap:wrap;gap:8px;align-items:center; }
 .checkup-sources { margin-bottom:12px; }
 .checkup-player-choices { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }

@@ -6,7 +6,7 @@ import {
   parseAliases,
   resolvePerspective,
   trapId
-} from './study-store.js?v=20261118-v12-p0';
+} from './study-store.js?v=20261121-checkup-accounts';
 import { t } from './i18n.js?v=20261118-summary-ai';
 
 export class MistakeBank {
@@ -76,13 +76,7 @@ export class MistakeBank {
       this.dialog.addEventListener('close', () => this.button?.focus({ preventScroll: true }));
     }
     if (this.profileSelect) {
-      this.profileSelect.onchange = async () => {
-        this.store.setActiveProfileId(this.profileSelect.value);
-        await this.refreshState();
-        await this.renderDialog();
-        this.app.renderBlunderCards?.();
-        this.app.reviewOverview?.render?.();
-      };
+      this.profileSelect.onchange = () => this.selectProfile(this.profileSelect.value);
     }
     if (this.btnNewProfile) {
       this.btnNewProfile.onclick = () => this.openProfileEditor(null);
@@ -193,6 +187,29 @@ export class MistakeBank {
     }
   }
 
+  async selectProfile(id) {
+    this.store.setActiveProfileId(id);
+    await this.refreshState();
+    if (this.dialog?.open) await this.renderDialog();
+    this.app.renderBlunderCards?.();
+    this.app.reviewOverview?.render?.();
+  }
+
+  renderProfileOptions(select) {
+    if (!select) return;
+    select.replaceChildren();
+    for (const profile of this.profiles) {
+      const label = profile.id === DEFAULT_PROFILE_ID && profile.displayName === 'Default'
+        ? t('bankDefaultProfile')
+        : profile.displayName;
+      const option = document.createElement('option');
+      option.value = profile.id;
+      option.textContent = label;
+      option.selected = profile.id === this.activeProfile?.id;
+      select.add(option);
+    }
+  }
+
   async open() {
     if (!this.allowed() || !this.dialog) return;
     const generation = ++this.openGeneration;
@@ -213,6 +230,7 @@ export class MistakeBank {
     return {
       white: this.app.el?.metaWhite?.textContent || '',
       black: this.app.el?.metaBlack?.textContent || '',
+      platform: this.app.checkupGame?.platform,
       result: this.app.el?.metaResult?.textContent || '*',
       isSample: !!this.app.isSampleGame,
       isPositionOnly: document.body.classList.contains('position-only')
@@ -400,19 +418,7 @@ export class MistakeBank {
 
   async renderDialog() {
     if (!this.dialog || !this.activeProfile) return;
-    if (this.profileSelect) {
-      this.profileSelect.replaceChildren();
-      for (const profile of this.profiles) {
-        const label = profile.id === DEFAULT_PROFILE_ID && profile.displayName === 'Default'
-          ? t('bankDefaultProfile')
-          : profile.displayName;
-        const opt = document.createElement('option');
-        opt.value = profile.id;
-        opt.textContent = label;
-        opt.selected = profile.id === this.activeProfile.id;
-        this.profileSelect.add(opt);
-      }
-    }
+    this.renderProfileOptions(this.profileSelect);
     if (this.btnDeleteProfile) {
       this.btnDeleteProfile.hidden = this.activeProfile.id === DEFAULT_PROFILE_ID;
     }

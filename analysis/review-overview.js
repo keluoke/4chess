@@ -2,6 +2,7 @@ import { getLang, t } from './i18n.js?v=20261118-summary-ai';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
 import { turningPointWording } from './review-commentary.js?v=20261120-review';
+import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const byId = id => document.getElementById(id);
 const sideLabel = side => t(side === 'w' ? 'reviewWhite' : side === 'b' ? 'reviewBlack' : 'reviewBoth');
@@ -68,24 +69,50 @@ export class ReviewOverview {
       this.side = button.dataset.practiceSide;
       this.renderPractice(app.reviewExplorer.available(app.reviewResult.allMoves));
     });
+    for (const type of ['pointerdown', 'click', 'keydown', 'wheel', 'input', 'drop']) {
+      document.addEventListener(type, event => {
+        if (event.isTrusted) this.autoOpenRequested = false;
+      }, { capture: true, passive: true });
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.autoOpenRequested = false;
+    });
     this.reset();
   }
 
-  reset(side = this.app.reviewExplorer.side) {
+  reset(side = this.app.reviewExplorer.side, { newGame = true } = {}) {
     this.received = this.pending = false;
+    this.autoOpenRequested = false;
+    if (newGame) this.autoOpened = false;
     this.side = side;
     this.queue = [];
     this.summary.querySelector('details').open = false;
     this.show('workbench');
   }
 
+  requestAutoOpen() {
+    this.autoOpenRequested = !this.autoOpened && !this.app.isBranching && !this.app.tempAnalysisFen;
+  }
+
   update(result) {
     this.render(result);
+    let view = this.view;
     if (!this.received) {
       this.received = true;
       this.pending = true;
+      if (this.autoOpenRequested && !result.isPartial && !this.app.moves?.isPartial
+        && result.allMoves.length === this.app.moves?.length
+        && FairPlayGuard.verifyConcludedGame(this.app.sessionInput?.pgn || this.app.sessionInput).ok
+        && !FairPlayGuard.isLiveGameInProgress() && !this.app.scanSourceLocked
+        && !document.hidden && document.hasFocus() && !document.querySelector('dialog[open]')
+        && !this.app.el.pgnModal.classList.contains('open') && !this.app.boardUI.promotionPicker
+        && !this.app.isBranching && !this.app.tempAnalysisFen && !this.app.practice?.inProgress) {
+        this.autoOpened = true;
+        view = 'overview';
+      }
+      this.autoOpenRequested = false;
     }
-    this.show(this.view);
+    this.show(view);
   }
 
   show(view) {
@@ -95,7 +122,11 @@ export class ReviewOverview {
     if (overview) this.pending = false;
     this.overviewButton.hidden = !available;
     this.readyButton.hidden = !available || !this.pending;
-    this.readyButton.textContent = t(this.app.reviewResult?.isPartial ? 'reviewPartialReady' : 'reviewReady');
+    const { isPartial, accuracyWhite, accuracyBlack } = this.app.reviewResult || {};
+    this.readyButton.textContent = isPartial ? t('reviewPartialReady')
+      : Number.isFinite(accuracyWhite) && Number.isFinite(accuracyBlack)
+        ? t('reviewReadyWithAccuracy', { white: accuracyWhite.toFixed(1), black: accuracyBlack.toFixed(1) })
+        : t('reviewReady');
     if (overview) {
       if (this.summary.open) return;
       this.summary.showModal();

@@ -179,6 +179,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (lang) params.set('lang', lang);
           if (orientation || gameData.fen) params.set('orientation', orientation || 'white');
           if (gameData.pgn && platform) params.set('checkupSource', platform);
+          if (gameData.pgn && !gameData.fen && platform) params.set('overview', '1');
           const prefs = normalizeEnginePreferences(settings);
           const sf = prefs.stockfishVariant;
           const maia = prefs.maiaVariant;
@@ -190,6 +191,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (gameData.fen) params.set('fen', gameData.fen);
           if (orientation || gameData.fen) params.set('orientation', orientation || 'white');
           if (gameData.pgn && platform) params.set('checkupSource', platform);
+          if (gameData.pgn && !gameData.fen && platform) params.set('overview', '1');
           if (gameData.empty) params.set('empty', '1');
           targetUrl += `#${params}`;
         }

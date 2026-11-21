@@ -607,6 +607,103 @@ try {
   await denied.close();
   await incoming.close();
   console.log('PASS review links: final position, rating provenance, bilingual context, resignation, observation isolation, fresh-profile sharing, replacement and reload; unfinished PGNs are blocked.');
+
+  const checkup = await browser.newPage({ serviceWorkers: 'block' });
+  checkup.on('pageerror', error => errors.push(error.message));
+  await checkup.route('https://weights.4chess.cc/**', route => route.abort());
+  await checkup.goto(base + '?lang=en');
+  await checkup.waitForFunction(() => window.__maiaStudioApp?.positions.length === 1);
+  const accountPgn = '[Site "Chess.com"]\n[White "OtherPlayer"]\n[Black "StudyPlayer"]\n[Result "0-1"]\n1. e4 e5 2. Nf3 Nc6 0-1';
+  await checkup.evaluate(pgn => {
+    const app = __maiaStudioApp;
+    app.positionAnalysis.refresh = () => {};
+    app.intuitionReview.start = () => {};
+    const analyze = () => new Promise(resolve => {
+      window.completeAnalysis = (isPartial = false) => resolve({
+        allMoves: app.positions.slice(1).map((position, i) => ({ ...position, fenBefore: app.positions[i].fen })),
+        positionEvaluations: [], accuracyWhite: 93, accuracyBlack: 94, engineOnly: true, isPartial
+      });
+    });
+    window.beginReview = options => {
+      app.analyzer.analyzeGame = analyze;
+      app.startNewSession({ pgn, ...options });
+    };
+    beginReview({ openOverview: true });
+  }, accountPgn);
+  const summary = checkup.locator('#review-summary');
+  await checkup.evaluate(() => completeAnalysis());
+  await summary.waitFor();
+  await checkup.keyboard.press('Escape');
+  await checkup.locator('#btn-reanalyze').click();
+  await checkup.evaluate(() => completeAnalysis());
+  await checkup.locator('#review-ready').waitFor();
+  assert.equal(await summary.isVisible(), false, 'Reanalyzing the same game does not auto-open again');
+
+  await checkup.evaluate(() => beginReview({ openOverview: true }));
+  await checkup.locator('#btn-settings').click();
+  await checkup.locator('#btn-close-settings').click();
+  await checkup.evaluate(() => completeAnalysis());
+  await checkup.locator('#review-ready').waitFor();
+  assert.equal(await summary.isVisible(), false, 'Interacting while waiting keeps the workbench open');
+  assert.match(await checkup.locator('#review-ready').innerText(), /93\.0%.*94\.0%/);
+  await checkup.evaluate(() => beginReview({ openOverview: true }));
+  await checkup.evaluate(() => completeAnalysis(true));
+  await checkup.locator('#review-ready').waitFor();
+  assert.equal(await summary.isVisible(), false, 'Partial results only show the manual entry');
+
+  await checkup.evaluate(async () => {
+    const bank = __maiaStudioApp.mistakeBank;
+    await bank.ready;
+    await bank.store.saveProfile({ id: 'child', displayName: 'Child', aliases: ['StudyPlayer'] });
+    __maiaStudioApp.stockfish.initialize = async () => true;
+    __maiaStudioApp.maiaEngine.initialize = async () => true;
+  });
+  const profile = checkup.locator('#checkup-profile-select');
+  const cards = checkup.locator('#checkup-accounts li');
+  await checkup.locator('#btn-intuition-checkup').click();
+  await profile.selectOption('child');
+  await checkup.locator('#checkup-player-choices').getByRole('button', { name: /StudyPlayer/ }).click();
+  await checkup.locator('#btn-checkup-save-account').click();
+  await checkup.getByRole('button', { name: /Analyze the last 10 games for Chess.com · StudyPlayer/ }).waitFor();
+  await checkup.locator('[data-checkup-source="lichess"]').click();
+  await checkup.locator('#checkup-username').fill('LichessChild');
+  await checkup.locator('#btn-checkup-save-account').click();
+  await checkup.getByRole('button', { name: /Analyze the last 10 games for Lichess · LichessChild/ }).waitFor();
+
+  let completedFetches = 0;
+  const archive = 'https://api.chess.com/pub/player/studyplayer/games/2026/11';
+  await checkup.route('https://api.chess.com/pub/player/studyplayer/games/archives', route => route.fulfill({ json: { archives: [archive] } }));
+  await checkup.route(archive, route => {
+    completedFetches++;
+    return route.fulfill({ json: { games: [{ rules: 'chess', pgn: accountPgn }] } });
+  });
+  await checkup.getByRole('button', { name: /Analyze the last 10 games for Chess.com · StudyPlayer/ }).click();
+  await checkup.locator('#checkup-report-box').waitFor();
+  assert.equal(completedFetches, 1);
+  assert.match(await checkup.locator('#checkup-report-box').innerText(), /StudyPlayer/);
+  assert.equal(await checkup.evaluate(async () => {
+    const store = __maiaStudioApp.mistakeBank.store;
+    const report = (await store.listCheckups('child'))[0];
+    return report.sourceLabel + '|' + (await store.listCheckups('default')).length;
+  }), 'chesscom:StudyPlayer|0');
+  await profile.selectOption('default');
+  await cards.first().waitFor({ state: 'detached' });
+  assert.equal(await checkup.locator('#checkup-report-box').isVisible(), false);
+  await profile.selectOption('child');
+  await checkup.getByRole('button', { name: /Unlink Lichess · LichessChild/ }).click();
+  await checkup.getByRole('button', { name: /Unlink Lichess · LichessChild/ }).waitFor({ state: 'detached' });
+  await checkup.reload();
+  await checkup.waitForFunction(() => window.__maiaStudioApp?.positions.length > 1);
+  await checkup.locator('#btn-intuition-checkup').click();
+  await cards.first().waitFor();
+  assert.equal(await profile.inputValue(), 'child');
+  assert.equal(await cards.count(), 1, 'IndexedDB preserves linked accounts and removals after reload');
+  await checkup.setViewportSize({ width: 390, height: 844 });
+  assert(await checkup.locator('#checkup-dialog').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth + 1),
+    'Account cards and profile selector fit the mobile dialog');
+  await checkup.close();
+  console.log('PASS conditional overview and multi-account checkup: one auto-open, interaction and partial guards, profile-scoped history and IndexedDB reload.');
+
   assert.deepEqual(errors, []);
   console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, grounded English loss wording, recap cancellation on all review resets, cache, practice isolation and Chinese fallback.');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

@@ -2,11 +2,11 @@ import { initWorkbenchLayout } from './workbench-layout.js?v=20261118-precise-fi
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
 import { IntuitionReview } from './intuition-review.js?v=20261118-summary-ai';
 import { ReviewExplorer } from './review-explorer.js?v=20261118-summary-ai';
-import { ReviewOverview } from './review-overview.js?v=20261120-review';
+import { ReviewOverview } from './review-overview.js?v=20261121-checkup-accounts';
 import { ReviewCommentary } from './review-commentary.js?v=20261120-review';
 import { ConsequencePlayer } from './consequence-player.js?v=20261118-v12-p0';
-import { MistakeBank } from './mistake-bank.js?v=20261118-v12-p0-fix2';
-import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261119-checkup';
+import { MistakeBank } from './mistake-bank.js?v=20261121-checkup-accounts';
+import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261121-checkup-accounts';
 import { ShareCardModal } from './share-card.js?v=20261118-v12-p2';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
 import { ReviewPractice } from './review-practice.js?v=20261118-v12-p0';
@@ -30,7 +30,7 @@ import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } f
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
-const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource'];
+const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource', 'overview'];
 const STUDIO_SESSION = 'divergeStudioSession';
 
 const POSITION_TOGGLES = [
@@ -481,7 +481,7 @@ class AnalysisStudioApp {
     // Reanalyze button
     this.el.btnReanalyze.addEventListener('click', () => {
       if (this.moves.length > 0) {
-        this.runFullReview(true);
+        this.runFullReview(true, { openOverview: true });
       }
     });
 
@@ -553,6 +553,7 @@ class AnalysisStudioApp {
     this.mistakeBank?.refreshState?.();
     if (this.mistakeBank?.dialog?.open) this.mistakeBank.renderDialog();
     if (this.checkup?.dialog?.open) {
+      this.checkup.renderAccounts();
       this.checkup.renderSourceControls();
       this.checkup.renderReport(this.checkup.latestReport);
     }
@@ -942,7 +943,7 @@ class AnalysisStudioApp {
     const fen = value('fen');
     const sourceUrl = value('url') || (text && /^https?(?::|%3a)/i.test(text) ? text : null);
     const empty = value('empty') === '1';
-    const external = { orientation, elo, fallbackElo, checkupSource, landAtEnd: true };
+    const external = { orientation, elo, fallbackElo, checkupSource, landAtEnd: true, openOverview: value('overview') === '1' };
     try {
       if (fen) {
         if (this.startNewSession({ ...external, fen, positionInput: true, autoReview: false })) return;
@@ -1088,6 +1089,7 @@ class AnalysisStudioApp {
     result = null,
     cachedReview = null,
     autoReview = true,
+    openOverview = false,
     positionInput = false,
     checkupSource = null,
     checkupOrientation = null,
@@ -1258,6 +1260,7 @@ class AnalysisStudioApp {
     this.rememberSession();
     this.syncGameLink();
 
+    if (openOverview) this.reviewOverview.requestAutoOpen();
     const compatibleReview = cachedReview && GameAnalyzer.isValidReviewCache(cachedReview) &&
       (cachedReview.engineKey || 'sf19lite') === this.stockfish.engineKey &&
       (cachedReview.modelKey || 'maia3-5m') === this.maiaEngine.modelKey &&
@@ -1475,7 +1478,7 @@ class AnalysisStudioApp {
     }
   }
 
-  async runFullReview(forceRefresh = false) {
+  async runFullReview(forceRefresh = false, { openOverview = false } = {}) {
     if (this.checkup?.ownsEngines) return;
     this.consequencePlayer?.stop();
     this.practice?.stop();
@@ -1484,7 +1487,8 @@ class AnalysisStudioApp {
     if (this.scanSourceLocked) return;
     if (!this.moves || this.moves.length === 0) return;
 
-    if (forceRefresh) this.reviewOverview.reset();
+    if (forceRefresh) this.reviewOverview.reset(undefined, { newGame: false });
+    if (openOverview) this.reviewOverview.requestAutoOpen();
     this.positionAnalysis.cancel();
     this.reviewResult = this.coreReview = null;
     this.practiceResults = new Map();
@@ -2311,6 +2315,7 @@ class AnalysisStudioApp {
   }
 
   pauseWholeReview() {
+    this.reviewOverview.autoOpenRequested = false;
     clearTimeout(this.resumeReviewTimer);
     if (!this.fullReviewRunning && !this.analyzer.isAnalyzing) return;
     this.reviewEpoch++;

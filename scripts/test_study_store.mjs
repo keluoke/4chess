@@ -57,6 +57,19 @@ const store = new StudyStore({ useIndexedDb: false });
 await store.init();
 const son = await store.saveProfile({ displayName: 'Son', aliases: ['KidChess, kidchess'] }, now);
 assert.deepEqual(son.aliases, ['KidChess']);
+await Promise.all([
+  store.setProfileAccount(son.id, 'lichess', 'KidChess'),
+  store.setProfileAccount(son.id, 'chesscom', 'OtherName')
+]);
+await store.setProfileAccount(son.id, 'lichess', ' kidchess ');
+const linkedSon = await store.saveProfile({ id: son.id, displayName: 'Son', aliases: son.aliases }, now + 1);
+assert.deepEqual(linkedSon.accounts, [
+  { platform: 'lichess', username: 'KidChess' },
+  { platform: 'chesscom', username: 'OtherName' }
+], 'Editing profile details preserves case-insensitively deduplicated platform accounts');
+assert.equal(resolvePerspective({ platform: 'chesscom', white: 'KidChess', black: 'OtherName' }, linkedSon).side, 'b');
+assert.equal(resolvePerspective({ platform: 'chesscom', white: 'KidChess' }, linkedSon).side, null);
+assert.equal(resolvePerspective({ white: 'KidChess' }, linkedSon).side, 'w', 'Local PGN aliases still match');
 
 const move = {
   ply: 34,
@@ -103,6 +116,19 @@ assert.equal(importResult.trapsAdded, 1);
 assert.equal((await restored.listTraps(son.id))[0].srs.stage, 1);
 assert.equal((await restored.listProfiles()).find(p => p.id === DEFAULT_PROFILE_ID).displayName, '爸爸', 'Renamed default profile must be restored');
 assert.equal(restored.getActiveProfileId(), son.id, 'Active profile ID must be restored');
+assert.deepEqual((await restored.getActiveProfile()).accounts, linkedSon.accounts, 'Backup restores account bindings');
+await restored.importBackup({
+  version: 1,
+  profiles: [{ id: son.id, displayName: 'Son', accounts: [
+    { platform: 'chesscom', username: 'othername' },
+    { platform: 'lichess', username: 'NextAccount' },
+    { platform: 'other', username: 'Unknown' }
+  ] }]
+}, now + 2100);
+assert.equal((await restored.getActiveProfile()).accounts.length, 3, 'Merge adds new accounts, deduplicates and validates');
+await restored.setProfileAccount(son.id, 'lichess', 'kidCHESS', { remove: true });
+assert.deepEqual((await restored.getActiveProfile()).accounts.map(item => item.username), ['OtherName', 'NextAccount']);
+assert.deepEqual((await restored.get('profiles', DEFAULT_PROFILE_ID)).accounts, []);
 
 const highStreakTrap = {
   ...recSon,

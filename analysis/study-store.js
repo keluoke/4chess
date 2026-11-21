@@ -31,12 +31,41 @@ export function parseAliases(input) {
   return list;
 }
 
+export function normalizeAccount(platform, username) {
+  if (!['chesscom', 'lichess'].includes(platform) || typeof username !== 'string') return null;
+  const clean = username.trim();
+  return /^[a-z0-9][a-z0-9_-]{0,49}$/i.test(clean) ? { platform, username: clean } : null;
+}
+
+export function accountKey({ platform, username }) {
+  return `${platform}:${username.toLowerCase()}`;
+}
+
+function mergeAccounts(...lists) {
+  const accounts = new Map();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const account = normalizeAccount(item?.platform, item?.username);
+      if (account && !accounts.has(accountKey(account))) accounts.set(accountKey(account), account);
+    }
+  }
+  return [...accounts.values()];
+}
+
+export function perspectiveNames(profile, platform) {
+  if (platform && profile?.accounts?.length) {
+    return profile.accounts.filter(account => account.platform === platform).map(account => account.username);
+  }
+  return profile?.aliases || [];
+}
+
 export function resolvePerspective(meta = {}, profile = null) {
   if (!meta || meta.isSample || meta.isPositionOnly) {
     return { side: null, mode: 'spectator', matchedAlias: null };
   }
   const aliases = new Map();
-  for (const alias of profile?.aliases || []) {
+  for (const alias of perspectiveNames(profile, meta.platform)) {
     const key = normalizeAlias(alias);
     if (key) aliases.set(key, alias);
   }
@@ -181,6 +210,7 @@ function defaultProfile(now = Date.now()) {
     id: DEFAULT_PROFILE_ID,
     displayName: 'Default',
     aliases: [],
+    accounts: [],
     createdAt: now,
     updatedAt: now
   };
@@ -241,10 +271,7 @@ export class StudyStore {
         this.db = await openDatabase();
         this.persistent = !!this.db;
       }
-      const profiles = await this.listProfiles();
-      if (!profiles.some(profile => profile.id === DEFAULT_PROFILE_ID)) {
-        await this.put('profiles', defaultProfile());
-      }
+      await this.writeProfile(DEFAULT_PROFILE_ID, existing => existing ? null : defaultProfile());
       return this;
     })();
     return this.readyPromise;
@@ -325,20 +352,52 @@ export class StudyStore {
     return (await this.get('profiles', DEFAULT_PROFILE_ID)) || defaultProfile();
   }
 
+  async writeProfile(id, update) {
+    if (!this.db) {
+      const record = update(this.memory.profiles.get(id));
+      if (record) this.memory.profiles.set(id, structuredClone(record));
+      return record;
+    }
+    const tx = this.db.transaction('profiles', 'readwrite');
+    const store = tx.objectStore('profiles');
+    const record = update(await txRequest(store.get(id)));
+    if (!record) return record;
+    this.requestPersistence();
+    const committed = new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onabort = () => reject(tx.error);
+    });
+    store.put(record);
+    await committed;
+    return record;
+  }
+
   async saveProfile({ id, displayName, aliases = [] }, now = Date.now()) {
     await this.init();
     const cleanName = String(displayName || '').trim();
     if (!cleanName) throw new Error('Profile name is required');
-    const existing = id ? await this.get('profiles', id) : null;
-    const record = {
-      id: existing?.id || id || `profile_${now}_${Math.random().toString(36).slice(2, 7)}`,
+    const profileId = id || `profile_${now}_${Math.random().toString(36).slice(2, 7)}`;
+    return this.writeProfile(profileId, existing => ({
+      id: profileId,
       displayName: cleanName.slice(0, 40),
       aliases: parseAliases(aliases),
+      accounts: existing?.accounts || [],
       createdAt: existing?.createdAt || now,
       updatedAt: now
-    };
-    await this.put('profiles', record);
-    return record;
+    }));
+  }
+
+  async setProfileAccount(id, platform, username, { remove = false } = {}) {
+    const account = normalizeAccount(platform, username);
+    if (!account) return null;
+    await this.init();
+    return this.writeProfile(id, existing => {
+      if (!existing) return null;
+      const accounts = remove
+        ? (existing.accounts || []).filter(item => accountKey(item) !== accountKey(account))
+        : mergeAccounts(existing.accounts, [account]);
+      return { ...existing, accounts };
+    });
   }
 
   async deleteProfile(id) {
@@ -480,27 +539,22 @@ export class StudyStore {
     let trapsUpdated = 0;
     for (const incoming of Array.isArray(payload.profiles) ? payload.profiles : []) {
       if (!incoming?.id || !incoming?.displayName) continue;
-      const existing = await this.get('profiles', incoming.id);
-      if (!existing) {
-        await this.put('profiles', {
-          id: String(incoming.id),
-          displayName: String(incoming.displayName).slice(0, 40),
-          aliases: parseAliases(incoming.aliases),
-          createdAt: Number.isFinite(incoming.createdAt) ? incoming.createdAt : now,
-          updatedAt: Number.isFinite(incoming.updatedAt) ? incoming.updatedAt : now
-        });
-        profilesAdded++;
-      } else {
-        const shouldAdoptName =
-          (existing.id === DEFAULT_PROFILE_ID && existing.displayName === 'Default' && incoming.displayName !== 'Default') ||
+      const id = String(incoming.id);
+      await this.writeProfile(id, existing => {
+        if (!existing) profilesAdded++;
+        const shouldAdoptName = !existing ||
+          (id === DEFAULT_PROFILE_ID && existing.displayName === 'Default' && incoming.displayName !== 'Default') ||
           (Number.isFinite(incoming.updatedAt) && incoming.updatedAt >= (existing.updatedAt || 0));
-        await this.put('profiles', {
+        return {
           ...existing,
+          id,
           displayName: shouldAdoptName ? String(incoming.displayName).slice(0, 40) : existing.displayName,
-          aliases: parseAliases([...(existing.aliases || []), ...(incoming.aliases || [])]),
-          updatedAt: Math.max(existing.updatedAt || 0, Number.isFinite(incoming.updatedAt) ? incoming.updatedAt : now)
-        });
-      }
+          aliases: parseAliases([...(existing?.aliases || []), ...parseAliases(incoming.aliases)]),
+          accounts: mergeAccounts(existing?.accounts, incoming.accounts),
+          createdAt: existing?.createdAt ?? (Number.isFinite(incoming.createdAt) ? incoming.createdAt : now),
+          updatedAt: Math.max(existing?.updatedAt || 0, Number.isFinite(incoming.updatedAt) ? incoming.updatedAt : now)
+        };
+      });
     }
     if (payload.activeProfileId && await this.get('profiles', String(payload.activeProfileId))) {
       this.setActiveProfileId(String(payload.activeProfileId));
