@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Diverge · 复盘快照</title>
+  <link rel="icon" href="../favicon.svg">
+  <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
+  <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
+  <link rel="stylesheet" href="./analysis.css?v=20261118-precise-filter">
+  <link rel="stylesheet" href="./review-share.css?v=20261122-v129">
+</head>
+<body class="diverge-ui snapshot-page">
+  <main class="snapshot-wrap">
+    <header class="snapshot-header">
+      <a class="snapshot-brand" href="./index.html"><img src="../icons/icon48.png" alt="" width="32" height="32">Diverge</a>
+      <a id="snapshot-analyze" class="btn-header" hidden data-i18n="snapshotAnalyze">分析当前局面</a>
+    </header>
+    <p id="snapshot-status" role="status"></p>
+    <article id="snapshot-report" hidden>
+      <header class="snapshot-summary">
+        <h1 id="snapshot-title"></h1>
+        <p id="snapshot-opening"></p>
+        <dl id="snapshot-scores" class="snapshot-scores" data-i18n-aria="accuracyLabel"></dl>
+        <p id="snapshot-source"></p>
+      </header>
+      <div class="snapshot-grid">
+        <section class="snapshot-board-panel">
+          <div id="snapshot-board" role="img"></div>
+          <div class="snapshot-navigation">
+            <button class="btn-header" id="snapshot-prev" type="button" data-i18n-aria="btnPrev" aria-label="上一步">‹</button>
+            <input type="range" id="snapshot-range" min="0" value="0" data-i18n-aria="snapshotScrub" aria-label="棋局进度">
+            <button class="btn-header" id="snapshot-next" type="button" data-i18n-aria="btnNext" aria-label="下一步">›</button>
+          </div>
+          <output id="snapshot-position" for="snapshot-range"></output>
+        </section>
+        <div class="snapshot-detail">
+          <div id="snapshot-chart" class="eval-chart-wrapper"></div>
+          <section id="snapshot-turning" hidden>
+            <h2 data-i18n="keyMovesHeading">关键步</h2>
+            <div id="snapshot-turns" class="snapshot-tags"></div>
+          </section>
+          <section id="snapshot-evidence" hidden>
+            <h2 id="snapshot-evidence-title"></h2>
+            <div id="snapshot-lines"></div>
+          </section>
+          <section>
+            <h2 data-i18n="notationHeading">记谱</h2>
+            <ol id="snapshot-notation" class="snapshot-notation"></ol>
+          </section>
+        </div>
+      </div>
+    </article>
+  </main>
+  <script type="module" src="./shared-review.js?v=20261122-v129"></script>
+</body>
+</html>

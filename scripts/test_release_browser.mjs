@@ -12,7 +12,7 @@ const output = path.join(root, 'artifacts/delivery-2026-10-25');
 fs.mkdirSync(output, { recursive: true });
 const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
-const releaseVersion = '20261122-v128';
+const releaseVersion = '20261122-v129';
 const releaseModules = new Set([
  '/ui/theme.js', '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
  '/engine/game-analyzer.js', '/engine/stockfish-inbrowser.js', '/engine/engine-preferences.js',

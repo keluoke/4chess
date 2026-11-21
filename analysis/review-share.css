@@ -1,0 +1,53 @@
+#review-share-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 36px);
+  color: var(--text-main);
+  background: var(--dg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+#review-share-dialog::backdrop { background: #142c25aa; }
+.review-share-heading, .review-share-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+.review-share-heading h2 { margin: 0; font-size: 20px; }
+.review-share-options { display: flex; gap: 8px; margin: 12px 0; }
+#review-share-preview { display: block; box-sizing: border-box; max-width: 100%; max-height: 50dvh; width: auto; height: auto; margin: 0 auto 12px; border-radius: 8px; object-fit: contain; }
+#review-share-preview[hidden], .snapshot-page [hidden] { display: none !important; }
+#review-share-status { min-height: 1.35em; font-size: 14px; }
+#review-share-field { width: 100%; box-sizing: border-box; margin-top: 12px; }
+
+.snapshot-page { display: block; overflow: auto; min-height: 100dvh; background: var(--dg-paper, #f4f7ef); color: var(--text-main, #18342d); }
+.snapshot-wrap { box-sizing: border-box; width: min(1120px, 100%); margin: 0 auto; padding: 18px clamp(14px, 4vw, 40px) 48px; }
+.snapshot-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+.snapshot-header a { text-decoration: none; }
+.snapshot-brand { color: var(--text-main); display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.snapshot-summary, .snapshot-board-panel, .snapshot-detail > * { background: var(--dg-surface, #fff); border: 1px solid var(--border-color, #cddbd3); border-radius: 14px; padding: 16px; min-width: 0; }
+.snapshot-summary { margin-bottom: 16px; }
+.snapshot-summary h1 { font-size: clamp(20px, 4vw, 36px); margin: 0; overflow-wrap: anywhere; }
+.snapshot-summary p { color: var(--text-muted); margin: 6px 0 0; }
+.snapshot-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; gap: 12px; }
+.snapshot-scores dt { overflow-wrap: anywhere; }
+.snapshot-scores dd { margin: 0; font-size: clamp(28px, 5vw, 50px); font-variant-numeric: tabular-nums; }
+.snapshot-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); align-items: start; gap: 16px; }
+.snapshot-board-panel { position: sticky; top: 12px; }
+.snapshot-board-panel .maia-board-wrapper { max-width: none; box-shadow: none; pointer-events: none; }
+.snapshot-navigation { display: flex; gap: 8px; align-items: center; margin: 12px 0 6px; }
+.snapshot-navigation input { flex: 1; min-width: 0; accent-color: #226458; }
+.snapshot-navigation button { min-width: 44px; min-height: 44px; font-size: 24px; }
+.snapshot-detail { display: grid; gap: 12px; min-width: 0; }
+.snapshot-detail h2 { margin: 0 0 8px; font-size: 16px; }
+.snapshot-detail .eval-chart-body { height: 105px; margin-right: 25px; overflow: visible; }
+.snapshot-detail .eval-grid line { stroke: var(--dg-line); }
+.snapshot-detail .chart-axis { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 12px; margin: 4px 25px 0 0; }
+.snapshot-detail .chart-scale { position: absolute; top: 0; right: -25px; width: 21px; height: 100%; display: flex; flex-direction: column; justify-content: space-evenly; font-size: 11px; color: var(--text-muted); }
+.snapshot-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+#snapshot-lines { display: grid; gap: 8px; }
+#snapshot-lines p { margin: 0; }
+#snapshot-lines .snapshot-tags { margin-top: 5px; }
+.snapshot-notation { display: flex; flex-wrap: wrap; gap: 4px; max-height: 230px; overflow: auto; padding: 0; margin: 0; list-style: none; }
+.snapshot-notation button[aria-current] { color: #fff; background: #226458; border-color: #226458; }
+@media (max-width: 690px) {
+  .snapshot-grid { grid-template-columns: minmax(0, 1fr); }
+  .snapshot-board-panel { position: static; }
+}

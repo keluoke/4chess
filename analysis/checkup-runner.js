@@ -1,9 +1,9 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v128';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v129';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
 import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-v127';
-import { t } from './i18n.js?v=20261122-v128';
+import { t } from './i18n.js?v=20261122-v129';
 import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261121-v127';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];

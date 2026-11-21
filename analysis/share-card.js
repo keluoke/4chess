@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { intuitionKind } from '../engine/review-policy.js?v=20261117-review-policy';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { getLang, t } from './i18n.js?v=20261122-v128';
+import { getLang, t } from './i18n.js?v=20261122-v129';
 
 export const SHARE_CARD_FORMATS = {
   landscape: { width: 1200, height: 675 },
@@ -253,34 +253,10 @@ function wrapTextLines(ctx, text, maxWidth) {
   return lines;
 }
 
-export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => true } = {}) {
-  if (!canvas) return canvas;
-  const pieceImages = await getPieceImages();
-  if (!isCurrent()) return null;
-  const { width, height } = spec.dimensions;
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return canvas;
+export async function prepareShareBoards() { return getPieceImages(); }
 
-  const isPortrait = spec.format === 'portrait';
-
-  // Background gradient
-  const grad = ctx.createLinearGradient(0, 0, width, height);
-  grad.addColorStop(0, '#0f172a');
-  grad.addColorStop(1, '#1e293b');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-
-  // Subtle border frame
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(16, 16, width - 32, height - 32);
-
-  // Board geometry
-  const boardSize = isPortrait ? 860 : 576;
-  const boardX = isPortrait ? Math.round((width - boardSize) / 2) : 48;
-  const boardY = isPortrait ? 310 : Math.round((height - boardSize) / 2);
+export function drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize) {
+  ctx.save();
   const sqSize = boardSize / 8;
 
   // Board shadow & frame
@@ -335,6 +311,38 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
     const toPos = squareCoords(arrow.to, spec.orientation, boardX, boardY, sqSize);
     drawCanvasArrow(ctx, { x: fromPos.cx, y: fromPos.cy }, { x: toPos.cx, y: toPos.cy }, arrow.color, sqSize);
   }
+  ctx.restore();
+}
+
+export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => true } = {}) {
+  if (!canvas) return canvas;
+  const pieceImages = await getPieceImages();
+  if (!isCurrent()) return null;
+  const { width, height } = spec.dimensions;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+
+  const isPortrait = spec.format === 'portrait';
+
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, width, height);
+  grad.addColorStop(0, '#0f172a');
+  grad.addColorStop(1, '#1e293b');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Subtle border frame
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(16, 16, width - 32, height - 32);
+
+  // Board geometry
+  const boardSize = isPortrait ? 860 : 576;
+  const boardX = isPortrait ? Math.round((width - boardSize) / 2) : 48;
+  const boardY = isPortrait ? 310 : Math.round((height - boardSize) / 2);
+  drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize);
 
   // Text panel
   const textX = isPortrait ? boardX : boardX + boardSize + 44;

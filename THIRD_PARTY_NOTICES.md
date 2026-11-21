@@ -120,3 +120,7 @@ The studio also offers **Maia-3 23M**, reusing the existing CDN export at `https
 - SHA-256: `693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3`
 - License: SIL Open Font License 1.1; full copyright and license in `LICENSES/Inter-OFL-1.1.txt` (upstream v4.1).
 - Used locally for study typography, including offline and packaged use. Chinese glyphs use the platform font fallback.
+
+### QR Code Generator for JavaScript
+
+The review report QR uses [qrcode-generator 2.0.4](https://www.npmjs.com/package/qrcode-generator/v/2.0.4) by Kazuhiko Arase. The vendored ES module is `lib/review-qr.js`. See `LICENSES/MIT-qrcode-generator.txt` for the MIT license.

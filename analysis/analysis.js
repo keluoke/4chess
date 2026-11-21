@@ -1,17 +1,18 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261122-v128';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261122-v129';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261122-v128';
-import { ReviewExplorer } from './review-explorer.js?v=20261122-v128';
-import { ReviewOverview } from './review-overview.js?v=20261122-v128';
-import { ReviewCommentary } from './review-commentary.js?v=20261122-v128';
-import { ConsequencePlayer } from './consequence-player.js?v=20261122-v128';
-import { MistakeBank } from './mistake-bank.js?v=20261122-v128';
-import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261122-v128';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261122-v128';
-import { CheckupReminders } from './checkup-reminders.js?v=20261122-v128';
-import { ShareCardModal } from './share-card.js?v=20261122-v128';
+import { IntuitionReview } from './intuition-review.js?v=20261122-v129';
+import { ReviewExplorer } from './review-explorer.js?v=20261122-v129';
+import { ReviewOverview } from './review-overview.js?v=20261122-v129';
+import { ReviewCommentary } from './review-commentary.js?v=20261122-v129';
+import { ConsequencePlayer } from './consequence-player.js?v=20261122-v129';
+import { MistakeBank } from './mistake-bank.js?v=20261122-v129';
+import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261122-v129';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261122-v129';
+import { CheckupReminders } from './checkup-reminders.js?v=20261122-v129';
+import { ReviewShare } from './review-share.js?v=20261122-v129';
+import { ShareCardModal } from './share-card.js?v=20261122-v129';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261122-v128';
+import { ReviewPractice } from './review-practice.js?v=20261122-v129';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -19,17 +20,17 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
  */
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261122-v128';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261122-v128';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v128';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261122-v129';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261122-v129';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v129';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261122-v128';
+import { EvalChart } from './eval-chart.js?v=20261122-v129';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261122-v128';
+import { PositionAnalysis } from './position-analysis.js?v=20261122-v129';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261122-v128';
-import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261122-v128';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261122-v129';
+import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261122-v129';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
 const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource', 'overview'];
@@ -113,6 +114,7 @@ class AnalysisStudioApp {
     this.studyProfiles = new StudyProfileControls(this);
     this.checkupReminders = new CheckupReminders(this);
     this.shareCard = new ShareCardModal(this);
+    this.reviewShare = new ReviewShare(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
     subscribePreferences(next => this.applyPreferences(next));
@@ -511,7 +513,7 @@ class AnalysisStudioApp {
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
-      if (this.el.settingsDialog.open || this.reviewOverview.summary.open || this.mistakeBank?.dialog?.open || this.checkup?.dialog?.open || this.shareCard?.dialog?.open) return;
+      if (this.el.settingsDialog.open || this.reviewOverview.summary.open || this.mistakeBank?.dialog?.open || this.checkup?.dialog?.open || this.shareCard?.dialog?.open || this.reviewShare?.dialog?.open) return;
       if (this.el.pgnModal.classList.contains('open')) {
         if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
         if (e.key === 'Tab') {
@@ -585,6 +587,7 @@ class AnalysisStudioApp {
       this.checkup.renderReport(this.checkup.latestReport);
     }
     if (this.shareCard?.dialog?.open) this.shareCard.renderPreview();
+    if (this.reviewShare?.dialog?.open) void this.reviewShare.prepare();
     this.renderCurrentInsight();
     if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
@@ -829,7 +832,7 @@ class AnalysisStudioApp {
             this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
             return false;
           }
-          if (data.pgn && commit({ pgn: withPgnTermination(data.pgn, data.status), checkupSource: 'lichess', landAtEnd: true })) {
+          if (data.pgn && commit({ pgn: withPgnTermination(data.pgn, data.status), checkupSource: 'lichess', publicGameUrl: 'https://lichess.org/' + gameId, landAtEnd: true })) {
             this.showToast(t('toastLoadedLichess', { gameId }));
             return true;
           }
@@ -913,7 +916,7 @@ class AnalysisStudioApp {
 
         // 1. Direct PGN string
         let pgn = gameObj.pgn || fetchedData.pgn;
-        if (typeof pgn === 'string' && pgn && commit({ pgn: withPgnTermination(pgn, gameObj.status), checkupSource: 'chesscom', landAtEnd: true })) {
+        if (typeof pgn === 'string' && pgn && commit({ pgn: withPgnTermination(pgn, gameObj.status), checkupSource: 'chesscom', publicGameUrl: 'https://www.chess.com/game/' + type + '/' + gameId, landAtEnd: true })) {
           this.showToast(t('toastLoadedChesscom', { gameId }));
           return true;
         }
@@ -940,6 +943,7 @@ class AnalysisStudioApp {
               black,
               result,
               checkupSource: 'chesscom',
+              publicGameUrl: 'https://www.chess.com/game/' + type + '/' + gameId,
               landAtEnd: true
             })) {
               this.showToast(t('toastLoadedChesscom', { gameId }));
@@ -1120,6 +1124,7 @@ class AnalysisStudioApp {
     openOverview = false,
     positionInput = false,
     checkupSource = null,
+    publicGameUrl = null,
     checkupOrientation = null,
     orientation = null,
     elo = null,
@@ -1205,7 +1210,7 @@ class AnalysisStudioApp {
     this.sessionOrientation = this.hasAnalysisInput ? this.boardUI.orientation : null;
     this.sessionFallbackElo = fallbackElo;
     this.sessionInput = this.hasAnalysisInput ? {
-      pgn, fen, white, black, result, checkupSource, landAtEnd,
+      pgn, fen, white, black, result, checkupSource, publicGameUrl, landAtEnd,
       positionInput: positionOnly,
       moves: !pgn && !positionOnly ? parsedMoves.map(({ element, ...move }) => move) : null,
       startFen: !pgn && !positionOnly ? parsedMoves.startFen : null
@@ -1320,6 +1325,7 @@ class AnalysisStudioApp {
       white: game.white,
       black: game.black,
       result: game.result,
+      publicGameUrl: game.url,
       orientation: game.orientation,
       elo: game.elo,
       cachedReview: game.cachedReview,
@@ -1508,6 +1514,7 @@ class AnalysisStudioApp {
     this.el.copyGameLink.hidden = !pgn || this.moves.isPartial || scan || !!this.scanSourceLocked ||
       !FairPlayGuard.verifyConcludedGame(pgn).ok || FairPlayGuard.isLiveGameInProgress();
     this.el.gameLinkField.hidden = true;
+    this.reviewShare?.sync();
   }
 
   async copyGameLink() {

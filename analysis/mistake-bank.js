@@ -8,7 +8,7 @@ import {
   resolvePerspective,
   trapId
 } from './study-store.js?v=20261121-v127';
-import { t } from './i18n.js?v=20261122-v128';
+import { t } from './i18n.js?v=20261122-v129';
 
 export class MistakeBank {
   filter = 'due';

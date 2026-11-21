@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="workbench.css?v=20261121-v127">
+  <link rel="stylesheet" href="./review-share.css?v=20261122-v129">
 </head>
 <body class="diverge-ui">
   <script>
@@ -284,12 +285,28 @@
 
     </div>
     <footer class="review-card-footer">
+      <button type="button" class="btn-header" id="review-share-open" data-i18n="reviewShareTitle" hidden>分享整盘复盘</button>
       <button type="button" class="btn-header" id="review-copy-game-link" data-i18n="reviewCopyGameLink" hidden>复制对局链接</button>
       <input id="review-game-link-field" type="url" readonly data-i18n-aria="reviewGameLink" hidden>
       <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">进入复盘工作台</button>
     </footer>
   </dialog>
 
+
+  <dialog id="review-share-dialog" aria-labelledby="review-share-title">
+    <div class="review-share-heading">
+      <h2 id="review-share-title" data-i18n="reviewShareTitle">分享整盘复盘</h2>
+      <button type="button" class="btn-header" id="review-share-close" data-i18n="btnClose" autofocus>关闭</button>
+    </div>
+    <label class="review-share-options"><input type="checkbox" id="review-share-anonymize"><span data-i18n="reviewShareAnon">隐藏棋手名</span></label>
+    <canvas id="review-share-preview" hidden data-i18n-aria="reviewShareTitle"></canvas>
+    <p id="review-share-status" role="status"></p>
+    <div class="review-share-actions">
+      <button type="button" class="btn-header" id="review-share-png" data-i18n="reviewSharePng" disabled>下载战报 PNG</button>
+      <button type="button" class="btn-header btn-primary" id="review-share-copy" data-i18n="reviewShareCopy" disabled>复制复盘快照链接</button>
+    </div>
+    <input type="url" id="review-share-field" readonly hidden data-i18n-aria="reviewShareCopy">
+  </dialog>
 
   <dialog id="maia-elo-trend" class="maia-trend-dialog" aria-labelledby="maia-trend-heading">
     <div class="maia-trend-heading">
@@ -521,12 +538,12 @@
     <p id="share-card-status" class="bank-status-note" role="status"></p>
   </dialog>
 
-  <script type="module" src="../ui/theme.js?v=20261122-v128"></script>
-  <script type="module" src="analysis.js?v=20261122-v128"></script>
+  <script type="module" src="../ui/theme.js?v=20261122-v129"></script>
+  <script type="module" src="analysis.js?v=20261122-v129"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261122-v128').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261122-v129').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });
