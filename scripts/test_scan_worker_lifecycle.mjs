@@ -83,7 +83,13 @@ assert.equal(
 workers[1].onmessage({
   data: { id: "b", ok: true, result: { current: true } },
 });
-assert.deepEqual(await second, { ok: true, result: { current: true } });
+const secondReply = await second;
+assert.equal(secondReply.ok, true);
+assert.deepEqual(secondReply.result, { current: true });
+assert.deepEqual(secondReply.frame, {
+  x: 0, y: 0, width: 8, height: 8, inputWidth: 8, inputHeight: 8,
+  screenshotWidth: 8, screenshotHeight: 8,
+});
 assert.equal(workers[1].terminated, true);
 console.log(
   "PASS offscreen cancellation settles immediately, terminates computation, rejects late results and preserves a newer worker",

@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261121-study-reminders';
+const CACHE_NAME = '4chess-review-20261121-v125';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -21,7 +21,7 @@ const STATIC_ASSETS = [
   "../ui/fonts/InterVariable.woff2?v=4.1",
   "./workbench.css?v=20261121-study-reminders",
   "../ui/theme.js?v=20261025-v115",
-  "./analysis.js?v=20261121-study-reminders",
+  "./analysis.js?v=20261121-v125",
   "./commentary-text.js?v=20261118-recap-reset",
   "./built-in-ai.js?v=20261118-summary-ai",
   "./review-commentary.js?v=20261121-study-reminders",
@@ -40,9 +40,9 @@ const STATIC_ASSETS = [
   "./i18n.js?v=20261121-study-reminders",
   "./intuition-review.js?v=20261121-study-reminders",
   "./maia-elo-trend.js?v=20261121-study-reminders",
-  "./position-analysis.js?v=20261121-study-reminders",
+  "./position-analysis.js?v=20261121-v125",
   "./review-explorer.js?v=20261121-study-reminders",
-  "./review-practice.js?v=20261121-study-reminders",
+  "./review-practice.js?v=20261121-v125",
   "./review-overview.js?v=20261121-study-reminders",
   "./scan-authorization.js?v=20261121-study-reminders",
   "./sound-effects.js?v=20261025-v115",
@@ -59,7 +59,7 @@ const STATIC_ASSETS = [
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
   "../engine/game-analyzer.js?v=20261118-summary-ai",
-  "../engine/maia-engine.js?v=20261117-elo-trend",
+  "../engine/maia-engine.js?v=20261121-v125",
   "../engine/maia-inbrowser.js?v=20261117-elo-trend",
   "../engine/maia-worker.js?v=20261117-elo-trend",
   "../engine/model-cache.js",
@@ -67,6 +67,7 @@ const STATIC_ASSETS = [
   "../engine/model-loader.js",
   "../engine/model-sources.js",
   "../engine/opening-book.js",
+  "../engine/position-lines.js",
   "../engine/review-policy.js?v=20261117-review-policy",
   "../engine/review-policy.js?v=20261120-review",
   "../engine/stockfish-inbrowser.js",

@@ -221,17 +221,26 @@
       }
       let fen = null,
         orientation = "white",
-        assumed = true;
+        assumed = true,
+        verifiedReplay = false;
       if (gate.allowed && detector && detector.findBoard()) {
         detector.detectOrientation();
         const replay = detector.getReplayedPositionFromMoves();
-        fen = detector.extractFen();
+        fen = replay?.fen || detector.extractFen();
         orientation = detector.orientation;
-        assumed = !(replay?.fen && replay.fen === fen);
+        assumed = !replay?.fen;
+        if (!assumed) {
+          const visible = detector.reconstructFenFromPieces();
+          verifiedReplay = !!visible && visible.split(" ")[0] === fen.split(" ")[0];
+          if (visible && !verifiedReplay) {
+            fen = visible;
+            assumed = true;
+          }
+        }
         if (assumed && fen)
           fen = fen.split(" ").slice(0, 2).join(" ") + " - - 0 1";
       }
-      reply({ ...gate, nonce, url: startUrl, fen, orientation, assumed });
+      reply({ ...gate, nonce, url: startUrl, fen, orientation, assumed, verifiedReplay });
     }
     if (msg.type === "SCAN_OVERLAY") {
       const panel = document.getElementById("maia3-intuition-panel");

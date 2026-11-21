@@ -131,7 +131,7 @@ try {
   for (const source of [chessReviewUrl, lichessGameUrl]) {
     const host = await context.newPage();
     await host.goto(source);
-    const action = host.getByRole('button', { name: 'Full Game Analysis', exact: true });
+    const action = host.getByRole('button', { name: 'Free Full Game Analysis', exact: true });
     await action.waitFor();
     assert.equal(await action.isEnabled(), true);
     if (source === lichessGameUrl) {

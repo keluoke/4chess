@@ -4,6 +4,15 @@ import {
   rotateSquare,
 } from "../lib/vision/image-context.js";
 import { defaultTurn } from "../lib/vision/default-context.js";
+import { validateChessPosition } from "../lib/vision/fen-optimizer.js";
+import { ChessBoard } from "../engine/chess-core.js";
+
+export function loadValidatedPosition(fen) {
+  const board = new ChessBoard();
+  return validBoardPlacement(fen) &&
+    board.load(fen) && validateChessPosition(fen).valid &&
+    validHistoricalFields(fen, board) ? board : null;
+}
 
 export function imageContext(result) {
   const orientationKnown =

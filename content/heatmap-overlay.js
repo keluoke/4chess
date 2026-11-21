@@ -89,11 +89,9 @@ export class HeatmapOverlay {
     }
   }
 
-  setHoverMove(moveUci) {
-    this.activeHoverMove = moveUci;
-    if (this.currentData) {
-      this.render(this.currentData);
-    }
+  setHoverMove(uci, source, fen) {
+    this.activeHoverMove = uci && fen === this.currentData?.fen ? { uci, source, fen } : null;
+    if (this.currentData) this.render(this.currentData);
   }
 
   setLiveEvaluation(enabled) {
@@ -163,6 +161,22 @@ export class HeatmapOverlay {
     arrowsGroup.innerHTML = '';
     if (sfArrowsGroup) sfArrowsGroup.innerHTML = '';
     trapsGroup.innerHTML = '';
+
+    const hover = this.activeHoverMove;
+    if (hover?.fen && predictionData?.fen === hover.fen) {
+      const sf = hover.source === 'sf';
+      const permitted = sf ? this.showStockfishArrows : this.showArrows && predictionData.isAvailable;
+      const moves = sf ? [predictionData.stockfish?.bestMove, ...(predictionData.stockfish?.lines || [])] : predictionData.moves || [];
+      if (permitted && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(hover.uci) && moves.some(move => move?.uci === hover.uci)) {
+        if (this.showHeatmap && predictionData.isAvailable && predictionData.heatmap)
+          this.renderHeatmapSquares(heatmapGroup, predictionData.heatmap);
+        this.drawArrow(sf ? sfArrowsGroup : arrowsGroup, {
+          from: hover.uci.slice(0, 2), to: hover.uci.slice(2, 4), width: 8,
+          marker: sf ? 'maia-arrow-sf' : 'maia-arrow-gold', badge: false,
+        });
+        return;
+      }
+    }
 
     // If Stockfish has bestMove, draw Stockfish arrow immediately regardless of Maia state
     if (this.showStockfishArrows && predictionData?.stockfish?.bestMove && sfArrowsGroup && !predictionData.isAvailable) {
@@ -343,13 +357,13 @@ export class HeatmapOverlay {
     }
   }
 
-  drawArrow(group, { from, to, width, marker, label }) {
+  drawArrow(group, { from, to, width, marker, label, badge = true }) {
     const a = this.squareToCoords(from), b = this.squareToCoords(to);
     const role = marker === 'maia-arrow-sf' ? 'sf' : marker === 'maia-arrow-consensus' ? 'consensus' : marker === 'maia-arrow-blunder' ? 'error' : label?.startsWith('M ') ? 'maia' : 'candidate';
     const colors = boardColors();
     const color = role === 'sf' ? colors.blue : role === 'consensus' ? colors.green : role === 'error' ? colors.red : colors.gold;
     drawBoardArrow(group, { from: { x: a.cx, y: a.cy }, to: { x: b.cx, y: b.cy }, color, marker: width <= 5 ? `${marker}-secondary` : marker, role, secondary: width <= 5, opacity: width <= 5 ? .5 : .84, dashed: role === 'error' });
-    drawMoveBadge(group, { x: b.cx, y: b.cy, role, color, title: label });
+    if (badge) drawMoveBadge(group, { x: b.cx, y: b.cy, role, color, title: label });
   }
 
   renderTrapWarning(group, topMove) {

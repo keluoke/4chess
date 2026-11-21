@@ -198,6 +198,37 @@
   width: 100%;
   height: 100%;
 }
+#scan-candidates {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+#scan-candidates button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+#scan-candidates svg {
+  width: 23px;
+  height: 23px;
+}
+#scan-comparison {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 25;
+  opacity: .8;
+}
+#scan-comparison.flipped {
+  transform: rotate(180deg);
+}
+#scan-compare[aria-pressed="true"] {
+  background: var(--dg-green-soft);
+}
 .scan-suspicious {
   cursor: pointer;
 }

@@ -28,10 +28,10 @@ try {
     const panel = window.panel = new IntuitionPanel({});
     await new Promise(r => setTimeout(r, 30)); panel.userPositioned = true;
     panel.setEnginePreferences({ stockfishVariant: 'standard', maiaVariant: '79m' });
-    window.result = { isAvailable: true, turn: 'w', moves: [{ uci: 'e2e4', san: 'e4', prob: 59.3, deltaText: '0.00' }, { uci: 'd2d4', san: 'd4', prob: 27, deltaText: '-0.28' }, { uci: 'g1f3', san: 'Nf3', prob: 8.2, deltaText: '-1.30' }], stockfish: { bestMove: { uci: 'e2e4', san: 'e4' }, scoreCp: 32, score: '+0.32' }, comparison: { agreed: true, deltaText: '0.00' }, status: { maia: { state: 'ready', source: 'IndexedDB 缓存' }, stockfish: { state: 'ready' } } };
+    window.result = { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', isAvailable: true, turn: 'w', moves: [{ uci: 'e2e4', san: 'e4', prob: 59.3, deltaText: '0.00' }, { uci: 'd2d4', san: 'd4', prob: 27, deltaText: '-0.28' }, { uci: 'g1f3', san: 'Nf3', prob: 8.2, deltaText: '-1.30' }], stockfish: { bestMove: { uci: 'e2e4', san: 'e4' }, scoreCp: 32, score: '+0.32', depth: 8, lines: [{uci:'e2e4', multipv:1, depth:8, scoreCp:32, pv:['e2e4','e7e5','f1c4','b8c6']}, {uci:'d2d4', multipv:2, depth:8, scoreCp:4, pv:['d2d4','g8f6','c2c4','e7e6']}, {uci:'g1f3', multipv:3, depth:8, scoreCp:-98, pv:['g1f3','d7d5','d2d4','g8f6']}] }, comparison: { agreed: true, deltaText: '0.00' }, status: { maia: { state: 'ready', source: 'IndexedDB 缓存' }, stockfish: { state: 'ready' } } };
     panel.update(result, 531);
   });
-  for (const theme of ['light', 'dark']) for (const lang of ['zh', 'en']) for (const [width, height] of [[250, 200], [250, 600], [300, 600], [420, 800]]) {
+  for (const theme of ['light', 'dark']) for (const lang of ['zh', 'en']) for (const [width, height] of [[250, 200], [250, 380], [320, 600], [420, 800]]) {
     await p.evaluate(({ theme, lang, width, height }) => {
       panel.open(); panel.userPositioned = true; panel.setLanguage(lang); panel.container.dataset.theme = theme;
       panel.container.style.setProperty('--diverge-panel-width', width + 'px'); panel.container.style.setProperty('--diverge-panel-height', height + 'px');
@@ -49,15 +49,21 @@ try {
       await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-compact.png`) });
     } else {
       assert(await p.locator('#btn-trigger-standalone').isVisible());
+      const footer = await p.locator('#btn-trigger-standalone').boundingBox();
+      await p.locator('#maia-panel-body').evaluate(e => { e.scrollTop = e.scrollHeight; });
+      assert.deepEqual(await p.locator('#btn-trigger-standalone').boundingBox(), footer);
+      await p.locator('#maia-panel-body').evaluate(e => { e.scrollTop = 0; });
+      assert.equal(await p.locator('#panel-sf-lines .diverge-sf-line').count(), 3);
+      assert.equal(await p.locator('#panel-sf-lines .diverge-pv').first().locator('span:visible').count(), height < 420 ? 2 : 3);
       const visible = await p.locator('.weui-move-item').first().evaluate(e => { const r=e.getBoundingClientRect(), b=e.closest('#maia-panel-body').getBoundingClientRect(); return r.top>=b.top && r.bottom<=b.bottom; });
       assert(visible, 'First candidate must be fully readable before scrolling');
-      if (width === 300) await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-analysis.png`) });
+      if (width === 320) await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-analysis.png`) });
     }
     await p.locator('#weui-btn-more').click();
     assert.equal(await p.locator('#maia-sf-select, #panel-hide').count(), 0);
     assert.equal(await p.locator('#panel-collapse').isVisible(), false);
     await p.locator('[data-model="79m"]').scrollIntoViewIfNeeded();
-    if (width === 300) await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-settings.png`) });
+    if (width === 320) await panel.screenshot({ path: path.join(screenshots, `${theme}-${lang}-settings.png`) });
     const lowContrast = await panel.evaluate(root => {
       const rgb=s=>s.match(/[\d.]+/g)?.map(Number), lum=c=>c.slice(0,3).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0), bad=[];
       for(const e of root.querySelectorAll('.weui-insight-box strong,.weui-move-prob,.weui-delta-tag,.weui-cell__ft,.diverge-help,.weui-segment.active,.diverge-model-options small')) {
