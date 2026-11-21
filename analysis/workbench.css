@@ -556,6 +556,11 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-background-control { display:flex;align-items:center;gap:6px;margin:0 0 10px;font-size:12px;color:var(--text-muted); }
 .checkup-background-control[hidden] { display:none; }
 .checkup-background-control input { accent-color:var(--brand-green); }
+.checkup-background-offer { padding:10px 12px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-paper); }
+.checkup-background-offer p { margin:0 0 6px;font-size:13px;color:var(--text-main); }
+.checkup-background-offer div { display:flex;flex-wrap:wrap;gap:6px; }
+.checkup-background-offer .btn-header { min-height:32px;height:auto;box-shadow:none; }
+.practice-active .checkup-background-offer,.temp-position-analysis .checkup-background-offer { display:none; }
 .studio-profile-select { max-width:clamp(94px,14vw,170px); }
 .studio-profile-select[hidden],.study-link-guide[hidden] { display:none; }
 .study-link-guide { padding:10px 12px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-paper); }
@@ -573,6 +578,7 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-accounts { display:grid;gap:6px;margin:0 0 12px;padding:0;list-style:none; }
 .checkup-accounts[hidden],#btn-checkup-save-account[hidden] { display:none; }
 .checkup-accounts li { display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 8px;border:1px solid var(--dg-line);border-radius:10px;background:var(--dg-paper); }
+.checkup-accounts li[data-selected="true"] { border-color:var(--brand-green);background:var(--dg-green-soft); }
 .checkup-account-name { flex:1 1 160px;min-width:0;overflow-wrap:anywhere;font-size:13px; }
 .checkup-accounts .btn-header { height:32px;box-shadow:none; }
 .checkup-sources,.checkup-confirm-row,.checkup-progress-box,.checkup-report-actions { display:flex;flex-wrap:wrap;gap:8px;align-items:center; }

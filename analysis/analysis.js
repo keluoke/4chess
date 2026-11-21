@@ -1,17 +1,17 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261121-study-reminders';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261121-v127';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261121-study-reminders';
-import { ReviewExplorer } from './review-explorer.js?v=20261121-study-reminders';
-import { ReviewOverview } from './review-overview.js?v=20261121-study-reminders';
-import { ReviewCommentary } from './review-commentary.js?v=20261121-study-reminders';
-import { ConsequencePlayer } from './consequence-player.js?v=20261121-study-reminders';
-import { MistakeBank } from './mistake-bank.js?v=20261121-study-reminders';
-import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261121-study-reminders';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261121-study-reminders';
-import { CheckupReminders } from './checkup-reminders.js?v=20261121-study-reminders';
-import { ShareCardModal } from './share-card.js?v=20261121-study-reminders';
+import { IntuitionReview } from './intuition-review.js?v=20261121-v127';
+import { ReviewExplorer } from './review-explorer.js?v=20261121-v127';
+import { ReviewOverview } from './review-overview.js?v=20261121-v127';
+import { ReviewCommentary } from './review-commentary.js?v=20261121-v127';
+import { ConsequencePlayer } from './consequence-player.js?v=20261121-v127';
+import { MistakeBank } from './mistake-bank.js?v=20261121-v127';
+import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261121-v127';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261121-v127';
+import { CheckupReminders } from './checkup-reminders.js?v=20261121-v127';
+import { ShareCardModal } from './share-card.js?v=20261121-v127';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261121-v125';
+import { ReviewPractice } from './review-practice.js?v=20261121-v127';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -23,12 +23,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261117-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261121-v125';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261121-study-reminders';
+import { EvalChart } from './eval-chart.js?v=20261121-v127';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261121-v125';
+import { PositionAnalysis } from './position-analysis.js?v=20261121-v127';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261121-study-reminders';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261121-v127';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
@@ -119,7 +119,17 @@ class AnalysisStudioApp {
     });
     this.headerObserver.observe(document.querySelector('.studio-navbar'));
     this.workbenchLayout = initWorkbenchLayout();
-    this.loadInitialGame();
+    const url = new URL(location.href);
+    const hash = new URLSearchParams(url.hash.slice(1));
+    const reminder = hash.get('checkup');
+    if (reminder) {
+      hash.delete('checkup');
+      url.hash = hash.toString();
+      history.replaceState(history.state, '', url);
+    }
+    this.loadInitialGame().then(() => {
+      if (reminder && !hash.has('scan')) return this.checkupReminders.openFromReminder(reminder);
+    }).catch(error => console.warn('[Studio] Could not open initial view:', error));
   }
 
   initElements() {

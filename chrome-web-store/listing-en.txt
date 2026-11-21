@@ -11,7 +11,7 @@ Share a chess position as a PNG
 From a key move in the analysis studio, open Share card to show the position and compare Stockfish’s recommendation with the played move or Maia’s first choice. Copy the image or download a landscape or portrait PNG. The card is generated on your device.
 
 Mistake Bank and Intuition Checkup in the web studio
-On 4chess.cc, save intuition traps to a local Mistake Bank and revisit them with spaced practice. Intuition Checkup looks for patterns across up to 10 recent finished Chess.com or Lichess games. You can also import a PGN with multiple games. Study profiles and reports stay in the browser.
+On 4chess.cc, save intuition traps to a local Mistake Bank and revisit them with spaced practice. Intuition Checkup looks for patterns across up to 10 recent finished Chess.com or Lichess games. You can also import a PGN with multiple games. Study profiles and reports stay in the browser. Enable optional reminders for a linked profile to see new completed games and open its checkup from the extension popup.
 
 Image to FEN
 Found a diagram in an article or a forum post? Open the extension and choose Scan page. Check the pieces and whose turn it is, then correct any square before confirming. Play a move on the recognized board, copy its FEN or open it in the studio. The scanner reads visible static diagrams. A diagram alone may leave castling and en passant rights unclear. You can edit the FEN to supply them.

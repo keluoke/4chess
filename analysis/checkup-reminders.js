@@ -1,14 +1,14 @@
 import {
   CHECKUP_FAILURE_MS, CHECKUP_REFRESH_MS, checkupProbeDue, fetchCheckupObservation,
-  checkupSubscriptionKey, hasNewCheckupGames, mergeCheckupObservation, mergeCheckupSnapshot
-} from '../engine/checkup-watch.js?v=20261121-study-reminders';
-import { accountKey, normalizeAccount } from './study-store.js?v=20261121-study-reminders';
-import { formatRelativeTime } from './checkup-runner.js?v=20261121-study-reminders';
-import { t } from './i18n.js?v=20261121-study-reminders';
+  checkupSubscriptionKey, hasNewCheckupGames, isCheckupReminderToken, mergeCheckupObservation, mergeCheckupSnapshot
+} from '../engine/checkup-watch.js?v=20261121-v127';
+import { accountKey, normalizeAccount } from './study-store.js?v=20261121-v127';
+import { formatRelativeTime } from './checkup-runner.js?v=20261121-v127';
+import { t } from './i18n.js?v=20261121-v127';
 
 const STALE_DIAGNOSIS_MS = 7 * 86400_000;
 
-function backgroundRequest(subscriptions) {
+function backgroundRequest(payload = {}) {
   return new Promise(resolve => {
     const id = crypto.randomUUID();
     const finish = value => {
@@ -22,7 +22,7 @@ function backgroundRequest(subscriptions) {
     };
     const timer = setTimeout(() => finish(null), 1200);
     window.addEventListener('message', onMessage);
-    window.postMessage({ type: 'DIVERGE_CHECKUP_SYNC', id, subscriptions }, location.origin);
+    window.postMessage({ type: 'DIVERGE_CHECKUP_SYNC', id, ...payload }, location.origin);
   });
 }
 
@@ -43,6 +43,10 @@ export class CheckupReminders {
     this.note = document.getElementById('checkup-reminder-note');
     this.backgroundControl = document.getElementById('checkup-background-control');
     this.backgroundToggle = document.getElementById('checkup-background-toggle');
+    this.backgroundTip = document.getElementById('checkup-background-tip');
+    this.reminderOffer = document.getElementById('checkup-background-offer');
+    this.acceptOffer = document.getElementById('checkup-background-enable');
+    this.dismissOffer = document.getElementById('checkup-background-dismiss');
     if (!app.checkup.supported) return;
     if (location.origin === 'https://4chess.cc') {
       this.connection = backgroundRequest().then(result => {
@@ -50,6 +54,8 @@ export class CheckupReminders {
         this.render();
       });
       this.backgroundToggle.onchange = () => this.setBackground(this.backgroundToggle.checked);
+      this.acceptOffer.onclick = () => this.setBackground(true);
+      this.dismissOffer.onclick = () => this.setBackground(false);
     }
     setInterval(() => { if (!document.hidden) this.refresh(); }, CHECKUP_REFRESH_MS);
   }
@@ -59,6 +65,36 @@ export class CheckupReminders {
     this.profile = this.bank.activeProfile;
     this.render();
     this.refresh();
+  }
+
+  offerAfterLink(profile) {
+    if (!this.connection || profile.accounts.length !== 1 || profile.backgroundCheckup !== undefined) return;
+    this.offerProfileId = profile.id;
+    this.render();
+  }
+
+  async openFromReminder(token) {
+    if (!this.connection || !isCheckupReminderToken(token)) return;
+    const { checkup } = this.app;
+    const epoch = this.app.gameEpoch;
+    const generation = checkup.openGeneration;
+    const canOpen = () => checkup.allowed() && this.app.gameEpoch === epoch &&
+      checkup.openGeneration === generation && !document.querySelector('dialog[open]');
+    await this.bank.ready;
+    await this.connection;
+    if (!canOpen()) return;
+    const result = this.extensionAvailable ? await backgroundRequest({ reminder: token }) : null;
+    const target = result?.target;
+    const account = normalizeAccount(target?.platform, target?.username);
+    const profile = account && await this.bank.store.get('profiles', target.profileId);
+    const linked = profile?.accounts?.find(item => accountKey(item) === accountKey(account));
+    if (!canOpen()) return;
+    if (profile?.backgroundCheckup && linked) {
+      if (profile.id !== this.bank.activeProfile?.id) await this.bank.selectProfile(profile.id);
+      if (canOpen() && profile.id === this.bank.activeProfile?.id) await checkup.open({ account: linked });
+    } else {
+      await checkup.open();
+    }
   }
 
   async refresh() {
@@ -103,6 +139,7 @@ export class CheckupReminders {
     try {
       const saved = await this.bank.store.setBackgroundCheckup(profile.id, enabled);
       if (this.profile?.id === profile.id && saved) this.profile = saved;
+      if (saved && this.offerProfileId === profile.id) this.offerProfileId = null;
       if (!saved || !await this.syncBackground()) this.app.showToast(t('checkupBackgroundSyncError'));
     } catch {
       this.app.showToast(t('checkupAccountError'));
@@ -126,7 +163,7 @@ export class CheckupReminders {
           state: profile.checkupReminders?.[accountKey(account)]
         }))
       );
-      const result = await backgroundRequest(subscriptions);
+      const result = await backgroundRequest({ subscriptions });
       if (!result?.ok || !Array.isArray(result.subscriptions)) return false;
       const original = new Map(subscriptions.map(item => [checkupSubscriptionKey(item), item]));
       for (const item of result.subscriptions) {
@@ -191,6 +228,11 @@ export class CheckupReminders {
       if (!this.toggling) this.backgroundToggle.checked = allowed && this.profile.backgroundCheckup === true;
       this.backgroundToggle.disabled = this.toggling;
     }
+    const showOffer = allowed && this.extensionAvailable && accounts.length === 1 &&
+      this.offerProfileId === this.profile.id && this.profile.backgroundCheckup === undefined;
+    this.reminderOffer.hidden = !showOffer;
+    this.backgroundTip.hidden = !showOffer;
+    this.acceptOffer.disabled = this.dismissOffer.disabled = this.toggling;
     const title = accounts.length && (hasNew || !latest || Date.now() - latest >= STALE_DIAGNOSIS_MS)
       ? `${t('checkupBtn')} · ${message}` : t('checkupBtn');
     this.button.title = title;

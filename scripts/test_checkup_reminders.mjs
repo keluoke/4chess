@@ -106,6 +106,9 @@ const sender = { frameId: 0, url: 'https://4chess.cc/analysis/' };
 const send = subscriptions => new Promise(resolve =>
   api.runtime.onMessage.fire({ type: 'CHECKUP_BACKGROUND_SYNC', subscriptions }, sender, resolve)
 );
+const resolveReminder = reminder => new Promise(resolve =>
+  api.runtime.onMessage.fire({ type: 'CHECKUP_BACKGROUND_SYNC', reminder }, sender, resolve)
+);
 const input = { ...lichess, profileId: 'child', state: mergeCheckupObservation({}, first) };
 assert.equal(api.runtime.onMessage.fire({ type: 'CHECKUP_BACKGROUND_SYNC', subscriptions: [input] },
   { ...sender, url: 'https://4chess.cc/guide' }, () => assert.fail('Non-studio sender accepted')), undefined);
@@ -116,11 +119,18 @@ assert.equal(badge, '');
 await api.alarms.onAlarm.fire(alarm);
 assert.equal(fetches, 1);
 assert.equal(badge, '•');
+const token = storage[0].token;
+assert.deepEqual(await resolveReminder(token), {
+  ok: true, target: { profileId: 'child', platform: 'lichess', username: 'student' }
+});
+assert.equal(badge, '•', 'Opening a reminder does not mark those games as diagnosed');
+assert.deepEqual(await resolveReminder('foreign-token'), { ok: false });
 assert.equal((await send([input])).subscriptions[0].state.games[0].id, 'NewGame1', 'Sync with an older web snapshot retains the background result');
 assert.equal((await send([{ ...input, state: { ...input.state, diagnosed: ['NewGame1'] } }])).ok, true);
 assert.equal(badge, '');
 await send([]);
 assert.equal(alarm, null);
+assert.deepEqual(await resolveReminder(token), { ok: true }, 'A removed subscription cannot open its former account');
 
 await send([input]);
 mode = 'error';

@@ -14,6 +14,12 @@
   "checkupBadgeTitle": {
     "message": "Diverge · New completed games to review"
   },
+  "popupCheckupTitle": {
+    "message": "New completed games"
+  },
+  "popupCheckupOpen": {
+    "message": "Open checkup"
+  },
   "popupSubtitle": {
     "message": "Human intuition · Engine insight",
     "description": "Popup subtitle below Diverge"

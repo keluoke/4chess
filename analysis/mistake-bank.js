@@ -7,8 +7,8 @@ import {
   parseAliases,
   resolvePerspective,
   trapId
-} from './study-store.js?v=20261121-study-reminders';
-import { t } from './i18n.js?v=20261121-study-reminders';
+} from './study-store.js?v=20261121-v127';
+import { t } from './i18n.js?v=20261121-v127';
 
 export class MistakeBank {
   filter = 'due';
@@ -212,6 +212,7 @@ export class MistakeBank {
     const saved = await this.store.setProfileAccount(id, platform, username, options);
     if (!saved) throw new Error('Profile does not exist');
     await this.refreshState();
+    if (!options?.remove) this.app.checkupReminders?.offerAfterLink(saved);
     this.app.renderBlunderCards?.();
     this.app.reviewOverview?.render?.();
   }

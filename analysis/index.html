@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261121-study-reminders">
+  <link rel="stylesheet" href="workbench.css?v=20261121-v127">
 </head>
 <body class="diverge-ui">
   <script>
@@ -144,6 +144,13 @@
     </section>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <div class="analysis-scroll">
+      <aside id="checkup-background-offer" class="checkup-background-offer" hidden>
+        <p data-i18n="checkupBackgroundOffer">开启提醒后，扩展约每 6 小时检查此档案的新完赛对局。</p>
+        <div>
+          <button id="checkup-background-enable" type="button" class="btn-header" data-i18n="checkupEnableReminders">开启提醒</button>
+          <button id="checkup-background-dismiss" type="button" class="btn-header" data-i18n="studyLinkDismiss">稍后再说</button>
+        </div>
+      </aside>
       <section id="study-link-guide" class="study-link-guide" aria-labelledby="study-link-title" hidden>
         <div class="study-link-heading">
           <p id="study-link-title"></p>
@@ -447,6 +454,7 @@
       <select id="checkup-profile-select" class="btn-header"></select>
     </div>
     <p id="checkup-reminder-note" class="checkup-reminder-note" hidden></p>
+    <p id="checkup-background-tip" class="checkup-reminder-note" data-i18n="checkupBackgroundOffer" hidden>开启提醒后，扩展约每 6 小时检查此档案的新完赛对局。</p>
     <label id="checkup-background-control" class="checkup-background-control" hidden>
       <input type="checkbox" id="checkup-background-toggle">
       <span data-i18n="checkupBackgroundToggle">为此档案启用扩展后台提醒</span>
@@ -513,11 +521,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261121-v125"></script>
+  <script type="module" src="analysis.js?v=20261121-v127"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261121-v125').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261121-v127').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

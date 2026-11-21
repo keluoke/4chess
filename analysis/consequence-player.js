@@ -1,7 +1,7 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261121-study-reminders';
+import { t } from './i18n.js?v=20261121-v127';
 
 export function buildReplaySteps(fenBefore, variation, limit = 3) {
   if (!fenBefore || !Array.isArray(variation) || !variation.length) return [];

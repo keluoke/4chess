@@ -5,6 +5,10 @@ export const CHECKUP_ALARM_MINUTES = 6 * 60;
 export const CHECKUP_BACKGROUND_KEY = 'divergeCheckupBackground';
 export const LICHESS_CHECKUP_SPEEDS = 'bullet,blitz,rapid,classical';
 
+export function isCheckupReminderToken(value) {
+  return typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
+}
+
 const LICHESS_FINISHED = new Set(['mate', 'resign', 'stalemate', 'timeout', 'draw', 'outoftime', 'cheat', 'variantEnd']);
 
 export function checkupGameId(platform, source) {

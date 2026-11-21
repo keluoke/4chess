@@ -1,8 +1,8 @@
-# 1.2.6 商店提交说明
+# 1.2.7 商店提交说明
 
-上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.6.zip`。本版修复 Chess.com 和 Lichess 在缩放、翻转与棋盘重挂载时的箭头与热力图对齐，保留悬浮窗候选线路预览和可选后台提醒。标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
+上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.7.zip`。本版修复 Chess.com 和 Lichess 在缩放、翻转与棋盘重挂载时的箭头与热力图对齐，保留悬浮窗候选线路预览，并从扩展弹窗直达对应档案的近期诊断。标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
 
-- 根目录只有一个 manifest.json，MV3 / 1.2.6，使用原生 popup 与本地 Worker / WASM。
+- 根目录只有一个 manifest.json，MV3 / 1.2.7，使用原生 popup 与本地 Worker / WASM。
 - Maia 5M / 23M / 79M 权重仅从 CDN 加载，作为固定本地推理实现的数值数据；不包含下载执行的 JS / WASM。SF19 标准版仅在独立网页运行，扩展强制使用 Lite。
 - 轻量识别资产随包：chess-cnn.wasm、chessimg2pos_weights.bin、chessimg2pos_manifest.json；大权重不入包。
 - 公开隐私政策填写 https://4chess.cc/privacy/ 。数据声明必须说明局面、记谱、公开玩家标签、本地复盘缓存和 UI 设置同步；不能声称一切关闭页面即删除，也不能声称所有网络请求都不涉及公开棋局数据。
@@ -17,7 +17,7 @@ Diverge provides local chess study and post-game review using packaged Stockfish
 
 To test share cards, open a finished game in the analysis studio and run a review. Open Share card on a key move, then copy the image or download a landscape or portrait PNG. Card generation runs locally. Mistake Bank and Intuition Checkup are available in the web studio at 4chess.cc.
 
-To test reminders, open Player checkup in the web studio, link a public Chess.com or Lichess username and enable extension reminders for the current profile. The extension checks public completed-game metadata approximately every six hours and shows a badge for new games. Disabling reminders or unlinking the account removes the subscription after sync.
+To test reminders, open Player checkup in the web studio, link a public Chess.com or Lichess username and enable extension reminders for the current profile. The extension checks public completed-game metadata approximately every six hours and shows a badge for new games. Open the extension popup and select Open checkup to reach the corresponding profile. Disabling reminders or unlinking the account removes the subscription after sync.
 
 Publishing instructions: https://developer.chrome.com/docs/webstore/publish/
 MV3 policy: https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements

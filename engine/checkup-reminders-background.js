@@ -1,6 +1,6 @@
 import {
   CHECKUP_ALARM_MINUTES, CHECKUP_BACKGROUND_KEY, CHECKUP_FAILURE_MS, checkupProbeDue, checkupSubscriptionKey,
-  fetchCheckupObservation, hasNewCheckupGames, mergeCheckupObservation, mergeCheckupSnapshot, sanitizeCheckupSnapshot
+  fetchCheckupObservation, hasNewCheckupGames, isCheckupReminderToken, mergeCheckupObservation, mergeCheckupSnapshot, sanitizeCheckupSnapshot
 } from './checkup-watch.js';
 
 const ALARM = 'diverge-checkup-archives';
@@ -58,6 +58,19 @@ export function startCheckupReminders(api = chrome, fetchImpl = (...args) => fet
 
   api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type !== MESSAGE || !allowedSender(sender)) return;
+    if (message.reminder !== undefined) {
+      if (!isCheckupReminderToken(message.reminder)) {
+        sendResponse({ ok: false });
+        return;
+      }
+      serial(async () => {
+        const entry = (await read()).find(item => item.token === message.reminder);
+        if (!entry) return { ok: true };
+        const { profileId, platform, username } = entry;
+        return { ok: true, target: { profileId, platform, username } };
+      }).then(sendResponse).catch(() => sendResponse({ ok: false }));
+      return true;
+    }
     if (message.subscriptions === undefined) {
       sendResponse({ ok: true });
       return;

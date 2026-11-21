@@ -6,7 +6,9 @@
       typeof message.id !== 'string' || !/^[a-f0-9-]{36}$/.test(message.id)) return;
     let result;
     try {
-      result = await chrome.runtime.sendMessage({ type: 'CHECKUP_BACKGROUND_SYNC', subscriptions: message.subscriptions });
+      result = await chrome.runtime.sendMessage({
+        type: 'CHECKUP_BACKGROUND_SYNC', subscriptions: message.subscriptions, reminder: message.reminder
+      });
     } catch {
       result = { ok: false };
     }

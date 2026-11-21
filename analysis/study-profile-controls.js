@@ -1,5 +1,5 @@
-import { accountKey, normalizeAccount } from './study-store.js?v=20261121-study-reminders';
-import { t } from './i18n.js?v=20261121-study-reminders';
+import { accountKey, normalizeAccount } from './study-store.js?v=20261121-v127';
+import { t } from './i18n.js?v=20261121-v127';
 
 export class StudyProfileControls {
   busy = false;

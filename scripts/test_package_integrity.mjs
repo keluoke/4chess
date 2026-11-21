@@ -25,6 +25,9 @@ try{
   }
  }
  walk(unpacked);
+ for (const entry of ['content/board-grid.js', 'engine/checkup-reminders-background.js', 'analysis/checkup-reminders.js']) {
+  assert(Object.hasOwn(hashes, entry), `Release ZIP must include ${entry}`);
+ }
  const manifest=JSON.parse(fs.readFileSync(path.join(unpacked,'manifest.json')));
  assert.equal(manifest.version,version);assert(fs.existsSync(path.join(unpacked,'_locales/en/messages.json')));assert(!fs.existsSync(path.join(unpacked,'__locales')));
  for(const entry of [manifest.background.service_worker,manifest.action.default_popup,...manifest.content_scripts.flatMap(c=>[...c.js,...c.css||[]])])assert(fs.existsSync(path.join(unpacked,entry)),entry);

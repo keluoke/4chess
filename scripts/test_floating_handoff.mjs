@@ -195,17 +195,22 @@ try {
   }));
   const studioUrl = 'https://4chess.cc/analysis/?lang=en';
   const reminders = await context.newPage();
-  await reminders.goto(studioUrl);
+  const finished = pgn.replace('UX White', 'BackgroundUser').replace('UX Black', 'OtherPlayer');
+  await reminders.goto(studioUrl + '#' + new URLSearchParams({ pgn: finished, checkupSource: 'lichess' }));
   await reminders.waitForFunction(() => window.__maiaStudioApp?.checkupReminders.extensionAvailable);
   await reminders.evaluate(async () => {
     const bank = window.__maiaStudioApp.mistakeBank;
     await bank.ready;
-    await bank.updateProfileAccount('default', 'lichess', 'BackgroundUser');
+    await bank.store.saveProfile({ id: 'reminder-child', displayName: 'Child' });
+    await bank.selectProfile('reminder-child');
   });
+  await reminders.locator('#study-link-guide').getByRole('button', { name: /Link .*BackgroundUser/ }).click();
+  await reminders.locator('#checkup-background-offer').waitFor();
+  assert.equal(await worker.evaluate(async () =>
+    (await chrome.storage.local.get('divergeCheckupBackground')).divergeCheckupBackground?.length || 0), 0,
+  'Binding alone does not enable background reminders');
   await reminders.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.checkupReminders?.['lichess:backgrounduser']?.checkedAt > 0);
-  await reminders.locator('#btn-intuition-checkup').click();
-  const toggle = reminders.locator('#checkup-background-toggle');
-  await toggle.check();
+  await reminders.locator('#checkup-background-enable').click();
   await reminders.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.backgroundCheckup === true &&
     !__maiaStudioApp.checkupReminders.toggling);
   await reminders.evaluate(() => __maiaStudioApp.checkupReminders.backgroundQueue);
@@ -217,6 +222,8 @@ try {
   assert.equal(subscription.period, 360);
   assert.equal(subscription.accounts.length, 1);
   assert.equal(subscription.accounts[0].username, 'backgrounduser');
+  assert.equal(subscription.accounts[0].profileId, 'reminder-child');
+  await reminders.evaluate(() => __maiaStudioApp.mistakeBank.selectProfile('default'));
   await reminders.close();
 
   const badge = await worker.evaluate(async ({ archiveUser, line }) => {
@@ -240,10 +247,21 @@ try {
   }, { archiveUser, line: archiveEntry('Newer001') });
   assert.equal(badge, '•', 'The alarm raises a badge while the workbench is closed');
 
-  const reopened = await context.newPage();
-  await reopened.goto(studioUrl);
+  await popup.reload();
+  const reminderLink = popup.locator('#popup-checkup').getByRole('link', { name: /backgrounduser/i });
+  await reminderLink.waitFor();
+  const reminderHref = await reminderLink.getAttribute('href');
+  assert.doesNotMatch(reminderHref, /backgrounduser|reminder-child/i, 'The link carries an opaque token');
+  const newStudio = context.waitForEvent('page');
+  await reminderLink.click();
+  const reopened = await newStudio;
+  await reopened.locator('#checkup-dialog').waitFor();
+  assert.equal(await reopened.locator('#checkup-profile-select').inputValue(), 'reminder-child');
+  assert.equal(await reopened.locator('#checkup-username').inputValue(), 'BackgroundUser');
+  assert.equal(await reopened.locator('#checkup-accounts [data-selected="true"]').count(), 1);
+  assert.equal(await reopened.evaluate(() => __maiaStudioApp.checkup.running || __maiaStudioApp.checkup.fetching), false);
   await reopened.locator('#checkup-new-dot').waitFor();
-  await reopened.locator('#btn-intuition-checkup').click();
+  assert.equal(await worker.evaluate(() => chrome.action.getBadgeText({})), '•');
   await reopened.locator('#checkup-background-toggle').uncheck();
   await reopened.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.backgroundCheckup === false &&
     !__maiaStudioApp.checkupReminders.toggling);
@@ -252,8 +270,9 @@ try {
     alarm: !!await chrome.alarms.get('diverge-checkup-archives')
   }));
   assert.deepEqual(cleared, { badge: '', alarm: false });
+  await popup.locator('#popup-checkup').waitFor({ state: 'hidden' });
   await reopened.close();
-  console.log('PASS packaged Chrome reminder bridge: opt-in, real alarm without a studio tab, badge and subscription removal.');
+  console.log('PASS packaged Chrome reminders: first-link offer and opt-in, real alarm without a studio tab, Popup deep link to the right profile, and subscription removal.');
 
   assert.deepEqual(pageErrors, [], 'Handoff pages must not contain uncaught application errors');
   console.log('PASS packaged MV3 handoff: web/local FEN and PGN orientation, both platform panel clicks and delayed extraction snapshots, white/black preference overrides, storage-only view, rating/language/model preferences and invalid-input recovery');

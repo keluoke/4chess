@@ -34,7 +34,7 @@ Share a chess position as a PNG
 From a key move in the analysis studio, open Share card to show the position and compare Stockfish’s recommendation with the played move or Maia’s first choice. Copy the image or download a landscape or portrait PNG. The card is generated on your device.
 
 Mistake Bank and Intuition Checkup in the web studio
-On 4chess.cc, save intuition traps to a local Mistake Bank and revisit them with spaced practice. Intuition Checkup looks for patterns across up to 10 recent finished Chess.com or Lichess games. You can also import a PGN with multiple games. Study profiles and reports stay in the browser.
+On 4chess.cc, save intuition traps to a local Mistake Bank and revisit them with spaced practice. Intuition Checkup looks for patterns across up to 10 recent finished Chess.com or Lichess games. You can also import a PGN with multiple games. Study profiles and reports stay in the browser. Enable optional reminders for a linked profile to see new completed games and open its checkup from the extension popup.
 
 Image to FEN
 Found a diagram in an article or a forum post? Open the extension and choose Scan page. Check the pieces and whose turn it is, then correct any square before confirming. Play a move on the recognized board, copy its FEN or open it in the studio. The scanner reads visible static diagrams. A diagram alone may leave castling and en passant rights unclear. You can edit the FEN to supply them.
@@ -55,22 +55,22 @@ Source and support: https://github.com/keluoke/4chess
 
 ## 简体中文
 
-名称（29/75）：
+名称（48/75）：
 
 ```text
-歧路 Diverge · 国际象棋分析、棋图扫描与人类直觉
+歧路 Diverge · Chess.com 与 Lichess 免费复盘、双引擎分析与棋图扫描
 ```
 
-摘要（55/132）：
+摘要（85/132）：
 
 ```text
-扫描网页棋图，对比 Stockfish 好棋与 Maia 人类常见走法；探索局面、导入棋谱，复盘已结束的对局。
+免费复盘 Chess.com、Lichess 完赛棋局，并排对比 Stockfish 与 Maia 候选。支持棋图转 FEN、近期诊断和错题练习。对局进行中自动锁定分析。
 ```
 
 详细说明（可直接粘贴；同 listing-zh-CN.txt）：
 
 ```text
-歧路 Diverge 是一款国际象棋分析与棋图扫描插件，核心是呈现机器引擎与人类直觉的差异：Stockfish 推荐怎样走，Maia 预测所选等级分的人类棋手更可能怎样走。你可以探索浏览网页时看到的静态棋图，也可以复盘 Chess.com、Lichess 上已结束的棋局。
+歧路 Diverge 提供 Chess.com 和 Lichess 免费完赛复盘。用 Stockfish 查看引擎推荐，用 Maia 了解所选等级分棋手常见的走法。你也可以把网页上的静态棋图扫描成 FEN，再在分析台探索。
 
 引擎建议与人类直觉，并排比较
 结合局面评分、候选变化和走法概率，寻找两种选择的分歧。Maia 的百分比表示人类走法预测概率，不是获胜概率，也不能用来认定个人棋力。常见的走法可能存在问题，引擎推荐的走法也可能违背第一直觉。
@@ -82,6 +82,9 @@ Source and support: https://github.com/keluoke/4chess
 
 复盘已结束的棋局
 在受支持的分析台和完赛棋局中，悬浮窗对比人类候选与引擎建议，可用走法箭头和落点概率热力图辅助理解。工作台支持导入 PGN 文件、粘贴 PGN 或 FEN，以及受支持的公开对局链接。整局复盘提供精度得分、优劣走势图、记谱与妙手／俗手等关键步；只有一个局面时不显示整局精度或棋局走势图。
+
+近期诊断与错题练习
+在 4chess.cc 的工作台，可按档案绑定公开棋手账号，诊断最近最多 10 盘完赛棋。把关键错题存进错题本，按间隔重练。你可以为档案开启新局提醒，在扩展图标看到红点后，直接从弹窗打开对应档案的诊断。
 
 自由探索与统一设置
 在分析棋盘上走棋形成个人分支，用键盘回看、右键拖动画箭头，查看简洁的候选谱。支持中英文、浅深主题、直觉等级分，以及 Maia-3 5M、23M、79M 三档模型。弹窗和悬浮窗使用 SF19 Lite；SF19 标准版是独立网页版的可选项。大模型首次下载更大、计算更慢。设置可保存，并与同一 Chrome 配置中的4chess 分析工作台同步。

@@ -1,4 +1,4 @@
-import { markCheckupGames } from '../engine/checkup-watch.js?v=20261121-study-reminders';
+import { markCheckupGames } from '../engine/checkup-watch.js?v=20261121-v127';
 
 const DB_NAME = 'diverge_study_v1';
 const DB_VERSION = 1;

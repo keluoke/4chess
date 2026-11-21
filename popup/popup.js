@@ -1,5 +1,6 @@
 import { initScanView } from './scan-view.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
+import { CHECKUP_BACKGROUND_KEY, hasNewCheckupGames, isCheckupReminderToken } from '../engine/checkup-watch.js';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, engineExperienceHint, readEnginePreferences, studioUrl } from '../engine/engine-preferences.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -14,6 +15,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   const language = document.getElementById('ui-language');
   const panel = document.getElementById('toggle-panel-switch');
   const overlays = document.getElementById('toggle-live-eval-switch');
+  const reminderCard = document.getElementById('popup-checkup');
+  const reminderAccounts = document.getElementById('popup-checkup-accounts');
+  let subscriptions = [];
+  const renderReminders = () => {
+    const rows = [];
+    for (const item of subscriptions) {
+      if (!['chesscom', 'lichess'].includes(item?.platform) || typeof item.username !== 'string'
+        || !isCheckupReminderToken(item.token) || !hasNewCheckupGames(item.state)) continue;
+      const platform = item.platform === 'chesscom' ? 'Chess.com' : 'Lichess';
+      const name = `${platform} · ${item.username}`;
+      const url = new URL(studioUrl(prefs, prefs.defaultElo, prefs.maia3_lang));
+      url.hash = new URLSearchParams({ checkup: item.token, empty: '1' }).toString();
+      const row = document.createElement('li');
+      const label = document.createElement('span');
+      label.textContent = name;
+      const link = document.createElement('a');
+      link.href = url.href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = message('popupCheckupOpen') + ' ↗';
+      link.setAttribute('aria-label', `${message('popupCheckupOpen')} · ${name}`);
+      row.append(label, link);
+      rows.push(row);
+    }
+    reminderAccounts.replaceChildren(...rows);
+    reminderCard.hidden = !rows.length;
+  };
   const render = () => {
     document.documentElement.lang = prefs.maia3_lang === 'zh' ? 'zh-CN' : 'en';
     document.querySelectorAll('[data-i18n]').forEach(el => { const text = message(el.dataset.i18n); if (text) el.textContent = text; });
@@ -22,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('guide-link').href = 'https://4chess.cc/guide/?lang=' + prefs.maia3_lang;
     document.querySelector('.popup-footer a').href = 'https://4chess.cc/guide/?lang=' + prefs.maia3_lang + '#about';
     document.getElementById('studio-link').href = studioUrl(prefs, prefs.defaultElo, prefs.maia3_lang);
+    renderReminders();
     const hint = document.getElementById('engine-experience-hint'); hint.textContent = engineExperienceHint(prefs, prefs.maia3_lang, true); hint.hidden = !hint.textContent;
   };
   const refreshCdn = async () => { const engines = await readEnginePreferences(); cdn.value = engines.cloudflareCdnUrl; };
@@ -29,7 +58,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (globalThis.chrome?.runtime?.id) initScanView();
   subscribePreferences(next => { prefs = next; render(); refreshCdn(); });
   if (!globalThis.chrome?.storage?.local) return;
-  const saved = await chrome.storage.local.get('liveEvaluation'); overlays.checked = saved.liveEvaluation !== false;
+  const saved = await chrome.storage.local.get(['liveEvaluation', CHECKUP_BACKGROUND_KEY]);
+  overlays.checked = saved.liveEvaluation !== false;
+  const setSubscriptions = value => {
+    subscriptions = Array.isArray(value) ? value : [];
+    renderReminders();
+  };
+  setSubscriptions(saved[CHECKUP_BACKGROUND_KEY]);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[CHECKUP_BACKGROUND_KEY]) setSubscriptions(changes[CHECKUP_BACKGROUND_KEY].newValue);
+  });
   const sendToTab = async payload => {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs[0]?.id) chrome.tabs.sendMessage(tabs[0].id, payload, () => { void chrome.runtime.lastError; });

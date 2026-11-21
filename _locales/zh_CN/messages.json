@@ -1,10 +1,10 @@
 {
   "extensionName": {
-    "message": "歧路 Diverge · 国际象棋分析、棋图扫描与人类直觉",
+    "message": "歧路 Diverge · Chess.com 与 Lichess 免费复盘、双引擎分析与棋图扫描",
     "description": "扩展标题"
   },
   "extensionDescription": {
-    "message": "扫描网页棋图，对比 Stockfish 好棋与 Maia 人类常见走法；探索局面、导入棋谱，复盘已结束的对局。",
+    "message": "免费复盘 Chess.com、Lichess 完赛棋局，并排对比 Stockfish 与 Maia 候选。支持棋图转 FEN、近期诊断和错题练习。对局进行中自动锁定分析。",
     "description": "扩展描述"
   },
   "actionTitle": {
@@ -13,6 +13,12 @@
   },
   "checkupBadgeTitle": {
     "message": "歧路 Diverge · 有新对局待诊断"
+  },
+  "popupCheckupTitle": {
+    "message": "有新对局待诊断"
+  },
+  "popupCheckupOpen": {
+    "message": "去诊断"
   },
   "popupSubtitle": {
     "message": "人类直觉 · 引擎洞察",

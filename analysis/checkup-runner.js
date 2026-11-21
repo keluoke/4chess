@@ -2,9 +2,9 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-study-reminders';
-import { t } from './i18n.js?v=20261121-study-reminders';
-import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261121-study-reminders';
+import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-v127';
+import { t } from './i18n.js?v=20261121-v127';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261121-v127';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
 const MAX_LOCAL_GAMES = 15;
@@ -676,7 +676,7 @@ export class IntuitionCheckup {
     await this.prepareBatch();
   }
 
-  async open() {
+  async open({ account } = {}) {
     if (!this.allowed() || !this.dialog) return;
     const generation = ++this.openGeneration;
     const epoch = this.app.gameEpoch;
@@ -699,6 +699,10 @@ export class IntuitionCheckup {
       this.source = this.gameContext?.platform || profile?.accounts?.[0]?.platform || 'lichess';
       if (this.usernameInput) this.usernameInput.value = this.suggestUsername(profile);
     }
+    if (account && profile?.accounts?.some(item => accountKey(item) === accountKey(account))) {
+      this.source = account.platform;
+      this.usernameInput.value = account.username;
+    }
     this.activeProfileId = profileId;
     if (this.pendingBatch && this.pendingBatch.profileId !== profileId) {
       this.pendingBatch = null;
@@ -713,7 +717,8 @@ export class IntuitionCheckup {
     this.renderReport(this.latestReport);
     if (!this.dialog.open) {
       this.dialog.showModal();
-      (this.accountList?.querySelector('button') || (this.usernameInput?.value ? this.btnFetch : this.usernameInput))?.focus();
+      const selected = this.accountList?.querySelector('[data-selected="true"] button');
+      (selected || this.accountList?.querySelector('button') || (this.usernameInput?.value ? this.btnFetch : this.usernameInput))?.focus();
     }
     this.app.checkupReminders?.refresh();
   }
@@ -805,6 +810,7 @@ export class IntuitionCheckup {
     for (const account of accounts) {
       const label = this.accountLabel(account);
       const row = document.createElement('li');
+      row.dataset.account = accountKey(account);
       const name = document.createElement('strong');
       name.className = 'checkup-account-name';
       name.textContent = label;
@@ -836,6 +842,10 @@ export class IntuitionCheckup {
     const busy = this.busy;
     if (this.profileSelect) this.profileSelect.disabled = busy;
     for (const button of this.accountList?.querySelectorAll('button') || []) button.disabled = busy;
+    const account = normalizeAccount(this.source, this.usernameInput?.value);
+    for (const row of this.accountList?.children || []) {
+      row.dataset.selected = String(!!account && row.dataset.account === accountKey(account));
+    }
     for (const tab of this.sourceTabs) {
       tab.setAttribute('aria-pressed', String(tab.dataset.checkupSource === this.source));
       tab.disabled = busy;
@@ -850,7 +860,6 @@ export class IntuitionCheckup {
     if (this.localPgnInput) this.localPgnInput.disabled = busy;
     if (this.btnSelectFiles) this.btnSelectFiles.disabled = busy;
     if (this.btnSaveAccount) {
-      const account = normalizeAccount(this.source, this.usernameInput?.value);
       const accounts = this.app.mistakeBank?.activeProfile?.accounts || [];
       this.btnSaveAccount.hidden = isLocal;
       this.btnSaveAccount.disabled = busy || !account || accounts.some(item => accountKey(item) === accountKey(account));
