@@ -101,7 +101,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         throw Error("Task cancelled");
       const crop = msg.crop || { x: 0, y: 0, width: 1, height: 1 };
       if (
-        Object.values(crop).some((v) => !Number.isFinite(v)) ||
+        [crop.x, crop.y, crop.width, crop.height].some((v) => !Number.isFinite(v)) ||
         crop.width <= 0 ||
         crop.height <= 0 ||
         crop.x < 0 ||
@@ -110,10 +110,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         crop.y + crop.height > 1.001
       )
         throw Error("Invalid crop");
-      const x = Math.round(crop.x * bitmap.width),
-        y = Math.round(crop.y * bitmap.height),
-        w = Math.max(1, Math.round(crop.width * bitmap.width)),
-        h = Math.max(1, Math.round(crop.height * bitmap.height));
+      const x = Math.min(bitmap.width - 1, Math.round(crop.x * bitmap.width)),
+        y = Math.min(bitmap.height - 1, Math.round(crop.y * bitmap.height)),
+        right = Math.min(bitmap.width, Math.round((crop.x + crop.width) * bitmap.width)),
+        bottom = Math.min(bitmap.height, Math.round((crop.y + crop.height) * bitmap.height)),
+        w = Math.max(1, right - x),
+        h = Math.max(1, bottom - y);
       // Bound input size/memory; coordinates are in screenshot pixels, independent of DPR/zoom.
       const scale = Math.min(1, 1400 / Math.max(w, h));
       const canvas = new OffscreenCanvas(
@@ -161,7 +163,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           [data.data.buffer],
         );
       });
-      reply({ ok: true, result });
+      const frame = {
+        x, y, width: w, height: h,
+        inputWidth: canvas.width,
+        inputHeight: canvas.height,
+        screenshotWidth: bitmap.width,
+        screenshotHeight: bitmap.height,
+      };
+      reply({ ok: true, result, frame });
     } finally {
       bitmap.close();
       job.worker?.terminate();

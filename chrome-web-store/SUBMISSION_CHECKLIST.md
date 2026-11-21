@@ -1,8 +1,8 @@
-# 1.2.1 商店提交说明
+# 1.2.3 商店提交说明
 
-直接上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.1.zip`。本版英文详情新增分享卡片、网页错题本和直觉体检，并加入[分享卡片截图](english/5-share-card.png)。详细说明分别使用 `listing-en.txt` 与 `listing-zh-CN.txt`，标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
+上传 `npm run package` 生成的 `releases/diverge-extension-v1.2.3.zip`。本版改进棋盘截图识别、选区调整、原图对照和识别快修。详细说明分别使用 `listing-en.txt` 与 `listing-zh-CN.txt`，标题和摘要见 `STORE_LISTING.md`，截图顺序见[英文商店素材](english/README.md)。
 
-- 根目录只有一个 manifest.json，MV3 / 1.2.1，使用原生 popup 与本地 Worker / WASM。
+- 根目录只有一个 manifest.json，MV3 / 1.2.3，使用原生 popup 与本地 Worker / WASM。
 - Maia 5M / 23M / 79M 权重仅从 CDN 加载，作为固定本地推理实现的数值数据；不包含下载执行的 JS / WASM。SF19 标准版仅在独立网页运行，扩展强制使用 Lite。
 - 轻量识别资产随包：chess-cnn.wasm、chessimg2pos_weights.bin、chessimg2pos_manifest.json；大权重不入包。
 - 公开隐私政策填写 https://4chess.cc/privacy/ 。数据声明必须说明局面、记谱、公开玩家标签、本地复盘缓存和 UI 设置同步；不能声称一切关闭页面即删除，也不能声称所有网络请求都不涉及公开棋局数据。

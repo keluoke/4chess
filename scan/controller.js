@@ -1,10 +1,9 @@
-import { validateChessPosition } from "../lib/vision/fen-optimizer.js";
 import {
   imageContext,
-  saneFenFields,
-  validHistoricalFields,
+  loadValidatedPosition,
   validBoardPlacement,
 } from "./position.js";
+import { screenshotBoard } from "./crop.js";
 import { normalizeEnginePreferences } from "../engine/engine-preferences.js";
 import { ChessBoard } from "../engine/chess-core.js";
 const KEY = "divergeScan";
@@ -144,20 +143,27 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         nonce: gate.nonce,
         url: gate.url,
       };
+      const confirmed = gate.verifiedReplay === true && !!loadValidatedPosition(gate.fen);
       s = {
         id: crypto.randomUUID(),
         source,
         fen: gate.fen,
         orientation: gate.orientation,
         assumed: gate.assumed,
-        confirmed: false,
+        confirmed,
+        originalFen: confirmed ? gate.fen : undefined,
         locked: false,
         history: [],
         status: gate.fen ? "review" : "capture",
       };
       expectedId = s.id;
       await save(s, true);
-      if (gate.fen) return { ok: true, state: s };
+      if (gate.fen) {
+        await check(source, true);
+        const latest = await state();
+        if (latest?.id !== s.id || latest.locked) throw Error("sourceChanged");
+        return { ok: true, state: latest };
+      }
       await offscreen();
       let dataUrl, captureGate;
       try {
@@ -206,10 +212,19 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       return { ok: true, state: s, dataUrl };
     }
     if (!s || s.locked) throw Error(s?.reason || "scanAgain");
-    await check(s.source);
-    if (msg.type === "SCAN_RESTORE" || msg.type === "SCAN_VALIDATE")
-      return { ok: true, state: s };
-    if (msg.id !== s.id) throw Error("sourceChanged");
+    if (msg.type !== "SCAN_RESTORE" && msg.id !== s.id) {
+      expectedId = undefined;
+      throw Error("sourceChanged");
+    }
+    await check(s.source, true);
+    s = await state();
+    if (s?.id !== expectedId || s.locked) throw Error(s?.reason || "sourceChanged");
+    if (msg.type === "SCAN_RESTORE") return { ok: true, state: s };
+    if (msg.type === "SCAN_VALIDATE") {
+      if (msg.fen !== undefined && (!s.confirmed || s.fen !== msg.fen))
+        throw Error("confirmPosition");
+      return { ok: true };
+    }
     if (msg.type === "SCAN_RECOGNIZE") {
       const response = await chrome.runtime.sendMessage({
         type: "VISION_RECOGNIZE",
@@ -217,17 +232,21 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         crop: msg.crop,
       });
       if (!response?.ok) throw Error(response?.error || "recognitionFailed");
-      await check(s.source);
+      await check(s.source, true);
       const latest = await state();
-      if (latest.id !== s.id || latest.locked) throw Error("sourceChanged");
+      if (latest?.id !== s.id || latest.locked) throw Error("sourceChanged");
       const result = response.result;
+      if (result?.metadata?.isVerifiedManifest !== true)
+        throw Error("recognitionFailed");
+      const boardCrop = screenshotBoard(result.layout, response.frame);
       if (
         !result?.layout?.gridAligned ||
         result.layout.requiresReview ||
-        !result.layout.autoAccepted ||
-        result.metadata?.isVerifiedManifest !== true
-      )
-        throw Error("recognitionFailed");
+        !result.layout.autoAccepted
+      ) {
+        const hasGridEvidence = result.layout?.gridAligned || result.layout?.qualityScore >= 2;
+        return { ok: true, suggestedCrop: hasGridEvidence ? boardCrop?.bounds : null };
+      }
       const context = imageContext(result);
       s = await save({
         ...s,
@@ -239,18 +258,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         orientation: context.orientation,
       });
       await chrome.runtime.sendMessage({ type: "VISION_CLEAR", id: s.id });
-      return { ok: true, state: s };
+      return { ok: true, state: s, boardCrop };
     }
     if (msg.type === "SCAN_SAVE" || msg.type === "SCAN_OPEN") {
       if (
-        typeof msg.fen !== "string" ||
-        msg.fen.length > 150 ||
-        !saneFenFields(msg.fen) ||
         !validBoardPlacement(msg.fen) ||
-        (msg.confirmed === true &&
-          (!new ChessBoard().load(msg.fen) ||
-            !validateChessPosition(msg.fen).valid ||
-            !validHistoricalFields(msg.fen, new ChessBoard(msg.fen))))
+        (msg.confirmed === true && !loadValidatedPosition(msg.fen))
       )
         throw Error("invalidPosition");
       const latest = await state();
@@ -260,8 +273,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         fen: msg.fen,
         orientation: msg.orientation === "black" ? "black" : "white",
         confirmed: msg.confirmed === true,
+        assumed: msg.assumed === true || latest.assumed,
         turnChosen: msg.turnChosen === true,
         directionCorrected: msg.directionCorrected === true,
+        reviewedSquares: Array.isArray(msg.reviewedSquares)
+          ? [...new Set(msg.reviewedSquares.slice(0, 64).filter(
+            (square) => typeof square === "string" && /^[a-h][1-8]$/.test(square),
+          ))]
+          : [],
         history: Array.isArray(msg.history)
           ? msg.history
               .filter((f) => typeof f === "string" && f.length < 150)

@@ -4,6 +4,7 @@ import os from "node:os";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { CHESS_PIECES_SVG } from "../analysis/chess-pieces.js";
+import { nativePopup } from "./native_popup_helper.mjs";
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "playwright"
 );
@@ -146,6 +147,17 @@ try {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
     "Actual screenshot piece recognition",
   );
+  await run("document.querySelector('#scan-compare').click()");
+  assert.equal(await run("document.querySelector('#scan-comparison').hidden"), false);
+  assert.equal(await run("document.querySelector('#scan-comparison').getContext('2d').getImageData(128,128,1,1).data[3]"), 255);
+  await run("document.querySelector('#scan-flip').click()");
+  assert.equal(await run("document.querySelector('#scan-comparison').classList.contains('flipped')"), true);
+  await run("document.querySelector('#scan-flip').click(); document.querySelector('#scan-compare').click()");
+  await run(`document.querySelector('[data-square=e2]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))`);
+  assert.equal(await run("document.querySelectorAll('#scan-candidates button').length"), 3);
+  assert.equal(await run("document.querySelector('#scan-candidates button').dataset.piece"), "P");
+  await run("document.querySelector('#scan-candidates button').click()");
+  assert.equal(await run("document.querySelector('#scan-results').hidden"), true);
   await run("document.querySelector('#scan-confirm').click()");
   await wait(
     "document.querySelectorAll('#scan-lines button').length===3",
@@ -221,6 +233,20 @@ try {
   );
   await run("document.querySelector('#scan-undo').click()");
   await wait("document.querySelector('#scan-turn').value==='w'");
+  await run(`const turn = document.querySelector('#scan-turn');
+    turn.value='b'; turn.dispatchEvent(new Event('change')); true`);
+  await wait("document.querySelector('#scan-fen').value.includes(' b ') && document.querySelectorAll('#scan-lines button').length===3");
+  assert.equal(await run("document.querySelector('#scan-confirm').hidden"), true);
+  await run(`document.querySelector('#scan-edit').click();
+    document.querySelector('[data-square=e1]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    document.querySelector('#scan-popover-grid button:last-child').click(); true`);
+  assert.equal(await run("document.querySelector('#scan-results').hidden"), true);
+  assert.match(await run("document.querySelector('#scan-status').textContent"), /Invalid position/);
+  await run(`document.querySelector('[data-square=e1]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    document.querySelector('#scan-candidates button[data-piece=K]').click(); true`);
+  await wait("document.querySelectorAll('#scan-lines button').length===3");
+  assert.equal(await run("document.querySelector('#scan-confirm').hidden"), true);
+  await run("document.querySelector('#scan-edit').click()");
   await run(
     "document.querySelector('#scan-settings').click();document.querySelector('#ui-language').value='zh';document.querySelector('#ui-language').dispatchEvent(new Event('change',{bubbles:true}))",
   );
@@ -240,6 +266,43 @@ try {
     await run("document.querySelector('#scan-results').hidden"),
     true,
   );
+  assert.equal(await run("document.querySelector('#scan-comparison').width"), 1);
+  const domBoard = (matches) => rows.map((row, rank) => [...row].map((piece, file) => {
+    if (piece === ".") return "";
+    const color = piece === piece.toUpperCase() ? "w" : "b";
+    const visibleRank = matches && piece === "P" && file === 4 ? 4 : 8 - rank;
+    return `<div class="piece ${color}${piece.toLowerCase()} square-${file + 1}${visibleRank}"></div>`;
+  }).join("")).join("");
+  await context.route("https://www.chess.com/analysis/scan-**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><wc-chess-board style="display:block;width:400px;height:400px">${domBoard(route.request().url().endsWith("verified"))}</wc-chess-board>
+        <div class="vertical-move-list"><div class="node selected">e4</div></div>`,
+    }),
+  );
+  const domSource = await context.newPage();
+  await domSource.goto("https://www.chess.com/analysis/scan-verified");
+  let domPopup = await nativePopup(context, sw, domSource);
+  await domPopup.run("document.querySelector('#scan-launch').click()");
+  await domPopup.wait("document.querySelectorAll('#scan-lines button').length===3");
+  assert.equal(await domPopup.run("document.querySelector('#scan-confirm').hidden"), true);
+  assert.match(await domPopup.run("document.querySelector('#scan-fen').value"), /4P3.* b KQkq e3 /);
+  assert.equal(await domPopup.run(`chrome.runtime.sendMessage({type:'SCAN_VALIDATE',id:'obsolete'}).then(r=>r.ok)`), false);
+  assert.equal(await domPopup.run("document.querySelector('#scan-results').hidden"), false);
+  await domSource.evaluate(() => {
+    const clock = document.createElement("div");
+    clock.className = "clock-running";
+    clock.textContent = "10:00";
+    document.body.append(clock);
+  });
+  await domPopup.wait("document.querySelector('#scan-position').hidden");
+  assert.equal(await domPopup.run("document.querySelectorAll('#scan-lines button').length"), 0);
+  await domSource.goto("https://www.chess.com/analysis/scan-mismatch");
+  domPopup = await nativePopup(context, sw, domSource);
+  await domPopup.run("document.querySelector('#scan-launch').click()");
+  await domPopup.wait("!document.querySelector('#scan-position').hidden");
+  assert.equal(await domPopup.run("document.querySelector('#scan-results').hidden"), true);
+  assert.equal(await domPopup.run("document.querySelector('#scan-confirm').hidden"), false);
   console.log(
     "PASS actual action popup: screenshot capture, offscreen WASM recognition, confirmation, real SF3, legal branch, undo, flip, bilingual layout and source-navigation lock",
   );

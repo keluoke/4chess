@@ -1,15 +1,15 @@
-import { saneFenFields, validHistoricalFields } from "../scan/position.js";
+import { loadValidatedPosition, validBoardPlacement } from "../scan/position.js";
 import { BoardUI } from "../analysis/board-ui.js";
 import { CHESS_PIECES_SVG } from "../analysis/chess-pieces.js";
 import { ChessBoard } from "../engine/chess-core.js";
 import { StockfishInBrowser } from "../engine/stockfish-inbrowser.js";
 import { engineLines, whiteEvaluation } from "../analysis/position-analysis.js";
-import { validateChessPosition } from "../lib/vision/fen-optimizer.js";
 import {
   getPreferences,
   subscribePreferences,
 } from "../engine/engine-preferences.js";
-import { rotateFen } from "../lib/vision/image-context.js";
+import { getUnitSquareToQuadHomography, isAxisAligned } from "../lib/vision/perspective.js";
+import { rotateFen, rotateSquare } from "../lib/vision/image-context.js";
 import { scanMessages } from "./scan-i18n.js";
 const $ = (id) => document.getElementById(id);
 const send = (payload) => chrome.runtime.sendMessage(payload);
@@ -23,8 +23,12 @@ export function initScanView() {
     engine = null,
     original = null,
     editing = false,
-    piece = "P",
+    resumeAfterEdit = false,
+    recheck = 0,
+    saveQueue = Promise.resolve(),
+    piece = null,
     capture = null,
+    comparisonOrientation = null,
     crop = null,
     start = null,
     lastStatus = "";
@@ -34,7 +38,7 @@ export function initScanView() {
   const view = document.createElement("section");
   view.id = "scan-view";
   view.hidden = true;
-  view.innerHTML = `<div class="scan-top"><button id="scan-retry" data-scan-text="retry"></button><small id="scan-source"></small></div><p id="scan-status" role="status" aria-live="polite"></p><div id="scan-capture" hidden><p data-scan-text="select"></p><canvas id="scan-preview" aria-label="Screenshot selection"></canvas><div class="scan-row"><button id="scan-detect" data-scan-text="detect"></button><button id="scan-crop" data-scan-text="crop" disabled></button></div></div><div id="scan-position" hidden><div class="scan-direction-row"><select id="scan-turn" aria-label="Side to move"><option value="w" data-scan-text="white"></option><option value="b" data-scan-text="black"></option></select><button id="scan-rotate" data-scan-title="rotateHelp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span data-scan-text="rotate"></span></button><button id="scan-flip" data-scan-title="flip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 3-4 4 4 4M3 7h14v5m0 9 4-4-4-4m4 4H7v-5"/></svg><span data-scan-text="view"></span></button></div><div class="scan-board-wrap"><div class="scan-board-row"><div id="scan-gauge" aria-label="White evaluation"><div id="scan-gauge-white"></div><span id="scan-score"></span></div><div id="scan-board"></div></div><div id="scan-square-popover" class="scan-square-popover" role="dialog" aria-labelledby="scan-popover-title" hidden><div class="scan-popover-head"><span id="scan-popover-title"></span><button type="button" id="scan-popover-close" aria-label="Close">✕</button></div><div id="scan-popover-grid"></div></div></div><div class="scan-toolbar"><button id="scan-undo" data-scan-title="undo"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><button id="scan-original" data-scan-title="original"><svg viewBox="0 0 24 24"><path d="M5 5v14m14-14-9 7 9 7z"/></svg></button><button id="scan-copy" data-scan-title="copy"><svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM4 16V3h11"/></svg></button><button id="scan-edit" data-scan-text="edit"></button></div><div id="scan-editor" hidden><div class="scan-correction"><p data-scan-text="rotateHelp"></p><button id="scan-reselect" data-scan-text="reselect"></button></div><p data-scan-text="palette"></p><div id="scan-palette"></div><label data-scan-text="fen" for="scan-fen"></label><textarea id="scan-fen" rows="2" spellcheck="false"></textarea></div><p id="scan-assumed" data-scan-text="assumed"></p><button id="scan-confirm" class="action-primary" data-scan-text="confirm"></button><div id="scan-results" hidden><p id="scan-engine-status" role="status"></p><div id="scan-lines"></div><button id="scan-web" class="action-primary" data-scan-text="web"></button><p class="scan-help" data-scan-text="help"></p></div></div>`;
+  view.innerHTML = `<div class="scan-top"><button id="scan-retry" data-scan-text="retry"></button><small id="scan-source"></small></div><p id="scan-status" role="status" aria-live="polite"></p><div id="scan-capture" hidden><p data-scan-text="select"></p><canvas id="scan-preview" aria-label="Screenshot selection"></canvas><div class="scan-row"><button id="scan-detect" data-scan-text="detect"></button><button id="scan-crop" data-scan-text="crop" disabled></button></div></div><div id="scan-position" hidden><div class="scan-direction-row"><select id="scan-turn" aria-label="Side to move"><option value="w" data-scan-text="white"></option><option value="b" data-scan-text="black"></option></select><button id="scan-rotate" data-scan-title="rotateHelp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span data-scan-text="rotate"></span></button><button id="scan-flip" data-scan-title="flip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 3-4 4 4 4M3 7h14v5m0 9 4-4-4-4m4 4H7v-5"/></svg><span data-scan-text="view"></span></button></div><div class="scan-board-wrap"><div class="scan-board-row"><div id="scan-gauge" aria-label="White evaluation"><div id="scan-gauge-white"></div><span id="scan-score"></span></div><div id="scan-board"></div></div><div id="scan-square-popover" class="scan-square-popover" role="dialog" aria-labelledby="scan-popover-title" hidden><div class="scan-popover-head"><span id="scan-popover-title"></span><button type="button" id="scan-popover-close" aria-label="Close">✕</button></div><div id="scan-candidates" aria-label="Model candidates" hidden></div><div id="scan-popover-grid"></div></div></div><div class="scan-toolbar"><button id="scan-undo" data-scan-title="undo"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button><button id="scan-original" data-scan-title="original"><svg viewBox="0 0 24 24"><path d="M5 5v14m14-14-9 7 9 7z"/></svg></button><button id="scan-copy" data-scan-title="copy"><svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM4 16V3h11"/></svg></button><button id="scan-compare" aria-pressed="false" data-scan-text="compare" hidden></button><button id="scan-edit" data-scan-text="edit"></button></div><div id="scan-editor" hidden><div class="scan-correction"><p data-scan-text="rotateHelp"></p><button id="scan-reselect" data-scan-text="reselect"></button></div><p data-scan-text="palette"></p><div id="scan-palette"></div><label data-scan-text="fen" for="scan-fen"></label><textarea id="scan-fen" rows="2" spellcheck="false"></textarea></div><p id="scan-assumed" data-scan-text="assumed"></p><button id="scan-confirm" class="action-primary" data-scan-text="confirm"></button><div id="scan-results" hidden><p id="scan-engine-status" role="status"></p><div id="scan-lines"></div><button id="scan-web" class="action-primary" data-scan-text="web"></button><p class="scan-help" data-scan-text="help"></p></div></div>`;
   document.querySelector(".popup-header").after(view);
   const launch = document.createElement("button");
   launch.id = "scan-launch";
@@ -66,13 +70,15 @@ export function initScanView() {
   function openSettings() {
     if (settingsOpen) return;
     settingsOpen = true;
+    toggleCompare(false);
     $("scan-settings-back").querySelector("span").textContent = text(
       view.hidden ? "backHome" : "back",
     );
     previousFocus = document.activeElement;
     previousScroll = window.scrollY;
     window.scrollTo(0, 0);
-    ++epoch;
+    if (state?.confirmed) ++epoch;
+    clearTimeout(recheck);
     engine?.stop();
     view.inert = true;
     settings.hidden = false;
@@ -88,6 +94,7 @@ export function initScanView() {
     previousFocus?.focus({ preventScroll: true });
     window.scrollTo(0, previousScroll);
     if (state?.confirmed && !state.locked) analyze();
+    else if (resumeAfterEdit && !state?.locked) confirmPosition(true);
   }
   $("scan-settings-back").onclick = closeSettings;
   document.addEventListener("keydown", (event) => {
@@ -112,6 +119,11 @@ export function initScanView() {
       changed();
     },
   });
+  const comparison = document.createElement("canvas");
+  comparison.id = "scan-comparison";
+  comparison.hidden = true;
+  comparison.setAttribute("aria-hidden", "true");
+  board.boardEl.append(comparison);
   function locale() {
     document
       .querySelectorAll("[data-scan-text]")
@@ -125,6 +137,7 @@ export function initScanView() {
       view.hidden ? "backHome" : "back",
     );
     $("scan-edit").textContent = text(editing ? "doneEdit" : "edit");
+    $("scan-candidates").setAttribute("aria-label", text("candidates"));
     if (lastStatus) $("scan-status").textContent = statusText(lastStatus);
     if (state?.fen)
       $("scan-source").textContent = text(state.recognition ? "image" : "dom");
@@ -177,6 +190,27 @@ export function initScanView() {
     popoverSquare = square;
     const pop = $("scan-square-popover");
     $("scan-popover-title").textContent = text("pickPiece").replace("{square}", square);
+    const candidates = $("scan-candidates");
+    const recognition = state.recognition;
+    const recognizedSquare =
+      !!state.directionCorrected !== (state.recognitionContext?.orientation !==
+        (recognition?.orientation?.perspective === "b" ? "black" : "white"))
+        ? rotateSquare(square) : square;
+    const choices = recognition?.squares?.find((item) => item.square === recognizedSquare)?.candidates ?? [];
+    candidates.replaceChildren(...choices.slice(0, 3).map(({ piece: label, prob }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.piece = label;
+      button.innerHTML = CHESS_PIECES_SVG[label] || "×";
+      button.title = label === "1" ? text("erase") : label;
+      button.setAttribute("aria-label", button.title);
+      const confidence = document.createElement("span");
+      confidence.textContent = `${Math.round(prob * 100)}%`;
+      button.append(confidence);
+      button.onclick = () => applySquarePiece(square, label);
+      return button;
+    }));
+    candidates.hidden = !candidates.childElementCount;
     pop.hidden = false;
     const wrap = pop.parentElement.getBoundingClientRect();
     const sqRect = targetEl.getBoundingClientRect();
@@ -186,12 +220,17 @@ export function initScanView() {
     const left = Math.max(4, Math.min(wrap.width - pop.offsetWidth - 4, sqRect.left - wrap.left + sqRect.width / 2 - pop.offsetWidth / 2));
     pop.style.left = `${left}px`;
   }
-  function clear() {
+  function clear(keepEngine = false) {
     closePopover();
+    toggleCompare(false);
     document.body.classList.remove("scan-confirmed");
     ++epoch;
-    engine?.reset();
-    engine = null;
+    clearTimeout(recheck);
+    if (keepEngine) engine?.stop();
+    else {
+      engine?.reset();
+      engine = null;
+    }
     $("scan-results").hidden = true;
     $("scan-lines").replaceChildren();
     $("scan-score").textContent = "";
@@ -199,9 +238,7 @@ export function initScanView() {
     board.clearArrows();
   }
   function lock(key) {
-    capture = null;
-    $("scan-preview").width = 1;
-    $("scan-preview").height = 1;
+    releaseImages();
     clear();
     board.clearAnnotations(true);
     window.dispatchEvent(new CustomEvent('scan-lock'));
@@ -213,35 +250,47 @@ export function initScanView() {
     $("scan-capture").hidden = true;
     status(scanMessages.en[key] ? key : "error");
   }
-  async function valid() {
-    const r = await send({ type: "SCAN_VALIDATE" });
+  async function valid(id, request, fen) {
+    const r = await send({ type: "SCAN_VALIDATE", id, fen }).catch(() => null);
+    if (id !== state?.id || request !== epoch || state.locked) return false;
     if (!r?.ok) {
-      lock(r?.error);
+      lock(r?.error || "sourceChanged");
       return false;
     }
     return true;
   }
-  async function persist() {
-    return send({
+  function persist(fields = {}) {
+    const payload = {
       type: "SCAN_SAVE",
       id: state.id,
       fen: state.fen,
       orientation: board.orientation,
       confirmed: state.confirmed,
-      history: state.history,
+      history: [...state.history],
       originalFen: state.originalFen,
+      assumed: state.assumed,
       turnChosen: state.turnChosen === true,
       directionCorrected: state.directionCorrected === true,
+      reviewedSquares: state.reviewedSquares,
+      ...fields,
+    };
+    const task = saveQueue.then(() => {
+      if (state?.id !== payload.id || state.locked) return null;
+      return send(payload).catch(() => ({ ok: false, error: "sourceChanged" }));
     });
+    saveQueue = task;
+    return task;
   }
   async function changed() {
-    ++epoch;
-    engine?.stop();
+    clear(true);
+    const request = epoch;
     $("scan-fen").value = state.fen;
     $("scan-turn").value = state.fen.split(" ")[1];
     board.setPosition(state.fen);
     board.clearArrows();
-    await persist();
+    const saved = await persist();
+    if (request !== epoch) return;
+    if (!saved?.ok) return lock(saved?.error || "sourceChanged");
     if (state.confirmed) analyze();
   }
   function previewPosition(fen) {
@@ -286,6 +335,7 @@ export function initScanView() {
     state.history ||= [];
     original = state.originalFen || state.history[0] || state.fen;
     editing = false;
+    resumeAfterEdit = false;
     $("scan-capture").hidden = true;
     $("scan-position").hidden = false;
     $("scan-editor").hidden = true;
@@ -298,12 +348,8 @@ export function initScanView() {
     board.setOrientation(s.orientation);
     previewPosition(s.fen);
     $("scan-gauge").classList.toggle("flipped", board.orientation === "black");
-    const suspicious = s.confirmed ? [] :
-      s.recognitionContext?.suspiciousSquares || s.recognition?.suspiciousSquares || [];
-    const squares = new Set(suspicious.map(square => typeof square === "string" ? square : square.square));
-    for (const [square, element] of Object.entries(board.squareEls))
-      element.classList.toggle("scan-suspicious", squares.has(square));
-    status(s.confirmed ? "help" : "review");
+    updateSuspicious();
+    status(s.confirmed ? "help" : loadValidatedPosition(s.fen) ? "review" : "invalidPosition");
     if (s.confirmed) analyze();
   }
   async function scan({ manual = false } = {}) {
@@ -313,7 +359,7 @@ export function initScanView() {
     clear();
     state = null;
     board.clearAnnotations(true);
-    capture = null;
+    releaseImages();
     crop = null;
     $("scan-position").hidden = true;
     $("scan-capture").hidden = true;
@@ -357,8 +403,17 @@ export function initScanView() {
         id: state.id,
         crop: selected,
       });
+      if (state?.locked) return;
+      if (r?.ok && r.suggestedCrop) {
+        crop = r.suggestedCrop;
+        $("scan-capture").hidden = false;
+        draw();
+        status("adjustCrop");
+        return;
+      }
       if (!r?.ok || !r.state?.fen || r.state.recognition?.hasBoard === false)
         throw Error(r?.error || "recognitionFailed");
+      if (capture && r.boardCrop) prepareComparison(r.boardCrop, r.state.orientation);
       capture = null;
       $("scan-preview").width = 1;
       $("scan-preview").height = 1;
@@ -388,16 +443,16 @@ export function initScanView() {
   }
   async function analyze() {
     const request = ++epoch,
-      fen = state.fen;
+      { id, fen } = state;
     engine?.stop();
     if (
       settingsOpen ||
       !state.confirmed ||
-      state.locked ||
-      !(await valid()) ||
-      request !== epoch
+      state.locked
     )
       return;
+    await saveQueue;
+    if (request !== epoch || !(await valid(id, request, fen))) return;
     document.body.classList.add("scan-confirmed");
     $("scan-results").hidden = false;
     $("scan-confirm").hidden = true;
@@ -420,7 +475,7 @@ export function initScanView() {
         $("scan-engine-status").textContent = text("unavailable");
         return;
       }
-      if (!(await valid()) || request !== epoch) return;
+      if (!(await valid(id, request, fen))) return;
       $("scan-engine-status").textContent = text("calculating");
       const result = await sf.evaluate(fen, 12, 8000, 3);
       if (request !== epoch) return;
@@ -428,7 +483,7 @@ export function initScanView() {
         $("scan-engine-status").textContent = text("unavailable");
         return;
       }
-      if (!(await valid()) || request !== epoch) return;
+      if (!(await valid(id, request, fen))) return;
       $("scan-engine-status").textContent =
         text("finished") + " " + result.depth + " · " + text("perspective");
       $("scan-gauge").style.visibility = "visible";
@@ -462,6 +517,59 @@ export function initScanView() {
         $("scan-engine-status").textContent = text("unavailable");
     }
   }
+  function toggleCompare(show) {
+    comparison.hidden = !show || !comparisonOrientation;
+    $("scan-compare").setAttribute("aria-pressed", String(!comparison.hidden));
+    comparison.classList.toggle("flipped",
+      (board.orientation !== comparisonOrientation) !== !!state?.directionCorrected);
+  }
+  function releaseImages() {
+    capture = null;
+    start = null;
+    comparisonOrientation = null;
+    toggleCompare(false);
+    comparison.width = comparison.height = 1;
+    $("scan-compare").hidden = true;
+    $("scan-preview").width = $("scan-preview").height = 1;
+  }
+  function prepareComparison({ bounds, points }, orientation) {
+    const size = 256;
+    comparison.width = comparison.height = size;
+    const ctx = comparison.getContext("2d");
+    const { x, y, width, height } = bounds;
+    const w = capture.naturalWidth, h = capture.naturalHeight;
+    if (isAxisAligned(points, 0.0005)) {
+      ctx.drawImage(capture, x * w, y * h, width * w, height * h, 0, 0, size, size);
+    } else {
+      const tile = document.createElement("canvas");
+      tile.width = tile.height = size;
+      const pixels = tile.getContext("2d", { willReadFrequently: true });
+      pixels.drawImage(capture, x * w, y * h, width * w, height * h, 0, 0, size, size);
+      const original = pixels.getImageData(0, 0, size, size).data;
+      const output = ctx.createImageData(size, size);
+      const homography = getUnitSquareToQuadHomography(points.map((point) => ({
+        x: (point.x - x) / width,
+        y: (point.y - y) / height,
+      })));
+      for (let row = 0; row < size; row++) {
+        for (let column = 0; column < size; column++) {
+          const u = (column + 0.5) / size, v = (row + 0.5) / size;
+          const denominator = 1 + homography.h20 * u + homography.h21 * v;
+          const sx = (homography.h00 * u + homography.h01 * v + homography.h02) / denominator;
+          const sy = (homography.h10 * u + homography.h11 * v + homography.h12) / denominator;
+          const px = Math.max(0, Math.min(size - 1, Math.floor(sx * size)));
+          const py = Math.max(0, Math.min(size - 1, Math.floor(sy * size)));
+          const from = (py * size + px) * 4, to = (row * size + column) * 4;
+          for (let channel = 0; channel < 4; channel++)
+            output.data[to + channel] = original[from + channel];
+        }
+      }
+      ctx.putImageData(output, 0, 0);
+    }
+    comparisonOrientation = orientation;
+    $("scan-compare").hidden = false;
+  }
+  $("scan-compare").onclick = () => toggleCompare(comparison.hidden);
   function draw() {
     const canvas = $("scan-preview");
     canvas.style.width =
@@ -470,6 +578,9 @@ export function initScanView() {
     canvas.height = Math.round((capture.height / capture.width) * 328);
     const ctx = canvas.getContext("2d");
     ctx.drawImage(capture, 0, 0, canvas.width, canvas.height);
+    $("scan-crop").disabled = !crop ||
+      crop.width * capture.naturalWidth < 32 ||
+      crop.height * capture.naturalHeight < 32;
     if (crop) {
       ctx.strokeStyle = "#b13b2e";
       ctx.lineWidth = 3;
@@ -479,6 +590,11 @@ export function initScanView() {
         crop.width * canvas.width,
         crop.height * canvas.height,
       );
+      ctx.fillStyle = ctx.strokeStyle;
+      for (const x of [crop.x, crop.x + crop.width]) {
+        for (const y of [crop.y, crop.y + crop.height])
+          ctx.fillRect(x * canvas.width - 3, y * canvas.height - 3, 6, 6);
+      }
     }
   }
   const point = (e) => {
@@ -489,23 +605,55 @@ export function initScanView() {
     };
   };
   $("scan-preview").onpointerdown = (e) => {
-    start = point(e);
-    $("scan-preview").setPointerCapture(e.pointerId);
+    if (e.button !== 0) return;
+    const origin = point(e);
+    const canvas = $("scan-preview");
+    const rect = canvas.getBoundingClientRect();
+    const dx = 10 / rect.width, dy = 10 / rect.height;
+    const atLeft = crop && Math.abs(origin.x - crop.x) <= dx;
+    const atRight = crop && Math.abs(origin.x - crop.x - crop.width) <= dx;
+    const atTop = crop && Math.abs(origin.y - crop.y) <= dy;
+    const atBottom = crop && Math.abs(origin.y - crop.y - crop.height) <= dy;
+    const inside = crop && origin.x >= crop.x - dx && origin.x <= crop.x + crop.width + dx &&
+      origin.y >= crop.y - dy && origin.y <= crop.y + crop.height + dy;
+    start = { origin, rect: inside ? crop : null, atLeft, atRight, atTop, atBottom };
+    canvas.setPointerCapture(e.pointerId);
   };
   $("scan-preview").onpointermove = (e) => {
     if (!start) return;
     const end = point(e);
-    crop = {
-      x: Math.min(start.x, end.x),
-      y: Math.min(start.y, end.y),
-      width: Math.abs(end.x - start.x),
-      height: Math.abs(end.y - start.y),
-    };
+    const { origin, rect, atLeft, atRight, atTop, atBottom } = start;
+    if (!rect) {
+      crop = {
+        x: Math.min(origin.x, end.x),
+        y: Math.min(origin.y, end.y),
+        width: Math.abs(origin.x - end.x),
+        height: Math.abs(origin.y - end.y),
+      };
+    } else {
+      const dx = end.x - origin.x, dy = end.y - origin.y;
+      const minWidth = Math.min(rect.width, 32 / capture.naturalWidth);
+      const minHeight = Math.min(rect.height, 32 / capture.naturalHeight);
+      const x2 = rect.x + rect.width, y2 = rect.y + rect.height;
+      const clamp = (value, lower, upper) => Math.max(lower, Math.min(upper, value));
+      if (atLeft || atRight || atTop || atBottom) {
+        const x = atLeft ? clamp(rect.x + dx, 0, x2 - minWidth) : rect.x;
+        const y = atTop ? clamp(rect.y + dy, 0, y2 - minHeight) : rect.y;
+        const right = atRight && !atLeft ? clamp(x2 + dx, x + minWidth, 1) : x2;
+        const bottom = atBottom && !atTop ? clamp(y2 + dy, y + minHeight, 1) : y2;
+        crop = { x, y, width: right - x, height: bottom - y };
+      } else {
+        crop = {
+          ...rect,
+          x: clamp(rect.x + dx, 0, 1 - rect.width),
+          y: clamp(rect.y + dy, 0, 1 - rect.height),
+        };
+      }
+    }
     draw();
   };
-  $("scan-preview").onpointerup = () => {
+  $("scan-preview").onlostpointercapture = () => {
     start = null;
-    $("scan-crop").disabled = !crop || crop.width < 0.03 || crop.height < 0.03;
   };
   launch.onclick = scan;
   $("scan-retry").onclick = scan;
@@ -513,80 +661,113 @@ export function initScanView() {
   $("scan-crop").onclick = () => recognize(crop);
   gear.onclick = openSettings;
   $("scan-reselect").onclick = () => scan({ manual: true });
-  $("scan-confirm").onclick = async () => {
-    const fen = $("scan-fen").value.trim();
-    const boardTest = new ChessBoard();
-    if (
-      !saneFenFields(fen) ||
-      !boardTest.load(fen) ||
-      !validateChessPosition(fen).valid ||
-      !validHistoricalFields(fen, boardTest)
-    ) {
+  function updateSuspicious() {
+    const pending = new Set();
+    if (!state.confirmed) {
+      for (const item of state.recognitionContext?.suspiciousSquares || []) {
+        const square = typeof item === "string" ? item : item.square;
+        const displayed = state.directionCorrected ? rotateSquare(square) : square;
+        if (!state.reviewedSquares?.includes(displayed)) pending.add(displayed);
+      }
+    }
+    for (const [square, element] of Object.entries(board.squareEls))
+      element.classList.toggle("scan-suspicious", pending.has(square));
+  }
+  function setEditing(value) {
+    editing = value;
+    piece = null;
+    for (const button of $("scan-palette").children) button.classList.remove("active");
+    $("scan-editor").hidden = !editing;
+    $("scan-edit").textContent = text(editing ? "doneEdit" : "edit");
+    closePopover();
+  }
+  async function confirmPosition(automatic = false) {
+    if (!state || state.locked || state.confirmed) return;
+    clearTimeout(recheck);
+    const validated = loadValidatedPosition($("scan-fen").value.trim());
+    if (!validated) {
       status("invalidPosition");
       return;
     }
-    const request = epoch;
-    if (!(await valid()) || request !== epoch) return;
-    state.fen = boardTest.getFen();
+    const request = ++epoch;
+    if (!(await valid(state.id, request))) return;
+    const fen = validated.getFen();
+    const originalFen = automatic ? original : fen;
+    const saved = await persist({ confirmed: true, fen, originalFen, history: [] });
+    if (request !== epoch) return;
+    if (!saved?.ok) return lock(saved?.error || "sourceChanged");
+    state.fen = fen;
     state.confirmed = true;
     state.history = [];
-    original = state.fen;
-    state.originalFen = state.fen;
-    editing = false;
-    $("scan-edit").textContent = text("edit");
-    $("scan-editor").hidden = true;
-    closePopover();
-    for (const square of $("scan-board").querySelectorAll(".scan-suspicious"))
-      square.classList.remove("scan-suspicious");
-    board.setPosition(state.fen);
-    const saved = await persist();
-    if (request !== epoch) return;
-    if (!saved?.ok) {
-      lock(saved?.error);
-      return;
-    }
+    state.originalFen = originalFen;
+    original = originalFen;
+    resumeAfterEdit = false;
+    if (!automatic) setEditing(false);
+    updateSuspicious();
+    board.setPosition(fen);
+    $("scan-turn").value = fen.split(" ")[1];
+    $("scan-confirm").hidden = true;
     status("help");
     analyze();
-  };
-  $("scan-turn").onchange = () => {
-    clear();
+  }
+  function reviewPosition(fen) {
+    resumeAfterEdit ||= state.confirmed;
+    clear(true);
     state.confirmed = false;
-    state.turnChosen = true;
-    state.fen = state.fen.replace(/ [wb] /, " " + $("scan-turn").value + " ");
-    $("scan-fen").value = state.fen;
-    previewPosition(state.fen);
+    state.fen = fen;
+    state.history = [];
+    $("scan-fen").value = fen;
+    $("scan-turn").value = fen.split(" ")[1];
+    $("scan-assumed").hidden = !state.assumed;
     $("scan-confirm").hidden = false;
-    status("review");
-    persist();
+    updateSuspicious();
+    const validated = loadValidatedPosition(fen);
+    status(validated ? "review" : "invalidPosition");
+    const request = epoch;
+    persist().then((saved) => {
+      if (request === epoch && !saved?.ok) lock(saved?.error || "sourceChanged");
+    });
+    if (validated && resumeAfterEdit)
+      recheck = setTimeout(() => confirmPosition(true), 150);
+  }
+  $("scan-confirm").onclick = () => confirmPosition();
+  $("scan-turn").onchange = () => {
+    state.turnChosen = true;
+    const fields = state.fen.split(" ");
+    fields[1] = $("scan-turn").value;
+    fields[3] = "-";
+    const fen = fields.join(" ");
+    previewPosition(fen);
+    reviewPosition(fen);
   };
   $("scan-edit").onclick = () => {
-    clear();
-    state.confirmed = false;
-    editing = !editing;
-    $("scan-editor").hidden = !editing;
-    $("scan-edit").textContent = text(editing ? "doneEdit" : "edit");
-    $("scan-confirm").hidden = false;
-    persist();
-    status("review");
+    setEditing(!editing);
+    if (!editing && resumeAfterEdit && loadValidatedPosition(state.fen)) {
+      clearTimeout(recheck);
+      confirmPosition(true);
+    }
   };
   function applySquarePiece(square, label) {
-    if (!square || !state) return;
-    clear();
-    state.confirmed = false;
-    board.chess.board[ChessBoard.squareToIndex(square)] =
-      label === "×"
-        ? null
-        : {
-            type: label.toLowerCase(),
-            color: label === label.toUpperCase() ? "w" : "b",
-          };
-    board.squareEls[square]?.classList.remove("scan-suspicious");
-    board.render();
-    state.fen = board.chess.getFen();
-    $("scan-fen").value = state.fen;
-    $("scan-confirm").hidden = false;
-    status("review");
-    persist();
+    if (!square || !state || state.locked) return;
+    const index = ChessBoard.squareToIndex(square);
+    const current = board.chess.board[index];
+    const next = label === "×" || label === "1" ? null : {
+      type: label.toLowerCase(),
+      color: label === label.toUpperCase() ? "w" : "b",
+    };
+    state.reviewedSquares = [...new Set([...(state.reviewedSquares || []), square])];
+    if (current?.type === next?.type && current?.color === next?.color) {
+      updateSuspicious();
+      closePopover();
+      persist();
+      return;
+    }
+    board.chess.board[index] = next;
+    const [placement, turn] = board.chess.getFen().split(" ");
+    const fen = [placement, turn, "-", "-", "0", "1"].join(" ");
+    state.assumed = true;
+    previewPosition(fen);
+    reviewPosition(fen);
   }
   $("scan-popover-close").onclick = closePopover;
   document.addEventListener("pointerdown", (e) => {
@@ -615,9 +796,9 @@ export function initScanView() {
     button.innerHTML = CHESS_PIECES_SVG[label] || "×";
     button.title = label === "×" ? text("erase") : label;
     button.onclick = () => {
-      piece = label;
+      piece = piece === label ? null : label;
       for (const el of $("scan-palette").children)
-        el.classList.toggle("active", el === button);
+        el.classList.toggle("active", piece === label && el === button);
     };
     $("scan-palette").append(button);
     const popBtn = document.createElement("button");
@@ -637,9 +818,9 @@ export function initScanView() {
       if (!state?.confirmed || editing) {
         e.stopImmediatePropagation();
         e.preventDefault();
-        if (editing && square) {
+        if (editing && square && piece) {
           applySquarePiece(square, piece);
-        } else if (!editing && square) {
+        } else if (square) {
           openPopover(square, sqEl);
         }
       }
@@ -657,35 +838,39 @@ export function initScanView() {
     true,
   );
   $("scan-fen").onchange = () => {
-    const b = new ChessBoard();
-    if (b.load($("scan-fen").value.trim())) {
-      clear();
+    const fen = $("scan-fen").value.trim();
+    if (!validBoardPlacement(fen)) {
+      resumeAfterEdit ||= state.confirmed;
+      clear(true);
       state.confirmed = false;
-      state.fen = b.getFen();
-      state.turnChosen = true;
-      board.setPosition(state.fen);
       $("scan-confirm").hidden = false;
-      status("review");
       persist();
-    } else status("invalidPosition");
+      status("invalidPosition");
+      return;
+    }
+    state.turnChosen = true;
+    previewPosition(fen);
+    reviewPosition(fen);
   };
   $("scan-flip").onclick = () => {
     board.flip();
     state.orientation = board.orientation;
+    toggleCompare(!comparison.hidden);
     $("scan-gauge").classList.toggle("flipped", board.orientation === "black");
-    persist();
+    const { id } = state;
+    saveQueue.then(() => {
+      if (id === state?.id && !state.locked) persist();
+    });
   };
   $("scan-rotate").onclick = () => {
-    clear();
     state.confirmed = false;
-    state.fen = rotateFen(state.fen);
-    state.directionCorrected = true;
-    previewPosition(state.fen);
+    resumeAfterEdit = false;
+    const fen = rotateFen(state.fen);
+    state.directionCorrected = !state.directionCorrected;
+    state.reviewedSquares = state.reviewedSquares?.map(rotateSquare);
+    previewPosition(fen);
     board.clearAnnotations(true);
-    $("scan-fen").value = state.fen;
-    $("scan-confirm").hidden = false;
-    status("review");
-    persist();
+    reviewPosition(fen);
   };
   $("scan-undo").onclick = () => {
     if (!state.confirmed || !state.history.length) return;
@@ -703,17 +888,22 @@ export function initScanView() {
     status("copied");
   };
   $("scan-web").onclick = async () => {
-    if (!(await valid())) return;
+    const request = epoch;
+    const { id, fen } = state;
+    if (!(await valid(id, request, fen))) return;
     const r = await send({
       type: "SCAN_OPEN",
-      id: state.id,
+      id,
       fen: state.fen,
       orientation: board.orientation,
       confirmed: state.confirmed,
       history: state.history,
       originalFen: state.originalFen,
+      turnChosen: state.turnChosen,
+      directionCorrected: state.directionCorrected,
+      reviewedSquares: state.reviewedSquares,
     });
-    if (!r.ok) lock(r.error);
+    if (!r.ok && request === epoch) lock(r.error);
   };
 
   /* LOCAL_FEATURE_START: PUZZLE_POSTER */
@@ -735,7 +925,7 @@ export function initScanView() {
       posterBtn.textContent = '📸 生成棋谜海报 (含小程序码)';
       posterBtn.onclick = async () => {
         if (!state?.fen) return;
-        if (!(await valid())) return;
+        if (!(await valid(state.id, epoch, state.fen))) return;
         openPosterModal({
           fen: state.fen,
           orientation: board.orientation
@@ -753,11 +943,13 @@ export function initScanView() {
     )
       lock(changes.divergeScan.newValue.reason);
   });
-  addEventListener("pagehide", clear);
-  addEventListener("unload", clear);
+  addEventListener("pagehide", () => {
+    releaseImages();
+    clear();
+  });
   send({ type: "SCAN_RESTORE" })
     .then((r) => {
-      if (r?.ok && r.state?.fen) {
+      if (!busy && !state && r?.ok && r.state?.fen) {
         show();
         showPosition(r.state);
       }

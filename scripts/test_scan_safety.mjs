@@ -2,6 +2,7 @@ import { ChessBoard } from "../engine/chess-core.js";
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
+import { screenshotBoard } from "../scan/crop.js";
 import {
   imagePosition,
   saneFenFields,
@@ -220,3 +221,69 @@ assert(
     new ChessBoard("7k/8/8/8/8/8/8/K7 w K - 0 1"),
   ),
 );
+const frame = {
+  x: 400, y: 100, width: 2000, height: 1500,
+  inputWidth: 1400, inputHeight: 1050,
+  screenshotWidth: 4000, screenshotHeight: 2000,
+};
+const box = { x: 140, y: 70, width: 350, height: 350 };
+const recovered = screenshotBoard({ hasBoard: true, box }, frame).bounds;
+for (const [key, value] of Object.entries({ x: 0.15, y: 0.1, width: 0.125, height: 0.25 }))
+  assert(Math.abs(recovered[key] - value) < 1e-8, key);
+assert.equal(screenshotBoard({ hasBoard: false, box }, frame), null);
+assert.equal(screenshotBoard({ hasBoard: true, box: { ...box, x: -4 } }, frame), null);
+
+let scanListener, locked = false, verified = true, captureCleared = false;
+let saved = {
+  id: "capture-1",
+  source: { tabId: 7, url: "https://example.test/diagram.png", nonce: "match", documentId: "doc" },
+  status: "capture",
+  confirmed: false,
+};
+const popupUrl = "chrome-extension://test/popup/popup.html";
+globalThis.chrome = {
+  storage: { session: {
+    get: async () => ({ divergeScan: saved }),
+    set: async ({ divergeScan }) => { saved = divergeScan; },
+  } },
+  tabs: {
+    get: async () => ({ url: saved.source.url }),
+    sendMessage: async () => ({ allowed: !locked, nonce: saved.source.nonce, reason: locked ? "liveLocked" : "" }),
+    onRemoved: { addListener() {} },
+    onUpdated: { addListener() {} },
+  },
+  runtime: {
+    id: "test",
+    getURL: () => popupUrl,
+    onMessage: { addListener: (listener) => { scanListener = listener; } },
+    sendMessage: async (message) => {
+      if (message.type === "VISION_CLEAR") {
+        captureCleared = true;
+        return { ok: true };
+      }
+      return {
+        ok: true,
+        frame,
+        result: {
+          layout: { hasBoard: true, box, qualityScore: 3, gridAligned: true, requiresReview: true },
+          metadata: { isVerifiedManifest: verified },
+        },
+      };
+    },
+  },
+};
+await import("../scan/controller.js");
+const recognize = () => new Promise((resolve) =>
+  scanListener({ type: "SCAN_RECOGNIZE", id: saved.id }, { id: "test", url: popupUrl }, resolve),
+);
+assert.deepEqual(await recognize(), { ok: true, suggestedCrop: recovered });
+assert.equal(saved.status, "capture");
+assert.equal(saved.confirmed, false);
+assert.equal(captureCleared, false);
+verified = false;
+assert.deepEqual(await recognize(), { ok: false, error: "recognitionFailed" });
+locked = true;
+assert.deepEqual(await recognize(), { ok: false, error: "liveLocked" });
+assert.equal(saved.locked, true);
+assert.equal(captureCleared, true);
+console.log("PASS weak board suggestions preserve a guarded capture for manual adjustment");

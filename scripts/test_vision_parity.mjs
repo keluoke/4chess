@@ -7,6 +7,7 @@ import { VisionRecognizerCore } from "../lib/vision/recognizer-core.js";
 import { WebAdapter } from "../lib/vision/web-adapter.js";
 import { imageContext } from "../scan/position.js";
 import { defaultTurn } from "../lib/vision/default-context.js";
+import { recognizeScreenshot } from "../scan/screenshot-recognition.js";
 const root = path.resolve(import.meta.dirname, "..");
 class LocalAdapter extends WebAdapter {
   async loadAsset(name) {
@@ -136,6 +137,39 @@ assert.equal(
   ).conflict,
   true,
 );
+// Preserve the original board pixels and reproduce a rounded screenshot with
+// a tight evaluation bar and enough side-panel edges to trigger the quad path.
+const scene = { width: 1400, height: 950 };
+scene.data = new Uint8ClampedArray(scene.width * scene.height * 4);
+const left = 180, top = 130, radius = 40;
+for (let y = 0; y < scene.height; y++) {
+  for (let x = 0; x < scene.width; x++) {
+    const dx = x - left, dy = y - top;
+    const clipX = Math.max(0, radius - Math.min(dx, fixture.width - 1 - dx));
+    const clipY = Math.max(0, radius - Math.min(dy, fixture.height - 1 - dy));
+    const index = (y * scene.width + x) * 4;
+    const inside = dx >= 0 && dy >= 0 && dx < fixture.width && dy < fixture.height;
+    if (inside && clipX ** 2 + clipY ** 2 < radius ** 2) {
+      const pixel = (dy * fixture.width + dx) * 4;
+      scene.data.set(fixture.data.subarray(pixel, pixel + 4), index);
+    } else {
+      let gray = 31;
+      if (x >= left - 19 && x < left - 2 && dy >= 0 && dy < fixture.height)
+        gray = dy < fixture.height * 0.56 ? 5 : 240;
+      if (dx >= fixture.width + 10 && x < scene.width - 30 &&
+          dy >= 32 && y < scene.height - 30) {
+        gray = y % 27 < 10 && x % 43 > 9 ? 235 : 52;
+        if (x % 100 < 12 || y % 83 < 12) gray = 245;
+      }
+      scene.data.set([gray, gray, gray, 255], index);
+    }
+  }
+}
+const repaired = await recognizeScreenshot(rec, scene);
+assert.equal(repaired.metadata.screenshotPreprocessing, "roundedCorners");
+assert.equal(repaired.boardFen, fixture.board, "Rounded and cluttered screenshot restores all 64 squares");
+assert.deepEqual(repaired.suspiciousSquares, []);
+assert.equal(repaired.metadata.isVerifiedManifest, true);
 rec.destroy();
 console.log(
   "PASS real pixel golden boards, black coordinate orientation, shared unconfirmed turn defaults, evidence precedence, verified local WASM/weights" +
