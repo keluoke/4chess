@@ -1,4 +1,4 @@
-import { readModelBytes, getModelCacheKey } from './model-loader.js';
+import { readModelBytes, getModelCacheKey } from './model-loader.js?v=20261122-v128';
 import { MAIA_VARIANTS } from './engine-variants.js';
 import { modelSourceCandidates } from './model-sources.js';
 

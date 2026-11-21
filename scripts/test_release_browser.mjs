@@ -12,6 +12,14 @@ const output = path.join(root, 'artifacts/delivery-2026-10-25');
 fs.mkdirSync(output, { recursive: true });
 const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
+const releaseVersion = '20261122-v128';
+const releaseModules = new Set([
+ '/ui/theme.js', '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
+ '/engine/game-analyzer.js', '/engine/stockfish-inbrowser.js', '/engine/engine-preferences.js',
+ '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
+ '/engine/model-cache-client.js', '/engine/model-loader.js'
+]);
+const staleModuleRequests = [];
 globalThis.fetch = async (url, options) => {
  if (String(url).startsWith('https://www.chess.com/callback/')) {
   upstreamCalls++;
@@ -21,6 +29,12 @@ globalThis.fetch = async (url, options) => {
 };
 const server = http.createServer(async (req, res) => {
  const url = new URL(req.url, 'http://localhost');
+ if (releaseModules.has(url.pathname) && url.searchParams.get('v') !== releaseVersion) {
+  staleModuleRequests.push(url.pathname + url.search);
+  res.writeHead(200, {'Content-Type':'application/javascript','Cache-Control':'public, max-age=31536000, immutable'});
+  res.end('throw new Error("Cached workbench module from the previous release")');
+  return;
+ }
  if (url.pathname === '/api/chesscom') {
   const response = await onRequest({request:new Request(url)});
   res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;
@@ -313,6 +327,16 @@ try {
   }));
  });
  assert(offlineAssets.every(Boolean), 'Each local engine asset has one cached URL and is retrievable offline');
+ const cachedReleaseModules = await offline.evaluate(async ({ paths, version }) => {
+  const cache = await caches.open('4chess-review-' + version);
+  const urls = (await cache.keys()).map(request => new URL(request.url));
+  return paths.every(path => {
+   const matches = urls.filter(url => url.pathname === path);
+   return matches.length === 1 && matches[0].searchParams.get('v') === version;
+  });
+ }, { paths: [...releaseModules], version: releaseVersion });
+ assert(cachedReleaseModules, 'Offline prefetch uses the same release URLs as the workbench module graph');
+ assert.deepEqual(staleModuleRequests, [], 'A warm HTTP cache must not supply a module from the previous release');
  await offline.locator('#btn-mistake-bank').click();
  await offline.locator('#btn-bank-practice').click();
  await offline.waitForFunction(() => window.__maiaStudioApp.practice?.active === true);

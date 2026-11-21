@@ -5,9 +5,9 @@
  * during full-game blunder review and position analysis.
  */
 
-import { setModelCachePort } from './model-cache-client.js';
+import { setModelCachePort } from './model-cache-client.js?v=20261122-v128';
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261117-elo-trend';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261122-v128';
 
 const engine = new MaiaInBrowserEngine();
 let activeRequestId = 0;

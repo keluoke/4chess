@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261121-v127';
+import { t, onLanguageChange } from './i18n.js?v=20261122-v128';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {
