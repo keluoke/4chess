@@ -603,11 +603,9 @@ export class MaiaEngine {
     });
   }
 
-  evaluateStockfishAsync(fen, callback) {
-    if (!this.stockfishInBrowser.isReady) return;
-    this.stockfishInBrowser.evaluate(fen, 8, 800, 3).then(sfRes => {
-      if (callback && sfRes) callback(sfRes);
-    }).catch(() => {});
+  async evaluateStockfishAsync(fen) {
+    if (!this.stockfishInBrowser.isReady) return null;
+    return this.stockfishInBrowser.evaluate(fen, 8, 800, 3);
   }
 
   attachStockfishResult(predictionResult, sfRes, elo = this.targetElo) {

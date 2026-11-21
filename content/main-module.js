@@ -4,6 +4,7 @@
  * Browser-based inference; model downloads and public-game imports use network services.
  */
 
+import { legalVariation } from '../engine/position-lines.js';
 import { MaiaEngine } from '../engine/maia-engine.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { BoardDetector } from './board-detector.js';
@@ -23,6 +24,7 @@ export async function initMaiaExtension() {
   let detector = null;
   let actionPath = '';
   let predictionEpoch = 0;
+  let rootSearch = null;
   let engineInitStarted = false;
   let preferences = await readEnginePreferences();
 
@@ -53,8 +55,8 @@ export async function initMaiaExtension() {
     onToggleChange: (toggles) => {
       overlay.setToggles(toggles);
     },
-    onMoveHover: (moveUci) => {
-      overlay.setHoverMove(moveUci);
+    onMoveHover: (moveUci, source, fen) => {
+      overlay.setHoverMove(moveUci, source, fen);
     },
     onModelLoaded: async () => {
       if (FairPlayGuard.isLiveGameInProgress()) return;
@@ -72,6 +74,7 @@ export async function initMaiaExtension() {
       owner.status.stockfish = { state: 'initializing', error: null };
       owner.notifyStatus();
       try {
+        rootSearch = null;
         owner.stockfishInBrowser.reset();
         const ready = await owner.stockfishInBrowser.initialize();
         if (owner !== engine || owner.lifecycleEpoch !== retryEpoch || FairPlayGuard.isLiveGameInProgress()) return;
@@ -305,6 +308,9 @@ export async function initMaiaExtension() {
 
   async function runPrediction(fen, blunderContext = null, viewMode = 'decision') {
     const thisEpoch = ++predictionEpoch;
+    const owner = engine;
+    const elo = panel.currentElo;
+    const path = location.pathname;
     const abortCheck = () => predictionEpoch !== thisEpoch;
 
     // Fair Play Iron Law: Strictly lock down during active live games
@@ -312,6 +318,7 @@ export async function initMaiaExtension() {
       overlay.clear();
       panel.setFairPlayLocked(true);
       predictionEpoch++;
+      rootSearch = null;
       analyzer.cancel();
       engine.suspendForFairPlay();
       engineInitStarted = false;
@@ -324,89 +331,96 @@ export async function initMaiaExtension() {
     overlay.clear();
     panel.setEvaluating(fen);
 
-    // Stop previous Stockfish evaluation to free up CPU, but NEVER interrupt an active full-game review
-    if (engine.stockfishInBrowser?.isReady && !analyzer.isAnalyzing) {
-      engine.stockfishInBrowser.stop();
-    }
+    if (rootSearch?.owner !== owner || rootSearch.fen !== fen || rootSearch.path !== path)
+      rootSearch = null;
+    // Keep a pending root search for the same position, including across an Elo change.
+    if (!rootSearch?.pending && owner.stockfishInBrowser.isReady && !analyzer.isAnalyzing)
+      owner.stockfishInBrowser.stop();
 
     // Yield 1 frame (16ms) to let browser finish rendering piece move animation and play audio
     await new Promise(r => setTimeout(r, 16));
     if (abortCheck()) return;
 
-    const t0 = performance.now();
-    try {
-      if (FairPlayGuard.isLiveGameInProgress() || abortCheck()) return;
-
-      // Show the bundled engine while the first Maia download is still pending.
-      let preliminarySf = null;
-      if (engine.stockfishInBrowser.isReady && !analyzer.isAnalyzing) {
-        engine.evaluateStockfishAsync(fen, sfRes => {
-          if (!sfRes || abortCheck() || FairPlayGuard.isLiveGameInProgress() || analyzer.isAnalyzing) return;
-          preliminarySf = sfRes;
-          if (!engine.isReady) {
-            const partial = { isAvailable: false, turn: fen.split(' ')[1], stockfish: sfRes, status: engine.status, moves: [], blunderContext, viewMode };
-            overlay.render(partial);
-            panel.update(partial, performance.now() - t0);
-          }
-        });
-      }
-
-      // Phase 1: Instant Maia-3 Human Intuition (0 wait, non-blocking)
-      let maiaResult = await engine.predict(fen, panel.currentElo, preliminarySf, abortCheck);
-      if (abortCheck() || !maiaResult || FairPlayGuard.isLiveGameInProgress()) return;
-      if (preliminarySf) maiaResult = engine.attachStockfishResult(maiaResult, preliminarySf, panel.currentElo);
-
-      const latency = performance.now() - t0;
-
-      maiaResult.blunderContext = blunderContext;
-      maiaResult.viewMode = viewMode;
-      overlay.render(maiaResult);
-      panel.update(maiaResult, latency);
-
-      // If blunderContext is provided, display human-engine divergence insight banner
+    const started = performance.now();
+    const invalid = () => abortCheck() || owner !== engine || elo !== panel.currentElo ||
+      path !== location.pathname || FairPlayGuard.isLiveGameInProgress();
+    const canSearch = () => !invalid() && !analyzer.isAnalyzing && owner.stockfishInBrowser.isReady;
+    let sf = null, maia = null;
+    let waitingForStockfish = canSearch(), waitingForMaia = true;
+    const publish = (maiaTopEstimate = null) => {
+      if (invalid() || (sf && analyzer.isAnalyzing)) return;
+      const prediction = maia || { isAvailable: false, moves: [], turn: fen.split(' ')[1] };
+      const data = owner.attachStockfishResult(prediction, sf, elo);
+      const combined = {
+        ...data, fen, stockfish: sf, status: owner.status, blunderContext, viewMode,
+        maiaTopEstimate, waitingForStockfish, waitingForMaia
+      };
+      overlay.render(combined);
+      panel.update(combined, performance.now() - started);
       if (blunderContext) {
-        const isZh = panel.lang === 'zh';
         const isTrap = blunderContext.isHumanTrap || blunderContext.severity === 'blunder';
-        const badgeText = isTrap
-          ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
-          : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
-        const sideText = blunderContext.turn === 'w' ? (isZh ? '白方' : 'White') : (isZh ? '黑方' : 'Black');
-        const probText = blunderContext.humanProbability ? `${blunderContext.humanProbability}%` : null;
-
-        panel.showCustomInsight({
-          badge: badgeText,
-          blunderInfo: blunderContext,
-          isTrap
-        });
+        const badge = panel.lang === 'zh' ? (isTrap ? '人机着法分歧 · 关键疑问手' : '人机着法分歧') :
+          (isTrap ? 'Human–engine divergence · Blunder' : 'Human–engine divergence');
+        panel.showCustomInsight({ badge, blunderInfo: blunderContext, isTrap });
       }
+    };
 
-      // Phase 2: Asynchronous Background Stockfish Stream (never blocks Maia, mutually exclusive with review)
-      if (!preliminarySf && engine.stockfishInBrowser.isReady && !FairPlayGuard.isLiveGameInProgress() && !abortCheck() && !analyzer.isAnalyzing) {
-        engine.evaluateStockfishAsync(fen, (sfRes) => {
-          if (abortCheck() || FairPlayGuard.isLiveGameInProgress() || !sfRes || analyzer.isAnalyzing) return;
-          const combined = engine.attachStockfishResult(maiaResult, sfRes, panel.currentElo);
-          combined.blunderContext = blunderContext;
-          combined.viewMode = viewMode;
-          overlay.render(combined);
-          panel.update(combined, latency);
-
-          if (blunderContext) {
-            const isZh = panel.lang === 'zh';
-            const isTrap = blunderContext.isHumanTrap || blunderContext.severity === 'blunder';
-            const badgeText = isTrap
-              ? (isZh ? '⚠️ 人机着法分歧 · 关键疑问手' : '⚠️ Human-Engine Divergence · Blunder')
-              : (isZh ? '⚠️ 人机着法分歧' : '⚠️ Divergence');
-
-            panel.showCustomInsight({
-              badge: badgeText,
-              blunderInfo: blunderContext,
-              isTrap
-            });
-          }
-        });
+    const stockfish = async () => {
+      try {
+        if (!canSearch()) return;
+        if (!rootSearch) {
+          const request = { owner, path, fen, pending: true };
+          rootSearch = request;
+          request.result = owner.evaluateStockfishAsync(fen).then(result => {
+            request.pending = false;
+            if (!result && rootSearch === request) rootSearch = null;
+            return result;
+          }, error => {
+            if (rootSearch === request) rootSearch = null;
+            throw error;
+          });
+        }
+        const result = await rootSearch.result;
+        if (canSearch()) sf = result;
+      } finally {
+        waitingForStockfish = false;
+        if (sf || maia) publish();
       }
-    } catch (err) {
-      console.error('[Maia-3] Prediction error:', err);
+    };
+    const predict = async () => {
+      try { maia = await owner.predict(fen, elo, null, invalid); }
+      finally {
+        waitingForMaia = false;
+        if (sf || maia) publish();
+      }
+    };
+    const results = await Promise.allSettled([stockfish(), predict()]);
+    for (const result of results) {
+      if (result.status === 'rejected' && !invalid())
+        console.warn('[Diverge] Position analysis failed:', result.reason);
+    }
+
+    if (!sf && !maia) publish();
+    const top = maia?.moves?.[0];
+    if (!canSearch()) return;
+    if (!sf?.bestMove || !top || top.uci === sf.bestMove.uci ||
+        sf.lines?.some(line => line.uci === top.uci) ||
+        sf.isBound || sf.isMate || !(sf.depth >= 8) || !Number.isFinite(sf.scoreCp)) return;
+    const [move] = legalVariation(fen, [top.uci], 1);
+    if (!move) return;
+
+    // Let quick navigation settle before borrowing the single Stockfish worker.
+    await new Promise(resolve => setTimeout(resolve, 180));
+    if (!canSearch()) return;
+    try {
+      const depth = sf.depth - 1;
+      const estimate = await owner.stockfishInBrowser.evaluate(move.fen, depth, 850);
+      if (!canSearch() || !estimate || estimate.isBound || estimate.isMate ||
+          (!estimate.terminal && estimate.depth < depth) || !Number.isFinite(estimate.scoreCp)) return;
+      const loss = sf.scoreCp + estimate.scoreCp;
+      if (loss >= 0) publish({ uci: top.uci, deltaCp: -loss });
+    } catch (error) {
+      if (!invalid()) console.warn('[Diverge] Candidate estimate failed:', error);
     }
   }
 
@@ -478,9 +492,11 @@ export async function initMaiaExtension() {
   function syncPositionContext() {
     if (actionPath !== location.pathname) panel.container.querySelector('#panel-action-recovery').hidden = true;
     actionPath = location.pathname;
-    const standaloneBoard = !GameAnalyzer.gameSource(location) && /\/(analysis|editor)(\/|$)/.test(actionPath);
-    const notation = standaloneBoard && document.querySelector('.vertical-move-list move, .move-list move, .move-list-row, kwdb, .tview2 move, .analyse__moves move');
-    panel.setPositionContext(currentFen, standaloneBoard && !notation ? 'position' : 'auto');
+    const practiceBoard = /^\/(editor|practice|puzzles|training|lessons|classroom|drills)(\/|$)/.test(actionPath);
+    const studyBoard = /^\/(analysis|study)(\/|$)/.test(actionPath);
+    const notation = studyBoard && document.querySelector('.vertical-move-list move, .move-list move, .move-list-row, kwdb, .tview2 move, .analyse__moves move');
+    const positionOnly = !GameAnalyzer.gameSource(location) && (practiceBoard || (studyBoard && !notation));
+    panel.setPositionContext(currentFen, positionOnly ? 'position' : 'auto');
   }
 
   detector = new BoardDetector(async ({ fen, orientation }) => {
@@ -505,16 +521,13 @@ export async function initMaiaExtension() {
       predictionEpoch++;
       analyzer.cancel();
       engine.suspendForFairPlay();
+      rootSearch = null;
       engineInitStarted = false;
       return;
     } else {
       panel.setFairPlayLocked(false);
       ensureEngineInitialized();
     }
-
-    // Immediately clear stale arrows and set evaluating state
-    overlay.clear();
-    panel.setEvaluating(fen);
 
     await runPrediction(fen);
   });
@@ -536,6 +549,7 @@ export async function initMaiaExtension() {
         overlay.clear();
         // Immediately stop Stockfish engine
         engine.suspendForFairPlay();
+        rootSearch = null;
         engineInitStarted = false;
       } else {
         // Game concluded! Re-enable evaluation and ensure engine is initialized for post-game review

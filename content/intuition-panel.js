@@ -3,6 +3,7 @@
  * Compact summaries, explicit minimize/collapse/hide, and keyboard preview share
  * the same fair-play lock as every analysis entry point.
  */
+import { engineLines, whiteEvaluation, comparableScoreDelta } from '../engine/position-lines.js';
 import { FairPlayGuard } from './fair-play-guard.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { readEnginePreferences, engineExperienceHint } from '../engine/engine-preferences.js';
@@ -149,7 +150,7 @@ Object.assign(I18N.zh, {
   waitingHelp: '打开分析台或已完赛棋谱即可开始。',
   positionLabel: '当前局面', prediction: 'Maia 预测', likelihood: '选择率', loss: '评分变化',
   probabilityHelp: '选择率是 Maia 对目标等级棋手的预测，不是胜率或该局面的实测统计。',
-  scoreHelp: '评分以兵为单位，正值对白方有利。Δ 为相对引擎最佳的变化，负值表示较弱；— 表示尚无评分。',
+  scoreHelp: '评分以兵为单位，正值对白方有利。Δ 是当前行棋方相对引擎首选的评分差。— 表示尚无评分。',
   preview: '预览箭头', previewHelp: '悬停、聚焦或点击候选可预览箭头；再次点击取消。',
   expandDetails: '展开详情', displaySettings: '棋盘显示', resetPosition: '恢复默认位置',
   collapseContent: '收起内容（保留侧栏）', hidePanel: '隐藏面板（从扩展菜单恢复）',
@@ -162,17 +163,25 @@ Object.assign(I18N.zh, {
   maiaOnly: '仅直觉预测 · 暂无质量评分', failedMaia: '直觉模型加载失败',
   failedSf: '质量引擎启动失败', retrying: '正在重试…',
   applied: '已应用', selected: '已选择', cached: '已缓存',
-  openPosition: '在工作台打开当前局面', openGame: '全盘分析',
+  openPosition: '在工作台打开当前局面', openGame: '免费全盘分析', freePosition: '免费局面深析',
   extracting: '正在提取棋谱…', opening: '正在打开工作台…',
   openFailed: '未能打开工作台，请重试。', noMoves: '未能取得完整的完赛棋谱。可以重试，或打开当前局面。',
   saveFailed: '设置保存失败，请重试。',
   importGame: '导入 PGN / 打开工作台',
-  sameChoice: '首选一致', differentChoice: '首选不同 · 评分待确认', closeChoice: '首选不同 · 评分接近',
+  sameChoice: '双引擎一致', differentChoice: '首选不同 · 评分待确认', closeChoice: '首选不同 · 评分接近',
   notableChoice: '直觉着法存在评分损失', humanChoice: 'Maia 预测首选',
   compactLocked: '分析已暂停', compactLoading: '正在准备分析…',
   engines: '引擎详情', selectRating: '调整模拟棋手等级',
   positionOpened: '已在新标签页打开当前局面', gameOpened: '已在新标签页打开全盘分析',
-  studioOpened: '已打开工作台，可导入 PGN'
+  studioOpened: '已打开工作台，可导入 PGN',
+  sfLines: 'Stockfish 19 Lite', maiaLines: 'Maia 人类直觉', outsideTop: '未进引擎前三 · 暂无评分',
+  evaluationPending: '暂无可比评分', theme: '主题', systemTheme: '跟随系统', lightTheme: '浅色', darkTheme: '深色',
+  customElo: '自定义等级分…', strongGap: '本次搜索中领先次优 {gap} 兵。',
+  sharedFirst: '{move} 是引擎首选，Maia 预测选择率 {prob}%。',
+  comparedMoves: 'Maia 首选 {maia}，引擎首选 {sf}。',
+  moveLoss: '{move} 较引擎首选低 {gap} 兵。', estimatedLoss: '补算估计 {move} 较引擎首选低约 {gap} 兵。',
+  mateDifference: '请对照将杀评分和续着。', higherRank: '引擎第 {rank} 位',
+  partialSearch: '正在比较…'
 });
 Object.assign(I18N.en, {
   waiting: 'Waiting for a board · Not started', unknown: 'Verifying game state · Analysis paused',
@@ -181,7 +190,7 @@ Object.assign(I18N.en, {
   waitingHelp: 'Open an analysis board or a completed game to begin.',
   positionLabel: 'Current position', prediction: 'Maia prediction', likelihood: 'Choice %', loss: 'Score Δ',
   probabilityHelp: 'Maia predicts choices at the target rating. This is not win probability or observed statistics for this position.',
-  scoreHelp: 'Scores are in pawns, positive for White. Δ compares a move with the engine best; negative is weaker. — means unscored.',
+  scoreHelp: 'Scores are in pawns, positive for White. Δ is relative to the engine’s best move for the side to move. — means unscored.',
   preview: 'Preview arrow', previewHelp: 'Hover, focus or click a candidate to preview. Click again to clear.',
   expandDetails: 'Expand details', displaySettings: 'Board display', resetPosition: 'Reset position',
   collapseContent: 'Collapse content (keep sidebar)', hidePanel: 'Hide (restore from extension menu)',
@@ -194,17 +203,25 @@ Object.assign(I18N.en, {
   maiaOnly: 'Intuition only · Quality score unavailable', failedMaia: 'Intuition model failed to load',
   failedSf: 'Quality engine failed to start', retrying: 'Retrying…',
   applied: 'Applied', selected: 'Selected', cached: 'Cached',
-  openPosition: 'Open position in studio', openGame: 'Full Game Analysis',
+  openPosition: 'Open position in studio', openGame: 'Free Full Game Analysis', freePosition: 'Free Deep Analysis',
   extracting: 'Extracting game…', opening: 'Opening studio…',
   openFailed: 'Could not open the studio. Please retry.', noMoves: 'Could not load the complete finished game. Retry or open the current position.',
   saveFailed: 'Could not save preferences. Please retry.',
   importGame: 'Import PGN / Open studio',
-  sameChoice: 'Same first choice', differentChoice: 'Different choices · Score pending', closeChoice: 'Different choices · Similar scores',
+  sameChoice: 'Both engines agree', differentChoice: 'Different choices · Score pending', closeChoice: 'Different choices · Similar scores',
   notableChoice: 'Intuition move loses evaluation', humanChoice: 'Maia predicted choice',
   compactLocked: 'Analysis paused', compactLoading: 'Preparing analysis…',
   engines: 'Engine details', selectRating: 'Change simulated player rating',
   positionOpened: 'Opened current position in a new tab', gameOpened: 'Opened full game analysis in a new tab',
-  studioOpened: 'Opened the studio for PGN import'
+  studioOpened: 'Opened the studio for PGN import',
+  sfLines: 'Stockfish 19 Lite', maiaLines: 'Maia Human Intuition', outsideTop: 'Outside the engine’s top three · Unscored',
+  evaluationPending: 'Comparable scores unavailable', theme: 'Theme', systemTheme: 'System', lightTheme: 'Light', darkTheme: 'Dark',
+  customElo: 'Custom rating…', strongGap: 'Leads the second choice by {gap} pawns in this search.',
+  sharedFirst: '{move} is the engine’s first choice. Maia predicts a {prob}% choice rate.',
+  comparedMoves: 'Maia favors {maia}. The engine favors {sf}.',
+  moveLoss: '{move} trails the engine’s top move by {gap} pawns.', estimatedLoss: 'A follow-up search puts {move} about {gap} pawns behind.',
+  mateDifference: 'See the mate scores and continuations.', higherRank: 'Engine rank {rank}',
+  partialSearch: 'Comparing…'
 });
 
 export class IntuitionPanel {
@@ -407,6 +424,8 @@ export class IntuitionPanel {
     this.renderSkeleton();
     if (globalThis.chrome?.storage?.local) {
       const applyAppearance = (theme) => {
+        const select = document.getElementById('panel-theme');
+        if (select) select.value = theme === 'light' || theme === 'dark' ? theme : 'system';
         document.querySelectorAll('#maia3-intuition-panel, #maia-wechat-float').forEach(element => {
           if (theme === 'light' || theme === 'dark') element.dataset.theme = theme;
           else delete element.dataset.theme;
@@ -475,12 +494,14 @@ export class IntuitionPanel {
             </svg>
           </span>
           <span class="weui-navbar__title" id="txt-panel-title" title="${this.t('dragHint')}">${this.t('panelTitle')}</span>
+          <span id="panel-engine-dot" class="weui-status-dot status-idle" role="img"></span>
           <span id="maia-turn-pill" class="weui-turn-tag turn-white">${this.t('white')}</span>
         </div>
         <!-- Iconic WeChat Mini-Program Capsule (小程序双键胶囊) -->
         <div class="weui-capsule">
+          <button type="button" id="panel-display" class="weui-capsule-btn" aria-controls="cdn-config-drawer">?</button>
           <button type="button" id="weui-btn-more" class="weui-capsule-btn" title="${this.t('btnMore')}" aria-label="${this.t('btnMore')}">
-            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--weui-BG-1)"/><circle cx="15" cy="17" r="3" fill="var(--weui-BG-1)"/></svg>
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 3h5l.7 2.8 2 .9 2.6-1.4 2.5 4.4-1.9 2.2.1 2.1 1.9 2.3-2.5 4.3-2.7-1-2 .9-.7 2.7h-5l-.7-2.7-2-.9-2.7 1-2.5-4.3 1.9-2.3.1-2.1-1.9-2.2 2.5-4.4 2.6 1.4 2-.9z" transform="translate(1 1) scale(.9)"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
           <div class="weui-capsule-divider"></div>
           <button type="button" id="weui-btn-close" class="weui-capsule-btn" title="${this.t('btnClose')}" aria-label="${this.t('btnClose')}">
@@ -491,7 +512,7 @@ export class IntuitionPanel {
 
       <div class="diverge-collapsed-summary"><strong id="compact-title"></strong><p id="compact-help"></p><button type="button" id="maia-restore" data-dg-text="expand"></button><a href="https://4chess.cc/guide/" target="_blank" rel="noopener" data-dg-text="guide"></a></div>
       <!-- Settings Dropdown Drawer (隐藏在设置胶囊内) -->
-      <div id="cdn-config-drawer" class="weui-drawer-overlay" style="display: none; max-height: 480px; overflow-y: auto;">
+      <div id="cdn-config-drawer" class="weui-drawer-overlay" style="display: none;">
         <div class="weui-drawer-header">
           <span class="weui-drawer-title" id="txt-drawer-title">${this.t('drawerTitle')}</span>
           <button type="button" id="weui-btn-drawer-close" class="weui-drawer-close">✕</button>
@@ -510,7 +531,7 @@ export class IntuitionPanel {
         <div class="weui-drawer-item">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div class="weui-drawer-label" id="lbl-elo-title">${this.t('eloTitle')}</div>
-            <span id="maia-elo-val" style="color: var(--weui-BRAND); font-weight: 700; font-size: 12px;">${this.currentElo}</span>
+            <span id="maia-elo-val" style="color: var(--dg-green); font-weight: 700; font-size: 12px;">${this.currentElo}</span>
           </div>
           <div class="weui-segmented-bar" style="height: 28px;">
             <button type="button" class="weui-segment ${this.currentElo === 1100 ? 'active' : ''}" data-elo="1100">1100</button>
@@ -524,13 +545,13 @@ export class IntuitionPanel {
 
         <!-- 3. Visual Overlays (意图热力图 & 直觉走法建议藏入设置) -->
         <div class="weui-drawer-item">
-          <div class="weui-drawer-label" id="lbl-visuals-title">${this.t('boardVisuals')}</div>
-          <div class="weui-cells" style="margin-top: 2px; border-radius: 8px; overflow: hidden; background: var(--weui-BG-3);">
+          <div class="weui-drawer-label" id="lbl-visuals-title" tabindex="-1">${this.t('boardVisuals')}</div>
+          <div class="weui-cells" style="margin-top: 2px; border-radius: 8px; overflow: hidden; background: var(--dg-paper);">
             <div class="weui-cell" style="padding: 7px 10px;">
               <div class="weui-cell__bd" id="lbl-heatmap" style="font-size: 11.5px;">${this.t('heatmap')}</div>
               <input type="checkbox" id="maia-chk-heatmap" class="weui-switch" />
             </div>
-            <div class="weui-cell" style="padding: 7px 10px; border-top: 0.5px solid var(--weui-BORDER);">
+            <div class="weui-cell" style="padding: 7px 10px; border-top: 0.5px solid var(--dg-line);">
               <div class="weui-cell__bd" id="lbl-arrows" style="font-size: 11.5px;">${this.t('arrows')}</div>
               <input type="checkbox" id="maia-chk-arrows" class="weui-switch" checked />
             </div>
@@ -579,87 +600,75 @@ export class IntuitionPanel {
         <!-- Cloudflare CDN Progress Card (if downloading) -->
         <div id="maia-cdn-progress-card" class="weui-cells diverge-download" style="display: none; padding: 10px 12px;">
           <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px;">
-            <span id="cdn-status-label" style="color: var(--weui-BRAND); font-weight: 600;">⚡ CDN 传输中...</span>
-            <span id="cdn-speed-label" style="color: var(--weui-FG-HALF);">-- MB/s</span>
+            <span id="cdn-status-label" style="color: var(--dg-green); font-weight: 600;">⚡ CDN 传输中...</span>
+            <span id="cdn-speed-label" style="color: var(--dg-muted);">-- MB/s</span>
           </div>
           <div class="weui-progress-track" style="height: 5px; margin-bottom: 5px;">
-            <div id="cdn-bar-fill" class="weui-progress-bar" style="width: 0%; background: var(--weui-BRAND);"></div>
+            <div id="cdn-bar-fill" class="weui-progress-bar" style="width: 0%; background: var(--dg-green);"></div>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--weui-FG-2);">
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--dg-muted);">
             <span id="cdn-bytes-label">0 / 28.0 MB</span>
             <span id="lbl-cdn-cache-tag">${this.lang === 'zh' ? '完成后缓存在浏览器' : 'Cached after download'}</span>
           </div>
         </div>
 
-        <section class="diverge-visual-legend"><strong data-dg-text="dualIntro"></strong><details><summary data-dg-text="visualLegend"></summary><div class="diverge-legend-detail"><span class="legend-maia" data-dg-text="maiaLegend"></span><span class="legend-sf" data-dg-text="sfLegend"></span><span class="legend-consensus" data-dg-text="consensusLegend"></span><p data-dg-text="heatmapHelp"></p><a href="https://4chess.cc/guide/#dual-engines" target="_blank" rel="noopener" data-dg-text="guide"></a></div></details></section>
-        <!-- Candidate Moves List Group -->
-        <div class="diverge-candidates">
-          <div class="weui-cells__title" style="display: flex; justify-content: space-between; align-items: center;">
-            <span id="maia-moves-header-text">${this.t('candidates')}</span>
-            <span id="maia-inference-time" style="font-size: 10px; color: var(--weui-FG-2);">0 ms</span>
-          </div>
-          <div class="weui-cells">
-            <div id="maia-moves-container" class="weui-moves-list">
-              <div style="padding: 12px; text-align: center; color: var(--weui-FG-2); font-size: 11.5px;">${this.t('readingState')}</div>
-            </div>
-          </div>
-        </div>
 
-        <!-- Human Intuition Insight Banner -->
-        <div id="maia-insight-card" class="weui-insight-box" style="display: none;">
+        <div id="panel-recovery" class="diverge-recovery" aria-live="polite" hidden></div>
+        <div id="maia-insight-card" class="weui-insight-box" style="display:none">
           <div class="weui-insight-header">
-            <span id="maia-insight-badge" class="weui-insight-badge">${this.t('intuitionBadge')}</span>
+            <span id="maia-insight-badge" class="weui-insight-badge" role="status"></span>
+            <span class="weui-sf-eval" id="panel-white-score" hidden></span>
           </div>
-          <div id="maia-insight-text">
-            ...
+          <div id="maia-insight-text"></div>
+        </div>
+        <section id="panel-stockfish" class="diverge-lines" aria-labelledby="panel-sf-title" hidden>
+          <h3 class="diverge-list-title sf-title" id="panel-sf-title" data-dg-text="sfLines"></h3>
+          <div id="panel-sf-lines" class="weui-moves-list"></div>
+        </section>
+        <section class="diverge-lines diverge-candidates" aria-labelledby="maia-moves-header-text">
+          <div class="diverge-list-heading">
+            <h3 class="diverge-list-title maia-title" id="maia-moves-header-text">${this.t('candidates')}</h3>
+            <select id="panel-rating"></select>
           </div>
-        </div>
-
-        <!-- Full Game Analysis Studio Entry Button (全盘分析按钮，置于悬浮窗最下方) -->
-        <div class="weui-review-entry" style="margin-top: 2px; margin-bottom: 2px;">
-          <button type="button" id="btn-trigger-standalone" class="weui-btn-review" style="width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; font-weight: 600; border-radius: 8px; background: rgba(7, 193, 96, 0.12); border: 0.5px solid rgba(7, 193, 96, 0.35); color: var(--weui-BRAND); cursor: pointer; transition: all 0.15s ease;" title="${this.lang === 'zh' ? '在独立工作台中全盘分析' : 'Open in Full Game Analysis'}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-            <span id="lbl-btn-standalone">${this.t('btnStandaloneStudio')}</span>
-          </button>
-        </div>
+          <span id="maia-inference-time" class="diverge-load-label" role="status"></span>
+          <div id="maia-moves-container" class="weui-moves-list">
+            <p class="diverge-empty-state">${this.t('readingState')}</p>
+          </div>
+        </section>
+      </div>
+      <div class="weui-review-entry">
+        <button type="button" id="btn-trigger-standalone" class="weui-btn-review">
+          <span id="lbl-btn-standalone"></span><span aria-hidden="true">→</span>
+        </button>
+        <div id="panel-action-recovery" role="alert" hidden></div>
       </div>
     `;
 
     const body = this.container.querySelector('#maia-panel-body');
-    const tools = document.createElement('div');
-    tools.className = 'diverge-study-tools';
-    tools.innerHTML = '<button type="button" id="panel-rating"></button><button type="button" id="panel-display" data-dg-text="displaySettings"></button>';
-    body.prepend(tools);
-    const columns = document.createElement('div');
-    columns.className = 'diverge-candidate-columns';
-    columns.innerHTML = '<span data-dg-text="prediction"></span><span data-dg-text="loss"></span><span data-dg-text="likelihood"></span>';
-    this.container.querySelector('#maia-moves-container').before(columns);
-    const legend = this.container.querySelector('.diverge-visual-legend');
-    legend.querySelector('strong').remove();
-    for (const key of ['probabilityHelp', 'scoreHelp', 'previewHelp']) {
-      const help = document.createElement('p'); help.dataset.dgText = key;
-      legend.querySelector('.diverge-legend-detail').prepend(help);
-    }
-    const recovery = document.createElement('div'); recovery.id = 'panel-recovery'; recovery.className = 'diverge-recovery'; recovery.hidden = true; recovery.setAttribute('aria-live', 'polite');
-    body.append(recovery);
-    const compact = document.createElement('section'); compact.className = 'diverge-compact-position';
+    const drawer = this.container.querySelector('#cdn-config-drawer');
+    const [language, rating, visuals, models] = drawer.querySelectorAll(':scope > .weui-drawer-item');
+    const legend = document.createElement('section');
+    legend.className = 'weui-drawer-item diverge-visual-legend';
+    legend.innerHTML = `<h3 data-dg-text="visualLegend"></h3>
+      <span class="legend-consensus" data-dg-text="consensusLegend"></span>
+      <p data-dg-text="probabilityHelp"></p><p data-dg-text="scoreHelp"></p>
+      <a href="https://4chess.cc/guide/#dual-engines" target="_blank" rel="noopener" data-dg-text="guide"></a>`;
+    const appearance = document.createElement('div');
+    appearance.className = 'weui-drawer-item';
+    appearance.innerHTML = `<label for="panel-theme" data-dg-text="theme"></label>
+      <select id="panel-theme"><option value="system" data-dg-text="systemTheme"></option>
+      <option value="light" data-dg-text="lightTheme"></option><option value="dark" data-dg-text="darkTheme"></option></select>`;
+    drawer.append(visuals, legend, rating, models, appearance, language);
+    const compact = document.createElement('section');
+    compact.className = 'diverge-compact-position';
     compact.innerHTML = '<strong id="panel-compact-title"></strong><p id="panel-compact-detail"></p><button type="button" id="panel-expand" data-dg-text="expandDetails"></button>';
     body.before(compact);
-    // Healthy technical details remain accessible without occupying two fixed rows.
-    const engineDetails = document.createElement('details'); engineDetails.className = 'diverge-engine-details';
-    const summary = document.createElement('summary'); summary.id = 'panel-engine-summary';
+    const engineDetails = document.createElement('div');
+    engineDetails.className = 'weui-drawer-item diverge-engine-details';
+    const summary = document.createElement('strong');
+    summary.id = 'panel-engine-summary';
     engineDetails.append(summary, this.container.querySelector('.diverge-engine-status'));
-    this.container.append(this.container.querySelector('.weui-review-entry'), engineDetails);
-    const actionRecovery = document.createElement('div'); actionRecovery.id = 'panel-action-recovery'; actionRecovery.hidden = true; actionRecovery.setAttribute('role', 'alert');
-    this.container.querySelector('.weui-review-entry').append(actionRecovery);
-    const drawer = this.container.querySelector('#cdn-config-drawer');
-    const items = [...drawer.querySelectorAll(':scope > .weui-drawer-item')];
-    // Rating and display are frequent actions; model and language are secondary.
-    [items[1], items[2], items[3], items[0]].filter(Boolean).forEach(item => drawer.append(item));
+    drawer.append(engineDetails);
     const positions = document.createElement('div'); positions.className = 'weui-drawer-item diverge-position-controls';
     positions.innerHTML = '<p class="diverge-help" data-dg-text="dragHint"></p><button type="button" id="panel-reset" data-dg-text="resetPosition"></button><button type="button" id="panel-collapse" data-dg-text="collapseContent" hidden></button>';
     drawer.append(positions);
@@ -672,7 +681,7 @@ export class IntuitionPanel {
       oldLabel.replaceWith(text);
     }
     this.container.querySelector('#weui-btn-more').setAttribute('aria-controls', 'cdn-config-drawer');
-    this.container.querySelector('#weui-btn-more').setAttribute('aria-expanded', 'false');
+    for (const id of ['weui-btn-more', 'panel-display']) this.container.querySelector('#' + id).setAttribute('aria-expanded', 'false');
     drawer.setAttribute('role', 'dialog'); drawer.setAttribute('aria-modal', 'true'); drawer.setAttribute('aria-labelledby', 'txt-drawer-title');
     this.container.querySelector('#maia-insight-badge').setAttribute('role', 'status');
     this.bindEvents();
@@ -748,15 +757,21 @@ export class IntuitionPanel {
 
   setSettings(open, focusTarget = null) {
     const drawer = this.container.querySelector('#cdn-config-drawer');
+    if (open && drawer.style.display === 'none') this.drawerOpener = document.activeElement;
     drawer.style.display = open ? 'flex' : 'none';
-    this.container.querySelector('#weui-btn-more').setAttribute('aria-expanded', String(open));
+    for (const id of ['weui-btn-more', 'panel-display'])
+      this.container.querySelector('#' + id).setAttribute('aria-expanded', String(open));
+    if (open) this.clearMovePreview();
     for (const child of this.container.children) {
       if (child !== drawer && !child.classList.contains('weui-navbar')) child.inert = open;
     }
     if (open) {
       const target = focusTarget ? drawer.querySelector(focusTarget) : drawer.querySelector('button');
       target?.focus(); target?.scrollIntoView({ block: 'nearest' });
-    } else if (drawer.contains(document.activeElement)) this.container.querySelector('#weui-btn-more').focus();
+    } else if (drawer.contains(document.activeElement)) {
+      const opener = this.container.contains(this.drawerOpener) ? this.drawerOpener : this.container.querySelector('#weui-btn-more');
+      opener?.focus({ preventScroll: true });
+    }
   }
 
   close() {
@@ -819,7 +834,9 @@ export class IntuitionPanel {
 
   syncPanelSize() {
     if (!this.container || this.container.style.display === 'none') return;
-    this.container.dataset.compact = String(this.container.getBoundingClientRect().height < 420);
+    const height = this.container.getBoundingClientRect().height;
+    this.container.dataset.compact = String(height < 420);
+    this.container.dataset.summaryOnly = String(height < 320);
     this.syncCompactSummary();
   }
 
@@ -853,7 +870,12 @@ export class IntuitionPanel {
     }
     this.container.querySelectorAll('[data-model], [data-elo], [data-lang]').forEach(button => button.setAttribute('aria-pressed', String(button.classList.contains('active'))));
     const rating = this.container.querySelector('#panel-rating');
-    if (rating) { rating.textContent = `${this.t('prediction')} · ${this.currentElo}`; rating.title = this.t('selectRating'); }
+    if (rating) {
+      const choices = [...new Set([1100, 1500, 1900, 2200, this.currentElo])].sort((a, b) => a - b);
+      rating.replaceChildren(...choices.map(value => new Option(`${value} Elo`, value)), new Option(this.t('customElo'), 'custom'));
+      rating.value = this.currentElo;
+      rating.setAttribute('aria-label', this.t('selectRating'));
+    }
     if (this.fab) { this.fab.title = this.t('expand'); this.fab.setAttribute('aria-label', this.t('expand')); }
     this.syncCompactSummary();
     this.syncAction();
@@ -864,7 +886,7 @@ export class IntuitionPanel {
 
   fitPanel() {
     if (!this.container) return;
-    let width = 300, height = 600;
+    let width = 320, height = 460;
     delete this.container.dataset.adCover;
     if (!this.userPositioned && !this.expandedForSpace && location.hostname.includes('chess.com')) {
       const board = document.querySelector('wc-chess-board, chess-board, .board-layout-chessboard')?.getBoundingClientRect();
@@ -1015,8 +1037,22 @@ export class IntuitionPanel {
 
     this.container.querySelectorAll('[data-model]').forEach(btn => btn.addEventListener('click', () => this.saveModels({ maiaVariant: btn.dataset.model, cloudflareCdnUrl: MAIA_VARIANTS[btn.dataset.model].url })));
     this.container.querySelector('#maia-restore').addEventListener('click', () => this.open());
-    this.container.querySelector('#panel-rating').addEventListener('click', () => this.setSettings(true, '#maia-elo-slider'));
-    this.container.querySelector('#panel-display').addEventListener('click', () => this.setSettings(true, '#maia-chk-heatmap'));
+    const rating = this.container.querySelector('#panel-rating');
+    rating.addEventListener('change', () => {
+      if (rating.value === 'custom') {
+        rating.value = this.currentElo;
+        this.setSettings(true, '#maia-elo-slider');
+      } else this.setElo(rating.value);
+    });
+    this.container.querySelector('#panel-display').addEventListener('click', () => this.setSettings(true, '#lbl-visuals-title'));
+    const theme = this.container.querySelector('#panel-theme');
+    theme.addEventListener('change', () => {
+      for (const element of [this.container, this.fab]) {
+        if (theme.value === 'system') delete element.dataset.theme;
+        else element.dataset.theme = theme.value;
+      }
+      this._setStorage({ diverge_ui_theme: theme.value });
+    });
     this.container.querySelector('#panel-reset').addEventListener('click', () => this.resetPosition());
     this.container.querySelector('#panel-collapse')?.addEventListener('click', () => this.close());
     this.container.querySelector('#panel-expand').addEventListener('click', () => {
@@ -1065,26 +1101,33 @@ export class IntuitionPanel {
 
   clearMovePreview() {
     this.pinnedMove = null;
-    this.container.querySelectorAll('.weui-move-item').forEach(row => row.setAttribute('aria-pressed', 'false'));
-    this.onMoveHover?.(null);
+    this.pinnedSource = null;
+    this.previewMove(null);
   }
 
-  previewMove(uci) {
-    if (this.isFairPlayLocked || FairPlayGuard.isLiveGameInProgress()) return;
-    this.onMoveHover?.(uci);
+  previewMove(uci, source = this.pinnedSource) {
+    if (uci && (!this.currentData?.fen || this.isFairPlayLocked || FairPlayGuard.isLiveGameInProgress())) return;
+    for (const row of this.container.querySelectorAll('.weui-move-item')) {
+      row.classList.toggle('is-preview', !!uci && row.dataset.uci === uci);
+      row.setAttribute('aria-pressed', String(row.dataset.uci === this.pinnedMove));
+    }
+    this.onMoveHover?.(uci, source, this.currentData?.fen);
   }
 
-  bindMovePreview(row, move) {
-    row.tabIndex = 0; row.setAttribute('role', 'button'); row.setAttribute('aria-pressed', String(this.pinnedMove === move.uci));
+  bindMovePreview(row, move, source) {
+    row.tabIndex = 0;
+    row.dataset.engine = source;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-pressed', String(this.pinnedMove === move.uci));
     row.setAttribute('aria-label', `${this.t('preview')} ${move.san}`);
-    row.addEventListener('mouseenter', () => this.previewMove(move.uci));
-    row.addEventListener('mouseleave', () => this.previewMove(this.pinnedMove || null));
-    row.addEventListener('focus', () => this.previewMove(move.uci));
-    row.addEventListener('blur', () => this.previewMove(this.pinnedMove || null));
+    row.addEventListener('mouseenter', () => this.previewMove(move.uci, source));
+    row.addEventListener('mouseleave', () => this.previewMove(this.pinnedMove));
+    row.addEventListener('focus', () => this.previewMove(move.uci, source));
+    row.addEventListener('blur', () => this.previewMove(this.pinnedMove));
     const activate = () => {
       if (this.isFairPlayLocked || FairPlayGuard.isLiveGameInProgress()) return;
-      this.pinnedMove = this.pinnedMove === move.uci ? null : move.uci;
-      this.container.querySelectorAll('.weui-move-item').forEach(el => el.setAttribute('aria-pressed', String(el.dataset.uci === this.pinnedMove)));
+      this.pinnedMove = this.pinnedMove === move.uci && this.pinnedSource === source ? null : move.uci;
+      this.pinnedSource = this.pinnedMove ? source : null;
       this.previewMove(this.pinnedMove);
     };
     row.addEventListener('click', activate);
@@ -1102,7 +1145,7 @@ export class IntuitionPanel {
   syncAction() {
     const button = this.container?.querySelector('#btn-trigger-standalone');
     if (!button) return;
-    const key = this.actionBusy || (this.actionMode === 'position' ? 'openPosition' : 'openGame');
+    const key = this.actionBusy || (this.actionMode === 'position' ? 'freePosition' : 'openGame');
     this.container.querySelector('#lbl-btn-standalone').textContent = this.t(key);
     button.disabled = this.isFairPlayLocked || !!this.actionBusy;
     button.setAttribute('aria-busy', String(!!this.actionBusy));
@@ -1168,6 +1211,17 @@ export class IntuitionPanel {
     };
     summary.textContent = `Maia ${stateText('maia')} · SF ${stateText('stockfish')}`;
     summary.title = this.t('engines');
+    const dot = this.container.querySelector('#panel-engine-dot');
+    const states = ['maia', 'stockfish'].map(name => this.lastEngineStatus?.[name]?.state || 'uninitialized');
+    const appearance = this.isFairPlayLocked ? 'idle' : states.includes('error') ? 'error' :
+      states.every(state => state === 'ready') ? 'ready' :
+      states.some(state => state !== 'uninitialized' && state !== 'ready') ? 'loading' : 'idle';
+    dot.className = `weui-status-dot status-${appearance}`;
+    dot.title = `${summary.textContent} · ${MAIA_VARIANTS[this.enginePreferences.maiaVariant]?.name || 'Maia'} · Stockfish 19 Lite`;
+    dot.setAttribute('aria-label', dot.title);
+    this.container.dataset.initializing = String(appearance === 'loading' && !states.includes('downloading'));
+    if (this.container.dataset.initializing === 'true')
+      this.container.querySelector('#maia-inference-time').title = summary.textContent;
     const hint = this.container.querySelector('#model-switch-hint');
     if (hint?.dataset.saved && !this.isFairPlayLocked) {
       const state = this.lastEngineStatus?.maia;
@@ -1380,7 +1434,7 @@ export class IntuitionPanel {
     for (const [id, key] of Object.entries(labels)) {
       const field = this.container.querySelector('#' + id); if (field) field.textContent = this.t(key);
     }
-    for (const [id, key] of [['weui-btn-more', 'btnMore'], ['weui-btn-close', 'btnClose']]) {
+    for (const [id, key] of [['weui-btn-more', 'btnMore'], ['weui-btn-close', 'btnClose'], ['panel-display', 'visualLegend']]) {
       const button = this.container.querySelector('#' + id); button.title = this.t(key); button.setAttribute('aria-label', this.t(key));
     }
     const close = this.container.querySelector('#weui-btn-drawer-close');
@@ -1469,6 +1523,12 @@ export class IntuitionPanel {
     this.clearMovePreview();
     if (isLocked) {
       this.currentData = null;
+      this.container.dataset.loading = 'false';
+      this.container.querySelector('#panel-stockfish').hidden = true;
+      this.container.querySelector('#panel-sf-lines').replaceChildren();
+      this.container.querySelector('#panel-white-score').textContent = '';
+      this.container.querySelector('#maia-insight-text').replaceChildren();
+      this.container.querySelector('#maia-insight-badge').textContent = '';
       this.viewState = phase;
       clearTimeout(this.eloTimer); this.pendingElo = undefined;
       this.container.querySelector('#maia-insight-card').style.display = 'none';
@@ -1528,128 +1588,185 @@ export class IntuitionPanel {
       movesHeader.textContent = isWhite ? this.t('whiteCandidates') : this.t('blackCandidates');
     }
 
-    const movesContainer = this.container.querySelector('#maia-moves-container');
-    if (movesContainer) {
-      movesContainer.innerHTML = `
-        <div class="weui-skeleton-wrapper">
-          <div class="weui-move-skeleton">
-            <div class="weui-skeleton-line">
-              <span class="weui-skel-rank"></span>
-              <span class="weui-skel-name"></span>
-              <span class="weui-skel-val"></span>
-            </div>
-            <div class="weui-skel-bar" style="width: 75%;"></div>
-          </div>
-          <div class="weui-move-skeleton">
-            <div class="weui-skeleton-line">
-              <span class="weui-skel-rank"></span>
-              <span class="weui-skel-name" style="width: 44px;"></span>
-              <span class="weui-skel-val" style="width: 30px;"></span>
-            </div>
-            <div class="weui-skel-bar" style="width: 45%;"></div>
-          </div>
-          <div class="weui-move-skeleton">
-            <div class="weui-skeleton-line">
-              <span class="weui-skel-rank"></span>
-              <span class="weui-skel-name" style="width: 36px;"></span>
-              <span class="weui-skel-val" style="width: 25px;"></span>
-            </div>
-            <div class="weui-skel-bar" style="width: 28%;"></div>
-          </div>
-        </div>
-      `;
+    this.container.dataset.loading = 'true';
+    this.container.querySelector('#panel-stockfish').hidden = false;
+    for (const id of ['panel-sf-lines', 'maia-moves-container']) {
+      const area = this.container.querySelector('#' + id);
+      this.fillPendingRows(area);
     }
-
-    const insightBox = this.container.querySelector('#maia-insight-card');
-    if (insightBox) {
-      insightBox.style.display = 'none';
-    }
+    this.container.querySelector('#maia-insight-card').style.display = 'none';
+    this.container.querySelector('#maia-insight-badge').textContent = '';
+    this.container.querySelector('#maia-insight-text').replaceChildren();
+    this.container.querySelector('#panel-white-score').textContent = '';
     this.syncCompactSummary();
   }
 
-  update(predictionData, latencyMs = 0) {
-    if (this.isFairPlayLocked || !predictionData) return;
-    const focused = this.container.querySelector('.weui-move-item:focus');
-    const focusMove = focused?.dataset.uci;
-    this.currentData = predictionData;
-    this.latency = latencyMs;
-    this.viewState = predictionData.isAvailable ? 'ready' : predictionData.stockfish?.bestMove ? 'partial' : 'loading';
-    this.currentTurn = predictionData.turn || 'w';
-    if (predictionData.status) this.updateEngineStatus(predictionData.status);
-    const isWhite = this.currentTurn === 'w';
-    const sf = predictionData.stockfish;
-    const top = predictionData.isAvailable ? predictionData.moves?.[0] : null;
-    this.container.dataset.maiaAvailable = String(!!predictionData.isAvailable);
-    this.container.querySelector('#maia-turn-pill').textContent = this.t(isWhite ? 'white' : 'black');
-    this.container.querySelector('#maia-moves-header-text').textContent = predictionData.isAvailable ? this.t(isWhite ? 'whiteCandidates' : 'blackCandidates') : this.t('positionLabel');
-    const time = this.container.querySelector('#maia-inference-time');
-    time.textContent = ''; time.title = `${Math.round(latencyMs)} ms`;
-    const area = this.container.querySelector('#maia-moves-container');
+  fillPendingRows(area) {
+    area.replaceChildren(...Array.from({ length: 3 }, () => {
+      const row = document.createElement('div');
+      row.className = 'diverge-line-skeleton';
+      row.setAttribute('aria-hidden', 'true');
+      return row;
+    }));
+  }
+
+  comparisonText(key, values) {
+    return this.t(key).replace(/\{(\w+)\}/g, (_, field) => values[field]);
+  }
+
+  renderVerdict(data, lines, top) {
     const insight = this.container.querySelector('#maia-insight-card');
     const badge = this.container.querySelector('#maia-insight-badge');
     const text = this.container.querySelector('#maia-insight-text');
-    insight.style.display = top || sf?.bestMove ? 'block' : 'none';
-    insight.className = 'weui-insight-box'; badge.className = 'weui-insight-badge'; text.replaceChildren();
-    if (top) {
-      const agreed = sf?.bestMove?.uci === top.uci;
-      const value = predictionData.comparison?.deltaText ?? top.deltaText;
-      const delta = value !== null && value !== undefined && value !== '' ? Number(value) : NaN;
-      const warning = !agreed && Number.isFinite(delta) && delta <= -1;
-      const copy = !sf?.bestMove ? 'humanChoice' : agreed ? 'sameChoice' : !Number.isFinite(delta) ? 'differentChoice' : delta > -0.3 ? 'closeChoice' : 'notableChoice';
-      badge.textContent = `${this.t(copy)}${agreed ? ` · ${top.san}` : ''}`;
-      if (warning) { insight.classList.add('alert-trap'); badge.classList.add('badge-trap'); }
-      if (sf?.bestMove) {
-        const row = document.createElement('div'); row.className = 'weui-sf-mini-row';
-        const best = document.createElement('span'); best.textContent = `SF19 Lite: ${sf.bestMove.san}`;
-        const score = document.createElement('span'); score.className = 'weui-sf-eval'; score.textContent = `${this.t('evalLabel')} ${this.formatWhiteScore(sf, this.currentTurn) || '—'}`; score.title = this.t('scoreHelp');
-        row.append(best, score); text.append(row);
-      } else {
-        const note = document.createElement('p'); note.textContent = this.t('maiaOnly'); text.append(note);
-      }
-    } else if (sf?.bestMove) {
-      badge.textContent = this.t('sfOnly');
-      text.textContent = `SF19 Lite: ${sf.bestMove.san} · ${this.t('evalLabel')} ${this.formatWhiteScore(sf, this.currentTurn) || '—'}`;
+    const score = this.container.querySelector('#panel-white-score');
+    const sf = data.stockfish;
+    const best = sf?.bestMove;
+    const evaluation = data.fen && !sf?.isBound ? whiteEvaluation(sf, data.fen) : null;
+    score.hidden = !evaluation;
+    score.textContent = evaluation ? `${this.t('evalLabel')} ${evaluation.text}` : '';
+    score.title = this.t('scoreHelp');
+    insight.style.display = top || best || sf?.terminal ? 'block' : 'none';
+    insight.className = 'weui-insight-box';
+    badge.className = 'weui-insight-badge';
+    if (!top || !best) {
+      badge.textContent = this.t(top ? 'humanChoice' : sf?.terminal ? 'noLegalMoves' : best ? 'sfLines' : 'positionLabel');
+      text.textContent = this.t(top ? 'maiaOnly' : best ? 'sfOnly' : '');
+      return;
     }
-    area.replaceChildren();
-    if (predictionData.isAvailable && predictionData.moves?.length) {
-      predictionData.moves.slice(0, 3).forEach((move, index) => {
-        const row = document.createElement('div'); row.className = `weui-move-item ${index === 0 ? 'top-pick' : ''}`; row.dataset.uci = move.uci;
-        const main = document.createElement('div'); main.className = 'weui-move-main';
-        const left = document.createElement('div'); left.className = 'weui-move-left';
-        const rank = document.createElement('span'); rank.className = 'weui-rank-tag'; rank.textContent = String(index + 1);
-        const san = document.createElement('span'); san.className = 'weui-move-san'; san.textContent = move.san;
-        const match = !!sf?.bestMove && sf.bestMove.uci === move.uci;
-        if (match) { const tag = document.createElement('small'); tag.className = 'diverge-match-tag'; tag.textContent = this.t('consensus'); san.append(' ', tag); }
-        left.append(rank, san);
-        const right = document.createElement('div'); right.className = 'weui-move-right';
-        const delta = document.createElement('span');
-        const numeric = move.deltaText !== null && move.deltaText !== undefined && move.deltaText !== '' ? Number(move.deltaText) : NaN;
-        // A missing independent engine result must never retain an old quality score.
-        const known = !!sf?.bestMove && (match || Number.isFinite(numeric));
-        delta.className = `weui-delta-tag ${known ? match || numeric >= 0 ? 'tag-best' : numeric <= -1 ? 'tag-blunder' : numeric > -0.3 ? 'tag-neutral' : 'tag-slight' : 'tag-neutral'}`;
-        delta.textContent = known ? match ? '0.00' : `Δ ${move.deltaText}` : '—';
-        delta.title = this.t('scoreHelp');
-        const probability = document.createElement('span'); probability.className = 'weui-move-prob'; probability.textContent = `${move.prob}%`; probability.title = this.t('probabilityHelp');
-        right.append(delta, probability); main.append(left, right);
-        const track = document.createElement('div'); track.className = 'weui-progress-track'; track.setAttribute('aria-hidden', 'true');
-        const bar = document.createElement('div'); bar.className = 'weui-progress-bar'; bar.style.width = `${Math.max(0, Math.min(100, Number(move.prob) || 0))}%`; bar.style.background = match ? 'var(--dg-green)' : 'var(--dg-gold)'; track.append(bar);
-        row.append(main, track); this.bindMovePreview(row, move); area.append(row);
-      });
-    } else if (sf?.bestMove) {
-      const row = document.createElement('div'); row.className = 'weui-move-item top-pick'; row.dataset.uci = sf.bestMove.uci;
-      const san = document.createElement('strong'); san.className = 'weui-move-san'; san.textContent = sf.bestMove.san;
-      const desc = document.createElement('span'); desc.textContent = this.t('engineBest'); row.append(san, ' · ', desc);
-      this.bindMovePreview(row, sf.bestMove); area.append(row);
+
+    const root = lines.find(line => line.uci === best.uci);
+    const rank = lines.find(line => line.uci === top.uci);
+    const gap = comparableScoreDelta(root, lines.find(line => line.multipv === 2));
+    const delta = comparableScoreDelta(root, rank);
+    const estimate = data.maiaTopEstimate?.uci === top.uci ? data.maiaTopEstimate.deltaCp : null;
+    const agreed = best.uci === top.uci;
+    badge.textContent = this.t(agreed ? 'sameChoice' :
+      delta === null ? 'differentChoice' : delta >= -30 ? 'closeChoice' : 'notableChoice');
+    if (!agreed && delta !== null && delta <= -100) {
+      insight.classList.add('alert-trap');
+      badge.classList.add('badge-trap');
+    }
+    if (agreed) {
+      text.textContent = gap !== null && gap <= -150
+        ? `${top.san} · ${this.comparisonText('strongGap', { gap: (-gap / 100).toFixed(2) })}`
+        : this.comparisonText('sharedFirst', { move: top.san, prob: top.prob });
+    } else if (delta !== null || Number.isFinite(estimate)) {
+      const value = delta ?? estimate;
+      text.textContent = this.comparisonText(delta === null ? 'estimatedLoss' : 'moveLoss',
+        { move: top.san, gap: (-value / 100).toFixed(2) });
     } else {
-      const message = document.createElement('p'); message.className = 'diverge-empty-state';
-      message.textContent = predictionData.isAvailable ? this.t(predictionData.fen && !predictionData.isReading ? 'noLegalMoves' : 'readingState') : this.lastEngineStatus?.maia?.state === 'error' ? this.t('failedMaia') : this.t('loadingModel');
-      area.append(message);
-      if (this.lastEngineStatus?.maia?.state === 'downloading') {
-        const note = document.createElement('p'); note.className = 'diverge-help'; note.textContent = this.t('downloadingHelp'); area.append(note);
-      }
+      const note = sf.isMate || rank?.isMate ? this.t('mateDifference') :
+        lines.length === 3 && !rank ? this.t('outsideTop') : this.t('evaluationPending');
+      text.textContent = `${this.comparisonText('comparedMoves', { maia: top.san, sf: best.san })} ${note}`;
     }
-    if (focusMove) [...area.querySelectorAll('.weui-move-item')].find(row => row.dataset.uci === focusMove)?.focus({ preventScroll: true });
-    if (this.pinnedMove && !predictionData.moves?.some(move => move.uci === this.pinnedMove)) this.clearMovePreview();
+  }
+
+  update(predictionData, latencyMs = 0) {
+    if (this.isFairPlayLocked || FairPlayGuard.isLiveGameInProgress() || !predictionData) return;
+    const focused = this.container.querySelector('.weui-move-item:focus');
+    const data = this.currentData = predictionData;
+    this.latency = latencyMs;
+    this.viewState = data.isAvailable ? 'ready' : data.stockfish?.bestMove ? 'partial' : 'loading';
+    this.currentTurn = data.fen?.split(' ')[1] || data.turn || 'w';
+    if (data.status) this.updateEngineStatus(data.status);
+    const sf = data.stockfish;
+    const moves = data.isAvailable ? (data.moves || []).slice(0, 3) : [];
+    const top = moves[0];
+    const lines = data.fen ? engineLines(sf, data.fen) : [];
+    const root = lines.find(line => line.uci === sf?.bestMove?.uci);
+    const consensus = top?.uci === sf?.bestMove?.uci ? top?.uci : null;
+    this.container.dataset.loading = String(!!(data.waitingForStockfish || data.waitingForMaia));
+    this.container.dataset.maiaAvailable = String(!!data.isAvailable);
+    this.container.querySelector('#maia-turn-pill').textContent = this.t(this.currentTurn === 'w' ? 'white' : 'black');
+    this.container.querySelector('#maia-moves-header-text').textContent = this.t('maiaLines');
+    const time = this.container.querySelector('#maia-inference-time');
+    time.textContent = this.container.dataset.loading === 'true' ? this.t('partialSearch') : ''; time.title = `${Math.round(latencyMs)} ms`;
+    this.renderVerdict(data, lines, top);
+
+    const sfArea = this.container.querySelector('#panel-sf-lines');
+    const maiaArea = this.container.querySelector('#maia-moves-container');
+    sfArea.replaceChildren();
+    maiaArea.replaceChildren();
+    this.container.querySelector('#panel-stockfish').hidden = !lines.length && !data.waitingForStockfish;
+    if (!lines.length && data.waitingForStockfish) this.fillPendingRows(sfArea);
+    if (!moves.length && data.waitingForMaia) this.fillPendingRows(maiaArea);
+    const badge = () => {
+      const tag = document.createElement('small');
+      tag.className = 'diverge-match-tag';
+      tag.textContent = this.t('consensus');
+      return tag;
+    };
+    for (const line of lines) {
+      const first = line.variation[0];
+      if (!first) continue;
+      const row = document.createElement('div');
+      row.className = 'weui-move-item diverge-sf-line';
+      row.dataset.uci = first.uci;
+      const score = document.createElement('span');
+      score.className = 'diverge-line-score';
+      score.textContent = line.isBound ? '—' : line.evaluation?.text ?? '—';
+      score.title = this.t('scoreHelp');
+      const san = document.createElement('strong');
+      san.className = 'weui-move-san';
+      san.textContent = first.san;
+      const pv = document.createElement('span');
+      pv.className = 'diverge-pv';
+      const replies = line.variation.slice(1, 4);
+      for (const reply of replies) {
+        const step = document.createElement('span');
+        step.textContent = reply.san;
+        pv.append(step);
+      }
+      pv.title = line.variation.map(move => move.label).join(' ');
+      row.append(score, san, pv);
+      if (first.uci === consensus) row.append(badge());
+      this.bindMovePreview(row, first, 'sf');
+      sfArea.append(row);
+    }
+    for (const move of moves) {
+      const row = document.createElement('div');
+      row.className = 'weui-move-item diverge-maia-line';
+      row.dataset.uci = move.uci;
+      const main = document.createElement('div'); main.className = 'weui-move-main';
+      const left = document.createElement('div'); left.className = 'weui-move-left';
+      const san = document.createElement('strong'); san.className = 'weui-move-san'; san.textContent = move.san;
+      left.append(san);
+      const comparable = lines.find(line => line.uci === move.uci);
+      if (move.uci === consensus) left.append(badge());
+      else if (comparable) {
+        const rank = document.createElement('small');
+        rank.className = 'diverge-engine-rank';
+        rank.title = this.comparisonText('higherRank', { rank: comparable.multipv });
+        rank.setAttribute('aria-label', rank.title);
+        rank.textContent = `SF #${comparable.multipv}`;
+        left.append(rank);
+      }
+      const right = document.createElement('div'); right.className = 'weui-move-right';
+      const delta = document.createElement('span'); delta.className = 'weui-delta-tag';
+      const exact = sf?.bestMove?.uci === move.uci && !sf?.isMate && !sf?.isBound
+        ? 0 : comparableScoreDelta(root, comparable);
+      const estimate = data.maiaTopEstimate?.uci === move.uci ? data.maiaTopEstimate.deltaCp : null;
+      const value = exact ?? estimate;
+      delta.textContent = Number.isFinite(value) ? `${exact === null ? '≈ ' : ''}Δ ${(value / 100).toFixed(2)}` : '—';
+      if (exact !== null && exact <= -100) delta.classList.add('tag-blunder');
+      delta.title = this.t('scoreHelp');
+      const probability = document.createElement('span'); probability.className = 'weui-move-prob'; probability.textContent = `${move.prob}%`; probability.title = this.t('probabilityHelp');
+      right.append(delta, probability); main.append(left, right);
+      const track = document.createElement('div'); track.className = 'weui-progress-track'; track.setAttribute('aria-hidden', 'true');
+      const bar = document.createElement('div'); bar.className = 'weui-progress-bar'; bar.style.width = `${Math.max(0, Math.min(100, Number(move.prob) || 0))}%`; track.append(bar);
+      row.append(main, track);
+      this.bindMovePreview(row, move, 'maia');
+      maiaArea.append(row);
+    }
+    if (!moves.length && !data.waitingForMaia) {
+      const message = document.createElement('p'); message.className = 'diverge-empty-state';
+      message.textContent = data.isAvailable || sf?.terminal ? this.t(data.fen && !data.isReading ? 'noLegalMoves' : 'readingState') : this.t(this.lastEngineStatus?.maia?.state === 'error' ? 'failedMaia' : 'loadingModel');
+      maiaArea.append(message);
+    }
+    const rows = [...this.container.querySelectorAll('.weui-move-item')];
+    if (this.pinnedMove && !rows.some(row => row.dataset.uci === this.pinnedMove && row.dataset.engine === this.pinnedSource)) this.clearMovePreview();
+    this.previewMove(this.pinnedMove);
+    if (focused) rows.find(row => row.dataset.uci === focused.dataset.uci && row.dataset.engine === focused.dataset.engine)?.focus({ preventScroll: true });
     this.renderRecovery(); this.syncStudyChrome(); this.syncEngineSummary();
   }
 
@@ -1696,7 +1813,7 @@ export class IntuitionPanel {
 
       const recLabel = document.createTextNode(isZh ? '，而引擎推荐最优走法为 ' : ', while Engine recommends ');
       const bestEl = document.createElement('strong');
-      bestEl.style.color = 'var(--weui-BRAND)';
+      bestEl.style.color = 'var(--dg-green)';
       bestEl.textContent = blunderInfo.bestSan || '';
       line1.append(recLabel, bestEl);
       line1.appendChild(document.createTextNode('。'));
@@ -1704,7 +1821,7 @@ export class IntuitionPanel {
       const line2 = document.createElement('div');
       line2.style.marginTop = '3px';
       line2.style.fontSize = '11px';
-      line2.style.color = 'var(--weui-FG-1)';
+      line2.style.color = 'var(--dg-muted)';
 
       const lossLabel = document.createTextNode(isZh ? '局面损耗: ' : 'Centipawn loss: ');
       const lossEl = document.createElement('strong');
