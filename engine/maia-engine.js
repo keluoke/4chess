@@ -47,7 +47,8 @@ export class MaiaEngine {
     // Independent status tracking for both engines
     this.status = {
       maia: {
-        state: 'uninitialized', // 'uninitialized' | 'loading' | 'cached' | 'downloading' | 'ready' | 'error'
+        modelKey: this.modelKey,
+        state: 'uninitialized',
         percent: 0,
         speed: '',
         loadedMB: '0',
@@ -210,6 +211,9 @@ export class MaiaEngine {
     this.status.maia.state = 'loading';
     this.status.maia.stage = 'cache';
     this.status.maia.source = '检测缓存中...';
+    this.status.maia.error = null;
+    this.status.maia.percent = 0;
+    this.status.maia.loadedMB = '0';
     if (!this.stockfishInBrowser.isReady) {
       this.status.stockfish.state = 'initializing';
     }

@@ -90,12 +90,12 @@ export class MaiaInBrowserEngine {
         for (const [name, info] of Object.entries(this.meta.tensors)) {
           const totalOffset = payloadBytes.byteOffset + info.offset;
           if (isFp16) {
-            const u16Slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 2);
-            if (typeof Float16Array !== 'undefined') {
-              this.tensors[name] = new Float32Array(new Float16Array(u16Slice));
-            } else {
-              this.tensors[name] = decodeFp16(new Uint16Array(u16Slice));
-            }
+            const encoded = totalOffset % 2 === 0
+              ? new Uint16Array(arrayBuffer, totalOffset, info.numel)
+              : new Uint16Array(arrayBuffer.slice(totalOffset, totalOffset + info.numel * 2));
+            this.tensors[name] = typeof Float16Array !== 'undefined'
+              ? new Float32Array(new Float16Array(encoded.buffer, encoded.byteOffset, encoded.length))
+              : decodeFp16(encoded);
           } else {
             if (totalOffset % 4 === 0) {
               this.tensors[name] = new Float32Array(

@@ -213,6 +213,9 @@ export class StockfishInBrowser {
           if (multipv === 1) {
             this.lastInfo = { depth, scoreText, scoreCp, isMate, isBound, pv };
           }
+          if (!this.isStopping && this.activeRequest) {
+            this.pendingRequests.get(this.activeRequest.id)?.info?.(this.multiPvMap.get(multipv));
+          }
         }
 
         // Parse bestmove line
@@ -425,6 +428,8 @@ export class StockfishInBrowser {
           this._readyResolve = null;
           r(true);
         }
+      } else if (data.type === 'STOCKFISH_INFO') {
+        this.pendingRequests.get(data.id)?.info?.(data.line);
       } else if (data.type === 'STOCKFISH_RESULT') {
         const req = this.pendingRequests.get(data.id);
         if (req) {
@@ -547,7 +552,7 @@ export class StockfishInBrowser {
     }, 15000);
   }
 
-  async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1, moveTime = null) {
+  async evaluate(fen, depth = 8, timeoutMs = 2000, multipv = 1, moveTime = null, onProgress = null) {
     if (!(Number.isSafeInteger(moveTime) && moveTime > 0)) moveTime = null;
     const epoch = this.searchEpoch;
     if (!this.isReady) {
@@ -560,63 +565,59 @@ export class StockfishInBrowser {
     }
 
     const board = new ChessBoard(fen);
-    if (board.isValid && board.getLegalMoves().length === 0) {
+    const legalMoves = board.isValid ? board.getLegalMoves() : [];
+    if (board.isValid && !legalMoves.length) {
       const isMate = board.inCheck(board.turn);
       return { available: true, terminal: true, bestMove: null, score: isMate ? 'M0' : '0.00', scoreCp: isMate ? -10000 : 0, isMate, depth: 0, pv: [], lines: [] };
     }
     const reqId = ++this.reqCounter;
 
+    const formatResult = raw => {
+      if (!raw?.bestMove) return null;
+      const uci = raw.bestMove;
+      const fromSq = uci.slice(0, 2), toSq = uci.slice(2, 4);
+      return {
+        available: true,
+        bestMove: {
+          uci, san: legalMoves.find(move => move.uci === uci)?.san || uci,
+          from: ChessBoard.squareToIndex(fromSq), to: ChessBoard.squareToIndex(toSq),
+          fromSq, toSq
+        },
+        score: raw.scoreText,
+        scoreCp: raw.scoreCp,
+        isMate: raw.isMate,
+        isBound: !!raw.isBound,
+        depth: raw.depth,
+        pv: raw.pv || [],
+        lines: raw.lines || []
+      };
+    };
+
+    const lineCount = Math.min(multipv, legalMoves.length);
+    const latestLines = new Map();
+    let publishedDepth = 0;
+    const info = onProgress && lineCount ? line => {
+      if (!line?.uci || line.multipv < 1 || line.multipv > lineCount || epoch !== this.searchEpoch) return;
+      latestLines.set(line.multipv, line);
+      if (line.depth <= publishedDepth || latestLines.size < lineCount) return;
+      const lines = Array.from(latestLines.values()).sort((a, b) => a.multipv - b.multipv);
+      if (!lines.every(candidate => candidate.depth === line.depth && !candidate.isBound)) return;
+      const best = lines[0];
+      publishedDepth = best.depth;
+      onProgress(formatResult({ ...best, bestMove: best.uci, lines: lines.map(candidate => {
+        const deltaCp = candidate.scoreCp - best.scoreCp;
+        return { ...candidate, deltaCp, deltaText: (deltaCp / 100).toFixed(2) };
+      }) }));
+    } : null;
+
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
-        if (this.pendingRequests.has(reqId)) {
-          this.pendingRequests.delete(reqId);
-          resolve(null);
-        }
+        if (this.pendingRequests.delete(reqId)) resolve(null);
       }, timeoutMs);
 
       this.pendingRequests.set(reqId, {
-        resolve: (rawResult) => {
-          clearTimeout(timer);
-          if (!rawResult || !rawResult.bestMove) {
-            resolve(null);
-            return;
-          }
-
-          // Parse coordinates and SAN
-          const uci = rawResult.bestMove;
-          const fromSq = uci.slice(0, 2);
-          const toSq = uci.slice(2, 4);
-          const from = ChessBoard.squareToIndex(fromSq);
-          const to = ChessBoard.squareToIndex(toSq);
-
-          // Get SAN representation
-          let san = uci;
-          try {
-            const chess = new ChessBoard(fen);
-            const legalMoves = chess.getLegalMoves();
-            const match = legalMoves.find(m => m.uci === uci);
-            if (match) san = match.san;
-          } catch (e) {}
-
-          resolve({
-            available: true,
-            bestMove: {
-              uci,
-              san,
-              from,
-              to,
-              fromSq,
-              toSq
-            },
-            score: rawResult.scoreText,
-            scoreCp: rawResult.scoreCp,
-            isMate: rawResult.isMate,
-            isBound: !!rawResult.isBound,
-            depth: rawResult.depth,
-            pv: rawResult.pv || [],
-            lines: rawResult.lines || []
-          });
-        }
+        info,
+        resolve: rawResult => { clearTimeout(timer); resolve(formatResult(rawResult)); }
       });
 
       if (this.worker) {
@@ -638,7 +639,8 @@ export class StockfishInBrowser {
           fen,
           depth,
           multipv,
-          moveTime
+          moveTime,
+          stream: !!info
         });
       } else {
         clearTimeout(timer);

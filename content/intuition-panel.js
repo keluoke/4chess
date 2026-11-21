@@ -1095,7 +1095,8 @@ export class IntuitionPanel {
       if (globalThis.chrome?.storage?.local) await chrome.storage.local.set(next);
       this.setEnginePreferences(next);
       const hint = this.container.querySelector('#model-switch-hint');
-      hint.dataset.saved = 'true'; hint.textContent = this.t('modelSaved');
+      hint.dataset.saved = 'true';
+      this.syncEngineSummary();
     } catch { this.showToast(this.t('saveFailed')); }
   }
 
@@ -1225,7 +1226,10 @@ export class IntuitionPanel {
     const hint = this.container.querySelector('#model-switch-hint');
     if (hint?.dataset.saved && !this.isFairPlayLocked) {
       const state = this.lastEngineStatus?.maia;
-      hint.textContent = state?.state === 'ready' ? `${this.t('applied')} · ${MAIA_VARIANTS[this.enginePreferences.maiaVariant]?.name || 'Maia'}${state.source === 'IndexedDB 缓存' ? ` · ${this.t('cached')}` : ''}` : state?.state === 'downloading' ? `${this.t('selected')} · ${state.percent || 0}%` : this.t('modelSaved');
+      const model = MAIA_VARIANTS[this.enginePreferences.maiaVariant];
+      if (state?.modelKey && state.modelKey !== model?.key) hint.textContent = this.t('modelSaved');
+      else if (state?.state === 'error') hint.textContent = [this.t('failedMaia'), state.error].filter(Boolean).join(' · ');
+      else hint.textContent = state?.state === 'ready' ? `${this.t('applied')} · ${MAIA_VARIANTS[this.enginePreferences.maiaVariant]?.name || 'Maia'}${state.source === 'IndexedDB 缓存' ? ` · ${this.t('cached')}` : ''}` : state?.state === 'downloading' ? `${this.t('selected')} · ${state.percent == null ? state.loadedMB + ' MiB' : state.percent + '%'}` : this.t('modelSaved');
     }
   }
 
@@ -1276,6 +1280,7 @@ export class IntuitionPanel {
 
     if (status.maia) {
       const { state, percent, speed, loadedMB, totalMB, source } = status.maia;
+      if (labelMaia) labelMaia.title = status.maia.error || '';
       if (state === 'uninitialized') {
         if (dotMaia) dotMaia.className = 'weui-status-dot status-idle';
         if (labelMaia) {
@@ -1292,16 +1297,17 @@ export class IntuitionPanel {
         }
         if (cdnCard) cdnCard.style.display = 'none';
       } else if (state === 'downloading') {
+        const progress = percent == null ? loadedMB + ' MiB' : percent + '%';
         if (dotMaia) dotMaia.className = 'weui-status-dot status-loading';
         if (labelMaia) {
-          labelMaia.textContent = this.lang === 'zh' ? `下载中 ${percent}%` : `Downloading ${percent}%`;
+          labelMaia.textContent = this.lang === 'zh' ? `下载中 ${progress}` : `Downloading ${progress}`;
           labelMaia.className = 'weui-cell__ft';
         }
         if (cdnCard) {
           cdnCard.style.display = 'block';
-          if (cdnStatusLabel) cdnStatusLabel.textContent = this.lang === 'zh' ? `⚡ CDN 传输中 (${percent}%)` : `⚡ Downloading (${percent}%)`;
+          if (cdnStatusLabel) cdnStatusLabel.textContent = this.lang === 'zh' ? `CDN 传输中 (${progress})` : `Downloading (${progress})`;
           if (cdnSpeedLabel) cdnSpeedLabel.textContent = speed ? `${speed} MB/s` : '-- MB/s';
-          if (cdnBarFill) cdnBarFill.style.width = `${percent}%`;
+          if (cdnBarFill) cdnBarFill.style.width = `${percent ?? 0}%`;
           if (cdnBytesLabel) cdnBytesLabel.textContent = `${loadedMB} / ${totalMB} MB`;
         }
       } else if (state === 'error') {

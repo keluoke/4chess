@@ -1,5 +1,6 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { t } from './i18n.js?v=20261121-v127';
+import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { MaiaEloTrend } from './maia-elo-trend.js?v=20261121-v127';
 
 import { engineLines, legalVariation, whiteEvaluation } from '../engine/position-lines.js';
@@ -11,6 +12,8 @@ export function reviewEvaluation(move, after = false) {
   return whiteEvaluation({ scoreCp: move[`${prefix}Cp`], score: move[prefix], isMate: /^[M#]/.test(move[prefix]) }, after ? move.fenAfter : move.fenBefore);
 }
 
+const AUXILIARY_DEPTH = 10;
+
 export class PositionAnalysis {
   constructor(app) {
     this.app = app;
@@ -20,6 +23,10 @@ export class PositionAnalysis {
     this.maiaQueue = [];
     const trend = globalThis.document?.getElementById('maia-elo-trend');
     if (trend) this.eloTrend = new MaiaEloTrend(this, trend, document.getElementById('maia-trend-open'));
+    globalThis.document?.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.cancel();
+      else this.app.updateActivePositionAnalysis();
+    });
   }
 
   cancel() {
@@ -41,20 +48,20 @@ export class PositionAnalysis {
   context() {
     const app = this.app;
     if (app.tempAnalysisFen && !app.isBranching) {
-      const depth = Number(app.el.positionDepth.value);
+      const depth = app.positionMaxDepth;
       return { fen: app.tempAnalysisFen, ply: 0, history: [], depth, elo: app.currentElo, epoch: app.gameEpoch, temp: true, key: `temp|${app.tempAnalysisFen}|${app.currentElo}|${depth}|${app.stockfish.engineKey}|${app.maiaEngine.modelKey}` };
     }
     const ply = app.isBranching ? app.activeBranch.base.ply + app.activeBranch.cursor : app.isReviewingMove ? app.currentPly - 1 : app.currentPly;
     const fen = app.isBranching ? app.branchFen : app.positions[ply]?.fen;
     if (!fen) return null;
     const history = app.isBranching ? (app.branchHistory || []) : app.positions.slice(Math.max(0, ply - 7), ply).map(p => p.fen);
-    const depth = Number(app.el.positionDepth.value);
+    const depth = app.positionMaxDepth;
     return { fen, ply, history, depth, elo: app.currentElo, epoch: app.gameEpoch, key: `${fen}|${app.currentElo}|${depth}|${app.stockfish.engineKey}|${app.maiaEngine.modelKey}|${history.join(';')}` };
   }
 
   refresh({ calculate = true } = {}) {
     this.cancel();
-    if (this.app.scanSourceLocked || this.app.practice?.active) return;
+    if (this.app.scanSourceLocked || this.app.practice?.active || FairPlayGuard.isLiveGameInProgress()) return;
     const ctx = this.context();
     if (!ctx) return;
     const generation = this.generation;
@@ -78,19 +85,24 @@ export class PositionAnalysis {
     this.active = { ctx, entry, generation };
     this.render();
     if (!calculate || (!this.app.moves.length && !this.app.hasAnalysisInput && !this.app.tempAnalysisFen)) return;
-    if (this.app.analyzer.isAnalyzing) return; // Full-game review owns the engine until completion.
-    this.timer = setTimeout(() => { this.pending = this.compute(this.active); }, 140);
+    if (!this.current(this.active)) return;
+    this.timer = setTimeout(() => { void this.compute(this.active); }, 75);
   }
 
   current(snapshot) {
-    return !this.app.scanSourceLocked && !this.app.practice?.active && snapshot && snapshot.generation === this.generation && snapshot.ctx.epoch === this.app.gameEpoch && snapshot.ctx.elo === this.app.currentElo && !this.app.analyzer.isAnalyzing;
+    return !this.app.scanSourceLocked && !this.app.practice?.active && !this.app.checkup?.ownsEngines &&
+      !globalThis.document?.hidden && !FairPlayGuard.isLiveGameInProgress() &&
+      snapshot && snapshot.generation === this.generation && snapshot.ctx.epoch === this.app.gameEpoch &&
+      snapshot.ctx.elo === this.app.currentElo && !this.app.analyzer.isAnalyzing;
   }
 
-  async search(snapshot, fen, depth, multipv = 1) {
+  async search(snapshot, fen, depth, multipv = 1, moveTime = null, onProgress = null) {
     if (!this.current(snapshot)) return null;
     this.searchCount++;
-    try { return await this.app.stockfish.evaluate(fen, depth, depth > 10 ? 12000 : 6000, multipv); }
-    finally { this.searchCount--; }
+    try {
+      const timeout = moveTime ? moveTime + 1000 : 6000;
+      return await this.app.stockfish.evaluate(fen, depth, timeout, multipv, moveTime, onProgress);
+    } finally { this.searchCount--; }
   }
 
   get foregroundBusy() { return this.computingGeneration === this.generation; }
@@ -148,12 +160,27 @@ export class PositionAnalysis {
     };
     const maiaTask = predict();
     try {
-      if (!entry.sf) {
+      if (!entry.sfComplete) {
         await this.app.stockfish.initialize();
         if (!this.current(snapshot)) { await maiaTask; return; }
-        const result = await this.search(snapshot, ctx.fen, ctx.depth, 3);
+        const preview = this.app.reviewPendingResume || this.app.isPlaying;
+        const limit = preview ? Math.min(ctx.depth, 12) : ctx.depth;
+        const moveTime = preview ? 450 : limit === 22 ? 7000 : 4000;
+        const publish = result => {
+          if (!this.current(snapshot) || result?.isBound || !(result?.depth > (entry.sf?.depth || 0))) return;
+          entry.sf = result;
+          this.render();
+        };
+        let latest;
+        const result = await this.search(snapshot, ctx.fen, limit, 3, moveTime, update => {
+          latest = update;
+          if (update.depth >= 8) publish(update);
+        });
         if (!this.current(snapshot)) { await maiaTask; return; }
-        entry.sf = result;
+        publish(latest);
+        // A time limit may stop halfway through a MultiPV iteration.
+        if (result && (!result.lines || result.lines.every(line => line.depth === result.depth && !line.isBound))) publish(result);
+        entry.sfComplete = !!entry.sf && !preview;
         entry.sfFailed = !entry.sf;
         this.app.updateEngineStatus(); this.render();
       }
@@ -173,7 +200,7 @@ export class PositionAnalysis {
         if (!child.getLegalMoves().length) {
           evaluation = child.inCheck() ? { cp: child.turn === 'w' ? -10000 : 10000, isMate: true, text: child.turn === 'w' ? '-M0' : '+M0' } : { cp: 0, isMate: false, text: '0.00' };
         } else {
-          const result = await this.search(snapshot, variation[0].fen, ctx.depth - 1);
+          const result = await this.search(snapshot, variation[0].fen, AUXILIARY_DEPTH);
           evaluation = whiteEvaluation(result, variation[0].fen);
         }
         if (!this.current(snapshot)) return;
@@ -195,7 +222,7 @@ export class PositionAnalysis {
       if (branch.evaluations.has(key)) continue;
       const board = new ChessBoard(node.fen);
       const terminal = !board.getLegalMoves().length;
-      const result = terminal ? null : await this.search(snapshot, node.fen, snapshot.ctx.depth);
+      const result = terminal ? null : await this.search(snapshot, node.fen, AUXILIARY_DEPTH);
       if (!this.current(snapshot) || app.activeBranch !== branch || !app.isBranching) return;
       const evaluation = terminal ? (board.inCheck() ? { cp: board.turn === 'w' ? -10000 : 10000, text: board.turn === 'w' ? '-M0' : '+M0', isMate: true } : { cp: 0, text: '0.00' }) : whiteEvaluation(result, node.fen);
       if (evaluation) branch.evaluations.set(key, { ...evaluation, depth: result?.depth });
@@ -217,7 +244,7 @@ export class PositionAnalysis {
   }
 
   render() {
-    if (this.app.scanSourceLocked || this.app.practice?.active) { this.eloTrend?.reset(); this.clearOverlays(); return; }
+    if (this.app.scanSourceLocked || this.app.practice?.active || FairPlayGuard.isLiveGameInProgress()) { this.eloTrend?.reset(); this.clearOverlays(); return; }
     if (!this.active) { this.eloTrend?.update(null); this.renderGauge(null); this.app.renderPositionHeading?.(null); return; }
     const { ctx, entry } = this.active;
     const board = new ChessBoard(ctx.fen);
@@ -237,6 +264,10 @@ export class PositionAnalysis {
     this.renderLoadingStatuses();
     const engineContainer = document.getElementById('engine-candidate-lines');
     const maiaContainer = document.getElementById('maia-candidate-lines');
+    const focused = document.activeElement;
+    const focusKey = this.renderedGeneration === this.active.generation ? focused?.dataset?.candidateKey : null;
+    const focusContainer = focusKey && focused.closest('#engine-candidate-lines, #maia-candidate-lines');
+    this.renderedGeneration = this.active.generation;
     engineContainer.replaceChildren(); maiaContainer.replaceChildren();
     const placeholder = (container, key) => { const el = document.createElement('div'); el.className = 'candidate-placeholder'; el.textContent = t(key); container.append(el); };
     if (!lines.length) placeholder(engineContainer, terminal ? 'noLegalMoves' : entry.sfFailed ? 'positionUnavailable' : (!app.moves.length && !app.hasAnalysisInput && !app.tempAnalysisFen) ? 'engineNotStarted' : pending);
@@ -248,6 +279,12 @@ export class PositionAnalysis {
       const match = lines.find(line => line.uci === move.uci);
       this.renderRow(maiaContainer, match?.evaluation || entry.maiaEvaluations.get(move.uci), match?.variation || legalVariation(ctx.fen, [move.uci]), app.settings.probability && Number.isFinite(move.prob) ? `${move.prob.toFixed(1)}%` : null, 'gold');
     });
+    if (focusContainer) {
+      const buttons = Array.from(focusContainer.querySelectorAll('[data-candidate-key]'));
+      const sameLine = focusKey.split(' ')[0];
+      (buttons.find(button => button.dataset.candidateKey === focusKey) ||
+        buttons.find(button => button.dataset.candidateKey === sameLine) || buttons[0])?.focus({ preventScroll: true });
+    }
     this.eloTrend?.update(this.current(this.active) && (app.moves.length || app.hasAnalysisInput || app.tempAnalysisFen) ? this.active : null, moves, lines);
     this.renderOverlays(lines, moves);
   }
@@ -259,8 +296,11 @@ export class PositionAnalysis {
     const sfStatus = entry.sf ? t('candidateDepth', { depth: entry.sf.depth }) : entry.sfFailed ? t('engineFailed') : sfLoading ? (app.stockfish.downloadProgress ? t('modelDownloading', { percent: app.stockfish.downloadProgress.percent }) : t('engineStarting')) : t(app.stockfish.isReady ? 'engineReady' : 'engineNotStarted');
     document.getElementById('candidate-engine-status').textContent = `${app.stockfish.variant === 'standard' ? 'SF19' : 'SF19 Lite'} · ${sfStatus}`;
     const progress = app.maiaEngine.status?.maia;
-    const maiaStatus = entry.prediction?.moves?.length ? t('probLabel') : entry.maiaFailed ? t('engineFailed') : app.maiaEngine.isLoading ? (progress?.state === 'downloading' ? t('modelDownloading', { percent: progress.percent || 0 }) : t('engineStarting')) : t(app.maiaEngine.isReady ? 'engineReady' : 'engineNotStarted');
-    document.getElementById('candidate-maia-status').textContent = `${app.maiaEngine.modelName || 'Maia-3'} · ${ctx.elo} · ${maiaStatus}`;
+    const download = progress?.percent == null ? t('modelDownloadingBytes', { size: progress?.loadedMB || 0 }) : t('modelDownloading', { percent: progress.percent });
+    const maiaStatus = entry.prediction?.moves?.length ? t('probLabel') : entry.maiaFailed ? t('engineFailed') : app.maiaEngine.isLoading ? (progress?.state === 'downloading' ? download : t('engineStarting')) : t(app.maiaEngine.isReady ? 'engineReady' : 'engineNotStarted');
+    const maiaLabel = document.getElementById('candidate-maia-status');
+    maiaLabel.title = progress?.error || '';
+    maiaLabel.textContent = `${app.maiaEngine.modelName || 'Maia-3'} · ${ctx.elo} · ${maiaStatus}`;
   }
 
   renderRow(container, evaluation, variation, probability, color) {
@@ -270,13 +310,14 @@ export class PositionAnalysis {
     const moves = document.createElement('div'); moves.className = 'candidate-variation';
     variation.forEach((move, index) => {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'candidate-move'; button.textContent = move.label;
+      button.dataset.candidateKey = variation.slice(0, index + 1).map(item => item.uci).join(' ');
       button.title = t('previewCandidate', { move: move.san });
       button.onclick = () => this.app.previewCandidate(this.active.ctx, variation.slice(0, index + 1));
       moves.append(button);
     });
     moves.onmouseenter = () => {
       const enabled = color === 'gold' ? this.app.settings.maiaArrows : this.app.settings.sfArrows;
-      if (!enabled || this.app.scanSourceLocked || this.app.practice?.active) return;
+      if (!enabled || this.app.scanSourceLocked || this.app.practice?.active || FairPlayGuard.isLiveGameInProgress()) return;
       this.app.boardUI.setArrows([{ from: variation[0].uci.slice(0, 2), to: variation[0].uci.slice(2, 4), color, role: color === 'gold' ? 'maia' : 'sf' }]);
     };
     moves.onmouseleave = () => this.renderOverlays();
@@ -288,7 +329,7 @@ export class PositionAnalysis {
 
   renderOverlays(lines, moves) {
     this.clearOverlays();
-    if (this.app.scanSourceLocked || this.app.practice?.active) return;
+    if (this.app.scanSourceLocked || this.app.practice?.active || FairPlayGuard.isLiveGameInProgress()) return;
     if (!this.active) return;
     const { ctx, entry } = this.active;
     lines ||= engineLines(entry.sf, ctx.fen);

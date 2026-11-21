@@ -77,6 +77,8 @@ class AnalysisStudioApp {
     this.currentElo = preferences.defaultElo;
     this.engineVariant = preferences.stockfishVariant;
     this.modelVariant = preferences.maiaVariant;
+    this.reviewMode = preferences.studio_review_mode;
+    this.positionMaxDepth = preferences.studio_max_depth;
     if (location.protocol === 'chrome-extension:') this.engineVariant = 'lite';
     this.moves = [];
     this.positions = [];
@@ -179,6 +181,7 @@ class AnalysisStudioApp {
       fileInput: document.getElementById('pgn-file-input'),
       btnUploadFile: document.getElementById('btn-upload-file'),
       positionDepth: document.getElementById('position-depth'),
+      reviewMode: document.getElementById('review-mode'),
       settingsDialog: document.getElementById('review-settings'),
       btnSettings: document.getElementById('btn-settings')
     };
@@ -279,7 +282,10 @@ class AnalysisStudioApp {
       const text = document.getElementById(`text-status-${name}`);
       if (text) {
         const progress = name === 'maia' ? this.maiaEngine?.status?.maia : this.stockfish?.downloadProgress;
-        text.textContent = loading && progress && (name === 'sf' || progress.state === 'downloading') ? t('modelDownloading', { percent: progress.percent || 0 }) : t(status);
+        text.title = failed ? this.maiaEngine?.status?.[name === 'maia' ? 'maia' : 'stockfish']?.error || '' : '';
+        text.textContent = loading && progress && (name === 'sf' || progress.state === 'downloading')
+          ? (name === 'maia' && progress.percent == null ? t('modelDownloadingBytes', { size: progress.loadedMB }) : t('modelDownloading', { percent: progress.percent || 0 }))
+          : t(status);
       }
     }
     this.positionAnalysis?.renderLoadingStatuses();
@@ -358,7 +364,10 @@ class AnalysisStudioApp {
         }
       });
     }
-    this.el.btnPlay.addEventListener('click', () => this.toggleAutoPlay());
+    this.el.btnPlay.addEventListener('click', () => {
+      this.toggleAutoPlay();
+      this.updateActivePositionAnalysis();
+    });
     this.el.btnExitBranch.addEventListener('click', () => this.goToPly(this.currentPly));
 
     this.el.btnSettings.addEventListener('click', () => {
@@ -375,7 +384,8 @@ class AnalysisStudioApp {
       }
     });
     this.el.settingsDialog.addEventListener('close', () => this.el.btnSettings.focus());
-    this.el.positionDepth.addEventListener('change', () => { savePreferences({ studio_depth: Number(this.el.positionDepth.value) }); this.positionAnalysis.refresh(); });
+    this.el.positionDepth.addEventListener('change', () => savePreferences({ studio_max_depth: Number(this.el.positionDepth.value) }));
+    this.el.reviewMode.addEventListener('change', () => savePreferences({ studio_review_mode: this.el.reviewMode.value }));
     for (const [id, , preference] of POSITION_TOGGLES) {
       document.getElementById(id).addEventListener('change', event => {
         savePreferences({ [preference]: event.target.checked });
@@ -550,6 +560,7 @@ class AnalysisStudioApp {
       } else if ((e.key === ' ' || e.code === 'Space') && !document.activeElement?.closest('button, a, summary')) {
         e.preventDefault();
         this.toggleAutoPlay();
+        this.updateActivePositionAnalysis();
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         this.flipBoard();
@@ -693,6 +704,7 @@ class AnalysisStudioApp {
           this.navigateStudy(1);
         } else {
           this.toggleAutoPlay();
+          this.updateActivePositionAnalysis();
         }
       }, 1200);
     }
@@ -1282,6 +1294,7 @@ class AnalysisStudioApp {
 
     if (openOverview) this.reviewOverview.requestAutoOpen();
     const compatibleReview = cachedReview && GameAnalyzer.isValidReviewCache(cachedReview) &&
+      cachedReview.reviewMode === this.reviewMode &&
       (cachedReview.engineKey || 'sf19lite') === this.stockfish.engineKey &&
       (cachedReview.modelKey || 'maia3-5m') === this.maiaEngine.modelKey &&
       (cachedReview.elo == null || cachedReview.elo === this.currentElo);
@@ -1289,7 +1302,7 @@ class AnalysisStudioApp {
       this.applyReviewResult(cachedReview);
       if (!cachedReview.engineOnly && cachedReview.positionEvaluations) {
         const epoch = this.gameEpoch;
-        this.analyzer.analyzeGame(this.moves, { engineOnly: true, depth: cachedReview.depth, baseReview: cachedReview }).then(core => {
+        this.analyzer.analyzeGame(this.moves, { engineOnly: true, depth: cachedReview.depth, reviewMode: this.reviewMode, baseReview: cachedReview }).then(core => {
           if (this.gameEpoch === epoch && core) { this.coreReview = core; this.intuitionReview.render(); }
         }).catch(error => console.warn('[Studio] Cached score restore failed:', error));
       }
@@ -1346,7 +1359,7 @@ class AnalysisStudioApp {
   }
 
   getReviewKey() {
-    return GameAnalyzer.getGameKey(this.moves, { depth: GameAnalyzer.DEFAULT_DEPTH, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
+    return GameAnalyzer.getGameKey(this.moves, { depth: GameAnalyzer.DEFAULT_DEPTH, reviewMode: this.reviewMode, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
   }
 
   changeEngineVersions({ persist = true, prioritizePosition = false } = {}) {
@@ -1354,7 +1367,7 @@ class AnalysisStudioApp {
     const model = document.getElementById('intuition-edition').value;
     if (engine === this.engineVariant && model === this.modelVariant) return;
     const engineChanged = engine !== this.engineVariant;
-    const retainedCore = !engineChanged ? this.coreReview : null;
+    const retainedCore = !engineChanged && this.coreReview?.reviewMode === this.reviewMode ? this.coreReview : null;
     if (this.isPlaying) this.toggleAutoPlay();
     this.consequencePlayer?.stop();
     this.positionAnalysis.cancel();
@@ -1561,6 +1574,7 @@ class AnalysisStudioApp {
       this.positionAnalysis.refresh({ calculate: false });
       const result = await this.analyzer.analyzeGame(this.moves, {
         depth: GameAnalyzer.DEFAULT_DEPTH,
+        reviewMode: this.reviewMode,
         engineOnly: true,
         elo: targetElo,
         forceRefresh,
@@ -1573,6 +1587,10 @@ class AnalysisStudioApp {
           const detailEl = document.getElementById('blunder-loading-detail');
           if (prog.phase === 'evaluating') {
             const txt = t('evaluatingEngine', { current: prog.current, total: prog.total, move: prog.currentMove || '' });
+            this.el.phaseText.textContent = txt;
+            if (detailEl) detailEl.textContent = txt;
+          } else if (prog.phase === 'scoring') {
+            const txt = t('reviewVerifyingScore', { current: prog.current, total: prog.total });
             this.el.phaseText.textContent = txt;
             if (detailEl) detailEl.textContent = txt;
           } else if (prog.phase === 'intuition') {
@@ -1645,9 +1663,13 @@ class AnalysisStudioApp {
     }
     const depth = result.depthMin == null ? t('accuracyTargetDepth', { depth: result.depth })
       : `D${result.depthMin}${result.depthMax > result.depthMin ? '–' + result.depthMax : ''}`;
-    document.getElementById('accuracy-analysis-detail').textContent = t('accuracyAnalysisDetail', {
+    const verified = result.scoreVerifications || [];
+    const detail = t('accuracyAnalysisDetail', {
       engine: result.engineKey?.startsWith('sf19standard') ? 'SF19 Standard' : 'SF19 Lite', depth
     });
+    document.getElementById('accuracy-analysis-detail').textContent = verified.length
+      ? detail + ' · ' + t('accuracyVerifiedDepth', { count: verified.length, depth: Math.max(...verified.map(move => move.depth)) })
+      : detail;
   }
 
   applyReviewResult(result, { refreshPosition = true } = {}) {
@@ -2174,14 +2196,18 @@ class AnalysisStudioApp {
       const versionsChanged = engine !== this.engineVariant || prefs.maiaVariant !== this.modelVariant;
       const effectiveElo = this.sessionElo?.value ?? prefs.defaultElo;
       const eloChanged = this.currentElo !== effectiveElo;
-      const calculate = eloChanged || this.settings.heatmap !== prefs.showHeatmap || Number(this.el.positionDepth.value) !== prefs.studio_depth;
+      const reviewModeChanged = this.reviewMode !== prefs.studio_review_mode;
+      const calculate = eloChanged || this.settings.heatmap !== prefs.showHeatmap || this.positionMaxDepth !== prefs.studio_max_depth;
+      this.reviewMode = prefs.studio_review_mode;
+      this.el.reviewMode.value = this.reviewMode;
       if (getLang() !== prefs.maia3_lang) setLanguage(prefs.maia3_lang);
       this.setSessionElo(effectiveElo);
       for (const [id, key, preference] of POSITION_TOGGLES) {
         this.settings[key] = prefs[preference];
         document.getElementById(id).checked = prefs[preference];
       }
-      this.el.positionDepth.value = String(prefs.studio_depth);
+      this.positionMaxDepth = prefs.studio_max_depth;
+      this.el.positionDepth.value = String(this.positionMaxDepth);
       const orientation = this.sessionOrientation || prefs.studio_orientation;
       this.boardUI.setOrientation(orientation);
       document.getElementById('setting-orientation').value = orientation;
@@ -2191,6 +2217,9 @@ class AnalysisStudioApp {
       if (versionsChanged) {
         document.getElementById('engine-edition').value = engine; document.getElementById('intuition-edition').value = prefs.maiaVariant;
         this.changeEngineVersions({ persist: false });
+      } else if (reviewModeChanged && this.moves.length) {
+        this.currentGameKey = this.getReviewKey();
+        this.runFullReview();
       } else if (eloChanged) {
         this.intuitionReview.dispose();
         this.currentGameKey = this.getReviewKey();
@@ -2280,7 +2309,7 @@ class AnalysisStudioApp {
     }
   }
 
-  branchEvaluationKey(fen, depth = Number(this.el.positionDepth.value)) {
+  branchEvaluationKey(fen, depth = this.positionMaxDepth) {
     return `${this.stockfish.engineKey}|${depth}|${fen}`;
   }
 
@@ -2390,8 +2419,7 @@ class AnalysisStudioApp {
   scheduleReviewResume() {
     if (!this.reviewPendingResume || this.isBranching || this.positionAnalysis.eloTrend?.isOpen || this.checkup?.ownsEngines) return;
     clearTimeout(this.resumeReviewTimer);
-    this.resumeReviewTimer = setTimeout(async () => {
-      await this.positionAnalysis.pending;
+    this.resumeReviewTimer = setTimeout(() => {
       if (this.reviewPendingResume && !this.isBranching && !this.fullReviewRunning && !this.positionAnalysis.eloTrend?.isOpen && !this.checkup?.ownsEngines) this.runFullReview();
     }, 1800);
   }

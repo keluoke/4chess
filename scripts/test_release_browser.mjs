@@ -162,7 +162,7 @@ try {
  await trendPage.evaluate(()=>window.__maiaStudioApp.positionAnalysis.render());
  assert.equal(await maiaMove.getAttribute('aria-pressed'),'true');
  assert.equal(await trendPage.evaluate(()=>document.activeElement.dataset.uci),'e2e4');
- assert.match(await trend.locator('.maia-trend-sources').innerText(),/Move probabilities · Maia-3 5M\s+Top move and Δ scores · Stockfish 19 Lite · Root search D10/);
+ assert.match(await trend.locator('.maia-trend-sources').innerText(),/Move probabilities · Maia-3 5M\s+Top move and Δ scores · Stockfish 19 Lite · Root search D20/);
  await trend.getByRole('button',{name:'Sampled values',exact:true}).click();
  assert.equal(await trend.locator('table tbody tr').count(),6);
  assert.equal(await trend.locator('.maia-trend-chart').isVisible(),false);
@@ -236,7 +236,7 @@ try {
  await trendPage.waitForFunction(()=>trendCalls.some(call=>call.model==='23m'&&call.rating===1900));
  await trendPage.evaluate(()=>{window.holdRating=null;});
  await trendPage.waitForFunction(()=>document.querySelector('.maia-trend-status')?.textContent.includes('6 of 6'));
- assert.match(await trend.locator('.maia-trend-sources').innerText(),/Maia-3 23M\s+Top move and Δ scores · Stockfish 19 Standard · Root search D9/);
+ assert.match(await trend.locator('.maia-trend-sources').innerText(),/Maia-3 23M\s+Top move and Δ scores · Stockfish 19 Standard · Root search D11/);
  assert.deepEqual(await trendPage.evaluate(()=>trendCalls.filter(call=>call.model==='23m').map(({fen,rating})=>[fen,rating]).sort((a,b)=>a[1]-b[1])),
   [600,1000,1400,1800,1900,2200,2600].map(rating=>[priorFen,rating]));
  assert.equal(await trendPage.locator('#intuition-edition').inputValue(),'23m');

@@ -460,8 +460,11 @@ export async function initMaiaExtension() {
     });
   };
 
+  let preferenceRead = 0;
   async function applyEnginePreferences() {
+    const revision = ++preferenceRead;
     const next = await readEnginePreferences();
+    if (revision !== preferenceRead) return;
     const changed = next.maiaVariant !== preferences.maiaVariant || next.cloudflareCdnUrl !== preferences.cloudflareCdnUrl;
     preferences = next;
     panel.setEnginePreferences(next);
@@ -469,9 +472,9 @@ export async function initMaiaExtension() {
     predictionEpoch++;
     analyzer.cancel();
     overlay.clear();
+    const stockfish = engine.stockfishInBrowser;
     engine.dispose();
-    engine.stockfishInBrowser.reset();
-    const fresh = new MaiaEngine(status => { if (engine === fresh) panel.updateEngineStatus(status); }, null, { variant: next.maiaVariant });
+    const fresh = new MaiaEngine(status => { if (engine === fresh) panel.updateEngineStatus(status); }, stockfish, { variant: next.maiaVariant });
     engine = fresh;
     engine.setElo(panel.currentElo);
     analyzer = new GameAnalyzer(engine.stockfishInBrowser, engine);

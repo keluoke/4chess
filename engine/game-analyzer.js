@@ -446,11 +446,13 @@ export class GameAnalyzer {
   // Inspired by Lichess's documented volatility + harmonic aggregation:
   // https://lichess.org/page/accuracy . Diverge retains its own per-move mapping.
   // Use one White-perspective timeline, including forced moves, for volatility.
-  static accuracyWeights(whiteScores) {
+  static accuracyWeights(whiteScores, verifiedScores = new Map()) {
     const size = Math.max(2, Math.min(8, Math.floor((whiteScores.length - 1) / 10)));
     return whiteScores.slice(1).map((_, index) => {
       const start = Math.max(0, index + 2 - size);
       const window = whiteScores.slice(start, start + size);
+      const verified = verifiedScores.get(index);
+      if (verified) window.splice(index - start, 2, ...verified);
       if (window.some(q => q === null || !Number.isFinite(q))) return 0.5;
       const mean = window.reduce((sum, q) => sum + q, 0) / window.length;
       const deviation = Math.sqrt(window.reduce((sum, q) => sum + (q - mean) ** 2, 0) / window.length);
@@ -493,7 +495,8 @@ export class GameAnalyzer {
     const { depth = GameAnalyzer.DEFAULT_DEPTH, elo = 1900, engineKey = 'sf19lite', modelKey = 'maia3-5m' } = options;
     const startFen = moves?.startFen || 'start';
     const moveSans = (moves || []).map(m => m.san || '').join(',');
-    const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|${engineKey}|${modelKey}`);
+    const policy = options.reviewMode ? '|adaptive-v1:' + options.reviewMode : '';
+    const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|${engineKey}|${modelKey}${policy}`);
 
     if (typeof window !== 'undefined') {
       const href = window.location.href;
@@ -620,6 +623,7 @@ export class GameAnalyzer {
         engineOnly: !!result.engineOnly,
         engineGameKey: result.engineGameKey,
         positionEvaluations: result.positionEvaluations,
+        ...(result.reviewMode ? { reviewMode: result.reviewMode, scoreVerifications: result.scoreVerifications } : {}),
         isPartial: !!result.isPartial,
         blundersCount: result.blundersCount,
         mistakesCount: result.mistakesCount,
@@ -688,12 +692,12 @@ export class GameAnalyzer {
     this.isCancelled = false;
     const invalid = () => this.isCancelled || this._currentRunId !== runId || FairPlayGuard.isLiveGameInProgress();
     let verificationStartup;
-    const evaluate = async (fen, targetDepth, timeoutMs, multipv, budget = null) => {
+    const evaluate = async (fen, targetDepth, timeoutMs, multipv, budget = null, moveTime = null) => {
       if (invalid()) return null;
       if (options.waitForTurn) await options.waitForTurn(invalid);
       if (invalid()) return null;
       if (!budget) {
-        const result = await this.stockfish.evaluate(fen, targetDepth, timeoutMs, multipv);
+        const result = await this.stockfish.evaluate(fen, targetDepth, timeoutMs, multipv, moveTime);
         return invalid() ? null : result;
       }
       // Waiting for foreground work or first-time engine initialization is outside the search budget.
@@ -719,11 +723,12 @@ export class GameAnalyzer {
       onProgress = null,
       engineOnly = false,
       baseReview = null,
-      waitForTurn = null
+      waitForTurn = null,
+      reviewMode = null
     } = options;
 
-    const engineGameKey = GameAnalyzer.getGameKey(moves, { depth, elo: 0, engineKey: this.stockfish.engineKey, modelKey: 'engine-only' });
-    const cacheKey = engineOnly ? engineGameKey : GameAnalyzer.getGameKey(moves, { depth, elo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
+    const engineGameKey = GameAnalyzer.getGameKey(moves, { depth, elo: 0, engineKey: this.stockfish.engineKey, modelKey: 'engine-only', reviewMode });
+    const cacheKey = engineOnly ? engineGameKey : GameAnalyzer.getGameKey(moves, { depth, elo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey, reviewMode });
 
     // 1. Instant Cache Hit Check (0ms response)
     if (!forceRefresh && cacheKey) {
@@ -733,7 +738,8 @@ export class GameAnalyzer {
       // report, even when the game, depth and selected model are identical.
       const sameBase = !baseReview || engineOnly || (
         cached?.engineGameKey === baseReview.engineGameKey &&
-        JSON.stringify(cached?.positionEvaluations) === JSON.stringify(baseReview.positionEvaluations)
+        JSON.stringify(cached?.positionEvaluations) === JSON.stringify(baseReview.positionEvaluations) &&
+        JSON.stringify(cached?.scoreVerifications) === JSON.stringify(baseReview.scoreVerifications)
       );
       if (cached && sameBase) {
         this.lastReviewResult = cached;
@@ -779,6 +785,7 @@ export class GameAnalyzer {
         }
       }
 
+      const scanPercent = engineOnly ? (reviewMode ? 85 : 100) : 50;
       // Step 1: Evaluate each position with Stockfish 19
       for (let i = 0; i < totalPositions; i++) {
         if (invalid()) {
@@ -798,13 +805,13 @@ export class GameAnalyzer {
             phase: 'evaluating',
             current: i + 1,
             total: totalPositions,
-            percent: Math.min(engineOnly ? 100 : 50, Math.max(1, Math.round(((i + 1) / totalPositions) * (engineOnly ? 100 : 50)))),
+            percent: Math.max(1, Math.round((i + 1) / totalPositions * scanPercent)),
             currentMove: positions[i].san
           });
         }
 
         // Full-game evaluation with the requested depth, bounded time and one principal variation.
-        let evalRes = reusable ? reusable[i] : await evaluate(positions[i].fen, depth, 3500, 1);
+        let evalRes = reusable ? reusable[i] : await evaluate(positions[i].fen, depth, 3500, 1, null, reviewMode ? 3200 : null);
         if (!Number.isFinite(evalRes?.scoreCp)) evalRes = null;
         // A cancelled review must not stop a newer foreground position search.
         if (invalid()) return null;
@@ -833,23 +840,13 @@ export class GameAnalyzer {
       }
 
       // Step 2: Compute centipawn loss, legal moves, opening book lookup, and move accuracy per move
-      let blundersCount = 0;
-      let mistakesCount = 0;
-      let inaccuraciesCount = 0;
-      let totalLossWhite = 0;
-      let countWhite = 0;
-      let totalLossBlack = 0;
-      let countBlack = 0;
-      let maxLossWhite = 0;
-      let maxLossBlack = 0;
-
       const analyzedMoves = [];
 
-      const accuracyWeights = GameAnalyzer.accuracyWeights(evals.map((evaluation, i) => {
+      const whiteScores = evals.map((evaluation, i) => {
         if (!evaluation) return null;
         const whiteCp = positions[i].fen.split(' ')[1] === 'w' ? evaluation.scoreCp : -evaluation.scoreCp;
         return GameAnalyzer.winScore(whiteCp);
-      }));
+      });
 
       for (let i = 1; i < positions.length; i++) {
         const posBefore = positions[i - 1];
@@ -887,20 +884,7 @@ export class GameAnalyzer {
             lossCp = Math.max(0, cpBefore + cpAfter);
           }
 
-          if (turn === 'w') {
-            totalLossWhite += lossCp;
-            countWhite++;
-            if (lossCp > maxLossWhite) maxLossWhite = lossCp;
-          } else {
-            totalLossBlack += lossCp;
-            countBlack++;
-            if (lossCp > maxLossBlack) maxLossBlack = lossCp;
-          }
-
           severity = errorSeverity(lossCp);
-          if (severity === 'blunder') blundersCount++;
-          else if (severity === 'mistake') mistakesCount++;
-          else if (severity === 'inaccuracy') inaccuraciesCount++;
         } else {
           severity = 'unknown';
         }
@@ -932,7 +916,6 @@ export class GameAnalyzer {
           lossPawns: `-${lossPawns}`,
           severity,
           accuracy: moveAccuracy,
-          accuracyWeight: accuracyWeights[i - 1],
           expectedScoreLoss,
           legalMovesCount,
           isOnlyLegalMove,
@@ -968,6 +951,71 @@ export class GameAnalyzer {
           _predMoves: []
         });
       }
+
+      const sameDecisiveAdvantage = move => {
+        const before = move.evalBeforeCp, after = -move.evalAfterCp;
+        return Math.abs(before) > 600 && Math.abs(after) > 600 && Math.sign(before) === Math.sign(after);
+      };
+      const scoreVerifications = reusable ? (baseReview.scoreVerifications || []) : [];
+      if (reviewMode && !reusable) {
+        const deep = reviewMode === 'deep';
+        const depthCap = deep ? 18 : 16;
+        const minimum = depthCap - 2;
+        const budget = { remaining: deep ? 10000 : 2200 };
+        const candidates = analyzedMoves.filter(move => {
+          if (move.isOnlyLegalMove || move.isBookMove || move.expectedScoreLoss == null) return false;
+          return !sameDecisiveAdvantage(move) && (move.expectedScoreLoss >= 6 || (move.evalBeforeIsMate && !move.evalAfterIsMate));
+        }).sort((a, b) => b.expectedScoreLoss - a.expectedScoreLoss || a.ply - b.ply).slice(0, deep ? 12 : 5);
+
+        for (const [index, move] of candidates.entries()) {
+          if (invalid()) return null;
+          if (budget.remaining < 180) break;
+          onProgress?.({ phase: 'scoring', current: index + 1, total: candidates.length,
+            percent: scanPercent + Math.floor((engineOnly ? 14 : 0) * index / candidates.length) });
+          const perMove = Math.min(budget.remaining, deep ? 2700 : 950);
+          const started = budget.remaining;
+          const root = await evaluate(move.fenBefore, depthCap, Math.floor(perMove / 2), 1, budget);
+          if (invalid()) return null;
+          if (!root?.bestMove?.uci || !Number.isFinite(root.scoreCp) || !(root.depth >= minimum) || root.isBound ||
+              (root.pv?.length && root.pv[0] !== root.bestMove.uci)) continue;
+          const isBest = root.bestMove.uci === move.uci;
+          const after = isBest
+            ? { scoreCp: -root.scoreCp, isMate: root.isMate }
+            : await evaluate(move.fenAfter, root.depth - 1, perMove - (started - budget.remaining), 1, budget);
+          if (invalid()) return null;
+          if (!Number.isFinite(after?.scoreCp) || after.isBound ||
+              (!isBest && !after.terminal && !(after.depth >= root.depth - 1))) continue;
+          scoreVerifications.push({ ply: move.ply, depth: root.depth, best: root.bestMove,
+            beforeCp: root.scoreCp, afterCp: after.scoreCp, beforeMate: root.isMate, afterMate: after.isMate });
+        }
+      }
+
+      // Use the verified pair for this move. The chart retains one shared score per position.
+      const verifiedWhiteScores = new Map();
+      const scoreText = (cp, mate) => mate
+        ? 'M' + (cp > 0 ? '+' : '-') + Math.round((10000 - Math.abs(cp)) / 100)
+        : (cp > 0 ? '+' : '') + (cp / 100).toFixed(2);
+      const clamp = cp => Math.max(-1000, Math.min(1000, cp));
+      for (const verification of scoreVerifications) {
+        const move = analyzedMoves[verification.ply - 1];
+        if (!move) continue;
+        const { beforeCp, afterCp, beforeMate, afterMate, best } = verification;
+        const isBest = move.uci === best.uci;
+        const lossCp = isBest ? 0 : Math.max(0, clamp(beforeCp) + clamp(afterCp));
+        const quality = GameAnalyzer.moveAccuracy(beforeCp, -afterCp, isBest);
+        Object.assign(move, {
+          bestMove: best, bestUci: best.uci, bestSan: best.san,
+          lossCp, lossPawns: '-' + (lossCp / 100).toFixed(2), severity: errorSeverity(lossCp),
+          accuracy: quality.accuracy, expectedScoreLoss: Math.round(quality.expectedScoreLoss * 10) / 10,
+          evalBefore: scoreText(beforeCp, beforeMate), evalAfter: scoreText(afterCp, afterMate),
+          evalBeforeCp: beforeCp, evalAfterCp: afterCp, evalBeforeIsMate: !!beforeMate, evalAfterIsMate: !!afterMate,
+          scoreVerificationDepth: verification.depth
+        });
+        const sign = move.turn === 'w' ? 1 : -1;
+        verifiedWhiteScores.set(verification.ply - 1, [expectedScore(sign * beforeCp), expectedScore(-sign * afterCp)]);
+      }
+      const weights = GameAnalyzer.accuracyWeights(whiteScores, verifiedWhiteScores);
+      analyzedMoves.forEach((move, i) => { move.accuracyWeight = weights[i]; });
 
       // Step 3: Maia intuition prediction for ALL moves
       // Guarantees comprehensive human intuition modeling across the whole game
@@ -1047,15 +1095,20 @@ export class GameAnalyzer {
       }
 
       // Step 4: Compare the two root lines and look up only the missing alternatives.
-      const candidateList = analyzedMoves.filter(move => move.isBeyondIntuitionCandidate || move.isHumanTrapCandidate);
-      const minimumDepth = Math.max(12, depth + 2);
-      const targetDepth = Math.max(12, depth + 3);
+      const candidateList = analyzedMoves.filter(move =>
+        (move.isBeyondIntuitionCandidate || move.isHumanTrapCandidate) && (!reviewMode || !sameDecisiveAdvantage(move)));
+      const targetDepth = reviewMode === 'deep' ? 18 : reviewMode === 'quick' ? 16 : Math.max(12, depth + 3);
+      const minimumDepth = reviewMode ? targetDepth - 2 : Math.max(12, depth + 2);
+      const intuitionBudget = { remaining: reviewMode === 'deep' ? 16000 : reviewMode === 'quick' ? 8000 : Infinity };
+      if (reviewMode) candidateList.sort((a, b) => b.expectedScoreLoss - a.expectedScoreLoss || a.ply - b.ply);
       for (const [index, move] of candidateList.entries()) {
         if (invalid()) return null;
+        if (intuitionBudget.remaining < 180) break;
         onProgress?.({ phase: 'verifying', current: index + 1, total: candidateList.length, percent: 95 });
         move.divergenceStatus = 'unconfirmed';
+        const allocated = Math.min(6000, intuitionBudget.remaining);
+        const budget = { remaining: allocated };
         try {
-          const budget = { remaining: 6000 };
           const root = await evaluate(move.fenBefore, targetDepth, 4200, 2, budget);
           move.verificationDepth = root?.depth ?? 0;
           if (!root?.bestMove?.uci || !Number.isFinite(root.scoreCp) || !(root.depth >= minimumDepth) || root.isBound ||
@@ -1135,6 +1188,8 @@ export class GameAnalyzer {
         } catch (err) {
           console.warn('[GameAnalyzer] Deep verification error on ply', move.ply, err);
           move.divergenceStatus = 'unconfirmed';
+        } finally {
+          intuitionBudget.remaining -= allocated - budget.remaining;
         }
       }
 
@@ -1183,11 +1238,16 @@ export class GameAnalyzer {
         return null;
       }
 
+      const lossesFor = turn => analyzedMoves.filter(move => move.turn === turn && move.severity !== 'unknown').map(move => move.lossCp);
+      const whiteLosses = lossesFor('w'), blackLosses = lossesFor('b');
+      const acpl = losses => losses.length ? Math.round(losses.reduce((sum, loss) => sum + loss, 0) / losses.length) : 0;
+      const countSeverity = severity => analyzedMoves.filter(move => move.severity === severity).length;
       const depths = evals.filter(e => e && !e.terminal && Number.isFinite(e.depth)).map(e => e.depth);
       const result = {
         engineOnly,
         engineGameKey,
         positionEvaluations: evals,
+        ...(reviewMode ? { reviewMode, scoreVerifications } : {}),
         depthMin: depths.length ? Math.min(...depths) : null,
         depthMax: depths.length ? Math.max(...depths) : null,
         schemaVersion: GameAnalyzer.SCHEMA_VERSION,
@@ -1203,9 +1263,9 @@ export class GameAnalyzer {
         stoppedAtPly: positions.stoppedAtPly || null,
         unparsedSan: positions.unparsedSan || null,
         rawTotalMoves: moves.length,
-        blundersCount,
-        mistakesCount,
-        inaccuraciesCount,
+        blundersCount: countSeverity('blunder'),
+        mistakesCount: countSeverity('mistake'),
+        inaccuraciesCount: countSeverity('inaccuracy'),
         beyondIntuitionCount,
         intuitionTrapsCount,
         beyondWhiteCount,
@@ -1219,10 +1279,10 @@ export class GameAnalyzer {
         coverageRateBlack,
         postBookAccuracyWhite,
         postBookAccuracyBlack,
-        maxLossWhite: (maxLossWhite / 100).toFixed(2),
-        maxLossBlack: (maxLossBlack / 100).toFixed(2),
-        acplWhite: countWhite > 0 ? Math.round(totalLossWhite / countWhite) : 0,
-        acplBlack: countBlack > 0 ? Math.round(totalLossBlack / countBlack) : 0,
+        maxLossWhite: (Math.max(0, ...whiteLosses) / 100).toFixed(2),
+        maxLossBlack: (Math.max(0, ...blackLosses) / 100).toFixed(2),
+        acplWhite: acpl(whiteLosses),
+        acplBlack: acpl(blackLosses),
         allMoves: analyzedMoves,
         keyMoments
       };

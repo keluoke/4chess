@@ -48,44 +48,59 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
   const res = await fetch(fetchUrl);
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
-  const contentLength = parseInt(res.headers.get('content-length') || '29329712', 10);
+  const length = Number(res.headers.get('content-length'));
+  const contentLength = !res.headers.get('content-encoding') && Number.isSafeInteger(length) && length > 0 ? length : null;
 
   if (res.body && res.body.getReader) {
     try {
       const reader = res.body.getReader();
       const chunks = [];
+      // The CDN sends a length for the large models. Write into one buffer to
+      // avoid holding all chunks and a second full-size allocation at once.
+      let target = contentLength && contentLength <= 512 * 1048576 ? new Uint8Array(contentLength) : null;
       let receivedLength = 0;
       const startTime = performance.now();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        if (target && receivedLength + value.length > target.length) {
+          chunks.push(target.subarray(0, receivedLength));
+          target = null;
+        }
+        if (target) target.set(value, receivedLength);
+        else chunks.push(value);
         receivedLength += value.length;
 
         const elapsedSec = (performance.now() - startTime) / 1000;
         const speedMBps = elapsedSec > 0.1 ? ((receivedLength / (1024 * 1024)) / elapsedSec).toFixed(1) : '...';
-        const percent = Math.min(100, Math.round((receivedLength / contentLength) * 100));
+        const percent = contentLength ? Math.min(99, Math.floor(receivedLength / contentLength * 100)) : null;
 
         if (onProgress) {
           onProgress({
             percent,
             speedMBps,
             receivedMB: (receivedLength / (1024 * 1024)).toFixed(1),
-            totalMB: (contentLength / (1024 * 1024)).toFixed(1),
-            status: `Cloudflare CDN 高速下载 (${percent}%)`,
+            totalMB: contentLength ? (contentLength / 1048576).toFixed(1) : '--',
             source: 'cdn'
           });
         }
       }
 
-      const allBytes = new Uint8Array(receivedLength);
-      let pos = 0;
-      for (const chunk of chunks) {
-        allBytes.set(chunk, pos);
-        pos += chunk.length;
+      if (target && receivedLength === target.length) {
+        arrayBuffer = target.buffer;
+      } else if (target) {
+        // Refuse a truncated weight even if its header happens to parse.
+        throw new Error('Maia CDN returned fewer bytes than advertised');
+      } else {
+        const allBytes = new Uint8Array(receivedLength);
+        let pos = 0;
+        for (const chunk of chunks) {
+          allBytes.set(chunk, pos);
+          pos += chunk.length;
+        }
+        arrayBuffer = allBytes.buffer;
       }
-      arrayBuffer = allBytes.buffer;
     } catch (streamErr) {
       // A partially consumed Response cannot be read a second time.
       // Retry the download with a fresh response; never cache partial weights.
@@ -98,6 +113,8 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
     arrayBuffer = await res.arrayBuffer();
   }
 
+  const sizeMB = (arrayBuffer.byteLength / 1048576).toFixed(1);
+  onProgress?.({ percent: 100, speedMBps: '', receivedMB: sizeMB, totalMB: sizeMB, source: 'cdn' });
   validateModelBytes(arrayBuffer, expected);
   const persisted = await cache.saveModel(cacheKey, arrayBuffer);
   if (!persisted) console.warn('[ModelCache] Persistence unavailable; offline reuse is unavailable for this download');

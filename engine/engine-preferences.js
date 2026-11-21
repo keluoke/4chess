@@ -27,14 +27,31 @@ export function studioUrl(prefs, elo = 1900, lang = 'zh') {
 }
 
 // UI preferences only. Game data, model bytes and engine commands never cross this bridge.
-export const SHARED_PREFERENCE_KEYS = ['maiaVariant', 'stockfishVariant', 'maia3_lang', 'defaultElo', 'maia3_target_elo', 'diverge_ui_theme', 'showHeatmap', 'showArrows', 'showStockfishArrows', 'showProbability', 'studio_depth', 'studio_orientation', 'diverge_sound_enabled'];
+export const SHARED_PREFERENCE_KEYS = ['maiaVariant', 'stockfishVariant', 'maia3_lang', 'defaultElo', 'maia3_target_elo', 'diverge_ui_theme', 'showHeatmap', 'showArrows', 'showStockfishArrows', 'showProbability', 'studio_depth', 'studio_max_depth', 'studio_review_mode', 'studio_orientation', 'diverge_sound_enabled'];
+const PREFERENCE_CHOICES = {
+  maiaVariant: Object.keys(MAIA_VARIANTS),
+  stockfishVariant: Object.keys(STOCKFISH_VARIANTS),
+  maia3_lang: ['zh', 'en'],
+  diverge_ui_theme: ['light', 'dark', 'system'],
+  studio_orientation: ['white', 'black'],
+  studio_depth: [10, 14],
+  studio_max_depth: [20, 22],
+  studio_review_mode: ['quick', 'deep']
+};
+
 export function preferencePatch(raw = {}) {
   const patch = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return patch;
   for (const key of SHARED_PREFERENCE_KEYS) {
     const value = raw[key];
-    const valid = key === 'maiaVariant' ? Object.hasOwn(MAIA_VARIANTS, value) : key === 'stockfishVariant' ? Object.hasOwn(STOCKFISH_VARIANTS, value) : key === 'maia3_lang' ? ['zh', 'en'].includes(value) : key === 'diverge_ui_theme' ? ['light', 'dark', 'system'].includes(value) : key === 'studio_orientation' ? ['white', 'black'].includes(value) : key === 'studio_depth' ? [10, 14].includes(value) : ['defaultElo', 'maia3_target_elo'].includes(key) ? Number.isInteger(value) && value >= 600 && value <= 2600 : typeof value === 'boolean';
+    const choices = PREFERENCE_CHOICES[key];
+    const isRating = key === 'defaultElo' || key === 'maia3_target_elo';
+    const valid = choices ? choices.includes(value) :
+      isRating ? Number.isInteger(value) && value >= 600 && value <= 2600 : typeof value === 'boolean';
     if (valid) patch[key] = value;
+  }
+  if (patch.studio_max_depth === undefined && patch.studio_depth !== undefined) {
+    patch.studio_max_depth = patch.studio_depth === 14 ? 22 : 20;
   }
   if (patch.defaultElo !== undefined) patch.maia3_target_elo = patch.defaultElo;
   else if (patch.maia3_target_elo !== undefined) patch.defaultElo = patch.maia3_target_elo;
@@ -53,7 +70,8 @@ function localSnapshot() {
   return raw;
 }
 export function getPreferences() {
-  return { maiaVariant: '5m', stockfishVariant: 'lite', maia3_lang: (globalThis.navigator?.language || 'zh').startsWith('zh') ? 'zh' : 'en', defaultElo: 1900, showHeatmap: false, showArrows: true, showStockfishArrows: true, showProbability: true, studio_depth: 10, studio_orientation: 'white', diverge_sound_enabled: true, ...preferencePatch(snapshot || localSnapshot()) };
+  const saved = preferencePatch(snapshot || localSnapshot());
+  return { maiaVariant: '5m', stockfishVariant: 'lite', maia3_lang: (globalThis.navigator?.language || 'zh').startsWith('zh') ? 'zh' : 'en', defaultElo: 1900, showHeatmap: false, showArrows: true, showStockfishArrows: true, showProbability: true, studio_max_depth: 20, studio_review_mode: 'quick', studio_orientation: 'white', diverge_sound_enabled: true, ...saved };
 }
 function receive(patch) {
   snapshot = { ...getPreferences(), ...preferencePatch(patch) };

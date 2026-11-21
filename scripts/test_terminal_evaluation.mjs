@@ -31,6 +31,12 @@ const terminalUci=uci.slice(terminalStart);
 assert.equal(terminalResult.terminal,true);assert.equal(terminalResult.scoreCp,-10000);
 const timed = await sf.evaluate('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 30, 1000, 2, 75);
 assert(timed && timed.depth > 0 && timed.depth < 30, 'A real engine time cap can return shallower evidence before the caller times out');
+const streamed = [];
+const progressive = await sf.evaluate('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 20, 6500, 3, 5000, result => streamed.push(result));
+assert(streamed.length > 1 && streamed.at(-1).depth >= 10 && progressive.depth <= 20);
+assert(streamed.every((result, index) => result.lines.length === 3 &&
+  result.lines.every(line => !line.isBound && line.depth === result.depth) &&
+  (index === 0 || result.depth > streamed[index - 1].depth)), 'Stream only publishes complete, monotonically deeper MultiPV sets');
 const maia={isReady:true,modelKey:'review-fixture',async predict(){return {moves:[]}}};
 const analyzer=new GameAnalyzer(sf,maia);
 let oneMoveError;

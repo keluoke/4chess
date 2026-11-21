@@ -71,7 +71,7 @@ export class IntuitionReview {
     const analyzer = this.analyzer = new GameAnalyzer(this.engine, facade);
     try {
       const result = await analyzer.analyzeGame(app.moves, {
-        depth: base.depth, elo, baseReview: base, waitForTurn,
+        depth: base.depth, reviewMode: base.reviewMode, elo, baseReview: base, waitForTurn,
         onProgress: progress => {
           if (!current() || progress.phase === 'evaluating' || progress.phase === 'done') return;
           this.progress = t(progress.phase === 'verifying' ? 'intuitionVerifying' : 'intuitionCount', { current: progress.current, total: progress.total });

@@ -148,6 +148,10 @@
               pv
             });
 
+            if (activeRequest?.stream && !isStopping) {
+              sendToParent({ type: 'STOCKFISH_INFO', id: activeRequest.id, line: multiPvMap.get(multipv) });
+            }
+
             if (multipv === 1) {
               lastInfo = {
                 depth,
@@ -390,6 +394,7 @@
           fen: data.fen,
           depth: data.depth || 6,
           multipv: data.multipv || 1,
+          stream: data.stream === true,
           moveTime: Number.isSafeInteger(data.moveTime) && data.moveTime > 0 ? data.moveTime : null
         };
 
