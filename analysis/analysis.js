@@ -1,16 +1,18 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261121-checkup-accounts-r2';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261121-study-reminders';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261121-checkup-accounts-r2';
-import { ReviewExplorer } from './review-explorer.js?v=20261121-checkup-accounts-r2';
-import { ReviewOverview } from './review-overview.js?v=20261121-checkup-accounts-r2';
-import { ReviewCommentary } from './review-commentary.js?v=20261121-checkup-accounts-r2';
-import { ConsequencePlayer } from './consequence-player.js?v=20261121-checkup-accounts-r2';
-import { MistakeBank } from './mistake-bank.js?v=20261121-checkup-accounts-r2';
-import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261121-checkup-accounts-r2';
-import { ShareCardModal } from './share-card.js?v=20261121-checkup-accounts-r2';
+import { IntuitionReview } from './intuition-review.js?v=20261121-study-reminders';
+import { ReviewExplorer } from './review-explorer.js?v=20261121-study-reminders';
+import { ReviewOverview } from './review-overview.js?v=20261121-study-reminders';
+import { ReviewCommentary } from './review-commentary.js?v=20261121-study-reminders';
+import { ConsequencePlayer } from './consequence-player.js?v=20261121-study-reminders';
+import { MistakeBank } from './mistake-bank.js?v=20261121-study-reminders';
+import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261121-study-reminders';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261121-study-reminders';
+import { CheckupReminders } from './checkup-reminders.js?v=20261121-study-reminders';
+import { ShareCardModal } from './share-card.js?v=20261121-study-reminders';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261121-checkup-accounts-r2';
-import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261118-summary-ai';
+import { ReviewPractice } from './review-practice.js?v=20261121-study-reminders';
+import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
  * Browser-based engine and human-intuition comparison for positions and completed games.
@@ -21,12 +23,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261117-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261117-elo-trend';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261121-checkup-accounts-r2';
+import { EvalChart } from './eval-chart.js?v=20261121-study-reminders';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261121-checkup-accounts-r2';
+import { PositionAnalysis } from './position-analysis.js?v=20261121-study-reminders';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261121-checkup-accounts';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261121-study-reminders';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
@@ -106,6 +108,8 @@ class AnalysisStudioApp {
     this.consequencePlayer = new ConsequencePlayer(this);
     this.mistakeBank = new MistakeBank(this);
     this.checkup = new IntuitionCheckup(this);
+    this.studyProfiles = new StudyProfileControls(this);
+    this.checkupReminders = new CheckupReminders(this);
     this.shareCard = new ShareCardModal(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });
@@ -550,6 +554,8 @@ class AnalysisStudioApp {
     this.renderEloHint();
     this.intuitionReview?.render();
     this.reviewCommentary?.sync();
+    this.studyProfiles?.render();
+    this.checkupReminders?.render();
     this.mistakeBank?.refreshState?.();
     if (this.mistakeBank?.dialog?.open) this.mistakeBank.renderDialog();
     if (this.checkup?.dialog?.open) {
@@ -1142,6 +1148,8 @@ class AnalysisStudioApp {
     const tempBanner = document.getElementById('temp-analysis-banner');
     if (tempBanner) tempBanner.hidden = true;
     this.checkupGame = null;
+    this.profilePerspective = null;
+    this.studyProfiles.render();
     this.consequencePlayer?.stop();
     this.reviewCommentary.reset();
     this.isSampleGame = !!pgn && (pgn.trim() === SAMPLE_GAMES.fischer.trim() || pgn.trim() === SAMPLE_GAMES.kasparov.trim());
@@ -1250,6 +1258,8 @@ class AnalysisStudioApp {
     this.currentGameKey = this.getReviewKey();
 
     this.renderGameMetadata({ white, black, result: conclusion.ok ? conclusion.result : result });
+    this.applyProfilePerspective();
+    this.studyProfiles.render();
 
     this.el.moveCountBadge.textContent = this.moves.isPartial
       ? t('errorTruncated', { count: this.moves.length })
@@ -1292,6 +1302,29 @@ class AnalysisStudioApp {
       cachedReview: game.cachedReview,
       autoReview: !game.cachedReview
     });
+  }
+
+  studyProfilesChanged(previousId) {
+    this.studyProfiles?.render();
+    this.checkupReminders?.profileChanged();
+    if (previousId && previousId !== this.mistakeBank.activeProfile?.id
+      && this.checkup?.dialog?.open && !this.checkup.updatingProfile) this.checkup.close();
+    const changedPerspective = this.applyProfilePerspective();
+    if (this.reviewResult && (changedPerspective || previousId !== this.mistakeBank.activeProfile?.id)) {
+      this.renderBlunderCards();
+      this.reviewOverview.render();
+    }
+  }
+
+  applyProfilePerspective() {
+    if (!this.moves.length || this.moves.isPartial || this.practice?.inProgress || this.tempAnalysisFen || this.scanSourceLocked) return;
+    const matched = this.mistakeBank.getPerspective().side;
+    if (matched === this.profilePerspective) return;
+    this.profilePerspective = matched;
+    const side = matched || (this.sessionOrientation === 'black' ? 'b' : 'w');
+    if (!this.reviewExplorer.sideSelected) this.reviewExplorer.side = side;
+    if (!this.reviewOverview.sideSelected) this.reviewOverview.side = this.reviewExplorer.side;
+    return true;
   }
 
   loadGameFromPgn(pgnText, autoReview = true) {

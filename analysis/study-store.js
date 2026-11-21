@@ -1,6 +1,8 @@
+import { markCheckupGames } from '../engine/checkup-watch.js?v=20261121-study-reminders';
+
 const DB_NAME = 'diverge_study_v1';
 const DB_VERSION = 1;
-const ACTIVE_PROFILE_KEY = 'diverge_study_active_profile';
+export const ACTIVE_PROFILE_KEY = 'diverge_study_active_profile';
 const MAX_TRAPS_PER_PROFILE = 2000;
 const MAX_CHECKUPS_PER_PROFILE = 20;
 
@@ -248,6 +250,13 @@ function txRequest(request) {
   });
 }
 
+function transactionDone(tx) {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onabort = () => reject(tx.error || new Error('Study transaction aborted'));
+  });
+}
+
 export class StudyStore {
   db = null;
   persistent = false;
@@ -361,10 +370,7 @@ export class StudyStore {
     const record = update(await txRequest(store.get(id)));
     if (!record) return record;
     this.requestPersistence();
-    const committed = new Promise((resolve, reject) => {
-      tx.oncomplete = resolve;
-      tx.onabort = () => reject(tx.error);
-    });
+    const committed = transactionDone(tx);
     store.put(record);
     await committed;
     return record;
@@ -376,6 +382,7 @@ export class StudyStore {
     if (!cleanName) throw new Error('Profile name is required');
     const profileId = id || `profile_${now}_${Math.random().toString(36).slice(2, 7)}`;
     return this.writeProfile(profileId, existing => ({
+      ...existing,
       id: profileId,
       displayName: cleanName.slice(0, 40),
       aliases: parseAliases(aliases),
@@ -394,8 +401,31 @@ export class StudyStore {
       const accounts = remove
         ? (existing.accounts || []).filter(item => accountKey(item) !== accountKey(account))
         : mergeAccounts(existing.accounts, [account]);
-      return { ...existing, accounts };
+      if (!remove) return { ...existing, accounts };
+      const checkupReminders = { ...existing.checkupReminders };
+      delete checkupReminders[accountKey(account)];
+      return { ...existing, accounts, checkupReminders };
     });
+  }
+
+  async updateCheckupReminder(id, account, update) {
+    await this.init();
+    const key = accountKey(account);
+    const profile = await this.writeProfile(id, existing => {
+      if (!existing?.accounts?.some(item => accountKey(item) === key)) return null;
+      const checkupReminders = { ...existing.checkupReminders };
+      const previous = checkupReminders[key] || {};
+      const next = update(previous);
+      if (next === previous) return null;
+      checkupReminders[key] = next;
+      return { ...existing, checkupReminders };
+    });
+    return profile?.checkupReminders[key];
+  }
+
+  async setBackgroundCheckup(id, enabled) {
+    await this.init();
+    return this.writeProfile(id, existing => existing ? { ...existing, backgroundCheckup: enabled === true } : null);
   }
 
   async deleteProfile(id) {
@@ -491,7 +521,26 @@ export class StudyStore {
   async saveCheckup(record) {
     await this.init();
     if (!record?.id || !record.profileId) return null;
-    await this.put('checkups', record);
+    const account = normalizeAccount(String(record.sourceLabel || '').split(':')[0], record.playerName);
+    const ids = record.analyzedGameIds;
+    if (account && ids?.length && this.db) {
+      const key = accountKey(account);
+      const tx = this.db.transaction(['profiles', 'checkups'], 'readwrite');
+      const profiles = tx.objectStore('profiles');
+      const profile = await txRequest(profiles.get(record.profileId));
+      const committed = transactionDone(tx);
+      if (profile?.accounts?.some(item => accountKey(item) === key)) {
+        const checkupReminders = { ...profile.checkupReminders };
+        checkupReminders[key] = markCheckupGames(checkupReminders[key], account.platform, ids, record.createdAt);
+        profiles.put({ ...profile, checkupReminders });
+      }
+      tx.objectStore('checkups').put(record);
+      await committed;
+    } else {
+      await this.put('checkups', record);
+      if (account && ids?.length) await this.updateCheckupReminder(record.profileId, account,
+        current => markCheckupGames(current, account.platform, ids, record.createdAt));
+    }
     const all = await this.listCheckups(record.profileId);
     if (all.length > MAX_CHECKUPS_PER_PROFILE) {
       for (const old of all.slice(MAX_CHECKUPS_PER_PROFILE)) {
@@ -521,7 +570,7 @@ export class StudyStore {
       version: 1,
       exportedAt: new Date(now).toISOString(),
       activeProfileId: this.getActiveProfileId(),
-      profiles: await this.listProfiles(),
+      profiles: (await this.listProfiles()).map(({ checkupReminders, backgroundCheckup, ...profile }) => profile),
       traps: await this.getAll('traps'),
       checkups: await this.getAll('checkups')
     };

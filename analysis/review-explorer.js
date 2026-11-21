@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261121-checkup-accounts';
+import { t } from './i18n.js?v=20261121-study-reminders';
 import { REVIEW_QUALITIES, INTUITION_KINDS, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
@@ -16,6 +16,7 @@ export class ReviewExplorer {
     this.root.addEventListener('click', event => {
       const button = event.target.closest('button[data-review-side]');
       if (!button) return;
+      this.sideSelected = true;
       this.side = button.dataset.reviewSide;
       app.reviewOverview.side = this.side;
       if (button.dataset.reviewCategory) app.currentDivergenceFilter = button.dataset.reviewCategory;
@@ -23,6 +24,7 @@ export class ReviewExplorer {
       if (button.dataset.reviewCategory) this.focusSelection();
     });
     document.getElementById('review-clear-filter').onclick = () => {
+      this.sideSelected = true;
       this.side = app.reviewOverview.side = 'all'; app.currentDivergenceFilter = 'all'; app.renderBlunderCards(); this.focusSelection();
     };
     document.getElementById('review-practice-batch').onclick = () => {
@@ -31,6 +33,7 @@ export class ReviewExplorer {
     };
   }
   reset(orientation) {
+    this.sideSelected = false;
     this.side = orientation === 'black' ? 'b' : orientation === 'white' ? 'w' : 'all';
     this.app.currentDivergenceFilter = 'all';
     this.clear();

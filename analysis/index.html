@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261121-checkup-accounts">
+  <link rel="stylesheet" href="workbench.css?v=20261121-study-reminders">
 </head>
 <body class="diverge-ui">
   <script>
@@ -59,7 +59,10 @@
 
     <div class="studio-header-actions">
       <button type="button" class="btn-header review-overview-button" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-haspopup="dialog" hidden>复盘总览</button>
-      <button type="button" class="btn-header" id="btn-intuition-checkup" aria-controls="checkup-dialog" aria-haspopup="dialog" data-i18n="checkupBtn" hidden>近期诊断</button>
+      <select id="studio-profile-select" class="btn-header studio-profile-select" data-i18n-aria="checkupProfile" aria-label="当前档案" hidden></select>
+      <button type="button" class="btn-header" id="btn-intuition-checkup" aria-controls="checkup-dialog" aria-haspopup="dialog" hidden>
+        <span data-i18n="checkupBtn">近期诊断</span><span id="checkup-new-dot" class="checkup-new-dot" aria-hidden="true" hidden></span>
+      </button>
       <button type="button" class="btn-header" id="btn-mistake-bank" aria-controls="mistake-bank-dialog" aria-haspopup="dialog" hidden><span data-i18n="mistakeBankBtn">错题本</span><span class="bank-due-badge" id="mistake-bank-due-badge" hidden>0</span></button>
       <!-- Actions -->
       <button type="button" class="btn-header" id="btn-focus" data-i18n="focusMode" aria-controls="insight-column" aria-pressed="false">专注</button>
@@ -141,6 +144,13 @@
     </section>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <div class="analysis-scroll">
+      <section id="study-link-guide" class="study-link-guide" aria-labelledby="study-link-title" hidden>
+        <div class="study-link-heading">
+          <p id="study-link-title"></p>
+          <button type="button" id="study-link-dismiss" class="btn-header" data-i18n="studyLinkDismiss">稍后再说</button>
+        </div>
+        <div id="study-link-players" class="study-link-players"></div>
+      </section>
       <button type="button" class="btn-header review-ready" id="review-ready" data-i18n="reviewReady" hidden>整盘分析已完成 · 查看总览</button>
       <section id="practice-panel" class="practice-panel" hidden></section>
       <!-- Review Progress Banner (shown during analysis) -->
@@ -436,6 +446,11 @@
       <label for="checkup-profile-select" data-i18n="checkupProfile">当前档案</label>
       <select id="checkup-profile-select" class="btn-header"></select>
     </div>
+    <p id="checkup-reminder-note" class="checkup-reminder-note" hidden></p>
+    <label id="checkup-background-control" class="checkup-background-control" hidden>
+      <input type="checkbox" id="checkup-background-toggle">
+      <span data-i18n="checkupBackgroundToggle">为此档案启用扩展后台提醒</span>
+    </label>
     <ul id="checkup-accounts" class="checkup-accounts" data-i18n-aria="checkupAccounts" aria-label="已绑定账号" hidden></ul>
     <div class="checkup-sources" role="group">
       <button type="button" class="btn-header" data-checkup-source="lichess" aria-pressed="true">Lichess</button>
@@ -498,11 +513,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261025-v115"></script>
-  <script type="module" src="analysis.js?v=20261121-checkup-accounts-r2"></script>
+  <script type="module" src="analysis.js?v=20261121-study-reminders"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261121-checkup-accounts-r2').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261121-study-reminders').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

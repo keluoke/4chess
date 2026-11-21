@@ -2,11 +2,11 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261118-summary-ai';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-checkup-accounts-r2';
-import { t } from './i18n.js?v=20261121-checkup-accounts';
+import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-study-reminders';
+import { t } from './i18n.js?v=20261121-study-reminders';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261121-study-reminders';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
-const MAX_FETCH_GAMES = 10;
 const MAX_LOCAL_GAMES = 15;
 const MAX_ELO_SAMPLES = 24;
 const VERIFY_ROOT_MIN_DEPTH = 14;
@@ -44,6 +44,7 @@ export function checkupGameContext(pgn, { source, orientation, white, black } = 
   return {
     platform,
     orientation,
+    gameRef: GameAnalyzer.hashString(pgn),
     white: cleanName(meta.white) || cleanName(white),
     black: cleanName(meta.black) || cleanName(black)
   };
@@ -93,10 +94,10 @@ export function detectBatchPlayer(games = [], profile = null) {
   };
 }
 
-export async function fetchLichessRecentGames(username, { max = MAX_FETCH_GAMES, signal, fetchImpl = fetch } = {}) {
+export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIMIT, signal, fetchImpl = fetch } = {}) {
   const clean = String(username || '').trim();
   if (!clean) throw new Error('Username is required');
-  const url = `https://lichess.org/api/games/user/${encodeURIComponent(clean)}?max=${max}&pgnInJson=true&clocks=false&evals=false&perfType=bullet,blitz,rapid,classical`;
+  const url = `https://lichess.org/api/games/user/${encodeURIComponent(clean)}?max=${max}&pgnInJson=true&clocks=false&evals=false&perfType=${LICHESS_CHECKUP_SPEEDS}`;
   const useBrowserProxy = fetchImpl === fetch && typeof location !== 'undefined' && location.protocol.startsWith('http');
   if (useBrowserProxy) {
     const proxyUrl = `/api/lichess?username=${encodeURIComponent(clean)}&max=${max}`;
@@ -116,7 +117,7 @@ export async function fetchLichessRecentGames(username, { max = MAX_FETCH_GAMES,
           if (!item.pgn) continue;
           const verdict = FairPlayGuard.verifyConcludedGame(item);
           if (!verdict.ok) continue;
-          games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn) });
+          games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn), gameId: checkupGameId('lichess', item.id) });
           if (games.length >= max) break;
         }
         return games;
@@ -142,22 +143,19 @@ export async function fetchLichessRecentGames(username, { max = MAX_FETCH_GAMES,
     if (!item.pgn) continue;
     const verdict = FairPlayGuard.verifyConcludedGame(item);
     if (!verdict.ok) continue;
-    games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn) });
+    games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn), gameId: checkupGameId('lichess', item.id) });
     if (games.length >= max) break;
   }
   return games;
 }
 
-export async function fetchChesscomRecentGames(username, { max = MAX_FETCH_GAMES, signal, fetchImpl = fetch } = {}) {
+export async function fetchChesscomRecentGames(username, { max = CHECKUP_GAME_LIMIT, signal, fetchImpl = fetch } = {}) {
   const clean = String(username || '').trim().toLowerCase();
   if (!clean) throw new Error('Username is required');
-  const archResp = await fetchImpl(`https://api.chess.com/pub/player/${encodeURIComponent(clean)}/games/archives`, { signal });
-  if (!archResp.ok) throw new Error(`Chess.com HTTP ${archResp.status}`);
-  const archData = await archResp.json();
-  const archives = Array.isArray(archData?.archives) ? archData.archives.slice(-6).reverse() : [];
+  const archives = await chesscomCheckupArchives(clean, { signal, fetchImpl });
   const games = [];
-  for (const archiveUrl of archives) {
-    const resp = await fetchImpl(archiveUrl, { signal });
+  for (const { url } of archives) {
+    const resp = await fetchImpl(url, { signal });
     if (!resp.ok) continue;
     const data = await resp.json();
     const list = Array.isArray(data?.games) ? data.games.slice().reverse() : [];
@@ -166,7 +164,7 @@ export async function fetchChesscomRecentGames(username, { max = MAX_FETCH_GAMES
       if (!item.pgn) continue;
       const verdict = FairPlayGuard.verifyConcludedGame({ pgn: item.pgn, isFinished: true, status: 'finished' });
       if (!verdict.ok) continue;
-      games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn) });
+      games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn), gameId: checkupGameId('chesscom', item.url) });
       if (games.length >= max) return games;
     }
   }
@@ -229,6 +227,7 @@ export async function runIntuitionCheckup({
     sourceLabel,
     playerName: targetPlayer.trim(),
     gameCount: 0,
+    analyzedGameIds: [],
     analyzedMoves: 0,
     eloFit: Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0])),
     closestElo: null,
@@ -269,13 +268,14 @@ export async function runIntuitionCheckup({
   const eloLogSums = Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0]));
   const collectedTraps = [];
   let analyzedGames = 0;
+  const analyzedGameIds = new Set();
   let analyzedMoves = 0;
   let eloSampleCount = 0;
   let partial = false;
 
   for (let gi = 0; gi < batch.length; gi++) {
     if (cancelled()) { partial = true; break; }
-    const { meta, userSide, positions } = batch[gi];
+    const { entry, meta, userSide, positions } = batch[gi];
 
     const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
       phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
@@ -406,6 +406,7 @@ export async function runIntuitionCheckup({
 
     reportProgress('analyzing', gameMoves, positions.length - 1);
     analyzedGames++;
+    if (entry.gameId) analyzedGameIds.add(entry.gameId);
     analyzedMoves += gameMoves;
     eloSampleCount += gameEloSamples;
     for (const r of CHECKUP_ELOS) eloLogSums[r] += gameEloLogSums[r];
@@ -439,6 +440,7 @@ export async function runIntuitionCheckup({
     sourceLabel,
     playerName: targetPlayer.trim(),
     gameCount: analyzedGames,
+    analyzedGameIds: [...analyzedGameIds],
     analyzedMoves,
     eloFit,
     closestElo,
@@ -478,7 +480,7 @@ export function selectCheckupHistory(history = [], { source = 'lichess', gameCon
   };
 }
 
-function formatRelativeTime(createdAt) {
+export function formatRelativeTime(createdAt) {
   if (!Number.isFinite(createdAt)) return '';
   const diffMin = Math.max(0, Math.floor((Date.now() - createdAt) / 60000));
   if (diffMin < 1) return t('checkupJustNow');
@@ -560,6 +562,7 @@ export class IntuitionCheckup {
 
   syncVisibility() {
     if (this.button) this.button.hidden = !this.allowed();
+    this.app.checkupReminders?.render();
   }
 
   bindEvents() {
@@ -712,6 +715,7 @@ export class IntuitionCheckup {
       this.dialog.showModal();
       (this.accountList?.querySelector('button') || (this.usernameInput?.value ? this.btnFetch : this.usernameInput))?.focus();
     }
+    this.app.checkupReminders?.refresh();
   }
 
   async switchProfile(id) {
@@ -745,16 +749,12 @@ export class IntuitionCheckup {
     this.updatingProfile = true;
     this.renderSourceControls();
     try {
-      const saved = await bank.store.setProfileAccount(id, platform, username, { remove });
-      await bank.refreshState();
-      this.app.renderBlunderCards?.();
-      this.app.reviewOverview?.render?.();
+      await bank.updateProfileAccount(id, platform, username, { remove });
       if (generation !== this.openGeneration || !this.allowed()) return;
       if (bank.activeProfile?.id !== id) {
         await this.open();
         return;
       }
-      if (!saved) throw new Error('Profile does not exist');
       this.renderAccounts();
       const key = remove ? 'checkupAccountRemoved' : 'checkupAccountSaved';
       this.setStatus(t(key, { account: this.accountLabel(account) }));
@@ -1041,6 +1041,7 @@ export class IntuitionCheckup {
           sourceLabel: report.sourceLabel,
           playerName: report.playerName,
           gameCount: report.gameCount,
+          analyzedGameIds: report.analyzedGameIds,
           analyzedMoves: report.analyzedMoves,
           eloFit: report.eloFit,
           closestElo: report.closestElo,
@@ -1060,6 +1061,7 @@ export class IntuitionCheckup {
         this.fallbackReport = null;
         if (this.app.mistakeBank?.store) {
           await this.app.mistakeBank.store.saveCheckup(savedRecord);
+          this.app.checkupReminders?.refresh();
         }
         if (!current()) return;
         this.renderReport(savedRecord);

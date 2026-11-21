@@ -1,19 +1,21 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import {
+  ACTIVE_PROFILE_KEY,
   DEFAULT_PROFILE_ID,
   StudyStore,
   buildTrapRecord,
   parseAliases,
   resolvePerspective,
   trapId
-} from './study-store.js?v=20261121-checkup-accounts-r2';
-import { t } from './i18n.js?v=20261121-checkup-accounts';
+} from './study-store.js?v=20261121-study-reminders';
+import { t } from './i18n.js?v=20261121-study-reminders';
 
 export class MistakeBank {
   filter = 'due';
   phase = 'all';
   sort = 'due';
   openGeneration = 0;
+  refreshGeneration = 0;
   savedIds = new Set();
   profiles = [];
   activeProfile = null;
@@ -52,6 +54,12 @@ export class MistakeBank {
 
     this.bindEvents();
     this.ready = this.refreshState();
+    window.addEventListener('storage', event => {
+      if (event.key === ACTIVE_PROFILE_KEY) this.refreshState().catch(console.warn);
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) this.refreshState().catch(console.warn);
+    });
   }
 
   allowed() {
@@ -172,12 +180,16 @@ export class MistakeBank {
 
   async refreshState() {
     if (!this.supported) return;
+    const generation = ++this.refreshGeneration;
     await this.store.init();
-    this.profiles = await this.store.listProfiles();
-    this.activeProfile = await this.store.getActiveProfile();
-    const traps = await this.store.listTraps(this.activeProfile.id, { filter: 'all' });
+    const [profiles, profile] = await Promise.all([this.store.listProfiles(), this.store.getActiveProfile()]);
+    const traps = await this.store.listTraps(profile.id, { filter: 'all' });
+    if (generation !== this.refreshGeneration || profile.id !== this.store.getActiveProfileId()) return;
+    const previousId = this.activeProfile?.id;
+    this.profiles = profiles;
+    this.activeProfile = profile;
     this.savedIds = new Set(traps.map(item => item.id));
-    const due = await this.store.countDue(this.activeProfile.id);
+    const due = traps.filter(item => (item.srs?.nextReviewAt ?? 0) <= Date.now()).length;
     if (this.badge) {
       this.badge.textContent = String(due);
       this.badge.hidden = due === 0;
@@ -185,6 +197,7 @@ export class MistakeBank {
     if (this.button) {
       this.button.hidden = !this.allowed();
     }
+    this.app.studyProfilesChanged?.(previousId);
   }
 
   async selectProfile(id) {
@@ -195,16 +208,25 @@ export class MistakeBank {
     this.app.reviewOverview?.render?.();
   }
 
+  async updateProfileAccount(id, platform, username, options) {
+    const saved = await this.store.setProfileAccount(id, platform, username, options);
+    if (!saved) throw new Error('Profile does not exist');
+    await this.refreshState();
+    this.app.renderBlunderCards?.();
+    this.app.reviewOverview?.render?.();
+  }
+
+  profileLabel(profile) {
+    return profile.id === DEFAULT_PROFILE_ID && profile.displayName === 'Default' ? t('bankDefaultProfile') : profile.displayName;
+  }
+
   renderProfileOptions(select) {
     if (!select) return;
     select.replaceChildren();
     for (const profile of this.profiles) {
-      const label = profile.id === DEFAULT_PROFILE_ID && profile.displayName === 'Default'
-        ? t('bankDefaultProfile')
-        : profile.displayName;
       const option = document.createElement('option');
       option.value = profile.id;
-      option.textContent = label;
+      option.textContent = this.profileLabel(profile);
       option.selected = profile.id === this.activeProfile?.id;
       select.add(option);
     }

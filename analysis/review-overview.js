@@ -1,7 +1,7 @@
-import { getLang, t } from './i18n.js?v=20261121-checkup-accounts';
+import { getLang, t } from './i18n.js?v=20261121-study-reminders';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { turningPointWording } from './review-commentary.js?v=20261121-checkup-accounts-r2';
+import { turningPointWording } from './review-commentary.js?v=20261121-study-reminders';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const byId = id => document.getElementById(id);
@@ -66,6 +66,7 @@ export class ReviewOverview {
     this.sidePicker.addEventListener('click', event => {
       const button = event.target.closest('[data-practice-side]');
       if (!button) return;
+      this.sideSelected = true;
       this.side = button.dataset.practiceSide;
       this.renderPractice(app.reviewExplorer.available(app.reviewResult.allMoves));
     });
@@ -83,7 +84,10 @@ export class ReviewOverview {
   reset(side = this.app.reviewExplorer.side, { newGame = true } = {}) {
     this.received = this.pending = false;
     this.autoOpenRequested = false;
-    if (newGame) this.autoOpened = false;
+    if (newGame) {
+      this.autoOpened = false;
+      this.sideSelected = false;
+    }
     this.side = side;
     this.queue = [];
     this.summary.querySelector('details').open = false;

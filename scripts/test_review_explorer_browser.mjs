@@ -325,7 +325,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261121-checkup-accounts');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261121-study-reminders');
     setLanguage('en');
     window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {
@@ -655,40 +655,90 @@ try {
     const bank = __maiaStudioApp.mistakeBank;
     await bank.ready;
     await bank.store.saveProfile({ id: 'child', displayName: 'Child', aliases: ['StudyPlayer'] });
+    await bank.refreshState();
     __maiaStudioApp.stockfish.initialize = async () => true;
     __maiaStudioApp.maiaEngine.initialize = async () => true;
   });
+  const month = new Date().toISOString().slice(0, 7).replace('-', '/');
+  const archive = 'https://api.chess.com/pub/player/studyplayer/games/' + month;
+  const archiveGame = id => ({
+    url: 'https://www.chess.com/game/live/' + id, rules: 'chess',
+    end_time: Math.floor(Date.now() / 1000) - 5, pgn: accountPgn
+  });
+  let archiveGames = [archiveGame(12345678)];
+  let archiveError = false;
+  await checkup.route('https://api.chess.com/pub/player/studyplayer/games/archives', route => route.fulfill({ json: { archives: [archive] } }));
+  await checkup.route(archive, route => route.fulfill(archiveError ? { status: 503 } : { json: { games: archiveGames } }));
+  await checkup.route('https://lichess.org/api/games/user/lichesschild?**', route => route.fulfill({ body: '' }));
+
+  const studioProfile = checkup.locator('#studio-profile-select');
+  const guide = checkup.locator('#study-link-guide');
+  const dot = checkup.locator('#checkup-new-dot');
+  await studioProfile.selectOption('child');
+  await guide.getByText(/Link a player.*Child/).waitFor();
+  await guide.getByRole('button', { name: /Link .*StudyPlayer/ }).click();
+  await guide.waitFor({ state: 'hidden' });
+  await checkup.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.checkupReminders?.['chesscom:studyplayer']?.checkedAt > 0);
+  assert.equal(await dot.isVisible(), false, 'First lookup seeds the baseline');
+  assert.equal(await checkup.evaluate(() => __maiaStudioApp.reviewExplorer.side), 'b');
+
+  const forceProbe = () => checkup.evaluate(async () => {
+    const app = __maiaStudioApp;
+    await app.mistakeBank.store.updateCheckupReminder('child', { platform: 'chesscom', username: 'StudyPlayer' },
+      state => ({ ...state, checkedAt: Date.now() - 3600_000, retryAt: 0 }));
+    await app.checkupReminders.refresh();
+  });
+  archiveGames.push(archiveGame(12345679));
+  await forceProbe();
+  await dot.waitFor();
+  archiveError = true;
+  await forceProbe();
+  assert.equal(await dot.isVisible(), true, 'A failed lookup does not clear the dot');
+  archiveError = false;
+
+  const ply = await checkup.evaluate(() => __maiaStudioApp.currentPly);
+  await studioProfile.selectOption('default');
+  await guide.getByRole('button', { name: /StudyPlayer.*Switch to Child/ }).waitFor();
+  assert.equal(await dot.isVisible(), false, 'The current profile owns its reminder');
+  await guide.getByRole('button', { name: /StudyPlayer.*Switch to Child/ }).click();
+  await dot.waitFor();
+  assert.equal(await checkup.evaluate(() => __maiaStudioApp.currentPly), ply, 'Profile changes preserve the selected ply');
+
   const profile = checkup.locator('#checkup-profile-select');
   const cards = checkup.locator('#checkup-accounts li');
   await checkup.locator('#btn-intuition-checkup').click();
-  await profile.selectOption('child');
-  await checkup.locator('#checkup-player-choices').getByRole('button', { name: /StudyPlayer/ }).click();
-  await checkup.locator('#btn-checkup-save-account').click();
   await checkup.getByRole('button', { name: /Analyze the last 10 games for Chess.com · StudyPlayer/ }).waitFor();
+  assert.equal(await profile.inputValue(), 'child');
   await checkup.locator('[data-checkup-source="lichess"]').click();
   await checkup.locator('#checkup-username').fill('LichessChild');
   await checkup.locator('#btn-checkup-save-account').click();
   await checkup.getByRole('button', { name: /Analyze the last 10 games for Lichess · LichessChild/ }).waitFor();
 
-  let completedFetches = 0;
-  const archive = 'https://api.chess.com/pub/player/studyplayer/games/2026/11';
-  await checkup.route('https://api.chess.com/pub/player/studyplayer/games/archives', route => route.fulfill({ json: { archives: [archive] } }));
-  await checkup.route(archive, route => {
-    completedFetches++;
-    return route.fulfill({ json: { games: [{ rules: 'chess', pgn: accountPgn }] } });
-  });
   await checkup.getByRole('button', { name: /Analyze the last 10 games for Chess.com · StudyPlayer/ }).click();
   await checkup.locator('#checkup-report-box').waitFor();
-  assert.equal(completedFetches, 1);
+  await dot.waitFor({ state: 'hidden' });
   assert.match(await checkup.locator('#checkup-report-box').innerText(), /StudyPlayer/);
   assert.equal(await checkup.evaluate(async () => {
     const store = __maiaStudioApp.mistakeBank.store;
     const report = (await store.listCheckups('child'))[0];
+    if (!report.analyzedGameIds.includes('live:12345679')) return 'missing newer game';
     return report.sourceLabel + '|' + (await store.listCheckups('default')).length;
   }), 'chesscom:StudyPlayer|0');
+  await checkup.evaluate(async () => {
+    const app = __maiaStudioApp;
+    const store = app.mistakeBank.store;
+    const report = (await store.listCheckups('child'))[0];
+    const lastDiagnosedAt = Date.now() - 8 * 86400_000;
+    await store.put('checkups', { ...report, createdAt: lastDiagnosedAt });
+    await store.updateCheckupReminder('child', { platform: 'chesscom', username: 'StudyPlayer' },
+      state => ({ ...state, lastDiagnosedAt }));
+    await app.checkupReminders.refresh();
+  });
+  assert.match(await checkup.locator('#btn-intuition-checkup').getAttribute('title'), /8d ago/);
   await profile.selectOption('default');
   await cards.first().waitFor({ state: 'detached' });
   assert.equal(await checkup.locator('#checkup-report-box').isVisible(), false);
+  assert.equal(await studioProfile.inputValue(), 'default');
   await profile.selectOption('child');
   await checkup.getByRole('button', { name: /Unlink Lichess · LichessChild/ }).click();
   await checkup.getByRole('button', { name: /Unlink Lichess · LichessChild/ }).waitFor({ state: 'detached' });
@@ -701,8 +751,15 @@ try {
   await checkup.setViewportSize({ width: 390, height: 844 });
   assert(await checkup.locator('#checkup-dialog').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth + 1),
     'Account cards and profile selector fit the mobile dialog');
+  await checkup.locator('#btn-close-checkup').click();
+  await studioProfile.selectOption('default');
+  await guide.getByRole('button', { name: /StudyPlayer.*Switch to Child/ }).waitFor();
+  await checkup.locator('#study-link-dismiss').click();
+  await checkup.reload();
+  await checkup.waitForFunction(() => window.__maiaStudioApp?.checkupGame && __maiaStudioApp.mistakeBank.activeProfile?.id === 'default');
+  assert.equal(await guide.isVisible(), false, 'Dismissing a game guide survives refresh');
   await checkup.close();
-  console.log('PASS conditional overview and multi-account checkup: one auto-open, interaction and partial guards, profile-scoped history and IndexedDB reload.');
+  console.log('PASS conditional overview and multi-account checkup: profile switch and link guide, first lookup, new-game dot, transient failure, diagnosis clears processed games, profile isolation and IndexedDB reload.');
 
   assert.deepEqual(errors, []);
   console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, grounded English loss wording, recap cancellation on all review resets, cache, practice isolation and Chinese fallback.');

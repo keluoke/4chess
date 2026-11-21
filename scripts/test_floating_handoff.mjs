@@ -186,6 +186,75 @@ try {
   await storedGame.waitForFunction(() => window.__maiaStudioApp?.moves.length === 4);
   assert.equal(await storedGame.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
   await storedGame.close();
+
+  // Real Chrome bridge and alarm, with both platform responses supplied as local fixtures.
+  const archiveUser = 'https://lichess.org/api/games/user/backgrounduser';
+  const archiveEntry = id => JSON.stringify({ id, variant: 'standard', status: 'mate', lastMoveAt: Date.now() - 1000 });
+  await context.route(url => url.href.startsWith(archiveUser + '?'), route => route.fulfill({
+    contentType: 'application/x-ndjson', body: archiveEntry('Older001')
+  }));
+  const studioUrl = 'https://4chess.cc/analysis/?lang=en';
+  const reminders = await context.newPage();
+  await reminders.goto(studioUrl);
+  await reminders.waitForFunction(() => window.__maiaStudioApp?.checkupReminders.extensionAvailable);
+  await reminders.evaluate(async () => {
+    const bank = window.__maiaStudioApp.mistakeBank;
+    await bank.ready;
+    await bank.updateProfileAccount('default', 'lichess', 'BackgroundUser');
+  });
+  await reminders.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.checkupReminders?.['lichess:backgrounduser']?.checkedAt > 0);
+  await reminders.locator('#btn-intuition-checkup').click();
+  const toggle = reminders.locator('#checkup-background-toggle');
+  await toggle.check();
+  await reminders.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.backgroundCheckup === true &&
+    !__maiaStudioApp.checkupReminders.toggling);
+  await reminders.evaluate(() => __maiaStudioApp.checkupReminders.backgroundQueue);
+  const subscription = await worker.evaluate(async () => {
+    const { divergeCheckupBackground } = await chrome.storage.local.get('divergeCheckupBackground');
+    const alarm = await chrome.alarms.get('diverge-checkup-archives');
+    return { accounts: divergeCheckupBackground, period: alarm?.periodInMinutes };
+  });
+  assert.equal(subscription.period, 360);
+  assert.equal(subscription.accounts.length, 1);
+  assert.equal(subscription.accounts[0].username, 'backgrounduser');
+  await reminders.close();
+
+  const badge = await worker.evaluate(async ({ archiveUser, line }) => {
+    const { divergeCheckupBackground } = await chrome.storage.local.get('divergeCheckupBackground');
+    const normalFetch = globalThis.fetch;
+    globalThis.fetch = (url, options) => String(url).startsWith(archiveUser + '?')
+      ? Promise.resolve(new Response(line)) : normalFetch(url, options);
+    divergeCheckupBackground[0].state.checkedAt = Date.now() - 7 * 3600_000;
+    await chrome.storage.local.set({ divergeCheckupBackground });
+    await chrome.alarms.create('diverge-checkup-archives', { when: Date.now() + 250, periodInMinutes: 360 });
+    try {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const text = await chrome.action.getBadgeText({});
+        if (text) return text;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      return '';
+    } finally {
+      globalThis.fetch = normalFetch;
+    }
+  }, { archiveUser, line: archiveEntry('Newer001') });
+  assert.equal(badge, '•', 'The alarm raises a badge while the workbench is closed');
+
+  const reopened = await context.newPage();
+  await reopened.goto(studioUrl);
+  await reopened.locator('#checkup-new-dot').waitFor();
+  await reopened.locator('#btn-intuition-checkup').click();
+  await reopened.locator('#checkup-background-toggle').uncheck();
+  await reopened.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.backgroundCheckup === false &&
+    !__maiaStudioApp.checkupReminders.toggling);
+  const cleared = await worker.evaluate(async () => ({
+    badge: await chrome.action.getBadgeText({}),
+    alarm: !!await chrome.alarms.get('diverge-checkup-archives')
+  }));
+  assert.deepEqual(cleared, { badge: '', alarm: false });
+  await reopened.close();
+  console.log('PASS packaged Chrome reminder bridge: opt-in, real alarm without a studio tab, badge and subscription removal.');
+
   assert.deepEqual(pageErrors, [], 'Handoff pages must not contain uncaught application errors');
   console.log('PASS packaged MV3 handoff: web/local FEN and PGN orientation, both platform panel clicks and delayed extraction snapshots, white/black preference overrides, storage-only view, rating/language/model preferences and invalid-input recovery');
 } finally { await context.close(); server.close(); fs.rmSync(temp, { recursive: true, force: true }); }

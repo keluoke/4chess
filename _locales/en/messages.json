@@ -11,6 +11,9 @@
     "message": "Diverge · Scan and compare chess positions",
     "description": "Action icon tooltip"
   },
+  "checkupBadgeTitle": {
+    "message": "Diverge · New completed games to review"
+  },
   "popupSubtitle": {
     "message": "Human intuition · Engine insight",
     "description": "Popup subtitle below Diverge"

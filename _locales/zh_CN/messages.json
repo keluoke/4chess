@@ -11,6 +11,9 @@
     "message": "歧路 Diverge · 扫描与分析棋盘局面",
     "description": "扩展图标悬停提示"
   },
+  "checkupBadgeTitle": {
+    "message": "歧路 Diverge · 有新对局待诊断"
+  },
   "popupSubtitle": {
     "message": "人类直觉 · 引擎洞察",
     "description": "弹窗副标题"

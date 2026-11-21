@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261121-checkup-accounts';
+import { t, onLanguageChange } from './i18n.js?v=20261121-study-reminders';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

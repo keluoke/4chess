@@ -6,8 +6,11 @@ import './scan/controller.js';
 
 import { ChessBoard } from './engine/chess-core.js';
 import { normalizeEnginePreferences } from './engine/engine-preferences.js';
+import { startCheckupReminders } from './engine/checkup-reminders-background.js';
 
 import { gameLinkInput, parseStudioElo, tcnToSanMoves, movesToPgn } from './engine/chess-notation.js';
+
+if (chrome.alarms && chrome.action) startCheckupReminders();
 
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[Maia-3 Extension] Installed successfully.');
