@@ -328,7 +328,8 @@ try {
  });
  assert(offlineAssets.every(Boolean), 'Each local engine asset has one cached URL and is retrievable offline');
  const cachedReleaseModules = await offline.evaluate(async ({ paths, version }) => {
-  const cache = await caches.open('4chess-review-' + version);
+  const cacheVersion = new URL(navigator.serviceWorker.controller.scriptURL).searchParams.get('v');
+  const cache = await caches.open('4chess-review-' + cacheVersion);
   const urls = (await cache.keys()).map(request => new URL(request.url));
   return paths.every(path => {
    const matches = urls.filter(url => url.pathname === path);

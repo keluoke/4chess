@@ -16,7 +16,7 @@
     "vision:check": "node scripts/sync_vision_core.mjs --source",
     "store:sync": "node scripts/sync_store_copy.mjs --write",
     "store:check": "node scripts/sync_store_copy.mjs",
-    "test:browser": "node scripts/test_release_browser.mjs && node scripts/test_review_share_browser.mjs",
+    "test:browser": "node scripts/test_release_browser.mjs && node scripts/test_review_share_browser.mjs && node scripts/test_checkup_browser.mjs",
     "test:floating": "node scripts/test_floating_layout.mjs && node scripts/test_floating_ux.mjs",
     "test:floating-handoff": "node scripts/test_floating_handoff.mjs",
     "test:release": "npm run package && node scripts/test_package_integrity.mjs && npm run test:browser",

@@ -36,7 +36,7 @@ export function mergeCheckupObservation(record = {}, observation) {
     ...record,
     games: observation.games,
     checkedAt: observation.checkedAt,
-    baseline: record.baseline || (record.diagnosed?.length ? [] : observation.games.map(game => game.id)),
+    baseline: record.baseline || (record.lastDiagnosedAt ? [] : observation.games.map(game => game.id)),
     baselineAt: record.baselineAt || observation.checkedAt,
     retryAt: 0
   };
@@ -73,13 +73,17 @@ export function sanitizeCheckupSnapshot(platform, input, now = Date.now()) {
   };
 }
 
-export function hasNewCheckupGames(record) {
-  if (!record?.games?.length) return false;
+export function pendingCheckupGameIds(record) {
+  if (!record?.games?.length) return [];
   const seen = new Set([...(record.baseline || []), ...(record.diagnosed || [])]);
-  return record.games.some(game => !seen.has(game.id));
+  return [...new Set(record.games.map(game => game.id))].filter(id => !seen.has(id));
 }
 
-export function markCheckupGames(record = {}, platform, ids, timestamp) {
+export function hasNewCheckupGames(record) {
+  return pendingCheckupGameIds(record).length > 0;
+}
+
+export function markCheckupGames(record = {}, platform, ids, timestamp = 0) {
   return {
     ...record,
     diagnosed: checkupGameIds(platform, [...ids, ...(record.diagnosed || [])]),

@@ -26,13 +26,19 @@ export function parsePgnMeta(pgnText = '') {
   };
 }
 
-export function checkupGameContext(pgn, { source, orientation, white, black } = {}) {
+export function checkupGameContext(pgn, { source, publicGameUrl, orientation, white, black } = {}) {
   if (!pgn || !FairPlayGuard.verifyConcludedGame(pgn).ok) return null;
   const meta = parsePgnMeta(pgn);
-  let site = meta.site.toLowerCase();
-  if (meta.url) {
-    try { site = new URL(meta.url).hostname.toLowerCase(); } catch { site = ''; }
-  }
+  const link = pgn.match(/^\[Link\s+"([^"]*)"\]/im)?.[1];
+  const urls = [publicGameUrl, meta.url, link].flatMap(value => {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' ? [url] : [];
+    } catch {
+      return [];
+    }
+  });
+  const site = urls.find(url => ['www.chess.com', 'chess.com', 'lichess.org'].includes(url.hostname))?.hostname || meta.site.toLowerCase();
   const platform = ['chesscom', 'lichess'].includes(source) ? source
     : /(^|\.)chess\.com$/.test(site) ? 'chesscom'
     : /(^|\.)lichess\.org$|^lichess$/.test(site) ? 'lichess' : null;
@@ -44,6 +50,9 @@ export function checkupGameContext(pgn, { source, orientation, white, black } = 
   return {
     platform,
     orientation,
+    gameId: urls.map(url => platform === 'lichess'
+      ? url.hostname === 'lichess.org' && checkupGameId(platform, url.pathname.match(/^\/([a-z0-9]{8})(?:\/(?:white|black))?\/?$/i)?.[1])
+      : checkupGameId(platform, url.href)).find(Boolean) || null,
     gameRef: GameAnalyzer.hashString(pgn),
     white: cleanName(meta.white) || cleanName(white),
     black: cleanName(meta.black) || cleanName(black)
@@ -203,12 +212,29 @@ async function initializeCheckupEngine(engine, signal) {
   }
 }
 
+function* checkupDecisions(positions, userSide) {
+  for (let mi = 0; mi < positions.length - 1; mi++) {
+    const move = positions[mi + 1];
+    if (move.turn !== userSide || move.ply <= 12) continue;
+    const fenBefore = positions[mi].fen;
+    if (new ChessBoard(fenBefore).getLegalMoves().length <= 1) continue;
+    const historySlice = positions.slice(Math.max(0, mi - 7), mi).map(pos => pos.fen);
+    yield { move, mi, fenBefore, historySlice };
+  }
+}
+
+function playedProbability(prediction, uci) {
+  const candidate = prediction?.moves?.find(move => move.uci === uci);
+  return candidate ? (candidate.rawProb ?? (candidate.prob / 100)) : 0;
+}
+
 export async function runIntuitionCheckup({
   games = [],
   targetPlayer = '',
   profileId = 'default',
   sourceLabel = 'local-pgn-batch',
-  elo = 1900,
+  elo,
+  defaultElo = 1900,
   stockfish,
   maiaEngine,
   onProgress = () => {},
@@ -220,6 +246,9 @@ export async function runIntuitionCheckup({
   if (!targetKey) throw new Error('Target player name is required');
   if (!stockfish || !maiaEngine) throw new Error('Engines are required');
   const cancelled = () => signal?.aborted || isCancelled();
+  const manual = Number.isFinite(elo) && elo > 0;
+  if (!manual) elo = defaultElo;
+  let screenEloSource = manual ? 'manual' : 'default';
 
   const emptyResult = (partial = true) => ({
     id: `checkup_${now}_${Math.random().toString(36).slice(2, 7)}`,
@@ -232,6 +261,7 @@ export async function runIntuitionCheckup({
     eloFit: Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0])),
     closestElo: null,
     screenElo: elo,
+    screenEloSource,
     phaseTraps: { opening: 0, middlegame: 0, endgame: 0 },
     topTrapIds: [],
     topTraps: [],
@@ -250,17 +280,27 @@ export async function runIntuitionCheckup({
       if (!parsedMoves?.length) return null;
       const positions = GameAnalyzer.buildPositionChain(parsedMoves);
       if (!positions || positions.length <= 1 || positions.isPartial) return null;
-      return { entry, meta, userSide, positions };
+      const rating = userSide === 'w' ? parsedMoves.whiteElo : parsedMoves.blackElo;
+      return { entry, meta, userSide, positions, rating: /^\d{3,4}$/.test(rating) ? Number(rating) : 0 };
     })
     .filter(Boolean);
   if (!batch.length) return emptyResult(false);
 
+  const ratings = batch.map(game => game.rating).filter(Boolean).sort((a, b) => a - b);
+  if (!manual && ratings.length) {
+    const midpoint = Math.floor(ratings.length / 2);
+    const median = (ratings[midpoint] + ratings[Math.floor((ratings.length - 1) / 2)]) / 2;
+    elo = CHECKUP_ELOS.reduce((best, rating) => Math.abs(rating - median) < Math.abs(best - median) ? rating : best);
+    screenEloSource = 'pgn';
+  }
+
   if (cancelled()) return emptyResult(true);
-  onProgress({ phase: 'stockfish' });
+  const startupProgress = phase => onProgress({ phase, totalGames: batch.length, completedGames: 0 });
+  startupProgress('stockfish');
   const stockfishReady = await initializeCheckupEngine(stockfish, signal);
   if (cancelled()) return emptyResult(true);
   if (stockfishReady === false) throw new Error(stockfish.lastError || 'Stockfish failed to start');
-  onProgress({ phase: 'maia' });
+  startupProgress('maia');
   await initializeCheckupEngine(maiaEngine, signal);
   if (cancelled()) return emptyResult(true);
 
@@ -273,13 +313,52 @@ export async function runIntuitionCheckup({
   let eloSampleCount = 0;
   let partial = false;
 
+  const needsEarlyFit = !manual && !ratings.length;
+  const fitPredictions = new Map();
+  const predict = (fen, rating, history) => maiaEngine.predict(fen, rating, null, cancelled, history);
+  const fitScores = async (move, fen, history, predictions, sums) => {
+    const probabilities = [];
+    for (const rating of CHECKUP_ELOS) {
+      if (!predictions.has(rating)) predictions.set(rating, await predict(fen, rating, history));
+      if (cancelled()) return false;
+      const prediction = predictions.get(rating);
+      if (!prediction?.moves?.length) return false;
+      probabilities.push(playedProbability(prediction, move.uci));
+    }
+    CHECKUP_ELOS.forEach((rating, i) => { sums[rating] += Math.log(Math.max(probabilities[i], LOG_PROB_FLOOR)); });
+    return true;
+  };
+  const closestRating = () => eloSampleCount
+    ? CHECKUP_ELOS.reduce((best, rating) => eloLogSums[rating] > eloLogSums[best] ? rating : best)
+    : null;
+
+  if (needsEarlyFit) {
+    startupProgress('fitting');
+    // Reuse the sampled predictions when screening these positions later.
+    fit: for (const { positions, userSide } of batch) {
+      for (const { move, fenBefore, historySlice } of checkupDecisions(positions, userSide)) {
+        if (cancelled()) return emptyResult(true);
+        const predictions = new Map();
+        fitPredictions.set(move, predictions);
+        if (await fitScores(move, fenBefore, historySlice, predictions, eloLogSums)) eloSampleCount++;
+        if (eloSampleCount === MAX_ELO_SAMPLES || fitPredictions.size === MAX_ELO_SAMPLES * 2) break fit;
+      }
+    }
+    if (cancelled()) return emptyResult(true);
+    const fitted = closestRating();
+    if (fitted !== null) {
+      elo = fitted;
+      screenEloSource = 'fit';
+    }
+  }
+
   for (let gi = 0; gi < batch.length; gi++) {
     if (cancelled()) { partial = true; break; }
     const { entry, meta, userSide, positions } = batch[gi];
 
     const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
       phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
-      workDone: gi + checkedPlies / (positions.length - 1)
+      completedGames: analyzedGames, workDone: gi + checkedPlies / (positions.length - 1)
     });
     reportProgress('analyzing', 0);
 
@@ -290,57 +369,20 @@ export async function runIntuitionCheckup({
     const gameTraps = [];
     let gameCancelled = false;
 
-    const historyFens = [positions[0].fen];
-    for (let mi = 0; mi < positions.length - 1; mi++) {
+    for (const { move, mi, fenBefore, historySlice } of checkupDecisions(positions, userSide)) {
       if (cancelled()) { gameCancelled = true; break; }
-      const move = positions[mi + 1];
-      const fenBefore = positions[mi].fen;
-      const fenAfter = move.fen;
-      const turn = move.turn;
-      const ply = move.ply;
-      const moveNumber = move.moveNumber;
-
-      if (turn !== userSide || ply <= 12) {
-        historyFens.push(fenAfter);
-        continue;
-      }
-
-      const board = new ChessBoard(fenBefore);
-      const legalMoves = board.getLegalMoves();
-      if (legalMoves.length <= 1) {
-        historyFens.push(fenAfter);
-        continue;
-      }
-
-      const historySlice = historyFens.slice(0, -1).slice(-7);
-      const maiaPred = await maiaEngine.predict(fenBefore, elo, null, cancelled, historySlice);
+      const { fen: fenAfter, turn, ply, moveNumber } = move;
+      const predictions = fitPredictions.get(move);
+      const maiaPred = predictions?.has(elo) ? predictions.get(elo) : await predict(fenBefore, elo, historySlice);
       if (cancelled()) { gameCancelled = true; break; }
 
-      const playedCandidate = maiaPred?.moves?.find(m => m.uci === move.uci);
-      const humanRawProb = playedCandidate ? (playedCandidate.rawProb ?? (playedCandidate.prob / 100)) : 0;
+      const humanRawProb = playedProbability(maiaPred, move.uci);
       const maiaTop = maiaPred?.moves?.[0] || null;
 
-      if (eloSampleCount + gameEloSamples < MAX_ELO_SAMPLES && maiaPred?.moves?.length) {
-        const sampleProbs = {};
-        let validAll = true;
-        for (const r of CHECKUP_ELOS) {
-          if (r === elo) {
-            sampleProbs[r] = humanRawProb;
-          } else {
-            const pred = await maiaEngine.predict(fenBefore, r, null, cancelled, historySlice);
-            if (cancelled()) { gameCancelled = true; break; }
-            if (!pred?.moves?.length) { validAll = false; continue; }
-            const hit = pred.moves.find(m => m.uci === move.uci);
-            sampleProbs[r] = hit ? (hit.rawProb ?? (hit.prob / 100)) : 0;
-          }
-        }
-        if (gameCancelled) break;
-        if (validAll) {
-          gameEloSamples++;
-          for (const r of CHECKUP_ELOS) {
-            gameEloLogSums[r] += Math.log(Math.max(sampleProbs[r], LOG_PROB_FLOOR));
-          }
-        }
+      if (!needsEarlyFit && eloSampleCount + gameEloSamples < MAX_ELO_SAMPLES && maiaPred?.moves?.length) {
+        const sample = new Map([[elo, maiaPred]]);
+        if (await fitScores(move, fenBefore, historySlice, sample, gameEloLogSums)) gameEloSamples++;
+        if (cancelled()) { gameCancelled = true; break; }
       }
 
       // Stockfish is only needed for moves eligible for trap verification.
@@ -396,16 +438,15 @@ export async function runIntuitionCheckup({
         }
       }
       reportProgress('analyzing', ++gameMoves, mi + 1);
-      historyFens.push(fenAfter);
     }
 
-    if (gameCancelled) {
+    if (gameCancelled || cancelled()) {
       partial = true;
       break;
     }
 
-    reportProgress('analyzing', gameMoves, positions.length - 1);
     analyzedGames++;
+    reportProgress('analyzing', gameMoves, positions.length - 1);
     if (entry.gameId) analyzedGameIds.add(entry.gameId);
     analyzedMoves += gameMoves;
     eloSampleCount += gameEloSamples;
@@ -420,9 +461,7 @@ export async function runIntuitionCheckup({
       eloSampleCount ? Math.round(Math.exp(eloLogSums[r] / eloSampleCount) * 1000) / 1000 : 0
     ])
   );
-  const closestElo = eloSampleCount
-    ? CHECKUP_ELOS.slice().sort((a, b) => eloLogSums[b] - eloLogSums[a])[0]
-    : null;
+  const closestElo = closestRating();
 
   const dedup = new Map();
   for (const trap of collectedTraps) {
@@ -445,6 +484,7 @@ export async function runIntuitionCheckup({
     eloFit,
     closestElo,
     screenElo: elo,
+    screenEloSource,
     phaseTraps,
     topTrapIds: topTraps.map(item => item.id),
     topTraps,
@@ -517,6 +557,10 @@ export class IntuitionCheckup {
     this.dialog = document.getElementById('checkup-dialog');
     this.closeBtn = document.getElementById('btn-close-checkup');
     this.profileSelect = document.getElementById('checkup-profile-select');
+    this.profileName = document.getElementById('checkup-profile-name');
+    this.newProfileBtn = document.getElementById('btn-checkup-new-profile');
+    this.screenEloSelect = document.getElementById('checkup-screen-elo');
+    for (const rating of CHECKUP_ELOS) this.screenEloSelect?.add(new Option(`Maia ${rating}`, String(rating)));
     this.accountList = document.getElementById('checkup-accounts');
     this.btnSaveAccount = document.getElementById('btn-checkup-save-account');
     this.sourceTabs = [...document.querySelectorAll('#checkup-dialog [data-checkup-source]')];
@@ -536,6 +580,10 @@ export class IntuitionCheckup {
     this.progressText = document.getElementById('checkup-progress-text');
     this.progressBar = document.getElementById('checkup-progress-bar');
     this.btnCancelRun = document.getElementById('btn-checkup-cancel');
+    this.eta = document.getElementById('checkup-eta');
+    this.progressDetails = document.getElementById('checkup-progress-details');
+    this.stopDialog = document.getElementById('checkup-stop-dialog');
+    this.stopMessage = document.getElementById('checkup-stop-message');
     this.historyHintEl = document.getElementById('checkup-history-hint');
     this.reportBox = document.getElementById('checkup-report-box');
     this.statusEl = document.getElementById('checkup-status');
@@ -553,7 +601,7 @@ export class IntuitionCheckup {
   }
 
   get ownsEngines() {
-    return this.running && !this.cancelled;
+    return this.running;
   }
 
   get busy() {
@@ -570,8 +618,16 @@ export class IntuitionCheckup {
       this.button.hidden = !this.allowed();
       this.button.onclick = () => this.open();
     }
-    if (this.closeBtn) this.closeBtn.onclick = () => this.close();
+    if (this.closeBtn) this.closeBtn.onclick = () => this.requestStop({ close: true });
     if (this.profileSelect) this.profileSelect.onchange = () => this.switchProfile(this.profileSelect.value);
+    if (this.newProfileBtn) this.newProfileBtn.onclick = () => this.changeProfile(() => this.app.studyProfiles.createProfile());
+    document.getElementById('btn-checkup-continue')?.addEventListener('click', () => this.stopDialog.close());
+    document.getElementById('btn-checkup-stop-confirm')?.addEventListener('click', () => {
+      const close = this.closeAfterConfirmation;
+      this.stopDialog.close();
+      this.closeWhenStopped = close;
+      this.cancelRun();
+    });
     if (this.btnSaveAccount) {
       this.btnSaveAccount.onclick = () => this.updateAccount(this.source, this.usernameInput.value);
     }
@@ -580,16 +636,17 @@ export class IntuitionCheckup {
         if (event.target === this.dialog) {
           const rect = this.dialog.getBoundingClientRect();
           if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-            this.close();
+            if (!this.running) this.close();
           }
         }
       });
-      this.dialog.addEventListener('cancel', () => {
-        this.openGeneration++;
-        this.fileReadGeneration++;
-        this.cancelRun();
+      this.dialog.addEventListener('cancel', event => {
+        event.preventDefault();
+        this.requestStop({ close: true });
       });
       this.dialog.addEventListener('close', () => {
+        if (this.updatingProfile && this.app.studyProfiles?.editor.open) this.app.studyProfiles.editor.close();
+        if (this.stopDialog?.open) this.stopDialog.close();
         this.openGeneration++;
         this.fileReadGeneration++;
         this.cancelRun();
@@ -646,7 +703,7 @@ export class IntuitionCheckup {
     }
     if (this.btnFetch) this.btnFetch.onclick = () => this.prepareBatch();
     if (this.btnStart) this.btnStart.onclick = () => this.startRun();
-    if (this.btnCancelRun) this.btnCancelRun.onclick = () => this.cancelRun();
+    if (this.btnCancelRun) this.btnCancelRun.onclick = () => this.requestStop();
   }
 
   async readFilesForBatch(files, { autoPrepare = false } = {}) {
@@ -677,7 +734,7 @@ export class IntuitionCheckup {
   }
 
   async open({ account } = {}) {
-    if (!this.allowed() || !this.dialog) return;
+    if (!this.allowed() || !this.dialog || this.running || this.fetching) return;
     const generation = ++this.openGeneration;
     const epoch = this.app.gameEpoch;
     this.fileReadGeneration++;
@@ -694,6 +751,7 @@ export class IntuitionCheckup {
       this.pendingBatch = null;
       this.setStatus('');
       if (profileChanged && this.localPgnInput) this.localPgnInput.value = '';
+      if (this.screenEloSelect) this.screenEloSelect.value = '';
       if (this.confirmNameInput) this.confirmNameInput.value = '';
       this.gameContext = this.app.checkupGame;
       this.source = this.gameContext?.platform || profile?.accounts?.[0]?.platform || 'lichess';
@@ -723,16 +781,20 @@ export class IntuitionCheckup {
     this.app.checkupReminders?.refresh();
   }
 
-  async switchProfile(id) {
-    const bank = this.app.mistakeBank;
-    if (!bank || this.busy || !this.allowed() || id === this.activeProfileId) return;
+  switchProfile(id) {
+    if (id === this.activeProfileId) return;
+    return this.changeProfile(() => this.app.mistakeBank.selectProfile(id));
+  }
+
+  async changeProfile(operation, account) {
+    if (this.busy || !this.allowed() || !this.dialog?.open) return;
     const generation = ++this.openGeneration;
     this.updatingProfile = true;
     this.renderSourceControls();
     this.renderReport(null);
     try {
-      await bank.selectProfile(id);
-      if (generation === this.openGeneration && this.dialog.open) await this.open();
+      await operation();
+      if (generation === this.openGeneration && this.dialog.open) await this.open({ account });
     } catch {
       if (generation === this.openGeneration) {
         this.renderAccounts();
@@ -754,10 +816,11 @@ export class IntuitionCheckup {
     this.updatingProfile = true;
     this.renderSourceControls();
     try {
-      await bank.updateProfileAccount(id, platform, username, { remove });
+      if (remove) await bank.updateProfileAccount(id, platform, username, { remove });
+      else if (!await this.app.studyProfiles.linkAccount(account)) return;
       if (generation !== this.openGeneration || !this.allowed()) return;
       if (bank.activeProfile?.id !== id) {
-        await this.open();
+        await this.open({ account });
         return;
       }
       this.renderAccounts();
@@ -771,7 +834,26 @@ export class IntuitionCheckup {
     }
   }
 
+  requestStop({ close = false } = {}) {
+    if (!this.running) {
+      if (close) this.close();
+      else this.cancelRun();
+      return;
+    }
+    if (this.cancelled || this.stopDialog.open) return;
+    this.closeAfterConfirmation = close;
+    this.renderStopMessage();
+    this.stopDialog.showModal();
+  }
+
+  renderStopMessage() {
+    if (!this.stopMessage) return;
+    const { completedGames: completed = 0, totalGames: total } = this.progress || {};
+    this.stopMessage.textContent = t(total ? 'checkupStopProgress' : 'checkupStopStarting', { completed, total });
+  }
+
   close() {
+    if (this.stopDialog?.open) this.stopDialog.close();
     this.openGeneration++;
     this.cancelRun();
     if (this.dialog?.open) this.dialog.close();
@@ -802,7 +884,7 @@ export class IntuitionCheckup {
 
   renderAccounts() {
     const bank = this.app.mistakeBank;
-    bank?.renderProfileOptions(this.profileSelect);
+    if (bank) bank.renderProfilePicker(this.profileSelect, this.profileName);
     if (!this.accountList) return;
     const accounts = bank?.activeProfile?.accounts || [];
     this.accountList.hidden = !accounts.length;
@@ -811,6 +893,8 @@ export class IntuitionCheckup {
       const label = this.accountLabel(account);
       const row = document.createElement('li');
       row.dataset.account = accountKey(account);
+      const identity = document.createElement('div');
+      identity.className = 'checkup-account-identity';
       const name = document.createElement('strong');
       name.className = 'checkup-account-name';
       name.textContent = label;
@@ -833,14 +917,82 @@ export class IntuitionCheckup {
       unlink.textContent = t('checkupRemoveAccount');
       unlink.setAttribute('aria-label', t('checkupRemoveAccountLabel', { account: label }));
       unlink.onclick = () => this.updateAccount(account.platform, account.username, { remove: true });
-      row.append(name, run, unlink);
+      const status = document.createElement('span');
+      status.className = 'checkup-account-status';
+      const ignore = document.createElement('button');
+      ignore.type = 'button';
+      ignore.className = 'btn-header checkup-ignore';
+      ignore.hidden = true;
+      ignore.textContent = t('checkupIgnore');
+      ignore.setAttribute('aria-label', t('checkupIgnoreAccount', { account: label }));
+      ignore.onclick = async () => {
+        if (this.busy || !this.allowed()) return;
+        ignore.disabled = true;
+        try {
+          await this.app.checkupReminders?.ignore(account);
+        } catch {
+          this.setStatus(t('checkupAccountError'));
+        } finally {
+          ignore.disabled = this.busy;
+        }
+      };
+      identity.append(name, status);
+      row.append(identity, run, ignore);
+      if (accounts.length > 1) {
+        const move = document.createElement('button');
+        move.type = 'button';
+        move.className = 'btn-header';
+        move.textContent = t('studyMoveProfile');
+        move.setAttribute('aria-label', t('studyMoveAccount', { account: label }));
+        move.onclick = () => this.changeProfile(() => this.app.studyProfiles.createProfile({ account, move: true }), account);
+        row.append(move);
+      }
+      row.append(unlink);
       this.accountList.append(row);
     }
+    this.renderAccountStatus();
+  }
+
+  renderAccountStatus() {
+    if (!this.accountList) return;
+    const accounts = this.app.mistakeBank?.activeProfile?.accounts || [];
+    const states = new Map(accounts.map(account => [
+      accountKey(account), this.app.checkupReminders?.accountState(account)
+    ]));
+    const rows = [...this.accountList.children];
+    for (const row of rows) {
+      const { record, pending } = states.get(row.dataset.account) || {};
+      const count = pending?.length || 0;
+      const status = row.querySelector('.checkup-account-status');
+      const checked = record?.checkedAt;
+      const diagnosed = record?.lastDiagnosedAt;
+      status.dataset.pending = String(count > 0);
+      const recent = diagnosed ? t('checkupLastDiagnosis', { when: formatRelativeTime(diagnosed) }) : '';
+      status.textContent = count ? t('checkupAccountPending', { count })
+        : checked ? [t('checkupCaughtUp'), recent].filter(Boolean).join(' · ')
+        : recent || t('checkupAwaitingCheck');
+      row.querySelector('.checkup-ignore').hidden = count === 0;
+      row.querySelector('button').textContent = t(count ? 'checkupRunAccount' : diagnosed ? 'checkupRunAgain' : 'checkupRunFirst');
+    }
+    const count = row => states.get(row.dataset.account)?.pending.length || 0;
+    const ordered = [...rows].sort((a, b) => Number(count(b) > 0) - Number(count(a) > 0));
+    const focused = this.accountList.contains(document.activeElement) ? document.activeElement : null;
+    ordered.forEach((row, index) => {
+      if (this.accountList.children[index] !== row) this.accountList.insertBefore(row, this.accountList.children[index]);
+    });
+    const nextFocus = focused?.hidden ? focused.closest('li').querySelector('button') : focused;
+    if (nextFocus && document.activeElement !== nextFocus) nextFocus.focus({ preventScroll: true });
   }
 
   renderSourceControls() {
     const busy = this.busy;
     if (this.profileSelect) this.profileSelect.disabled = busy;
+    if (this.newProfileBtn) this.newProfileBtn.disabled = busy;
+    if (this.screenEloSelect) this.screenEloSelect.disabled = busy;
+    if (this.btnCancelRun) {
+      this.btnCancelRun.disabled = this.running && this.cancelled;
+      this.btnCancelRun.textContent = t(this.running ? 'checkupStop' : 'btnCancel');
+    }
     for (const button of this.accountList?.querySelectorAll('button') || []) button.disabled = busy;
     const account = normalizeAccount(this.source, this.usernameInput?.value);
     for (const row of this.accountList?.children || []) {
@@ -893,7 +1045,22 @@ export class IntuitionCheckup {
 
   renderProgress() {
     if (!this.progressText || !this.progress) return;
-    const { phase, gameIndex, totalGames, analyzedMoves, workDone } = this.progress;
+    const { phase, gameIndex, totalGames, analyzedMoves, workDone, completedGames = 0 } = this.progress;
+    if (this.progressDetails) this.progressDetails.hidden = !this.running;
+    if (this.stopDialog?.open) this.renderStopMessage();
+    if (this.eta) {
+      let estimate = '';
+      if (this.running && phase !== 'cancelling') {
+        if (completedGames && completedGames < totalGames) {
+          const remaining = Math.max(1, Math.ceil(this.averageGameMs * (totalGames - workDone) / 1000));
+          estimate = t('checkupEta', { seconds: remaining });
+        } else if (totalGames && !completedGames) {
+          estimate = t('checkupEtaAfterFirst', { count: totalGames });
+        }
+      }
+      this.eta.hidden = !estimate;
+      if (this.eta.textContent !== estimate) this.eta.textContent = estimate;
+    }
     const stockfish = this.app.stockfish?.downloadProgress;
     const maia = this.app.maiaEngine?.status?.maia;
     let label;
@@ -910,13 +1077,13 @@ export class IntuitionCheckup {
     } else {
       const key = {
         fetching: 'checkupFetching', stockfish: 'checkupStartingStockfish', maia: 'checkupStartingMaia',
-        analyzing: 'checkupProgress', verifying: 'checkupVerifying', cancelling: 'checkupCancelling'
+        fitting: 'checkupFitting', analyzing: 'checkupProgress', verifying: 'checkupVerifying', cancelling: 'checkupCancelling'
       }[phase];
       label = t(key, { current: gameIndex, total: totalGames, moves: analyzedMoves });
     }
     if (this.progressText.textContent !== label) this.progressText.textContent = label;
     if (this.progressBar) {
-      if (totalGames) {
+      if (Number.isFinite(workDone)) {
         this.progressBar.max = totalGames;
         this.progressBar.value = workDone;
       } else if (downloadPercent !== undefined) {
@@ -1015,6 +1182,9 @@ export class IntuitionCheckup {
     }
     this.running = true;
     this.cancelled = false;
+    this.closeWhenStopped = false;
+    this.analysisStartedAt = null;
+    this.averageGameMs = 0;
     const controller = this.runController = new AbortController();
     const runGeneration = ++this.openGeneration;
     const current = () => this.allowed() && runGeneration === this.openGeneration && batch.profileId === activeId();
@@ -1029,13 +1199,18 @@ export class IntuitionCheckup {
         targetPlayer,
         profileId: batch.profileId,
         sourceLabel: batch.sourceLabel,
-        elo: this.app.currentElo || 1900,
+        elo: Number(this.screenEloSelect?.value) || undefined,
+        defaultElo: this.app.profileDefaultElo?.() || 1900,
         stockfish: this.app.stockfish,
         maiaEngine: this.app.maiaEngine,
         signal: controller.signal,
         isCancelled: () => this.cancelled || !current(),
         onProgress: progress => {
           if (!current() || this.cancelled) return;
+          if (progress.phase === 'analyzing' && this.analysisStartedAt === null) this.analysisStartedAt = performance.now();
+          if (progress.completedGames > (this.progress.completedGames || 0)) {
+            this.averageGameMs = (performance.now() - this.analysisStartedAt) / progress.completedGames;
+          }
           this.progress = progress;
           this.renderProgress();
         }
@@ -1054,7 +1229,8 @@ export class IntuitionCheckup {
           analyzedMoves: report.analyzedMoves,
           eloFit: report.eloFit,
           closestElo: report.closestElo,
-          screenElo: report.screenElo ?? (this.app.currentElo || 1900),
+          screenElo: report.screenElo,
+          screenEloSource: report.screenEloSource,
           phaseTraps: report.phaseTraps,
           topTrapIds: report.topTrapIds,
           topTraps: report.topTraps,
@@ -1070,7 +1246,8 @@ export class IntuitionCheckup {
         this.fallbackReport = null;
         if (this.app.mistakeBank?.store) {
           await this.app.mistakeBank.store.saveCheckup(savedRecord);
-          this.app.checkupReminders?.refresh();
+          await this.app.checkupReminders?.reload(batch.profileId);
+          this.app.checkupReminders?.syncBackground();
         }
         if (!current()) return;
         this.renderReport(savedRecord);
@@ -1081,10 +1258,13 @@ export class IntuitionCheckup {
         this.setStatus(t('checkupNoMatchedSide', { player: targetPlayer }));
       }
     } catch (err) {
+      this.closeWhenStopped = false;
       if (current()) this.setStatus(t('checkupRunFailed', { error: err.message }));
     } finally {
       this.runController = null;
       this.running = false;
+      if (this.stopDialog?.open) this.stopDialog.close();
+      if (this.closeWhenStopped && current()) this.close();
       this.renderSourceControls();
       restoreReview?.();
     }
@@ -1099,7 +1279,7 @@ export class IntuitionCheckup {
       this.setStatus(t('checkupFetchCancelled'));
     }
     if (this.running) {
-      this.progress = { phase: 'cancelling' };
+      this.progress = { ...this.progress, phase: 'cancelling' };
       this.runController?.abort();
       this.app.stockfish?.stop?.();
     }
@@ -1222,8 +1402,9 @@ export class IntuitionCheckup {
       middlegame: report.phaseTraps?.middlegame || 0,
       endgame: report.phaseTraps?.endgame || 0
     });
+    const screenLabel = { pgn: 'checkupScreenPgn', fit: 'checkupScreenFit', manual: 'checkupScreenManual', default: 'checkupScreenDefault' };
     phaseLine.textContent = Number.isFinite(report.screenElo)
-      ? `${phaseText} · ${t('checkupScreenElo', { elo: report.screenElo })}`
+      ? `${phaseText} · ${t(screenLabel[report.screenEloSource] || 'checkupScreenElo', { elo: report.screenElo })}`
       : phaseText;
     summary.append(phaseLine);
     this.reportBox.append(summary);

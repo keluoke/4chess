@@ -1,6 +1,6 @@
 import {
   CHECKUP_FAILURE_MS, CHECKUP_REFRESH_MS, checkupProbeDue, fetchCheckupObservation,
-  checkupSubscriptionKey, hasNewCheckupGames, isCheckupReminderToken, mergeCheckupObservation, mergeCheckupSnapshot
+  checkupSubscriptionKey, isCheckupReminderToken, markCheckupGames, mergeCheckupObservation, mergeCheckupSnapshot, pendingCheckupGameIds
 } from '../engine/checkup-watch.js?v=20261121-v127';
 import { accountKey, normalizeAccount } from './study-store.js?v=20261121-v127';
 import { formatRelativeTime } from './checkup-runner.js?v=20261122-v129';
@@ -105,15 +105,8 @@ export class CheckupReminders {
     try {
       await this.syncBackground();
       if (!current()) return;
-      const [profile, reports] = await Promise.all([this.bank.store.get('profiles', id), this.bank.store.listCheckups(id)]);
+      const profile = await this.loadProfile(id, current);
       if (!current()) return;
-      this.profile = profile;
-      const keys = new Set((profile?.accounts || []).map(accountKey));
-      this.lastDiagnosedAt = reports.find(report => {
-        const account = normalizeAccount(report.sourceLabel?.split(':')[0], report.playerName);
-        return account && keys.has(accountKey(account));
-      })?.createdAt || 0;
-      this.render();
       if (document.hidden) return;
       let updated = false;
       for (const account of profile?.accounts || []) {
@@ -128,6 +121,57 @@ export class CheckupReminders {
       if (updated && saved?.backgroundCheckup) this.syncBackground();
     } catch (error) {
       console.warn('[Checkup reminders] Could not refresh:', error);
+    }
+  }
+
+  accountState(account) {
+    const active = this.bank.activeProfile;
+    const profile = this.profile?.id === active?.id ? this.profile : active;
+    const record = profile?.checkupReminders?.[accountKey(account)];
+    return { record, pending: pendingCheckupGameIds(record) };
+  }
+
+  async loadProfile(id, current) {
+    const [profile, reports] = await Promise.all([this.bank.store.get('profiles', id), this.bank.store.listCheckups(id)]);
+    if (!current()) return;
+    this.profile = profile;
+    const keys = new Set((profile?.accounts || []).map(accountKey));
+    this.lastDiagnosedAt = reports.find(report => {
+      const account = normalizeAccount(report.sourceLabel?.split(':')[0], report.playerName);
+      return account && keys.has(accountKey(account));
+    })?.createdAt || 0;
+    this.render();
+    return profile;
+  }
+
+  async reload(id) {
+    if (id !== this.bank.activeProfile?.id || !this.app.checkup.allowed()) return;
+    const generation = ++this.generation;
+    await this.loadProfile(id, () => generation === this.generation &&
+      id === this.bank.activeProfile?.id && this.app.checkup.allowed());
+  }
+
+  async ignore(account) {
+    const id = this.bank.activeProfile?.id;
+    const { pending } = this.accountState(account);
+    if (!id || !pending.length || !this.app.checkup.allowed()) return;
+    await this.bank.store.updateCheckupReminder(id, account, current => markCheckupGames(current, account.platform, pending));
+    await this.reload(id);
+    this.syncBackground();
+  }
+
+  async recordReview(profileId, game) {
+    if (!profileId || !game?.gameId || !this.app.checkup.allowed()) return;
+    const profile = await this.bank.store.get('profiles', profileId);
+    if (!this.app.checkup.allowed()) return;
+    const players = new Set([game.white, game.black].map(name => name?.toLowerCase()).filter(Boolean));
+    const matched = profile?.accounts?.filter(account =>
+      account.platform === game.platform && players.has(account.username.toLowerCase())) || [];
+    const results = await Promise.all(matched.map(account => this.bank.store.updateCheckupReminder(profileId, account,
+      current => current.diagnosed?.includes(game.gameId) ? current : markCheckupGames(current, game.platform, [game.gameId]))));
+    if (results.some(Boolean)) {
+      await this.reload(profileId);
+      this.syncBackground();
     }
   }
 
@@ -215,12 +259,16 @@ export class CheckupReminders {
     if (!this.button || !this.dot || !this.note) return;
     const allowed = this.app.checkup.allowed() && this.profile && this.profile.id === this.bank.activeProfile?.id;
     const accounts = allowed ? this.profile.accounts || [] : [];
-    const records = accounts.map(account => this.profile.checkupReminders?.[accountKey(account)]);
-    const hasNew = records.some(hasNewCheckupGames);
-    const latest = Math.max(this.lastDiagnosedAt, ...records.map(record => record?.lastDiagnosedAt || 0));
+    const accountsWithState = accounts.map(account => ({ account, ...this.accountState(account) }));
+    const pending = accountsWithState.filter(item => item.pending.length);
+    const count = pending.reduce((sum, item) => sum + item.pending.length, 0);
+    const details = pending.map(({ account, pending }) =>
+      `${this.app.checkup.accountLabel(account)} ${t('checkupAccountPending', { count: pending.length })}`).join(' · ');
+    const latest = Math.max(this.lastDiagnosedAt, ...accountsWithState.map(item => item.record?.lastDiagnosedAt || 0));
     const lastDiagnosis = latest ? t('checkupLastDiagnosis', { when: formatRelativeTime(latest) }) : '';
-    const message = hasNew ? t('checkupNewGames') : lastDiagnosis || t('checkupFirstDiagnosis');
-    this.dot.hidden = !hasNew;
+    const message = details || lastDiagnosis || t('checkupFirstDiagnosis');
+    this.dot.hidden = count === 0;
+    this.dot.textContent = count ? String(count) : '';
     this.note.hidden = !accounts.length;
     this.note.textContent = accounts.length ? message : '';
     if (this.backgroundControl) {
@@ -233,7 +281,8 @@ export class CheckupReminders {
     this.reminderOffer.hidden = !showOffer;
     this.backgroundTip.hidden = !showOffer;
     this.acceptOffer.disabled = this.dismissOffer.disabled = this.toggling;
-    const title = accounts.length && (hasNew || !latest || Date.now() - latest >= STALE_DIAGNOSIS_MS)
+    if (this.app.checkup.dialog?.open) this.app.checkup.renderAccountStatus();
+    const title = accounts.length && (count || !latest || Date.now() - latest >= STALE_DIAGNOSIS_MS)
       ? `${t('checkupBtn')} · ${message}` : t('checkupBtn');
     this.button.title = title;
     this.button.setAttribute('aria-label', title);

@@ -45,6 +45,9 @@ assert.equal(suggestCheckupPlayer(chesscomContext, { aliases: ['kidplayer'] }), 
 assert.equal(suggestCheckupPlayer(chesscomContext, { aliases: ['OPPa', 'kidplayer'] }), '');
 const lichessContext = checkupGameContext('[Site "https://lichess.org/AbCd1234"]\n' + pgn2);
 assert.equal(lichessContext.platform, 'lichess');
+assert.equal(lichessContext.gameId, 'AbCd1234');
+assert.equal(checkupGameContext(chesscomPgn, { publicGameUrl: 'https://www.chess.com/game/live/12345678' }).gameId, 'live:12345678');
+assert.equal(checkupGameContext('[Link "https://www.chess.com/game/daily/12345678"]\n' + chesscomPgn).gameId, 'daily:12345678');
 assert.equal(suggestCheckupPlayer(lichessContext), '', 'A platform URL alone supplies no player perspective');
 assert.equal(suggestCheckupPlayer(lichessContext, {
   aliases: ['KidPlayer'],
@@ -146,9 +149,43 @@ const lowProbabilityReport = await runIntuitionCheckup({
 assert.equal(lowProbabilityReport.gameCount, 1);
 assert.equal(lowProbabilityReport.analyzedMoves, 2);
 assert.equal(lowProbabilityReport.eloFit[1900], 0.08);
-assert.deepEqual(progress.slice(0, 3).map(entry => entry.phase), ['stockfish', 'maia', 'analyzing']);
+assert.deepEqual(progress.slice(0, 4).map(entry => entry.phase), ['stockfish', 'maia', 'fitting', 'analyzing']);
 assert(progress.some(entry => entry.analyzedMoves === 1 && entry.workDone > 0 && entry.workDone < 1), 'Move progress arrives before the first game finishes');
 assert.equal(progress.at(-1).workDone, 1);
+assert.equal(progress.at(-1).completedGames, 1);
+assert.equal(lowProbabilityReport.screenEloSource, 'fit');
+
+const highRated = {
+  games: [
+    { pgn: '[WhiteElo "2160"]\n[BlackElo "1200"]\n' + pgn1 },
+    { pgn: '[WhiteElo "1300"]\n[BlackElo "2200"]\n' + pgn2 }
+  ],
+  targetPlayer: 'KidPlayer',
+  defaultElo: 1400,
+  stockfish: mockStockfish,
+  maiaEngine: mockMaia
+};
+const automatic = await runIntuitionCheckup(highRated);
+assert.equal(automatic.screenElo, 2200, 'The median is taken from target player ratings on either side');
+assert.equal(automatic.screenEloSource, 'pgn');
+assert.equal(automatic.closestElo, 1900, 'PGN rating and behavioral fit are independent');
+const manual = await runIntuitionCheckup({ ...highRated, elo: 1500 });
+assert.equal(manual.screenElo, 1500);
+assert.equal(manual.screenEloSource, 'manual');
+
+const fitted = await runIntuitionCheckup({
+  ...highRated,
+  games: [{ pgn: pgn1 }],
+  maiaEngine: {
+    async initialize() { return true; },
+    async predict(fen, elo) {
+      return { moves: [{ uci: 'a4b3', rawProb: elo === 2200 ? 0.48 : 0.08 }] };
+    }
+  }
+});
+assert.equal(fitted.screenElo, 2200);
+assert.equal(fitted.screenEloSource, 'fit');
+assert.equal(fitted.topTraps[0]?.elo, 2200, 'The fitted rating is used during trap screening');
 
 const abort = new AbortController();
 let releaseStockfish;
@@ -254,6 +291,7 @@ const emptyMaiaReport = await runIntuitionCheckup({
   }
 });
 assert(emptyMaiaReport.analyzedMoves >= 2);
+assert.equal(emptyMaiaReport.screenEloSource, 'default');
 assert.equal(emptyMaiaReport.closestElo, null, 'Empty Maia predictions across all Elos must yield closestElo: null');
 
 // 4. P1 regression: mid-game cancellation must NOT count unfinished game 1

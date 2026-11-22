@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { StudyStore } from '../analysis/study-store.js';
 import {
   CHECKUP_ALARM_MINUTES, CHECKUP_BACKGROUND_KEY, fetchCheckupObservation,
-  hasNewCheckupGames, mergeCheckupObservation
+  hasNewCheckupGames, markCheckupGames, mergeCheckupObservation, pendingCheckupGameIds
 } from '../engine/checkup-watch.js';
 import { startCheckupReminders } from '../engine/checkup-reminders-background.js';
 
@@ -52,6 +52,15 @@ const state = async () => (await store.get('profiles', 'default')).checkupRemind
 assert.equal(hasNewCheckupGames(await state()), false, 'The first observation establishes a baseline');
 await store.updateCheckupReminder('default', lichess, current => mergeCheckupObservation(current, observation));
 assert.equal(hasNewCheckupGames(await state()), true);
+const observed = await state();
+const newIds = pendingCheckupGameIds({ ...observed, games: [...observed.games, ...observed.games] });
+assert.deepEqual(newIds, ['NewGame1']);
+const late = mergeCheckupObservation(observed, { checkedAt: now + 1, games: [{ id: 'Later123', at: now }, ...observed.games] });
+const dismissed = markCheckupGames(late, 'lichess', newIds);
+assert.deepEqual(pendingCheckupGameIds(dismissed), ['Later123'], 'Dismissal only consumes the IDs visible at click time');
+assert.equal(dismissed.lastDiagnosedAt, 0, 'Dismissing or reviewing a game does not change the last diagnosis time');
+const beforeFirstProbe = markCheckupGames({}, 'lichess', ['NewGame1']);
+assert.deepEqual(pendingCheckupGameIds(mergeCheckupObservation(beforeFirstProbe, observation)), []);
 await store.saveCheckup({
   id: 'partial', profileId: 'default', sourceLabel: 'lichess:Student', playerName: 'Student',
   createdAt: now, analyzedGameIds: ['OldGame1'], partial: true

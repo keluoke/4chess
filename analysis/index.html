@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261121-v127">
+  <link rel="stylesheet" href="workbench.css?v=20261122-checkup">
   <link rel="stylesheet" href="./review-share.css?v=20261122-v129">
 </head>
 <body class="diverge-ui">
@@ -60,7 +60,11 @@
 
     <div class="studio-header-actions">
       <button type="button" class="btn-header review-overview-button" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-haspopup="dialog" hidden>复盘总览</button>
-      <select id="studio-profile-select" class="btn-header studio-profile-select" data-i18n-aria="checkupProfile" aria-label="当前档案" hidden></select>
+      <div class="studio-profile-picker" id="studio-profile-picker" hidden>
+        <span class="studio-profile-name" id="studio-profile-name"></span>
+        <select id="studio-profile-select" class="btn-header studio-profile-select" data-i18n-aria="checkupProfile" aria-label="当前档案" hidden></select>
+        <button type="button" id="btn-studio-new-profile" class="btn-header" data-i18n-title="bankNewProfile" data-i18n-aria="bankNewProfile" aria-label="新建档案" title="新建档案" aria-haspopup="dialog">＋</button>
+      </div>
       <button type="button" class="btn-header" id="btn-intuition-checkup" aria-controls="checkup-dialog" aria-haspopup="dialog" hidden>
         <span data-i18n="checkupBtn">近期诊断</span><span id="checkup-new-dot" class="checkup-new-dot" aria-hidden="true" hidden></span>
       </button>
@@ -468,8 +472,10 @@
       <button type="button" class="btn-header" id="btn-close-checkup" data-i18n="btnClose">关闭</button>
     </div>
     <div class="checkup-profile">
-      <label for="checkup-profile-select" data-i18n="checkupProfile">当前档案</label>
-      <select id="checkup-profile-select" class="btn-header"></select>
+      <span id="checkup-profile-label" data-i18n="checkupProfile">当前档案</span>
+      <strong id="checkup-profile-name"></strong>
+      <select id="checkup-profile-select" class="btn-header" aria-labelledby="checkup-profile-label" hidden></select>
+      <button type="button" id="btn-checkup-new-profile" class="btn-header" aria-haspopup="dialog" data-i18n="studyNewProfileAction">＋ 新建档案</button>
     </div>
     <p id="checkup-reminder-note" class="checkup-reminder-note" hidden></p>
     <p id="checkup-background-tip" class="checkup-reminder-note" data-i18n="checkupBackgroundOffer" hidden>开启提醒后，扩展约每 6 小时检查此档案的新完赛对局。</p>
@@ -478,10 +484,18 @@
       <span data-i18n="checkupBackgroundToggle">为此档案启用扩展后台提醒</span>
     </label>
     <ul id="checkup-accounts" class="checkup-accounts" data-i18n-aria="checkupAccounts" aria-label="已绑定账号" hidden></ul>
-    <div class="checkup-sources" role="group">
-      <button type="button" class="btn-header" data-checkup-source="lichess" aria-pressed="true">Lichess</button>
-      <button type="button" class="btn-header" data-checkup-source="chesscom" aria-pressed="false">Chess.com</button>
-      <button type="button" class="btn-header" data-checkup-source="local" aria-pressed="false" data-i18n="checkupSourceLocal">本地多盘 PGN</button>
+    <div class="checkup-input-options">
+      <div class="checkup-sources" role="group">
+        <button type="button" class="btn-header" data-checkup-source="lichess" aria-pressed="true">Lichess</button>
+        <button type="button" class="btn-header" data-checkup-source="chesscom" aria-pressed="false">Chess.com</button>
+        <button type="button" class="btn-header" data-checkup-source="local" aria-pressed="false" data-i18n="checkupSourceLocal">本地多盘 PGN</button>
+      </div>
+      <label class="checkup-screen-control">
+        <span data-i18n="checkupScreenSetting">筛查分段</span>
+        <select id="checkup-screen-elo" class="btn-header">
+          <option value="" data-i18n="checkupScreenAuto">自动（优先实战等级分）</option>
+        </select>
+      </label>
     </div>
     <div id="checkup-username-row" class="checkup-input-row">
       <input type="text" id="checkup-username" data-i18n-placeholder="checkupUsernamePlaceholder" placeholder="输入用户名（自动拉取最近 10 盘完赛标准棋）">
@@ -510,11 +524,39 @@
         <span id="checkup-progress-text" role="status"></span>
         <progress id="checkup-progress-bar" data-i18n-aria="checkupProgressLabel" aria-label="体检进度"></progress>
       </div>
-      <button type="button" class="btn-header" id="btn-checkup-cancel" data-i18n="btnCancel">取消</button>
+      <button type="button" class="btn-header" id="btn-checkup-cancel" data-i18n="checkupStop">停止诊断</button>
+      <div id="checkup-progress-details" class="checkup-progress-details">
+        <p id="checkup-eta" hidden></p>
+        <p data-i18n="checkupKeepPage">请保持页面开启。诊断期间主棋盘复盘暂停。</p>
+        <p data-i18n="checkupResultsPreview">完成后可查看实战直觉分段、开中残局陷阱分布，并一键收录最多 5 个陷阱。</p>
+      </div>
     </div>
     <p id="checkup-status" class="bank-status-note" role="status"></p>
     <div id="checkup-history-hint" class="checkup-history-hint" hidden></div>
     <div id="checkup-report-box" class="checkup-report-box" hidden></div>
+  </dialog>
+
+  <dialog class="checkup-dialog study-mini-dialog" id="checkup-stop-dialog" aria-labelledby="checkup-stop-title" aria-describedby="checkup-stop-message">
+    <h2 id="checkup-stop-title" data-i18n="checkupStop">停止诊断</h2>
+    <p id="checkup-stop-message"></p>
+    <div class="study-mini-actions">
+      <button type="button" class="btn-header btn-primary" id="btn-checkup-continue" data-i18n="checkupContinue" autofocus>继续诊断</button>
+      <button type="button" class="btn-header" id="btn-checkup-stop-confirm" data-i18n="checkupStopKeep">停止并保留结果</button>
+    </div>
+  </dialog>
+
+  <dialog class="checkup-dialog study-mini-dialog" id="study-profile-dialog" aria-labelledby="study-profile-title" aria-describedby="study-profile-hint">
+    <h2 id="study-profile-title"></h2>
+    <p id="study-profile-hint"></p>
+    <form method="dialog">
+      <label for="study-profile-name" data-i18n="studyProfileName">档案名称</label>
+      <input id="study-profile-name" type="text" maxlength="40" required pattern=".*\S.*" data-i18n-placeholder="studyProfileExample" placeholder="例如：孩子、小号" autofocus>
+      <div class="study-mini-actions">
+        <button type="submit" value="create" id="study-profile-save" class="btn-header btn-primary" data-i18n="bankNewProfile">新建档案</button>
+        <button type="button" id="study-profile-keep" class="btn-header" data-i18n="studyKeepProfile" hidden>留在当前档案</button>
+        <button type="button" id="study-profile-cancel" class="btn-header" data-i18n="btnCancel">取消</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog class="share-card-dialog" id="share-card-dialog" aria-labelledby="share-card-title">
@@ -543,7 +585,7 @@
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261122-v129').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261122-checkup').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

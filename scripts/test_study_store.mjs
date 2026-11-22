@@ -56,6 +56,7 @@ assert.equal(reset.nextReviewAt, now + 2000 + SRS_RETRY_MS);
 const store = new StudyStore({ useIndexedDb: false });
 await store.init();
 const son = await store.saveProfile({ displayName: 'Son', aliases: ['KidChess, kidchess'] }, now);
+await store.setProfileElo(son.id, 2200, now);
 assert.deepEqual(son.aliases, ['KidChess']);
 await Promise.all([
   store.setProfileAccount(son.id, 'lichess', 'KidChess'),
@@ -120,6 +121,8 @@ assert.equal((await restored.listTraps(son.id))[0].srs.stage, 1);
 assert.equal((await restored.listProfiles()).find(p => p.id === DEFAULT_PROFILE_ID).displayName, '爸爸', 'Renamed default profile must be restored');
 assert.equal(restored.getActiveProfileId(), son.id, 'Active profile ID must be restored');
 assert.deepEqual((await restored.getActiveProfile()).accounts, linkedSon.accounts, 'Backup restores account bindings');
+assert.equal((await restored.getActiveProfile()).defaultElo, 2200, 'Backup preserves the profile’s Maia default');
+assert.equal((await restored.get('profiles', DEFAULT_PROFILE_ID)).defaultElo, undefined);
 await restored.importBackup({
   version: 1,
   profiles: [{ id: son.id, displayName: 'Son', accounts: [

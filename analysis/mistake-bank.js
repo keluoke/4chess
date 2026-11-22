@@ -233,6 +233,14 @@ export class MistakeBank {
     }
   }
 
+  renderProfilePicker(select, name) {
+    const single = this.profiles.length < 2;
+    select.hidden = single;
+    name.hidden = !single;
+    name.textContent = this.activeProfile ? this.profileLabel(this.activeProfile) : '';
+    this.renderProfileOptions(select);
+  }
+
   async open() {
     if (!this.allowed() || !this.dialog) return;
     const generation = ++this.openGeneration;

@@ -1,4 +1,5 @@
 import { markCheckupGames } from '../engine/checkup-watch.js?v=20261121-v127';
+import { parseStudioElo } from '../engine/chess-notation.js?v=20261120-import';
 
 const DB_NAME = 'diverge_study_v1';
 const DB_VERSION = 1;
@@ -376,20 +377,55 @@ export class StudyStore {
     return record;
   }
 
-  async saveProfile({ id, displayName, aliases = [] }, now = Date.now()) {
+  async saveProfile({ id, displayName, aliases = [], account, moveFrom }, now = Date.now()) {
     await this.init();
     const cleanName = String(displayName || '').trim();
     if (!cleanName) throw new Error('Profile name is required');
     const profileId = id || `profile_${now}_${Math.random().toString(36).slice(2, 7)}`;
-    return this.writeProfile(profileId, existing => ({
+    const build = existing => ({
       ...existing,
       id: profileId,
       displayName: cleanName.slice(0, 40),
       aliases: parseAliases(aliases),
-      accounts: existing?.accounts || [],
+      accounts: account ? mergeAccounts(existing?.accounts, [account]) : existing?.accounts || [],
       createdAt: existing?.createdAt || now,
       updatedAt: now
-    }));
+    });
+    if (!moveFrom) return this.writeProfile(profileId, build);
+
+    const key = accountKey(account);
+    const tx = this.db?.transaction('profiles', 'readwrite');
+    const store = tx?.objectStore('profiles');
+    const from = store ? await txRequest(store.get(moveFrom)) : this.memory.profiles.get(moveFrom);
+    if (id || !from?.accounts?.some(item => accountKey(item) === key)) throw new Error('Account is no longer linked');
+    const created = build();
+    const checkupReminders = { ...from.checkupReminders };
+    if (checkupReminders[key]) created.checkupReminders = { [key]: checkupReminders[key] };
+    delete checkupReminders[key];
+    const updated = {
+      ...from,
+      accounts: from.accounts.filter(item => accountKey(item) !== key),
+      aliases: (from.aliases || []).filter(alias => normalizeAlias(alias) !== normalizeAlias(account.username)),
+      checkupReminders,
+      updatedAt: now
+    };
+    if (store) {
+      const committed = transactionDone(tx);
+      store.put(updated);
+      store.add(created);
+      await committed;
+    } else {
+      this.memory.profiles.set(updated.id, structuredClone(updated));
+      this.memory.profiles.set(created.id, structuredClone(created));
+    }
+    return created;
+  }
+
+  async setProfileElo(id, value, now = Date.now()) {
+    const defaultElo = parseStudioElo(value);
+    if (!defaultElo) throw new Error('Invalid Maia rating');
+    await this.init();
+    return this.writeProfile(id, profile => profile ? { ...profile, defaultElo, updatedAt: now } : null);
   }
 
   async setProfileAccount(id, platform, username, { remove = false } = {}) {
@@ -592,8 +628,10 @@ export class StudyStore {
         const shouldAdoptName = !existing ||
           (id === DEFAULT_PROFILE_ID && existing.displayName === 'Default' && incoming.displayName !== 'Default') ||
           (Number.isFinite(incoming.updatedAt) && incoming.updatedAt >= (existing.updatedAt || 0));
+        const defaultElo = parseStudioElo(incoming.defaultElo);
         return {
           ...existing,
+          ...(defaultElo && (shouldAdoptName || !existing?.defaultElo) ? { defaultElo } : {}),
           id,
           displayName: shouldAdoptName ? String(incoming.displayName).slice(0, 40) : existing.displayName,
           aliases: parseAliases([...(existing?.aliases || []), ...parseAliases(incoming.aliases)]),

@@ -6,6 +6,7 @@ import { ReviewOverview } from './review-overview.js?v=20261122-v129';
 import { ReviewCommentary } from './review-commentary.js?v=20261122-v129';
 import { ConsequencePlayer } from './consequence-player.js?v=20261122-v129';
 import { MistakeBank } from './mistake-bank.js?v=20261122-v129';
+import { resolvePerspective } from './study-store.js?v=20261121-v127';
 import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261122-v129';
 import { StudyProfileControls } from './study-profile-controls.js?v=20261122-v129';
 import { CheckupReminders } from './checkup-reminders.js?v=20261122-v129';
@@ -131,7 +132,8 @@ class AnalysisStudioApp {
       url.hash = hash.toString();
       history.replaceState(history.state, '', url);
     }
-    this.loadInitialGame().then(() => {
+    const profileReady = this.mistakeBank.ready?.catch(error => console.warn('[Studio] Could not load study profiles:', error));
+    Promise.resolve(profileReady).then(() => this.loadInitialGame()).then(() => {
       if (reminder && !hash.has('scan')) return this.checkupReminders.openFromReminder(reminder);
     }).catch(error => console.warn('[Studio] Could not open initial view:', error));
   }
@@ -323,16 +325,22 @@ class AnalysisStudioApp {
     this.el.eloSelector.addEventListener('change', (e) => {
       const elo = parseStudioElo(e.target.value);
       if (!elo) return;
-      this.sessionElo = this.hasAnalysisInput ? { value: elo, explicit: true } : null;
+      const profile = this.mistakeBank?.activeProfile;
+      this.sessionElo = this.hasAnalysisInput ? { value: elo, explicit: true, profileId: profile?.id } : null;
       this.setSessionElo(elo);
       this.rememberSession();
-      savePreferences({ defaultElo: this.currentElo });
-      try {
-        localStorage.setItem('maia3_target_elo', String(this.currentElo));
-        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-          chrome.storage.local.set({ defaultElo: this.currentElo });
-        }
-      } catch (err) {}
+      if (profile && this.mistakeBank.allowed()) {
+        profile.defaultElo = elo;
+        this.mistakeBank.store.setProfileElo(profile.id, elo).catch(() => this.showToast(t('checkupAccountError')));
+      } else {
+        savePreferences({ defaultElo: this.currentElo });
+        try {
+          localStorage.setItem('maia3_target_elo', String(this.currentElo));
+          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            chrome.storage.local.set({ defaultElo: this.currentElo });
+          }
+        } catch {}
+      }
 
       this.positionAnalysis.cancel();
       this.positionAnalysis.cache.clear();
@@ -513,7 +521,7 @@ class AnalysisStudioApp {
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
-      if (this.el.settingsDialog.open || this.reviewOverview.summary.open || this.mistakeBank?.dialog?.open || this.checkup?.dialog?.open || this.shareCard?.dialog?.open || this.reviewShare?.dialog?.open) return;
+      if (this.studyProfiles?.editor?.open || this.el.settingsDialog.open || this.reviewOverview.summary.open || this.mistakeBank?.dialog?.open || this.checkup?.dialog?.open || this.shareCard?.dialog?.open || this.reviewShare?.dialog?.open) return;
       if (this.el.pgnModal.classList.contains('open')) {
         if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
         if (e.key === 'Tab') {
@@ -999,8 +1007,11 @@ class AnalysisStudioApp {
       if (!fen && !pgn && !sourceUrl && !empty) {
         const session = hash.has('scan') ? null : history.state?.[STUDIO_SESSION];
         if (session) {
-          const { input, orientation: savedOrientation, elo: savedElo, fallbackElo: savedFallback, ratingMatch } = session;
-          const restored = { ...input, orientation: orientation || savedOrientation, elo: elo || savedElo, fallbackElo: fallbackElo || savedFallback, ratingMatch };
+          const { input, orientation: savedOrientation, elo: savedElo, eloProfileId, fallbackElo: savedFallback, ratingMatch } = session;
+          const restored = {
+            ...input, orientation: orientation || savedOrientation, elo: elo || savedElo,
+            eloProfileId: elo ? null : eloProfileId, fallbackElo: fallbackElo || savedFallback, ratingMatch
+          };
           if (restored.moves && restored.startFen) restored.moves.startFen = restored.startFen;
           if ((restored.fen || FairPlayGuard.verifyConcludedGame(restored).ok) && this.startNewSession(restored)) return;
         }
@@ -1128,6 +1139,7 @@ class AnalysisStudioApp {
     checkupOrientation = null,
     orientation = null,
     elo = null,
+    eloProfileId = null,
     fallbackElo = null,
     ratingMatch = null,
     landAtEnd = false
@@ -1160,10 +1172,16 @@ class AnalysisStudioApp {
     document.getElementById('setting-orientation').value = this.boardUI.orientation;
     const tags = pgn ? readPgnTags(pgn) : {};
     const conclusion = positionOnly ? null : FairPlayGuard.verifyConcludedGame(pgn || { result });
-    const matchedElo = conclusion?.ok ? ratingMatch || this.matchPgnElo(tags) : null;
-    const explicitElo = parseStudioElo(elo);
-    this.sessionElo = explicitElo ? { value: explicitElo, explicit: true } : matchedElo || (fallbackElo ? { value: fallbackElo } : null);
-    this.setSessionElo(this.sessionElo?.value ?? getPreferences().defaultElo);
+    const game = positionOnly ? null : checkupGameContext(pgn, {
+      source: checkupSource, publicGameUrl, orientation: checkupOrientation || this.boardUI.orientation, white, black
+    });
+    const profile = this.mistakeBank?.activeProfile;
+    const side = resolvePerspective(game, profile).side;
+    const matchedElo = conclusion?.ok ? (side ? this.matchPgnElo(tags, side) : ratingMatch || this.matchPgnElo(tags)) : null;
+    const explicitElo = !eloProfileId || eloProfileId === profile?.id ? parseStudioElo(elo) : null;
+    this.sessionElo = explicitElo ? { value: explicitElo, explicit: true, profileId: eloProfileId }
+      : matchedElo || (fallbackElo && !parseStudioElo(profile?.defaultElo) ? { value: fallbackElo } : null);
+    this.setSessionElo(this.sessionElo?.value ?? this.profileDefaultElo());
     this.pgnTags = tags;
     const termination = tags.termination || '';
     this.terminationType = /(?:^resign|^resignation|\bwon by resignation|\bresigned)[.!]?$/i.test(termination) ? 'resignation'
@@ -1280,7 +1298,7 @@ class AnalysisStudioApp {
     }
 
     this.positions = positions;
-    this.checkupGame = checkupGameContext(pgn, { source: checkupSource, orientation: checkupOrientation || this.boardUI.orientation, white, black });
+    this.checkupGame = game;
     this.el.btnReanalyze.disabled = false;
     this.currentGameKey = this.getReviewKey();
 
@@ -1339,6 +1357,18 @@ class AnalysisStudioApp {
     if (previousId && previousId !== this.mistakeBank.activeProfile?.id
       && this.checkup?.dialog?.open && !this.checkup.updatingProfile) this.checkup.close();
     const changedPerspective = this.applyProfilePerspective();
+    const profileId = this.mistakeBank.activeProfile?.id;
+    if (previousId !== profileId || changedPerspective) {
+      const manual = this.sessionElo?.explicit && (!this.sessionElo.profileId || this.sessionElo.profileId === profileId);
+      if (!manual && this.hasAnalysisInput) {
+        const match = this.checkupGame ? this.matchPgnElo(this.pgnTags, this.profilePerspective)
+          : this.sessionElo?.source ? this.sessionElo : null;
+        const fallback = parseStudioElo(this.mistakeBank.activeProfile?.defaultElo) ? null : this.sessionFallbackElo;
+        this.sessionElo = match || (fallback ? { value: fallback } : null);
+        this.rememberSession();
+      }
+      this.applyPreferences(getPreferences());
+    }
     if (this.reviewResult && (changedPerspective || previousId !== this.mistakeBank.activeProfile?.id)) {
       this.renderBlunderCards();
       this.reviewOverview.render();
@@ -1448,11 +1478,15 @@ class AnalysisStudioApp {
     }
   }
 
-  matchPgnElo(tags) {
+  profileDefaultElo(fallback = getPreferences().defaultElo) {
+    return parseStudioElo(this.mistakeBank?.activeProfile?.defaultElo) ?? fallback;
+  }
+
+  matchPgnElo(tags, side) {
     const rating = value => /^\d{3,4}$/.test(value || '') ? Number(value) : null;
     const white = rating(tags.whiteelo);
     const black = rating(tags.blackelo);
-    const preferred = this.boardUI.orientation === 'black' ? 'b' : 'w';
+    const preferred = side || (this.boardUI.orientation === 'black' ? 'b' : 'w');
     const source = (preferred === 'b' ? black : white) ? preferred : white ? 'w' : black ? 'b' : null;
     if (!source) return null;
     const raw = source === 'b' ? black : white;
@@ -1498,6 +1532,7 @@ class AnalysisStudioApp {
       input: this.sessionInput,
       orientation: this.sessionOrientation,
       elo: this.sessionElo?.explicit ? this.sessionElo.value : null,
+      eloProfileId: this.sessionElo?.profileId,
       fallbackElo: this.sessionFallbackElo,
       ratingMatch: this.sessionElo?.source ? this.sessionElo : null
     };
@@ -1563,6 +1598,8 @@ class AnalysisStudioApp {
     const targetReviewEpoch = ++this.reviewEpoch;
     const targetGameKey = this.currentGameKey;
     const targetElo = this.currentElo;
+    const targetProfileId = this.mistakeBank?.activeProfile?.id;
+    const checkupGame = this.checkupGame;
     clearTimeout(this.resumeReviewTimer);
     this.fullReviewRunning = true;
     this.reviewPendingResume = false;
@@ -1621,6 +1658,10 @@ class AnalysisStudioApp {
         this.coreReview = result;
         this.applyReviewResult(result);
         this.intuitionReview.start();
+        if (!this.moves.isPartial && !result.isPartial && result.positionEvaluations?.length === this.positions.length) {
+          this.checkupReminders?.recordReview(targetProfileId, checkupGame)
+            .catch(error => console.warn('[Checkup reminders] Could not record review:', error));
+        }
       }
     } catch (err) {
       if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
@@ -2201,7 +2242,7 @@ class AnalysisStudioApp {
     try {
       const engine = location.protocol === 'chrome-extension:' ? 'lite' : prefs.stockfishVariant;
       const versionsChanged = engine !== this.engineVariant || prefs.maiaVariant !== this.modelVariant;
-      const effectiveElo = this.sessionElo?.value ?? prefs.defaultElo;
+      const effectiveElo = this.sessionElo?.value ?? this.profileDefaultElo(prefs.defaultElo);
       const eloChanged = this.currentElo !== effectiveElo;
       const reviewModeChanged = this.reviewMode !== prefs.studio_review_mode;
       const calculate = eloChanged || this.settings.heatmap !== prefs.showHeatmap || this.positionMaxDepth !== prefs.studio_max_depth;
