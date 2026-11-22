@@ -357,7 +357,7 @@ try {
 
  // Load exactly the user-facing unpacked directory, not the source tree or an old ZIP.
  const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))).version;
- const extension=path.join(root,`releases/diverge-extension-v${version}`),profile=fs.mkdtempSync(path.join(os.tmpdir(),'diverge-release-profile-'));
+ const extension=path.resolve(root,process.env.DIVERGE_RELEASE_DIR || 'releases',`diverge-extension-v${version}`),profile=fs.mkdtempSync(path.join(os.tmpdir(),'diverge-release-profile-'));
  const extensionContext=await chromium.launchPersistentContext(profile,{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`]});
  try{
   const worker=extensionContext.serviceWorkers()[0]||await extensionContext.waitForEvent('serviceworker');

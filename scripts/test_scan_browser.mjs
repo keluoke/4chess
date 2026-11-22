@@ -3,7 +3,9 @@ import path from "node:path";
 import os from "node:os";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { deflateSync } from "node:zlib";
 import { CHESS_PIECES_SVG } from "../analysis/chess-pieces.js";
+import { loadBoard, roundedScreenshot } from "./fixtures/vision/scenes.cjs";
 import { nativePopup } from "./native_popup_helper.mjs";
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "playwright"
@@ -15,7 +17,7 @@ fs.mkdirSync(ext);
 const version = JSON.parse(fs.readFileSync(root + "/manifest.json")).version;
 execFileSync("unzip", [
   "-q",
-  root + `/releases/diverge-extension-v${version}.zip`,
+  path.resolve(root, process.env.DIVERGE_RELEASE_DIR || 'releases', `diverge-extension-v${version}.zip`),
   "-d",
   ext,
 ]);
@@ -303,8 +305,35 @@ try {
   await domPopup.wait("!document.querySelector('#scan-position').hidden");
   assert.equal(await domPopup.run("document.querySelector('#scan-results').hidden"), true);
   assert.equal(await domPopup.run("document.querySelector('#scan-confirm').hidden"), false);
+  const board = loadBoard("board-endgame");
+  const rounded = roundedScreenshot(board);
+  const packed = deflateSync(rounded.data).toString("base64");
+  const recovery = await domPopup.run(`(async () => {
+    const raw = Uint8Array.from(atob(${JSON.stringify(packed)}), c => c.charCodeAt(0));
+    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate'));
+    const pixels = new Uint8ClampedArray(await new Response(stream).arrayBuffer());
+    const canvas = document.createElement('canvas');
+    canvas.width = ${rounded.width}; canvas.height = ${rounded.height};
+    canvas.getContext('2d').putImageData(new ImageData(pixels, canvas.width, canvas.height), 0, 0);
+    const id = 'rounded-test';
+    const send = (type, data = {}) => chrome.runtime.sendMessage({ type, id, ...data });
+    try {
+      const capture = await send('VISION_CAPTURE', { dataUrl: canvas.toDataURL() });
+      if (!capture?.ok) throw Error(capture?.error || 'Unable to load screenshot');
+      const reply = await send('VISION_RECOGNIZE');
+      if (!reply?.ok) throw Error(reply?.error || 'Unable to recognize screenshot');
+      return {
+        boardFen: reply.result.boardFen,
+        preprocessing: reply.result.metadata.screenshotPreprocessing,
+        suspicious: reply.result.suspiciousSquares.length
+      };
+    } finally { await send('VISION_CLEAR'); }
+  })()`);
+  assert.deepEqual(recovery, {
+    boardFen: board.board, preprocessing: "roundedCorners", suspicious: 0,
+  });
   console.log(
-    "PASS actual action popup: screenshot capture, offscreen WASM recognition, confirmation, real SF3, legal branch, undo, flip, bilingual layout and source-navigation lock",
+    "PASS actual action popup: screenshot capture, offscreen WASM and rounded recovery, confirmation, real SF3, legal branch, undo, flip, bilingual layout and source-navigation lock",
   );
   assert.deepEqual(errors, []);
 } finally {

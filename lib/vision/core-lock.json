@@ -1,11 +1,12 @@
 {
-  "coreVersion": "2026.10.14.2",
+  "coreVersion": "2026.11.21.1",
   "protocolVersion": 1,
-  "buildToolVersion": 2,
+  "buildToolVersion": 3,
   "sourceProject": "chesspuzzle",
-  "sourceTreeHash": "e840c01048bb37a40c60dcd67262404daf3d81cbf6f5242536e8ff234bf91f99",
+  "sourceTreeHash": "4020a5bd23d3997cf0aaea2afde3a63410291b12173446f618718fc9894da87f",
   "sources": {
-    "recognizer-core": "84b69f0c58587266cfa8f3306193a4a1013f95c9e80467d40b0bf2d397591ab6",
+    "recognizer-core": "72a42489277c722d721d1d560b25803d59a8e80780343de2605b018661c27f1e",
+    "screenshot-recognition": "5d4e57143319ce4e1259d3e399ffb40d1e0a1b5f39638767a115d392752568c8",
     "task-controller": "b9b2084e905b9922bcfe4e57962402037f8dcae689b403c6676ba744ee658f90",
     "crypto-utils": "7026225e88a8a1466b90b4537ce951294325a777b7ac2bedb23c4fc2e9964b2e",
     "board-detector": "b12e3646a4616d4894fa513429bc4ef96bfcb6c283dd50cb3ec2a5a87880ce44",
@@ -18,16 +19,17 @@
     "qimi-piece-templates": "f1a39b07a29b906fdfd55c2bbbb3aea8b61ea5e47e1974416399582f33a52416",
     "turn-detector": "44c23cbc951581be95b69271d46ad221f6dcf90b933810f540b70aa55c080c1f",
     "protocol": "5f3296e4be2a7a0636d31c0b33302305944c9b211879becf8e57ce6a3e244f13",
-    "piece-classifier": "0750d20f7e80653ffe9902edb8fa462ff17beae0d63316181eeacce00f71b979",
-    "fen-optimizer": "b7e6108377c420f0d095f5b03f4128b3d467f6a51edc3160dc2eed54cd7ccb5b",
+    "piece-classifier": "009a3cefdfcc01e0e1880e3ff377c33450b6af1f7f20eeaab118d1eab3981286",
+    "fen-optimizer": "1ef35139b1c2a99d710d1f62fa94e0c6d1baa0046e89537ea2e9c6d416706b6f",
     "consensus-engine": "0b7875b7f220502c57db36341e251a5918e8c3d5569517ceaea815632a22fce6",
     "image-context": "b6e96c65a6a00e4d6f1e31fd0f1011f56ce48daa48148f97ec2e3707055a5203",
     "default-context": "d7e98e8372d1c5d3cb0cc89704d18ebaecc5322b548d3a0ab35eca1700c623e2",
     "chess": "d9846dc03150a61cccf329e89c3f2103799482cd194e45103a19edf9f1e12e33"
   },
   "outputs": {
-    "lib/vision/core-generated.js": "083f1d13ce7314d07f70312c53b451ea398c8ead8c33085b8d369e94ffbedea8",
+    "lib/vision/core-generated.js": "6e7d39deaa656307687161a910a14fb329006f6b710d91b14004e10d68b7a87f",
     "lib/vision/recognizer-core.js": "27057271a4c17c6b37292fad7a4ed13d1d23ce08647ac3235ddc78f4981b3d2e",
+    "lib/vision/screenshot-recognition.js": "f61ff616906c260956c6b86b548da5bbd792a491dc2a48559e9863cee582e5ac",
     "lib/vision/task-controller.js": "0dc936596beb1c47c14cdb4cca748852fac9a2c5c8964997e6618237a2c993c9",
     "lib/vision/crypto-utils.js": "14460b90c5ce656189058c844d74b84a1f05e79a353bfeb4334cf1556aef0909",
     "lib/vision/board-detector.js": "6101bd274cc91bd7b2d548bc01bc7b0838313143f204fe7f8eb48e6415806261",
@@ -48,5 +50,12 @@
     "lib/vision/chess.js": "3513887e410ddc81511b1f2540b12c6fa0d36d6614f9198ed2e1d893593ac5ec",
     "models/chess-cnn.wasm": "cd54b2122ed679eb5f935785a3db425131591f253d1e961c82ce516b456fe169",
     "models/chessimg2pos_weights.bin": "3911bad0cc0ec0e86b4688aab70e33ef59ddc77b805efbfa680dd02826059720"
+  },
+  "fixtures": {
+    "scripts/fixtures/vision/board-endgame.json": "ec01079b8400f247a8c0dc16e98822c02c2d52340939e554404da7586eb59cd3",
+    "scripts/fixtures/vision/board-endgame.rgba.zlib": "d4fd8c183ca8c45452b426a6da03adefe7d9a179ad35fc9c7b5a1a93bbc6c86f",
+    "scripts/fixtures/vision/black-coordinates.json": "4bfcab773daddd88a8b62d90547efbfc541ff1e349b1adc18b4b6b434bb460be",
+    "scripts/fixtures/vision/black-coordinates.rgba.zlib": "f1981d4a2b1e263dc27e5a2159bc7daee5e8ec7ee947bb880323c74942d7f23f",
+    "scripts/fixtures/vision/scenes.cjs": "2cdfb77b995c8539bb242abb0608cb7cb031b983f49ef4710403d09ec3c7c614"
   }
 }

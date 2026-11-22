@@ -5,6 +5,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out Qimi vision source
+        id: vision-source
+        if: ${{ vars.VISION_SOURCE_REPOSITORY != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.VISION_SOURCE_REPOSITORY }}
+          ref: ${{ vars.VISION_SOURCE_REF }}
+          token: ${{ secrets.VISION_SOURCE_TOKEN || github.token }}
+          path: .build_staging/chesspuzzle
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -13,14 +23,25 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npm run package
+      - name: Package against Qimi source
+        if: steps.vision-source.outcome == 'success'
+        run: npm run package
+        env:
+          VISION_SOURCE: ${{ github.workspace }}/.build_staging/chesspuzzle
+      - name: Build verification ZIP for standalone CI
+        if: steps.vision-source.outcome == 'skipped'
+        run: |
+          npm run package -- --verify-only
+          echo 'DIVERGE_RELEASE_DIR=releases/verification' >> "$GITHUB_ENV"
       - run: node scripts/test_package_integrity.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      - run: xvfb-run -a node scripts/test_scan_browser.mjs
       - run: npm run test:board-visuals
       - run: npm run test:floating-handoff
       - run: npm run test:review-explorer
       - uses: actions/upload-artifact@v4
+        if: steps.vision-source.outcome == 'success'
         with:
           name: diverge-extension
           path: |

@@ -1,15 +1,32 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, rmSync, copyFileSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, mkdtempSync, rmSync, copyFileSync, renameSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const local = process.argv.includes('--local');
+const verificationOnly = process.argv.includes('--verify-only');
+if (local && verificationOnly) throw new Error('Choose either --local or --verify-only');
+const source = resolve(process.env.VISION_SOURCE || join(root, '../chesspuzzle'));
+const visionSourceVerified = !local && !verificationOnly;
+execFileSync(process.execPath, [
+  join(root, 'scripts/sync_vision_core.mjs'),
+  ...(visionSourceVerified ? ['--source'] : [])
+], { cwd: root, stdio: 'inherit', env: { ...process.env, VISION_SOURCE: source } });
+if (visionSourceVerified) {
+  execFileSync(process.execPath, [join(root, 'scripts/test_vision_parity.mjs'), '--source'], {
+    cwd: root, stdio: 'inherit', env: { ...process.env, VISION_SOURCE: source }
+  });
+  execFileSync(process.execPath, ['--test', 'tests/vision-shared-scan.test.cjs'], {
+    cwd: source, stdio: 'inherit'
+  });
+}
 let sourceCommit = null, sourceDirty = true;
 try {
   sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   sourceDirty = !!execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
 } catch {}
+const { coreVersion: visionCoreVersion, sourceTreeHash: visionSourceTreeHash } = JSON.parse(readFileSync(join(root, 'lib/vision/core-lock.json'), 'utf8'));
 const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 const entries = ['manifest.json', 'background.js', 'index.html', 'favicon.svg', '_locales', 'analysis', 'content', 'engine', 'lib', 'popup', 'scan', 'offscreen', 'icons', 'ui', 'models', 'guide', 'LICENSE', 'LICENSES', 'THIRD_PARTY_NOTICES.md', 'README.md'];
 
@@ -43,10 +60,12 @@ function copyRecursive(src, dst, rel = '') {
   }
 }
 
-const staging = resolve(root, 'releases', `${local ? 'diverge-local' : 'diverge-extension'}-v${manifest.version}.staging`);
-const unpacked = resolve(root, 'releases', `${local ? 'diverge-local' : 'diverge-extension'}-v${manifest.version}`);
-rmSync(staging, { recursive: true, force: true });
-mkdirSync(staging, { recursive: true });
+const releaseDir = verificationOnly ? join(root, 'releases', 'verification') : join(root, 'releases');
+const unpacked = join(releaseDir, `${local ? 'diverge-local' : 'diverge-extension'}-v${manifest.version}`);
+mkdirSync(releaseDir, { recursive: true });
+const temporary = mkdtempSync(join(releaseDir, '.package-'));
+const staging = join(temporary, 'extension');
+mkdirSync(staging);
 
 try {
   // 1. Copy entries to clean staging workspace
@@ -104,33 +123,35 @@ try {
     rmSync(unpacked, { recursive: true, force: true });
     renameSync(staging, unpacked);
     console.log(`[Local development only — never upload] ${unpacked}`);
-    process.exit(0);
+  } else {
+    packageDistribution();
   }
+} finally {
+  rmSync(temporary, { recursive: true, force: true });
+}
 
-  // 4. Create release ZIP
-  const output = resolve(root, 'releases', `diverge-extension-v${manifest.version}.zip`);
-  mkdirSync(resolve(root, 'releases'), { recursive: true });
-  rmSync(output, { force: true });
-  execFileSync('zip', ['-r', '-X', output, ...entries, '-x', '*.DS_Store', '*__MACOSX*'], { cwd: staging, stdio: 'ignore' });
+function packageDistribution() {
+  // Validate new bytes before replacing the release ZIP.
+  const output = unpacked + '.zip';
+  const candidate = join(temporary, 'extension.zip');
+  execFileSync('zip', ['-r', '-X', candidate, ...entries, '-x', '*.DS_Store', '*__MACOSX*'], { cwd: staging, stdio: 'ignore' });
 
   // 5. Strict Zero-Residual Assertions on generated ZIP
-  const zipFiles = execFileSync('unzip', ['-Z', '-1', output], { encoding: 'utf8' }).split('\n');
+  const zipFiles = execFileSync('unzip', ['-Z', '-1', candidate], { encoding: 'utf8' }).split('\n');
   const forbiddenFilePatterns = [/puzzle-poster\.js$/, /qrcode\.mjs$/, /share-service\.mjs$/, /\.env/];
   for (const f of zipFiles) {
     if (!f) continue;
     for (const pat of forbiddenFilePatterns) {
       if (pat.test(f)) {
-        rmSync(output, { force: true });
         throw new Error(`Store isolation failed: forbidden file found in zip: ${f}`);
       }
     }
   }
 
-  const zipContent = execFileSync('unzip', ['-p', output, '*.js', '*.css', '*.html', '*.json'], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+  const zipContent = execFileSync('unzip', ['-p', candidate, '*.js', '*.css', '*.html', '*.json'], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
   const forbiddenStrings = ['puzzle-poster', 'scan-poster', 'poster-modal', 'PUZZLE_POSTER', '127.0.0.1:3210', 'localhost:3210', 'LOCAL_FEATURE_START', 'WECHAT_APPSECRET'];
   for (const word of forbiddenStrings) {
     if (zipContent.includes(word)) {
-      rmSync(output, { force: true });
       throw new Error(`Store isolation failed: forbidden string "${word}" leaked into release zip!`);
     }
   }
@@ -138,8 +159,11 @@ try {
   // Preserve exactly the same bytes for Load unpacked. _locales is the sole permitted underscore directory.
   rmSync(unpacked, { recursive: true, force: true });
   renameSync(staging, unpacked);
-  writeFileSync(resolve(root, 'releases', `diverge-extension-v${manifest.version}.json`), JSON.stringify({ sourceCommit, sourceDirty, version: manifest.version, zip: output, unpacked, localShareIncluded: false }, null, 2) + '\n');
-  console.log(`[Package Success] Store ZIP: ${output}\n[Load unpacked] ${unpacked}`);
-} finally {
-  rmSync(staging, { recursive: true, force: true });
+  renameSync(candidate, output);
+  const provenance = {
+    sourceCommit, sourceDirty, version: manifest.version, zip: output, unpacked,
+    localShareIncluded: false, visionSourceVerified, visionCoreVersion, visionSourceTreeHash
+  };
+  writeFileSync(unpacked + '.json', JSON.stringify(provenance, null, 2) + '\n');
+  console.log(`[Package Success] ${verificationOnly ? 'Verification ZIP' : 'Store ZIP'}: ${output}\n[Load unpacked] ${unpacked}`);
 }

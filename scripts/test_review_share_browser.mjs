@@ -106,7 +106,7 @@ try {
   assert.deepEqual(errors, []);
 
   const version = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'))).version;
-  const extension = path.join(root, 'releases', 'diverge-extension-v' + version);
+  const extension = path.resolve(root, process.env.DIVERGE_RELEASE_DIR || 'releases', 'diverge-extension-v' + version);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-review-share-'));
   const installed = await chromium.launchPersistentContext(profile, {
     channel: 'chromium', headless: true, args: ['--disable-extensions-except=' + extension, '--load-extension=' + extension]

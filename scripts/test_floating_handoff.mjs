@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const version = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'))).version;
-const extension = path.join(root, 'releases', `diverge-extension-v${version}`);
+const extension = path.resolve(root, process.env.DIVERGE_RELEASE_DIR || 'releases', `diverge-extension-v${version}`);
 assert(fs.existsSync(extension), 'Package the current extension first');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'diverge-handoff-'));
 const server = http.createServer((req, res) => {

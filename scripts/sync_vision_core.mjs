@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const root = path.resolve(import.meta.dirname, "..");
 const upstream = path.resolve(
@@ -15,7 +16,7 @@ const checkSource = process.argv.includes("--source") || update;
 const lockPath = path.join(root, "lib/vision/core-lock.json");
 if (!checkSource) {
   const lock = JSON.parse(fs.readFileSync(lockPath));
-  for (const [file, hash] of Object.entries(lock.outputs))
+  for (const [file, hash] of Object.entries({ ...lock.outputs, ...lock.fixtures }))
     if (sha(fs.readFileSync(path.join(root, file))) !== hash)
       throw Error("Generated vision drift: " + file);
   console.log("PASS vision output/model hashes, core " + lock.coreVersion);
@@ -23,6 +24,7 @@ if (!checkSource) {
 }
 const names = [
   "recognizer-core",
+  "screenshot-recognition",
   "task-controller",
   "crypto-utils",
   "board-detector",
@@ -95,10 +97,18 @@ for (const name of ["chess-cnn.wasm", "chessimg2pos_weights.bin"])
   output["models/" + name] = fs.readFileSync(
     path.join(upstream, "assets/models", name),
   );
+const { coreVersion } = JSON.parse(fs.readFileSync(path.join(core, "source-version.json")));
+const fixtures = Object.fromEntries(
+  ["board-endgame.json", "board-endgame.rgba.zlib", "black-coordinates.json",
+   "black-coordinates.rgba.zlib", "scenes.cjs"].map((name) => [
+    "scripts/fixtures/vision/" + name,
+    fs.readFileSync(path.join(upstream, "tests/fixtures/vision", name)),
+  ]),
+);
 const lock = {
-  coreVersion: "2026.10.14.2",
+  coreVersion,
   protocolVersion: 1,
-  buildToolVersion: 2,
+  buildToolVersion: 3,
   sourceProject: "chesspuzzle",
   sourceTreeHash: sha(JSON.stringify(sources)),
   sources: Object.fromEntries(
@@ -107,31 +117,32 @@ const lock = {
   outputs: Object.fromEntries(
     Object.entries(output).map(([file, body]) => [file, sha(body)]),
   ),
+  fixtures: Object.fromEntries(
+    Object.entries(fixtures).map(([file, body]) => [file, sha(body)]),
+  ),
+};
+const sourceLockPath = path.join(core, "extension-core-lock.json");
+const sourceLock = {
+  coreVersion,
+  sourceTreeHash: lock.sourceTreeHash,
+  buildToolVersion: lock.buildToolVersion,
+  extensionOutputs: lock.outputs,
+  fixtures: lock.fixtures,
 };
 if (update) {
-  for (const [file, body] of Object.entries(output))
+  for (const [file, body] of Object.entries({ ...output, ...fixtures }))
     fs.writeFileSync(path.join(root, file), body);
   fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
-  fs.writeFileSync(
-    path.join(core, "extension-core-lock.json"),
-    JSON.stringify(
-      {
-        coreVersion: lock.coreVersion,
-        sourceTreeHash: lock.sourceTreeHash,
-        buildToolVersion: lock.buildToolVersion,
-        extensionOutputs: lock.outputs,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  fs.writeFileSync(sourceLockPath, JSON.stringify(sourceLock, null, 2) + "\n");
 } else {
   const saved = JSON.parse(fs.readFileSync(lockPath));
   if (saved.sourceTreeHash !== lock.sourceTreeHash)
     throw Error(
       "Upstream vision changed. Run sync --update and both runtime suites.",
     );
-  for (const [file, hash] of Object.entries(lock.outputs))
+  assert.deepEqual(saved, lock, "Vision lock differs. Run npm run vision:sync.");
+  assert.deepEqual(JSON.parse(fs.readFileSync(sourceLockPath)), sourceLock, "Qimi vision lock differs. Run npm run vision:sync.");
+  for (const [file, hash] of Object.entries({ ...lock.outputs, ...lock.fixtures }))
     if (sha(fs.readFileSync(path.join(root, file))) !== hash)
       throw Error("Vision drift: " + file);
 }

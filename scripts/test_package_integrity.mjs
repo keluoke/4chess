@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 const root=path.resolve(import.meta.dirname,'..');
 const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))).version;
-const unpacked=path.join(root,`releases/diverge-extension-v${version}`),zip=unpacked+'.zip';
+const unpacked=path.resolve(root,process.env.DIVERGE_RELEASE_DIR || 'releases',`diverge-extension-v${version}`),zip=unpacked+'.zip';
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'diverge-package-check-'));
 execFileSync('unzip',['-q',zip,'-d',temporary]);
 const hashes={};
@@ -25,14 +25,20 @@ try{
   }
  }
  walk(unpacked);
- for (const entry of ['content/board-grid.js', 'engine/checkup-reminders-background.js', 'analysis/checkup-reminders.js']) {
+ for (const entry of ['content/board-grid.js', 'engine/checkup-reminders-background.js', 'analysis/checkup-reminders.js', 'lib/vision/screenshot-recognition.js']) {
   assert(Object.hasOwn(hashes, entry), `Release ZIP must include ${entry}`);
  }
  const manifest=JSON.parse(fs.readFileSync(path.join(unpacked,'manifest.json')));
  assert.equal(manifest.version,version);assert(fs.existsSync(path.join(unpacked,'_locales/en/messages.json')));assert(!fs.existsSync(path.join(unpacked,'__locales')));
  for(const entry of [manifest.background.service_worker,manifest.action.default_popup,...manifest.content_scripts.flatMap(c=>[...c.js,...c.css||[]])])assert(fs.existsSync(path.join(unpacked,entry)),entry);
- const prior=JSON.parse(fs.readFileSync(path.join(root,`releases/diverge-extension-v${version}.json`)));
- const record={sourceCommit:prior.sourceCommit,sourceDirty:prior.sourceDirty,version,zip,unpacked,zipSha256:createHash('sha256').update(fs.readFileSync(zip)).digest('hex'),bytes:fs.statSync(zip).size,files:hashes,localShareIncluded:false};
- fs.writeFileSync(path.join(root,`releases/diverge-extension-v${version}.json`),JSON.stringify(record,null,2)+'\n');
+ const lock=JSON.parse(fs.readFileSync(path.join(unpacked,'lib/vision/core-lock.json')));
+ assert(!Object.hasOwn(hashes, 'scan/screenshot-recognition.js'), 'The scanner uses the shared screenshot implementation');
+ for (const [file, hash] of Object.entries(lock.outputs)) assert.equal(hashes[file], hash, `ZIP vision asset mismatch: ${file}`);
+ const recordPath=unpacked+'.json';
+ const prior=JSON.parse(fs.readFileSync(recordPath));
+ assert.equal(prior.visionCoreVersion,lock.coreVersion);
+ assert.equal(prior.visionSourceTreeHash,lock.sourceTreeHash);
+ const record={...prior,zipSha256:createHash('sha256').update(fs.readFileSync(zip)).digest('hex'),bytes:fs.statSync(zip).size,files:hashes};
+ fs.writeFileSync(recordPath,JSON.stringify(record,null,2)+'\n');
  console.log(`PASS current ZIP and Load unpacked directory identical; ${Object.keys(hashes).length} files; _locales spelled exactly; no local service or generated Pages files`);
 }finally{fs.rmSync(temporary,{recursive:true,force:true});}
