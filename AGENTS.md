@@ -1,5 +1,13 @@
 # Maia-3 Extension Agent Guidelines & Iron Laws (智能体开发铁律)
 
+## Git 交付铁律（默认交付到 `main`）
+
+- 本仓库的代码交付以相关提交进入远端 `main` 为完成条件。可以用独立 worktree 或 `codex/*` 分支开发。验证通过后，合并到 `main`、推送 `origin/main`，并核对远端 `main` 包含交付提交。
+- 用户明确要求只交付分支、等待审核或暂停合并时，按用户指定的范围交付。合并使用正常 Git 流程，保留其他工作区的未提交改动。
+- 交付影响 `4chess.cc` 时，核对该提交的 Cloudflare Pages 生产部署，并从线上页面验证本次改动。交付说明记录 `main` 提交号、测试结果和实际线上状态。
+
+---
+
 ## ⚖️ IMMUTABLE IRON LAW: FAIR PLAY & ANTI-CHEAT (不可逾越的铁律：公平竞技与反作弊)
 
 > **铁律定义 (The Absolute Iron Law):**
