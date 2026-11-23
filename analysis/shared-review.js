@@ -1,7 +1,7 @@
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261123-fit-report';
-import { t, initI18n, getLang } from './i18n.js?v=20261123-fit-report';
-import { decodeReviewSnapshot } from './review-snapshot.js?v=20261123-fit-report';
+import { EvalChart } from './eval-chart.js?v=20261123-fit-report-zh';
+import { t, initI18n, getLang } from './i18n.js?v=20261123-fit-report-zh';
+import { decodeReviewSnapshot } from './review-snapshot.js?v=20261123-fit-report-zh';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 

@@ -1,30 +1,30 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-fit-report';
-import { getLang, t } from './i18n.js?v=20261123-fit-report';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-fit-report-zh';
+import { getLang, t } from './i18n.js?v=20261123-fit-report-zh';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-fit-report';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-fit-report';
+} from './checkup-archives.js?v=20261123-fit-report-zh';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-fit-report-zh';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-fit-report';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-fit-report';
-import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-fit-report';
-import { checkupFitBands } from './checkup-fit.js?v=20261123-fit-report';
+} from './checkup-insights.js?v=20261123-fit-report-zh';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-fit-report-zh';
+import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-fit-report-zh';
+import { checkupFitBands } from './checkup-fit.js?v=20261123-fit-report-zh';
 import {
   checkupFitScope, checkupReportDateRange, renderCheckupFit, renderCheckupStability, withCheckupFit
-} from './checkup-fit-view.js?v=20261123-fit-report';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-fit-report';
+} from './checkup-fit-view.js?v=20261123-fit-report-zh';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-fit-report-zh';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-fit-report';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-fit-report';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-fit-report';
+} from './checkup-archives.js?v=20261123-fit-report-zh';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-fit-report-zh';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-fit-report-zh';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 

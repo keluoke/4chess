@@ -1,5 +1,5 @@
 /* Appearance preference only; no engine or game state is touched. */
-import { savePreferences, subscribePreferences } from '../engine/engine-preferences.js?v=20261123-fit-report';
+import { savePreferences, subscribePreferences } from '../engine/engine-preferences.js?v=20261123-fit-report-zh';
 const themeKey = 'diverge_ui_theme';
 const validThemes = new Set(['light', 'dark']);
 const systemTheme = () => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
