@@ -22,21 +22,28 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chromium', headless: true });
 try {
   const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
-  const first = '[White "Seanyan"]\n[WhiteElo "2180"]\n[Black "Rival"]\n[BlackElo "1400"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 1-0';
+  const first = '[White "Seanyan"]\n[WhiteElo "2180"]\n[Black "Rival"]\n[BlackElo "1400"]\n[ECO "C60"]\n[Opening "Ruy Lopez"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 1-0';
   const second = '[White "Rival"]\n[Black "Seanyan"]\n[BlackElo "2180"]\n[Result "0-1"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 Nbd7 7. Rc1 c6 8. Bd3 dxc4 0-1';
   await context.route('https://weights.4chess.cc/**', route => route.abort());
   let clarkNew = false;
+  let archiveLookups = 0;
+  let failArchive = false;
   await context.route('https://api.chess.com/**', route => {
     const url = route.request().url();
-    if (url.endsWith('/archives')) return route.fulfill({ json: { archives: [] } });
+    if (url.endsWith('/archives')) {
+      archiveLookups++;
+      return failArchive ? route.fulfill({ status: 503 }) : route.fulfill({ json: { archives: [] } });
+    }
     const player = new URL(url).pathname.split('/')[3];
     const name = { clarkyan: 'Clarkyan', altplayer: 'Altplayer' }[player] || 'Seanyan';
     const base = { clarkyan: 12345673, altplayer: 12345676 }[player] || 12345671;
-    const archived = (id, pgn) => ({
-      rules: 'chess', url: `https://www.chess.com/game/live/${id}`, pgn: pgn.replaceAll('Seanyan', name)
+    const archived = (id, pgn, more = {}) => ({
+      rules: 'chess', time_class: 'rapid', url: `https://www.chess.com/game/live/${id}`, pgn: pgn.replaceAll('Seanyan', name), ...more
     });
     const games = [archived(base + 1, second), archived(base, first)];
-    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first));
+    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first.replaceAll('1-0', '0-1'), {
+      time_class: 'blitz', white: { result: 'timeout' }
+    }));
     return route.fulfill({ json: { games } });
   });
   const page = await context.newPage();
@@ -113,14 +120,56 @@ try {
   assert.equal(await page.evaluate(() => window.checkupStarts), 2);
   assert.match(await reportBox.innerText(), /3\/10 covered/);
   assert.equal(await reportBox.locator('.checkup-charts svg').count(), 2);
+  assert.equal(await reportBox.locator('.checkup-chart-endpoint').count(), 4);
+  assert.equal(await reportBox.locator('.checkup-chart-guide').count(), 7);
   const scope = page.getByRole('combobox', { name: 'Report scope' });
   await scope.selectOption('batch');
   assert.equal(await reportBox.locator('.checkup-window-coverage').count(), 0);
   await scope.selectOption('rolling');
+  await page.evaluate(() => {
+    const Analyzer = window.__maiaStudioApp.analyzer.constructor;
+    const parse = Analyzer.parsePgn;
+    window.clockParses = 0;
+    Analyzer.parsePgn = (...args) => {
+      if (args[1]?.clocks) window.clockParses++;
+      return parse(...args);
+    };
+  });
+  const beforeOverview = archiveLookups;
   await page.locator('#checkup-tab-overview').click();
-  await page.locator('#btn-checkup-overview').click();
   await page.getByText('3 completed games', { exact: true }).waitFor();
-  assert.match(await page.locator('#checkup-overview-body').innerText(), /Win rate by color/);
+  const overview = page.locator('#checkup-overview-body');
+  assert.match(await overview.locator('.checkup-result-total').innerText(), /67%[\s\S]*2 W[\s\S]*0 D[\s\S]*1 L/);
+  assert.equal(archiveLookups, beforeOverview + 1);
+  const speeds = page.locator('#checkup-overview-speeds');
+  await speeds.getByRole('button', { name: 'Blitz', exact: true }).click();
+  assert.match(await overview.locator('.checkup-result-total').innerText(), /0%[\s\S]*0 W[\s\S]*0 D[\s\S]*1 L/);
+  assert.equal(await page.evaluate(() => window.clockParses), 3, 'Changing filters does not parse clocks again');
+  assert.equal(archiveLookups, beforeOverview + 1, 'Changing filters uses cached archive data');
+  await overview.locator('[data-detail="w:C60"] summary').click();
+  await overview.locator('[data-detail="w:C60"]').getByRole('button', { name: /Open game/ }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkupGame?.gameId), 'live:12345675');
+  const backToOverview = page.getByRole('button', { name: 'Back to game overview' });
+  await backToOverview.click();
+  await speeds.getByRole('button', { name: 'Blitz', pressed: true }).waitFor();
+  assert(await overview.locator('[data-detail="w:C60"]').getByRole('button', { name: /Open game/ }).isVisible());
+  await overview.getByText(/View 1 losses on time/).click();
+  const timeoutReplay = overview.locator('[data-detail="timeout"]').getByRole('button', { name: /Open game/ });
+  await timeoutReplay.click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkupGame?.gameId), 'live:12345675');
+  await backToOverview.click();
+  await timeoutReplay.waitFor();
+  assert.equal(archiveLookups, beforeOverview + 1, 'Replaying and returning uses the original cached overview');
+  failArchive = true;
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.getByText(/Archive HTTP 503/).waitFor();
+  assert(await overview.getByText('Recent results').isVisible(), 'A failed refresh leaves the previous results visible');
+  failArchive = false;
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.waitForFunction(() => window.clockParses === 6);
+  await speeds.getByRole('button', { name: 'Blitz', pressed: true }).waitFor();
   assert.equal(await page.evaluate(() => window.checkupStarts), 2, 'The overview does not start an engine');
   await page.evaluate(() => window.restoreInitialStockfish());
   await settings();

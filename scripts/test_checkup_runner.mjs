@@ -12,7 +12,9 @@ import {
 } from '../analysis/checkup-runner.js';
 import { StudyStore } from '../analysis/study-store.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
-import { buildCheckupWindow, checkupTrend, summarizeCheckupOverview } from '../analysis/checkup-insights.js';
+import {
+  buildCheckupWindow, checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
+} from '../analysis/checkup-insights.js';
 
 const pgn1 = `[Event "Match 1"]
 [White "KidPlayer"]
@@ -146,6 +148,9 @@ const highlight = await runIntuitionCheckup({
 assert.equal(highlight.highlights.length, 1);
 assert.equal(highlight.highlights[0].kind, 'beyond');
 assert.equal(highlight.highlights[0].uci, 'a4b3');
+assert.equal(highlight.highlights[0].evidence.probability, 0.14);
+assert.equal(highlight.highlights[0].evidence.alternative, 'c3');
+assert(highlight.highlights[0].evidence.advantage > 0);
 assert.equal(GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(highlight.games[0].pgn))
   [highlight.highlights[0].ply - 1].fen, highlight.highlights[0].fenBefore);
 
@@ -491,13 +496,30 @@ assert.equal(GameAnalyzer.parsePgn(clockPgn)[0].clockSeconds, undefined);
 const clockGame = { gameId: 'live:1', pgn: clockPgn, meta: {
   white: 'KidPlayer', black: 'Rival', result: '0-1', eco: 'C20', timeClass: 'blitz', termination: 'timeout', initialSeconds: 60
 } };
-const overview = summarizeCheckupOverview([clockGame], 'kidplayer', { 'live:1': { w: { errors: { 3: true } } } });
+const prepared = prepareCheckupOverview([clockGame], 'kidplayer', { 'live:1': { w: { errors: { 3: true } } } });
+const overview = summarizeCheckupOverview(prepared);
 assert.deepEqual(overview.pressure, { observed: 2, low: 1, reviewedLow: 1, errors: 1, timeoutLosses: 1 });
 assert.equal(overview.openings[0].count, 1);
-assert.equal(summarizeCheckupOverview([clockGame], 'KidPlayer', {}, 'rapid').count, 0);
-assert.equal(summarizeCheckupOverview([{ ...clockGame, pgn: pgn1 }], 'KidPlayer').pressure.observed, 0);
-assert.equal(summarizeCheckupOverview([{ ...clockGame, pgn: clockPgn.replaceAll(/\[%clk [^\]]+\]/g, ''),
-  clocks: [2550, 5000, 1000] }], 'KidPlayer').pressure.low, 1);
+assert.equal(summarizeCheckupOverview(prepared, 'rapid').count, 0);
+assert.equal(prepareCheckupOverview([{ ...clockGame, pgn: pgn1 }], 'KidPlayer')[0].pressure.observed, 0);
+assert.equal(prepareCheckupOverview([{ ...clockGame, pgn: clockPgn.replaceAll(/\[%clk [^\]]+\]/g, ''),
+  clocks: [2550, 5000, 1000] }], 'KidPlayer')[0].pressure.low, 1);
+const outcomes = ['1-0', '1/2-1/2', '1-0', '0-1', '0-1', '0-1', '0-1'];
+const mixed = prepareCheckupOverview(outcomes.map((result, i) => ({
+  ...clockGame, gameId: `live:${i}`, meta: {
+    ...clockGame.meta, result, timeClass: i % 2 ? 'blitz' : 'rapid', eco: i < 4 ? 'C50' : 'C25'
+  }
+})), 'kidplayer');
+const mixedOverview = summarizeCheckupOverview(mixed);
+assert.deepEqual(mixedOverview.total, { count: 7, win: 2, draw: 1, loss: 4, points: 2.5 });
+assert.deepEqual(mixedOverview.colors.w, mixedOverview.total);
+const ranked = rankCheckupOpenings(mixedOverview.openings, 'w');
+assert.equal(ranked.length, 2, 'An opening with two labels is displayed once');
+assert.deepEqual([ranked[0].eco, ranked[0].count, ranked[0].games.length], ['C50', 4, 3]);
+assert.deepEqual(ranked[0].labels, ['checkupOpeningPopular', 'checkupOpeningBest']);
+assert.deepEqual(ranked[1].labels, ['checkupOpeningWorst']);
+assert.equal(summarizeCheckupOverview(mixed, 'blitz').openings.find(item => item.eco === 'C50').count, 2);
+assert.deepEqual(rankCheckupOpenings(summarizeCheckupOverview(mixed, 'blitz').openings, 'w')[0].labels, ['checkupOpeningPopular']);
 
 const makeEvidence = (id, loss, scores = [-4, -3, -2, -1]) => ({
   gameId: id, analyzedMoves: 10, screenedMoves: 8, timeClass: 'blitz',

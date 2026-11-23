@@ -1,5 +1,5 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-window';
-import { normalizeAlias } from './study-store.js?v=20261123-checkup-window';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-insights-ui';
+import { normalizeAlias } from './study-store.js?v=20261123-checkup-insights-ui';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
 export const MAX_ELO_SAMPLES = 24;
@@ -84,8 +84,15 @@ export function checkupTrend(reports, evidenceKey, timeClass) {
     }).reverse();
 }
 
-function winFor(result, side) {
-  return result === '1/2-1/2' ? 0.5 : Number(result === (side === 'w' ? '1-0' : '0-1'));
+const outcomes = ['win', 'draw', 'loss'];
+const results = { '1-0': { w: 'win', b: 'loss' }, '0-1': { w: 'loss', b: 'win' }, '1/2-1/2': { w: 'draw', b: 'draw' } };
+const emptyRecord = () => ({ count: 0, win: 0, draw: 0, loss: 0, points: 0 });
+const emptyPressure = () => ({ observed: 0, low: 0, reviewedLow: 0, errors: 0, timeoutLosses: 0 });
+
+function addResult(record, outcome) {
+  record.count++;
+  record[outcome]++;
+  record.points += outcome === 'win' ? 1 : outcome === 'draw' ? 0.5 : 0;
 }
 
 function terminationGroup(reason) {
@@ -95,58 +102,91 @@ function terminationGroup(reason) {
   return 'other';
 }
 
-export function summarizeCheckupOverview(games, username, reviews = {}, timeClass = '') {
-  const target = normalizeAlias(username);
-  const colors = { w: { count: 0, wins: 0 }, b: { count: 0, wins: 0 } };
-  const endings = { mate: 0, resign: 0, timeout: 0, other: 0 };
-  const openings = new Map();
-  const pressure = { observed: 0, low: 0, reviewedLow: 0, errors: 0, timeoutLosses: 0 };
-  let count = 0;
-  for (const game of games) {
-    const { meta } = game;
-    if (timeClass && timeClass !== meta.timeClass) continue;
-    const side = normalizeAlias(meta.white) === target ? 'w' : normalizeAlias(meta.black) === target ? 'b' : null;
-    if (!side) continue;
-    const score = winFor(meta.result, side);
-    count++;
-    colors[side].count++;
-    if (score === 1) colors[side].wins++;
-    const ending = terminationGroup(meta.termination || '');
-    endings[ending]++;
-    if (ending === 'timeout' && score === 0) pressure.timeoutLosses++;
-    if (meta.eco) {
-      const key = JSON.stringify([side, meta.timeClass || '', meta.eco]);
-      const opening = openings.get(key) || { side, timeClass: meta.timeClass, eco: meta.eco, name: meta.opening, count: 0, points: 0 };
-      opening.count++;
-      opening.points += score;
-      openings.set(key, opening);
-    }
-
-    const moves = GameAnalyzer.parsePgn(game.pgn, { clocks: true });
-    const review = reviews[game.gameId]?.[side];
-    const startsBlack = moves.startFen?.split(' ')[1] === 'b';
-    const decisions = moves.flatMap(move => {
-      const turn = startsBlack ? (move.turn === 'w' ? 'b' : 'w') : move.turn;
-      const rawClock = game.clocks?.[move.ply - 1];
-      const clock = move.clockSeconds ?? (Number.isFinite(rawClock) ? rawClock / 100 : null);
-      return turn === side ? [{ ply: move.ply, clock }] : [];
-    });
-    if (!decisions.some(move => Number.isFinite(move.clock))) continue;
-    let remaining = meta.initialSeconds;
-    for (const move of decisions) {
-      if (Number.isFinite(remaining)) {
-        pressure.observed++;
-        if (remaining < 30) {
-          pressure.low++;
-          const error = review?.errors?.[move.ply];
-          if (error !== undefined) {
-            pressure.reviewedLow++;
-            if (error) pressure.errors++;
-          }
+function clockPressure(game, side, review, timeoutLoss) {
+  const pressure = emptyPressure();
+  pressure.timeoutLosses = Number(timeoutLoss);
+  const moves = GameAnalyzer.parsePgn(game.pgn, { clocks: true });
+  const startsBlack = moves.startFen?.split(' ')[1] === 'b';
+  const decisions = moves.flatMap(move => {
+    const turn = startsBlack ? (move.turn === 'w' ? 'b' : 'w') : move.turn;
+    if (turn !== side) return [];
+    const rawClock = game.clocks?.[move.ply - 1];
+    const clock = move.clockSeconds ?? (Number.isFinite(rawClock) ? rawClock / 100 : null);
+    return [{ ply: move.ply, clock }];
+  });
+  if (!decisions.some(move => Number.isFinite(move.clock))) return pressure;
+  let remaining = game.meta.initialSeconds;
+  for (const move of decisions) {
+    if (Number.isFinite(remaining)) {
+      pressure.observed++;
+      if (remaining < 30) {
+        pressure.low++;
+        const error = review?.errors?.[move.ply];
+        if (typeof error === 'boolean') {
+          pressure.reviewedLow++;
+          if (error) pressure.errors++;
         }
       }
-      remaining = move.clock;
     }
+    remaining = move.clock;
   }
-  return { count, colors, endings, pressure, openings: [...openings.values()] };
+  return pressure;
+}
+
+export function prepareCheckupOverview(games, username, reviews = {}) {
+  const target = normalizeAlias(username);
+  return games.flatMap(game => {
+    const { meta } = game;
+    const side = normalizeAlias(meta.white) === target ? 'w' : normalizeAlias(meta.black) === target ? 'b' : null;
+    const outcome = results[meta.result]?.[side];
+    if (!outcomes.includes(outcome)) return [];
+    const ending = terminationGroup(meta.termination || '');
+    const pressure = clockPressure(game, side, reviews[game.gameId]?.[side], ending === 'timeout' && outcome === 'loss');
+    return [{ ...game, side, outcome, ending, pressure }];
+  });
+}
+
+export function summarizeCheckupOverview(games, timeClass = '') {
+  const total = emptyRecord();
+  const colors = { w: emptyRecord(), b: emptyRecord() };
+  const endings = { mate: 0, resign: 0, timeout: 0, other: 0 };
+  const openings = new Map();
+  const pressure = emptyPressure();
+  const timeoutGames = [];
+  for (const game of games) {
+    const { meta, side, outcome } = game;
+    if (timeClass && timeClass !== meta.timeClass) continue;
+    addResult(total, outcome);
+    addResult(colors[side], outcome);
+    endings[game.ending]++;
+    if (meta.eco) {
+      const key = side + ':' + meta.eco;
+      const opening = openings.get(key) || { ...emptyRecord(), key, side, eco: meta.eco, name: '', games: [] };
+      opening.name ||= meta.opening;
+      addResult(opening, outcome);
+      if (opening.games.length < 3) opening.games.push(game);
+      openings.set(key, opening);
+    }
+    for (const metric of Object.keys(pressure)) pressure[metric] += game.pressure[metric];
+    if (game.pressure.timeoutLosses) timeoutGames.push(game);
+  }
+  return { count: total.count, total, colors, endings, pressure, timeoutGames, openings: [...openings.values()] };
+}
+
+export function rankCheckupOpenings(openings, side) {
+  const popular = openings.filter(opening => opening.side === side)
+    .sort((a, b) => b.count - a.count || a.eco.localeCompare(b.eco));
+  const byScore = popular.filter(opening => opening.count >= 3)
+    .sort((a, b) => b.points / b.count - a.points / a.count || b.count - a.count);
+  const best = byScore[0];
+  const worst = byScore.at(-1);
+  const showWorst = worst && worst.points / worst.count < best.points / best.count;
+  const highlights = new Map();
+  for (const [opening, label] of [[popular[0], 'checkupOpeningPopular'], [best, 'checkupOpeningBest'], [showWorst && worst, 'checkupOpeningWorst']]) {
+    if (!opening) continue;
+    const item = highlights.get(opening.key) || { ...opening, labels: [] };
+    item.labels.push(label);
+    highlights.set(opening.key, item);
+  }
+  return [...highlights.values()];
 }
