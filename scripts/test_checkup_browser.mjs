@@ -42,7 +42,8 @@ try {
       rules: 'chess', time_class: 'rapid', url: `https://www.chess.com/game/live/${id}`, pgn: pgn.replaceAll('Seanyan', name), ...more
     });
     const games = [archived(base + 1, second), archived(base, first)];
-    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first.replaceAll('1-0', '0-1').replace('C60', 'C65'), {
+    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first.replaceAll('1-0', '0-1').replace('C60', 'C65')
+      .replace('[Opening "Ruy Lopez"]', '[ECOUrl "https://www.chess.com/openings/Ruy-Lopez-Opening-Berlin-Defense-4.O-O"]'), {
       time_class: 'blitz', white: { result: 'timeout' }
     }));
     return route.fulfill({ json: { games } });
@@ -150,6 +151,7 @@ try {
   assert(await moreOpenings.locator('[data-detail="w:C65"]').isHidden());
   await moreOpenings.getByText('See more common openings').click();
   assert(await moreOpenings.locator('[data-detail="w:C65"]').isVisible());
+  assert.match(await moreOpenings.locator('[data-detail="w:C65"] summary').innerText(), /Ruy Lopez Opening Berlin Defense/);
   assert.equal(archiveLookups, beforeOverview + 1);
   const speeds = page.locator('#checkup-overview-speeds');
   await speeds.getByRole('button', { name: 'Blitz', exact: true }).click();
@@ -425,7 +427,7 @@ try {
   const analyze = puzzle.getByRole('link', { name: 'Analyze this position in the studio' });
   assert(await analyze.isHidden(), 'Studio handoff is revealed after an answer');
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-challenge');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-opening-names');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   await puzzle.locator('#challenge-move').fill(parsed.played);

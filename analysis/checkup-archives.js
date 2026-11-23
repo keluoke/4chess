@@ -1,8 +1,8 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-challenge';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-opening-names';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-challenge';
-import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261123-checkup-challenge';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-opening-names';
+import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261123-checkup-opening-names';
 
 export const MAX_LOCAL_GAMES = 15;
 
@@ -96,12 +96,30 @@ export function detectBatchPlayer(games = [], profile = null) {
   };
 }
 
+function chesscomOpeningName(link) {
+  if (!link) return '';
+  try {
+    const url = new URL(link);
+    if (url.protocol !== 'https:' || !['chess.com', 'www.chess.com'].includes(url.hostname) ||
+        url.port || url.username || url.password) return '';
+    const slug = url.pathname.match(/^\/openings\/([^/]+)\/?$/)?.[1];
+    if (!slug) return '';
+    // Chess.com can append a PGN continuation such as "-3.e3-Nf6" to the title.
+    const title = decodeURIComponent(slug).split(/(?:^|-)\d+\./, 1)[0];
+    return /^[\p{L}\p{N}][\p{L}\p{M}\p{N}.'’ -]*$/u.test(title) ? title.replaceAll('-', ' ').trim() : '';
+  } catch {
+    return '';
+  }
+}
+
 function archivedCheckupGame(platform, item, pgn, result) {
   const tags = readPgnTags(pgn);
   const meta = parsePgnMeta(pgn);
   const loser = result === '1-0' ? item.black : result === '0-1' ? item.white : null;
   const initial = tags.timecontrol?.match(/^(\d+)(?:[+|]\d+)?$/)?.[1];
-  const openingPath = tags.ecourl?.match(/^https:\/\/(?:www\.)?chess\.com\/openings\/([A-Za-z0-9-]+)\/?$/i)?.[1];
+  const explicitOpening = [item.opening?.name, tags.opening]
+    .map(name => typeof name === 'string' ? name.trim() : '')
+    .find(name => name && !/^(?:[?*-]|unknown)$/i.test(name));
   return {
     pgn,
     gameId: checkupGameId(platform, platform === 'lichess' ? item.id : item.url),
@@ -109,7 +127,7 @@ function archivedCheckupGame(platform, item, pgn, result) {
     meta: {
       ...meta, result, timeClass: item.speed || item.time_class || '',
       eco: item.opening?.eco || tags.eco || '',
-      opening: item.opening?.name || tags.opening || openingPath?.replaceAll('-', ' ') || '',
+      opening: explicitOpening || chesscomOpeningName(tags.ecourl),
       termination: item.status?.name || item.status || loser?.result || tags.termination || '',
       initialSeconds: item.clock?.initial ?? (initial !== undefined ? Number(initial) : null)
     }

@@ -1,4 +1,4 @@
-import qrcode from '../lib/review-qr.js?v=20261123-checkup-challenge';
+import qrcode from '../lib/review-qr.js?v=20261123-checkup-opening-names';
 
 export const CHECKUP_URL = 'https://4chess.cc/analysis/?tab=checkup';
 

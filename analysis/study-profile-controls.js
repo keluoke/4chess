@@ -1,5 +1,5 @@
-import { accountKey, normalizeAccount } from './study-store.js?v=20261123-checkup-challenge';
-import { t } from './i18n.js?v=20261123-checkup-challenge';
+import { accountKey, normalizeAccount } from './study-store.js?v=20261123-checkup-opening-names';
+import { t } from './i18n.js?v=20261123-checkup-opening-names';
 
 export class StudyProfileControls {
   busy = false;

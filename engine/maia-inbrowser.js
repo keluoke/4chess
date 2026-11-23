@@ -4,7 +4,7 @@
  * 100% offline, zero external server, zero Python, zero configuration.
  */
 
-import { loadModelBytes } from './model-cache-client.js?v=20261123-checkup-challenge';
+import { loadModelBytes } from './model-cache-client.js?v=20261123-checkup-opening-names';
 import { ChessBoard } from './chess-core.js';
 
 export class MaiaInBrowserEngine {

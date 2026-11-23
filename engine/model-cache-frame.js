@@ -1,4 +1,4 @@
-import { readModelBytes, getModelCacheKey } from './model-loader.js?v=20261123-checkup-challenge';
+import { readModelBytes, getModelCacheKey } from './model-loader.js?v=20261123-checkup-opening-names';
 import { MAIA_VARIANTS } from './engine-variants.js';
 import { modelSourceCandidates } from './model-sources.js';
 

@@ -91,6 +91,26 @@ const chesscomGames = await fetchChesscomRecentGames('KidPlayer', {
 assert.equal(chesscomGames.length, 1);
 assert.equal(chesscomGames[0].meta.black, 'KidPlayer');
 
+const openingUrls = [
+  ['https://www.chess.com/openings/Slav-Defense-3.e3-Nf6', 'Slav Defense'],
+  ['https://chess.com/openings/R%C3%A9ti-Opening-1...d5-2.g3/?ref=archive#moves', 'Réti Opening'],
+  ['https://www.chess.com/openings/Dutch-Defense', 'Dutch Defense'],
+  ['https://chess.com.example.org/openings/Slav-Defense-3.e3-Nf6', ''],
+  ['https://www.chess.com/openings/%E0%A4%A', ''],
+  ['https://www.chess.com/openings/Slav-Defense-3.e3-Nf6', 'Slav Defense, Alapin Variation', 'Slav Defense, Alapin Variation'],
+  ['', '']
+];
+const namedArchives = await fetchChesscomRecentGames('KidPlayer', {
+  fetchImpl: async url => String(url).endsWith('/games/archives') ? Response.json({ archives: [] })
+    : Response.json({ games: openingUrls.map(([link, , opening], index) => ({
+      rules: 'chess',
+      url: `https://www.chess.com/game/live/${index + 1}`,
+      pgn: `[ECO "D11"]\n[ECOUrl "${link}"]\n[Opening "${opening || '?'}"]\n${pgn2}`
+    })).reverse() })
+});
+assert.deepEqual(namedArchives.map(game => game.meta.opening), openingUrls.map(([, title]) => title));
+assert(namedArchives.every(game => game.meta.eco === 'D11'));
+
 const mockStockfish = {
   async initialize() { return true; },
   async evaluate(fen, depth) {
