@@ -56,6 +56,13 @@ try {
   const bytes = fs.readFileSync(await png.path());
   assert.equal(bytes.readUInt32BE(16), 1080);
   assert(bytes.readUInt32BE(20) >= 1000, 'The report uses a vertical layout');
+  await page.locator('#review-share-image').click();
+  await page.locator('#review-share-status').getByText('Copied to the clipboard.', { exact: true }).waitFor();
+  assert(await page.evaluate(async () => (await navigator.clipboard.read()).some(item => item.types.includes('image/png'))));
+  await page.locator('#review-share-text').click();
+  const textSummary = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(textSummary, /Sample White 1-0 Sample Black/);
+  assert.equal(textSummary.split('\n').length, 3);
   await page.locator('#review-share-copy').click();
   const shared = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   assert.equal(shared.origin, 'https://4chess.cc');
@@ -92,10 +99,12 @@ try {
 
   await page.locator('#review-share-anonymize').check();
   await page.locator('#review-share-copy:not([disabled])').waitFor();
+  await page.locator('#review-share-text').click();
+  assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Sample White|Sample Black|AbCd1234/);
   await page.locator('#review-share-copy').click();
   const anonymous = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   const data = await view.evaluate(async hash => {
-    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261123-checkup-insights-ui');
+    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261123-checkup-social');
     return decodeReviewSnapshot(new URLSearchParams(hash.slice(1)).get('review'));
   }, anonymous.hash);
   assert.deepEqual([data.white, data.black, data.source], ['', '', null]);
@@ -127,7 +136,7 @@ try {
     await installed.close();
     fs.rmSync(profile, { recursive: true, force: true });
   }
-  console.log('PASS whole-game PNG and snapshot: independent browser, identical accuracy and chart, key move and variation, no engine requests, anonymous export and mobile layout.', shared.href.length + ' URL chars');
+  console.log('PASS whole-game share: PNG download and clipboard, anonymous text, exact snapshot and variations, no engine requests, mobile layout.', shared.href.length + ' URL chars');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

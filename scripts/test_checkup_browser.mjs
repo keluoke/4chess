@@ -21,7 +21,8 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chromium', headless: true });
 try {
-  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 },
+    serviceWorkers: 'block', permissions: ['clipboard-read', 'clipboard-write'] });
   const first = '[White "Seanyan"]\n[WhiteElo "2180"]\n[Black "Rival"]\n[BlackElo "1400"]\n[ECO "C60"]\n[Opening "Ruy Lopez"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 1-0';
   const second = '[White "Rival"]\n[Black "Seanyan"]\n[BlackElo "2180"]\n[Result "0-1"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 Nbd7 7. Rc1 c6 8. Bd3 dxc4 0-1';
   await context.route('https://weights.4chess.cc/**', route => route.abort());
@@ -41,7 +42,7 @@ try {
       rules: 'chess', time_class: 'rapid', url: `https://www.chess.com/game/live/${id}`, pgn: pgn.replaceAll('Seanyan', name), ...more
     });
     const games = [archived(base + 1, second), archived(base, first)];
-    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first.replaceAll('1-0', '0-1'), {
+    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first.replaceAll('1-0', '0-1').replace('C60', 'C65'), {
       time_class: 'blitz', white: { result: 'timeout' }
     }));
     return route.fulfill({ json: { games } });
@@ -59,6 +60,10 @@ try {
   const dialog = page.locator('#checkup-dialog');
   const settings = () => page.locator('#checkup-tab-settings').click();
   const reportBox = page.locator('#checkup-report-box');
+  const share = page.locator('#checkup-share-dialog');
+  const preview = page.locator('#checkup-share-canvas');
+  const readyToShare = () => share.getByRole('button', { name: 'Download PNG', exact: true }).and(page.locator(':enabled')).waitFor();
+  const closeShare = () => page.locator('#checkup-share-close').click();
   const editor = page.locator('#study-profile-dialog');
   const profileSelect = page.locator('#checkup-profile-select');
   const badge = page.locator('#checkup-new-dot');
@@ -140,20 +145,39 @@ try {
   await page.getByText('3 completed games', { exact: true }).waitFor();
   const overview = page.locator('#checkup-overview-body');
   assert.match(await overview.locator('.checkup-result-total').innerText(), /67%[\s\S]*2 W[\s\S]*0 D[\s\S]*1 L/);
+  assert.match(await overview.locator('.checkup-hero-summary').innerText(), /Black scores 50 percentage points higher.*100% of losses were on time/);
+  const moreOpenings = overview.locator('[data-detail="more-w"]');
+  assert(await moreOpenings.locator('[data-detail="w:C65"]').isHidden());
+  await moreOpenings.getByText('See more common openings').click();
+  assert(await moreOpenings.locator('[data-detail="w:C65"]').isVisible());
   assert.equal(archiveLookups, beforeOverview + 1);
   const speeds = page.locator('#checkup-overview-speeds');
   await speeds.getByRole('button', { name: 'Blitz', exact: true }).click();
   assert.match(await overview.locator('.checkup-result-total').innerText(), /0%[\s\S]*0 W[\s\S]*0 D[\s\S]*1 L/);
+  assert.match(await overview.locator('.checkup-result-b').innerText(), /—/);
+  assert.equal(await overview.locator('.checkup-result-b .checkup-result-bar > span').count(), 0);
+  await page.getByRole('button', { name: 'Share game overview card' }).click();
+  await readyToShare();
+  assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  const blitzSummary = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(blitzSummary, /1 game · 0% score/);
+  assert.doesNotMatch(blitzSummary, /Clarkyan/);
+  assert.equal(blitzSummary.split('\n').length, 3);
+  if (process.env.TEST_CHECKUP_CARDS) {
+    await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-overview.png' });
+  }
+  await closeShare();
   assert.equal(await page.evaluate(() => window.clockParses), 3, 'Changing filters does not parse clocks again');
   assert.equal(archiveLookups, beforeOverview + 1, 'Changing filters uses cached archive data');
-  await overview.locator('[data-detail="w:C60"] summary').click();
-  await overview.locator('[data-detail="w:C60"]').getByRole('button', { name: /Open game/ }).click();
+  await overview.locator('[data-detail="w:C65"] summary').click();
+  await overview.locator('[data-detail="w:C65"]').getByRole('button', { name: /Open game/ }).click();
   await dialog.waitFor({ state: 'hidden' });
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkupGame?.gameId), 'live:12345675');
   const backToOverview = page.getByRole('button', { name: 'Back to game overview' });
   await backToOverview.click();
   await speeds.getByRole('button', { name: 'Blitz', pressed: true }).waitFor();
-  assert(await overview.locator('[data-detail="w:C60"]').getByRole('button', { name: /Open game/ }).isVisible());
+  assert(await overview.locator('[data-detail="w:C65"]').getByRole('button', { name: /Open game/ }).isVisible());
   await overview.getByText(/View 1 losses on time/).click();
   const timeoutReplay = overview.locator('[data-detail="timeout"]').getByRole('button', { name: /Open game/ });
   await timeoutReplay.click();
@@ -348,6 +372,64 @@ try {
   await sixthJump.waitFor();
   const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
+  await page.getByRole('button', { name: 'Share diagnosis card' }).click();
+  await readyToShare();
+  assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
+  await share.getByRole('checkbox', { name: 'Hide player names' }).uncheck();
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
+  await share.getByRole('button', { name: '16:9' }).click();
+  await readyToShare();
+  const download = page.waitForEvent('download');
+  await share.getByRole('button', { name: 'Download PNG' }).click();
+  const png = await download;
+  const bytes = fs.readFileSync(await png.path());
+  assert.equal(png.suggestedFilename(), 'diverge-report.png');
+  assert.deepEqual([bytes.readUInt32BE(16), bytes.readUInt32BE(20)], [1280, 720]);
+  if (process.env.TEST_CHECKUP_CARDS) await png.saveAs(process.env.TEST_CHECKUP_CARDS + '-report.png');
+  await share.getByRole('button', { name: 'Copy image' }).click();
+  await share.locator('#checkup-share-status').getByText('Copied to the clipboard.', { exact: true }).waitFor();
+  assert(await page.evaluate(async () => (await navigator.clipboard.read()).some(item => item.types.includes('image/png'))));
+  await closeShare();
+
+  await reportBox.getByRole('button', { name: 'Share a challenge' }).first().click();
+  await share.getByRole('button', { name: 'Copy challenge link' }).click();
+  const challengeUrl = new URL(await page.evaluate(() => navigator.clipboard.readText()));
+  assert.equal(challengeUrl.pathname, '/analysis/challenge.html');
+  assert(challengeUrl.href.length < 270);
+  await closeShare();
+  const recipient = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  const engineRequests = [];
+  recipient.on('request', request => {
+    if (/\b(maia-engine|maia-worker|stockfish|weights\.4chess)/i.test(request.url())) engineRequests.push(request.url());
+  });
+  const puzzle = await recipient.newPage();
+  puzzle.on('pageerror', error => errors.push(error.message));
+  await puzzle.goto(origin + challengeUrl.pathname + challengeUrl.hash);
+  await puzzle.locator('#challenge-board .maia-square').first().waitFor();
+  assert(await puzzle.locator('#challenge-answer').isHidden());
+  assert.equal(await puzzle.locator('#maia-svg-arrows-group > *').count(), 0);
+  const parsed = await puzzle.evaluate(async () => {
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-social');
+    return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
+  });
+  await puzzle.locator('#challenge-move').fill(parsed.played);
+  await puzzle.getByRole('button', { name: 'Submit move' }).click();
+  assert.match(await puzzle.locator('#challenge-status').innerText(), /tempting move/);
+  assert.match(await puzzle.locator('#challenge-probability').innerText(), /Maia 2200 assigned 60% probability/);
+  assert(await puzzle.locator('#maia-svg-arrows-group > *').count() >= 2);
+  await puzzle.getByRole('button', { name: 'Try again' }).click();
+  await puzzle.locator(`[data-square="${parsed.best.slice(0, 2)}"]`).click();
+  await puzzle.locator(`[data-square="${parsed.best.slice(2, 4)}"]`).click();
+  assert.match(await puzzle.locator('#challenge-status').innerText(), /verified as best/);
+  assert.deepEqual(engineRequests, []);
+  await puzzle.getByRole('link', { name: 'Test your playing intuition' }).click();
+  await puzzle.locator('#checkup-tab-settings[aria-selected="true"]').waitFor();
+  assert(await puzzle.locator('#checkup-dialog').isVisible());
+  await recipient.close();
+  await page.bringToFront();
   await reportBox.getByRole('button', { name: `Save all ${replay.traps.length} traps` }).click();
   await page.waitForFunction(async count => {
     const bank = window.__maiaStudioApp.mistakeBank;
@@ -376,7 +458,7 @@ try {
   assert.equal(practiced.stored, replay.traps.length);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(errors, []);
-  console.log('PASS checkup workbench: diagnose before link, skip unchanged batches, check new games, move the latest report on split, badge dismissal, safe cancellation, completed-review acknowledgement, full trap list, exact original move replay and topic practice.');
+  console.log('PASS checkup workbench: incremental reports, overview cache and openings, profile isolation, reminders, safe cancellation, exact replay, topic practice, scoped share cards, PNG export and anonymous engine-free challenges.');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

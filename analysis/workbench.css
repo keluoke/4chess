@@ -702,14 +702,16 @@ button,input,select,textarea { font-family:inherit; }
 #checkup-dialog > .bank-heading { display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start; }
 #checkup-dialog:is([data-view="overview"],[data-view="report"]) .checkup-subtitle { display:none; }
 .checkup-overview-toolbar {
-  display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr) 38px;gap:8px;align-items:start;
+  display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr) auto 38px;gap:8px;align-items:start;
 }
 #checkup-overview-account {
   height:38px;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;box-shadow:none;
 }
 .checkup-refresh {
-  grid-column:3;height:38px;width:38px;min-width:0;padding:0;justify-content:center;box-shadow:none;
+  grid-column:4;height:38px;width:38px;min-width:0;padding:0;justify-content:center;box-shadow:none;
 }
+.checkup-overview-share { grid-column:3;height:38px;width:38px;min-width:0;padding:0;justify-content:center;box-shadow:none; }
+.checkup-overview-share[hidden] { display:none; }
 .checkup-refresh[data-loading="true"] svg { animation:checkup-refresh-spin 1.2s linear infinite; }
 @keyframes checkup-refresh-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) {
@@ -802,7 +804,11 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-clock-kpi strong { font-size:clamp(20px,2.8vw,29px); }
 .checkup-clock-kpi small { font-size:11px;line-height:1.4; }
 .checkup-clock-timeout strong { color:var(--dg-gold); }
-.checkup-clock-reviewed strong { color:var(--dg-green); }
+.checkup-clock-low strong { color:var(--dg-green); }
+.checkup-clock-medium strong { color:var(--dg-gold); }
+.checkup-clock-high strong { color:var(--dg-red); }
+.checkup-hero-summary { margin:-6px 0 14px;color:var(--dg-muted);font-size:13px;line-height:1.5; }
+.checkup-more-openings { padding-inline-start:12px; }
 .checkup-clock-missing strong { color:var(--dg-muted); }
 .checkup-clock-grid + details { margin-top:8px; }
 .checkup-highlight-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:8px; }
@@ -818,8 +824,9 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-charts .checkup-chart-endpoint { fill:var(--dg-green);font-size:11px;font-weight:650; }
 @media (max-width:590px) {
   #checkup-dialog:is([data-view="overview"],[data-view="report"]) { padding:16px; }
-  .checkup-overview-toolbar { grid-template-columns:minmax(0,1fr) 38px; }
-  .checkup-refresh { grid-column:2;grid-row:1; }
+  .checkup-overview-toolbar { grid-template-columns:minmax(0,1fr) auto 38px; }
+  .checkup-refresh { grid-column:3;grid-row:1; }
+  .checkup-overview-share { grid-column:2;grid-row:1; }
   #checkup-overview-speeds { grid-column:1/-1; }
   .checkup-overview-record,.checkup-overview-footer { grid-template-columns:minmax(0,1fr); }
   .checkup-overview-record { gap:6px; }

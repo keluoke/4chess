@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="description" content="One position from a completed game. Find the move that holds up under review.">
+  <title>Diverge · 直觉挑战</title>
+  <link rel="icon" href="../favicon.svg">
+  <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
+  <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
+  <link rel="stylesheet" href="./analysis.css?v=20261118-precise-filter">
+  <link rel="stylesheet" href="./review-share.css?v=20261123-checkup-social">
+</head>
+<body class="diverge-ui snapshot-page challenge-page">
+  <main class="snapshot-wrap">
+    <header class="snapshot-header">
+      <a class="snapshot-brand" href="../"><img src="../icons/icon48.png" alt="" width="32" height="32">Diverge</a>
+    </header>
+    <article class="challenge-panel">
+      <h1 data-i18n="challengeTitle">直觉挑战</h1>
+      <p id="challenge-status" role="status"></p>
+      <div id="challenge-play" hidden>
+        <div id="challenge-board"></div>
+        <form id="challenge-form" class="challenge-actions">
+          <input id="challenge-move" type="text" spellcheck="false" autocomplete="off" maxlength="12" data-i18n-placeholder="challengeMovePlaceholder" data-i18n-aria="challengeMoveInput">
+          <button class="btn-header" type="submit" data-i18n="challengeSubmit">提交走法</button>
+        </form>
+        <div id="challenge-answer" class="challenge-answer" hidden>
+          <p id="challenge-lines"></p>
+          <p id="challenge-probability" hidden></p>
+          <button type="button" id="challenge-reset" class="btn-header" data-i18n="challengeRetry">再试一次</button>
+        </div>
+      </div>
+      <a class="btn-header btn-primary challenge-self-test" href="./?tab=checkup" data-i18n="challengeSelfTest">测测你的实战直觉</a>
+    </article>
+  </main>
+  <script type="module" src="./challenge.js?v=20261123-checkup-social"></script>
+</body>
+</html>

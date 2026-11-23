@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261123-checkup-insights-ui';
+import { t } from './i18n.js?v=20261123-checkup-social';
 import { REVIEW_QUALITIES, INTUITION_KINDS, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const element = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };

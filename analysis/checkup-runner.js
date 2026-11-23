@@ -1,18 +1,21 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-insights-ui';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-social';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261117-review-policy';
-import { accountKey, buildTrapRecord, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261123-checkup-insights-ui';
-import { t } from './i18n.js?v=20261123-checkup-insights-ui';
+import { accountKey, buildTrapRecord, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261123-checkup-social';
+import { getLang, t } from './i18n.js?v=20261123-checkup-social';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupWindow, checkupTrend,
   planCheckupSamples, prepareCheckupOverview, summarizeCheckupGames
-} from './checkup-insights.js?v=20261123-checkup-insights-ui';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-insights-ui';
-import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-insights-ui';
+} from './checkup-insights.js?v=20261123-checkup-social';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-social';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-social';
 
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-insights-ui';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-social';
+
+import { CheckupShare, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-social';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-social';
 
 const MAX_LOCAL_GAMES = 15;
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
@@ -687,6 +690,7 @@ export class IntuitionCheckup {
     this.replayBanner = document.getElementById('checkup-replay-banner');
     this.overviewAccount = document.getElementById('checkup-overview-account');
     this.overviewButton = document.getElementById('btn-checkup-overview');
+    this.overviewShare = document.getElementById('btn-checkup-overview-share');
     this.overviewSpeeds = document.getElementById('checkup-overview-speeds');
     this.overviewStatus = document.getElementById('checkup-overview-status');
     this.overviewBody = document.getElementById('checkup-overview-body');
@@ -695,6 +699,8 @@ export class IntuitionCheckup {
       if (this.button) this.button.hidden = true;
       return;
     }
+    this.share = new CheckupShare(() => this.allowed() && !this.busy && this.dialog.open &&
+      this.activeProfileId === this.app.mistakeBank?.activeProfile?.id);
     this.bindEvents();
     this.syncVisibility();
   }
@@ -796,6 +802,7 @@ export class IntuitionCheckup {
       });
       this.dialog.addEventListener('close', () => {
         this.lastRunReportId = null;
+        if (this.share.dialog.open) this.share.dialog.close();
         this.overviewController?.abort();
         this.overviewController = null;
         this.overviewPendingKey = null;
@@ -889,7 +896,7 @@ export class IntuitionCheckup {
     await this.prepareBatch();
   }
 
-  async open({ account } = {}) {
+  async open({ account, view } = {}) {
     if (!this.allowed() || !this.dialog || this.running || this.fetching) return;
     const generation = ++this.openGeneration;
     const epoch = this.app.gameEpoch;
@@ -928,7 +935,7 @@ export class IntuitionCheckup {
     this.history = loadedHistory;
     this.reportScope = 'rolling';
     const replay = this.replayReturn;
-    const canReturn = !account && replay?.epoch === epoch && replay.profileId === profileId;
+    const canReturn = !account && !view && replay?.epoch === epoch && replay.profileId === profileId;
     const returnReport = canReturn ? loadedHistory.find(item => item.id === replay.reportId) : null;
     const returnOverview = canReturn && replay.overview && this.overviewCache.has(replay.overview.key);
     if (returnReport) {
@@ -945,7 +952,9 @@ export class IntuitionCheckup {
     this.renderReport(this.latestReport);
     const opening = !this.dialog.open;
     if (opening) this.dialog.showModal();
-    if (returnOverview) {
+    if (view) {
+      this.setView(view);
+    } else if (returnOverview) {
       this.overviewRestore = replay.overview;
       this.setView('overview');
     } else if (opening) {
@@ -1147,6 +1156,13 @@ export class IntuitionCheckup {
     const key = this.overviewKey();
     const cached = this.overviewCache.get(key);
     const loading = !!this.overviewController && this.overviewPendingKey === key;
+    this.overviewShare.hidden = !cached?.games?.length;
+    this.overviewShare.title = t('checkupShareOverview');
+    this.overviewShare.onclick = () => {
+      if (this.overviewKey() !== key || !cached?.games?.length) return;
+      const { speed } = cached.state;
+      this.share.open(overviewCardData(cached.games, cached.account, speed, speed ? this.speedLabel(speed) : t('checkupAllSpeeds')));
+    };
     this.overviewAccount.disabled = !key || this.busy;
     this.renderSourceControls();
     const buttonLabel = t(cached?.games ? 'checkupOverviewRefresh' : cached?.error ? 'checkupOverviewRetry' : 'checkupOverviewLoad');
@@ -1750,7 +1766,7 @@ export class IntuitionCheckup {
     summary.append(metaRow);
     const archivedReport = report;
     if (report.rolling && this.reportScope === 'rolling') {
-      report = { ...report, ...report.rolling, highlights: report.rolling.highlights || [] };
+      report = this.displayedReport(report);
       const coverage = document.createElement('p');
       coverage.className = 'checkup-elo-note checkup-window-coverage';
       coverage.textContent = t('checkupWindowCoverage', { count: report.gameCount });
@@ -1813,6 +1829,11 @@ export class IntuitionCheckup {
     this.renderTrends(archivedReport);
   }
 
+  displayedReport(report) {
+    if (!report.rolling || this.reportScope !== 'rolling') return report;
+    return { ...report, ...report.rolling, highlights: report.rolling.highlights || [], topTraps: [] };
+  }
+
   renderReportTools(report) {
     if (!this.reportTools) return;
     this.reportTools.replaceChildren();
@@ -1827,6 +1848,12 @@ export class IntuitionCheckup {
       }, 'btn-primary');
       update.disabled = this.busy;
       this.reportTools.append(update);
+    }
+    if (report) {
+      this.reportTools.append(this.reportButton(t('checkupShareReport'), () => {
+        const rolling = Boolean(report.rolling && this.reportScope === 'rolling');
+        this.share.open(diagnosticCardData(this.displayedReport(report), rolling, checkupTrapTopics));
+      }));
     }
     if (report?.rolling) {
       const view = document.createElement('select');
@@ -2075,6 +2102,10 @@ export class IntuitionCheckup {
         jump.setAttribute('aria-label', `${jump.textContent} · ${title.textContent}`);
         actions.append(jump);
       }
+      const challengeUrl = (!game?.pgn || FairPlayGuard.verifyConcludedGame(game.pgn).ok) && checkupChallengeUrl(trap, getLang());
+      if (challengeUrl) actions.append(this.reportButton(t('challengeShare'), () => {
+        this.share.open({ title: t('challengeShare') }, challengeUrl);
+      }, 'checkup-trap-practice-btn'));
       actions.append(this.reportButton(t('checkupTrapPracticeOne'),
         () => this.saveReportTraps(report, [trap], { practice: true }), 'checkup-trap-practice-btn'));
       row.append(actions);

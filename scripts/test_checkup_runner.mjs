@@ -12,6 +12,9 @@ import {
 } from '../analysis/checkup-runner.js';
 import { StudyStore } from '../analysis/study-store.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
+import { checkupChallengeUrl, decodeChallenge } from '../analysis/challenge-link.js';
+import { overviewSummary, clockErrorTone } from '../analysis/checkup-overview.js';
+import { diagnosticCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
 import {
   buildCheckupWindow, checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
 } from '../analysis/checkup-insights.js';
@@ -133,6 +136,20 @@ assert.equal(Object.keys(report.eloFit).length, CHECKUP_ELOS.length);
 assert.equal(report.topTraps.length, 1);
 assert.equal(report.topTraps[0].playedSan, 'Bb3');
 assert.equal(report.topTraps[0].turn, 'w', 'Only targetPlayer moves are collected');
+const challengeUrl = new URL(checkupChallengeUrl(report.topTraps[0], 'en'));
+const challengeToken = new URLSearchParams(challengeUrl.hash.slice(1)).get('p');
+const challenge = decodeChallenge(challengeToken);
+assert.equal(challengeUrl.pathname, '/analysis/challenge.html');
+assert.deepEqual([challenge.playedSan, challenge.bestSan, challenge.elo, challenge.probability], ['Bb3', 'c3', 1900, 48]);
+assert(!JSON.stringify(challenge).includes('KidPlayer'), 'A challenge carries no chess account or original PGN');
+assert.equal(checkupChallengeUrl({ ...report.topTraps[0], bestUci: 'a8a1' }, 'en'), null);
+assert.equal(checkupChallengeUrl({ ...report.topTraps[0], divergenceStatus: 'unconfirmed' }, 'en'), null);
+assert.equal(decodeChallenge('a'.repeat(321)), null);
+const card = diagnosticCardData(report, false, trap => trap.topics || []);
+assert.equal(card.position.firstSan, 'c3');
+assert(!summarizeCheckupCard(card, true).includes('KidPlayer'));
+assert.match(summarizeCheckupCard(card, false), /KidPlayer/);
+assert.equal(summarizeCheckupCard(card, true).split('\n').length, 3);
 
 const highlight = await runIntuitionCheckup({
   games: [{ pgn: pgn1 }], targetPlayer: 'KidPlayer', elo: 1900,
@@ -511,6 +528,13 @@ const mixed = prepareCheckupOverview(outcomes.map((result, i) => ({
   }
 })), 'kidplayer');
 const mixedOverview = summarizeCheckupOverview(mixed);
+assert.match(overviewSummary(mixedOverview), /100%/);
+assert.deepEqual([clockErrorTone(1, 0), clockErrorTone(11, 100), clockErrorTone(12, 100), clockErrorTone(25, 100), clockErrorTone(40, 100)],
+  ['missing', 'low', 'medium', 'high', 'high']);
+const statsCard = overviewCardData(mixed, { username: 'KidPlayer' }, 'blitz', 'Blitz');
+assert.equal(statsCard.count, 3);
+assert.equal(statsCard.summary, overviewSummary(summarizeCheckupOverview(mixed, 'blitz')));
+assert(!summarizeCheckupCard(statsCard, true).includes('KidPlayer'));
 assert.deepEqual(mixedOverview.total, { count: 7, win: 2, draw: 1, loss: 4, points: 2.5 });
 assert.deepEqual(mixedOverview.colors.w, mixedOverview.total);
 const ranked = rankCheckupOpenings(mixedOverview.openings, 'w');

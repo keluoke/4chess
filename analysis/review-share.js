@@ -1,8 +1,8 @@
-import { t, getLang } from './i18n.js?v=20261123-checkup-insights-ui';
+import { t, getLang } from './i18n.js?v=20261123-checkup-social';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards } from './share-card.js?v=20261123-checkup-insights-ui';
-import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261123-checkup-insights-ui';
-import qrcode from '../lib/review-qr.js?v=20261123-checkup-insights-ui';
+import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards } from './share-card.js?v=20261123-checkup-social';
+import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261123-checkup-social';
+import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-social';
 
 const VIEWER = 'https://4chess.cc/analysis/shared.html';
 const byId = id => document.getElementById(id);
@@ -13,10 +13,7 @@ function qrSpec(snapshotUrl, source) {
   // Keep ample pixels per module after chat apps resize the report image.
   const target = snapshotUrl && snapshotUrl.length <= 230 ? snapshotUrl : source;
   if (!target) return null;
-  const qr = qrcode(0, 'M');
-  qr.addData(target, 'Byte');
-  qr.make();
-  return { qr, snapshot: target === snapshotUrl };
+  return { qr: shareQr(target), snapshot: target === snapshotUrl };
 }
 
 function drawChart(ctx, report, x, y, width, height) {
@@ -129,14 +126,7 @@ async function drawReport(canvas, report, url, isCurrent) {
   ctx.font = '650 29px system-ui';
   fit(ctx, '4chess.cc · Diverge', 60, footer + 25, 690);
   if (qr) {
-    const { qr: code } = qr, size = code.getModuleCount();
-    const scale = Math.floor(180 / (size + 8)), pixels = (size + 8) * scale;
-    const x = 1020 - pixels, y = footer + 14;
-    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, pixels, pixels);
-    ctx.fillStyle = '#111';
-    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-      if (code.isDark(r, c)) ctx.fillRect(x + (c + 4) * scale, y + (r + 4) * scale, scale, scale);
-    }
+    drawShareQr(ctx, qr.qr, 1020, footer + 14, 180);
     ctx.font = '500 20px system-ui';
     ctx.fillStyle = '#284a3c';
     ctx.textAlign = 'right';
@@ -154,6 +144,8 @@ export class ReviewShare {
     this.anonymize = byId('review-share-anonymize');
     this.download = byId('review-share-png');
     this.copy = byId('review-share-copy');
+    this.image = byId('review-share-image');
+    this.text = byId('review-share-text');
     this.field = byId('review-share-field');
     this.status = byId('review-share-status');
     this.version = 0;
@@ -163,6 +155,8 @@ export class ReviewShare {
     this.anonymize.onchange = () => { void this.prepare(); };
     this.download.onclick = () => this.savePng();
     this.copy.onclick = () => { void this.copyLink(); };
+    this.image.onclick = () => { void this.copyImage(); };
+    this.text.onclick = () => { void this.copySummary(); };
   }
 
   allowed() {
@@ -180,7 +174,8 @@ export class ReviewShare {
   async prepare() {
     const version = ++this.version, epoch = this.app.gameEpoch;
     const current = () => version === this.version && epoch === this.app.gameEpoch && this.dialog.open && this.allowed();
-    this.download.disabled = this.copy.disabled = true;
+    this.download.disabled = this.copy.disabled = this.image.disabled = this.text.disabled = true;
+    this.blob = this.summary = null;
     this.field.hidden = true;
     this.url = null;
     this.canvas.hidden = true;
@@ -201,9 +196,20 @@ export class ReviewShare {
       try { url = VIEWER + '#' + new URLSearchParams({ review: await encodeReviewSnapshot(snapshot), lang: getLang() }).toString(); }
       catch { /* PNG export also works without browser compression support. */ }
       if (!(await drawReport(this.canvas, report, url, current)) || !current()) return;
+      const blob = await canvasPng(this.canvas);
+      if (!current()) return;
+      this.blob = blob;
+      this.summary = [
+        (report.white || t('reviewWhite')) + ' ' + report.result + ' ' + (report.black || t('reviewBlack')),
+        t('reviewShareSummaryScores', { white: scoreLabel(report.accuracy[0]), black: scoreLabel(report.accuracy[1]) }),
+        [t('snapshotPlies', { count: report.plies.length }), t('snapshotMistakes', {
+          count: report.plies.filter(move => ['inaccuracy', 'mistake', 'blunder'].includes(move.quality)).length
+        })].join(' · ')
+      ].join('\n');
       this.url = url;
       this.canvas.hidden = false;
-      this.download.disabled = false;
+      this.download.disabled = this.image.disabled = !blob;
+      this.text.disabled = false;
       this.copy.disabled = !url;
       const qr = qrSpec(url, report.source);
       this.status.textContent = !url ? t('snapshotLinkUnavailable') : qr?.snapshot ? '' :
@@ -214,31 +220,36 @@ export class ReviewShare {
   }
 
   savePng() {
-    if (!this.allowed() || this.download.disabled) return;
+    if (this.blob && this.dialog.open && this.allowed()) downloadPng(this.blob, 'diverge-game-review.png');
+  }
+
+  async copyImage() {
+    if (!this.blob || !this.dialog.open || !this.allowed()) return;
     const version = this.version;
-    this.canvas.toBlob(blob => {
-      if (!blob || version !== this.version || !this.dialog.open || !this.allowed()) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'diverge-game-review.png';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, 'image/png');
+    try {
+      await copyPng(this.blob);
+      if (version === this.version && this.allowed()) this.status.textContent = t('shareExportCopied');
+    } catch {
+      if (version === this.version && this.allowed()) this.status.textContent = t('shareCardCopyUnsupported');
+    }
+  }
+
+  async copySummary() {
+    if (this.summary && !this.text.disabled) await this.copyText(this.summary, 'shareExportCopied');
   }
 
   async copyLink() {
-    if (!this.url || this.copy.disabled || !this.allowed()) return;
+    if (this.url && !this.copy.disabled) await this.copyText(this.url, 'snapshotCopied');
+  }
+
+  async copyText(value, success) {
+    if (!this.dialog.open || !this.allowed()) return;
     const version = this.version;
     try {
-      await navigator.clipboard.writeText(this.url);
-      if (version === this.version) this.status.textContent = t('snapshotCopied');
+      await navigator.clipboard.writeText(value);
+      if (version === this.version && this.allowed()) this.status.textContent = t(success);
     } catch {
-      if (version !== this.version) return;
-      this.field.value = this.url;
-      this.field.hidden = false;
-      this.field.focus();
-      this.field.select();
+      if (version === this.version && this.allowed()) showCopyField(this.field, value);
     }
   }
 }
