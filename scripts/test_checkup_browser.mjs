@@ -425,7 +425,7 @@ try {
   const analyze = puzzle.getByRole('link', { name: 'Analyze this position in the studio' });
   assert(await analyze.isHidden(), 'Studio handoff is revealed after an answer');
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-social');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-challenge');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   await puzzle.locator('#challenge-move').fill(parsed.played);
@@ -439,6 +439,15 @@ try {
   await puzzle.locator(`[data-square="${parsed.best.slice(0, 2)}"]`).click();
   await puzzle.locator(`[data-square="${parsed.best.slice(2, 4)}"]`).click();
   assert.match(await puzzle.locator('#challenge-status').innerText(), /verified as best/);
+  await puzzle.getByRole('button', { name: 'Try again' }).click();
+  const alternative = await puzzle.evaluate(async ({ fen, played, best }) => {
+    const { ChessBoard } = await import('/engine/chess-core.js');
+    return new ChessBoard(fen).getLegalMoves().find(move => move.uci !== played && move.uci !== best)?.uci;
+  }, parsed);
+  assert(alternative, 'The archived position has a third legal move');
+  await puzzle.locator('#challenge-move').fill(alternative);
+  await puzzle.getByRole('button', { name: 'Submit move' }).click();
+  assert.match(await puzzle.locator('#challenge-status').innerText(), /chose a different move/);
   assert.deepEqual(engineRequests, []);
   const analyzeUrl = new URL(await analyze.getAttribute('href'));
   assert.equal(analyzeUrl.pathname, '/analysis/');
