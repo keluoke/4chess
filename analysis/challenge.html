@@ -4,8 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <meta name="description" content="One position from a completed game. Find the move that holds up under review.">
+  <meta name="description" content="一道来自完赛棋局的国际象棋挑战。先走出你的一步，再看原局选择与 Stockfish 复核首选。">
   <title>Diverge · 直觉挑战</title>
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:title" content="Diverge · 直觉挑战">
+  <meta property="og:description" content="一道来自完赛棋局的国际象棋挑战。先走出你的一步，再看原局选择与 Stockfish 复核首选。">
+  <meta property="og:image" content="https://4chess.cc/site/challenge-social.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="歧路 Diverge 直觉挑战封面，配有一盘示例棋局。">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Diverge · 直觉挑战">
+  <meta name="twitter:description" content="这一手，你会怎么走？落子后查看原局选择与 Stockfish 复核首选。">
+  <meta name="twitter:image" content="https://4chess.cc/site/challenge-social.png">
   <link rel="icon" href="../favicon.svg">
   <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
@@ -29,7 +42,10 @@
         <div id="challenge-answer" class="challenge-answer" hidden>
           <p id="challenge-lines"></p>
           <p id="challenge-probability" hidden></p>
-          <button type="button" id="challenge-reset" class="btn-header" data-i18n="challengeRetry">再试一次</button>
+          <div class="challenge-answer-actions">
+            <button type="button" id="challenge-reset" class="btn-header" data-i18n="challengeRetry">再试一次</button>
+            <a id="challenge-analyze" class="btn-header" data-i18n="challengeAnalyze">在工作台分析此局面</a>
+          </div>
         </div>
       </div>
       <a class="btn-header btn-primary challenge-self-test" href="./?tab=checkup" data-i18n="challengeSelfTest">测测你的实战直觉</a>

@@ -401,16 +401,29 @@ try {
   assert(challengeUrl.href.length < 270);
   await closeShare();
   const recipient = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await recipient.route('https://weights.4chess.cc/**', route => route.abort());
   const engineRequests = [];
   recipient.on('request', request => {
     if (/\b(maia-engine|maia-worker|stockfish|weights\.4chess)/i.test(request.url())) engineRequests.push(request.url());
   });
   const puzzle = await recipient.newPage();
   puzzle.on('pageerror', error => errors.push(error.message));
-  await puzzle.goto(origin + challengeUrl.pathname + challengeUrl.hash);
+  const challengeResponse = await puzzle.goto(origin + challengeUrl.pathname + challengeUrl.hash);
+  const challengeHtml = await challengeResponse.text();
+  assert.match(challengeHtml, /<meta property="og:title" content="Diverge · 直觉挑战">/);
+  assert.match(challengeHtml, /<meta property="og:description" content="一道来自完赛棋局/);
+  assert.match(challengeHtml, /<meta name="twitter:card" content="summary_large_image">/);
+  const coverUrl = new URL(challengeHtml.match(/<meta property="og:image" content="([^"]+)">/)?.[1]);
+  assert.equal(coverUrl.origin, 'https://4chess.cc');
+  const cover = await puzzle.request.get(origin + coverUrl.pathname);
+  assert.equal(cover.status(), 200);
+  const coverBytes = await cover.body();
+  assert.deepEqual([coverBytes.readUInt32BE(16), coverBytes.readUInt32BE(20)], [1200, 630]);
   await puzzle.locator('#challenge-board .maia-square').first().waitFor();
   assert(await puzzle.locator('#challenge-answer').isHidden());
   assert.equal(await puzzle.locator('#maia-svg-arrows-group > *').count(), 0);
+  const analyze = puzzle.getByRole('link', { name: 'Analyze this position in the studio' });
+  assert(await analyze.isHidden(), 'Studio handoff is revealed after an answer');
   const parsed = await puzzle.evaluate(async () => {
     const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-social');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
@@ -420,11 +433,25 @@ try {
   assert.match(await puzzle.locator('#challenge-status').innerText(), /tempting move/);
   assert.match(await puzzle.locator('#challenge-probability').innerText(), /Maia 2200 assigned 60% probability/);
   assert(await puzzle.locator('#maia-svg-arrows-group > *').count() >= 2);
+  assert(await analyze.isVisible());
   await puzzle.getByRole('button', { name: 'Try again' }).click();
+  assert(await analyze.isHidden());
   await puzzle.locator(`[data-square="${parsed.best.slice(0, 2)}"]`).click();
   await puzzle.locator(`[data-square="${parsed.best.slice(2, 4)}"]`).click();
   assert.match(await puzzle.locator('#challenge-status').innerText(), /verified as best/);
   assert.deepEqual(engineRequests, []);
+  const analyzeUrl = new URL(await analyze.getAttribute('href'));
+  assert.equal(analyzeUrl.pathname, '/analysis/');
+  const analyzeParams = new URLSearchParams(analyzeUrl.hash.slice(1));
+  const orientation = parsed.turn === 'w' ? 'white' : 'black';
+  assert.deepEqual([analyzeParams.get('fen'), analyzeParams.get('orientation'), analyzeParams.get('lang')],
+    [parsed.fen, orientation, 'en']);
+  await analyze.click();
+  await puzzle.waitForFunction(({ fen, orientation }) => {
+    const app = window.__maiaStudioApp;
+    return app?.hasAnalysisInput && app.boardUI?.orientation === orientation && app.positions[0]?.fen === fen;
+  }, { fen: parsed.fen, orientation });
+  await puzzle.goto(origin + challengeUrl.pathname + challengeUrl.hash);
   await puzzle.getByRole('link', { name: 'Test your playing intuition' }).click();
   await puzzle.locator('#checkup-tab-settings[aria-selected="true"]').waitFor();
   assert(await puzzle.locator('#checkup-dialog').isVisible());

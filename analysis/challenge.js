@@ -6,6 +6,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 const params = new URLSearchParams(location.hash.slice(1));
 initI18n();
 document.title = 'Diverge · ' + t('challengeTitle');
+document.querySelector('meta[name="description"]').content = t('challengeDescription');
 document.querySelector('.challenge-self-test').href = './?tab=checkup&lang=' + getLang();
 
 const byId = id => document.getElementById(id);
@@ -17,10 +18,14 @@ if (!challenge || !allowed()) {
   status.textContent = t('challengeInvalid');
 } else {
   const answer = byId('challenge-answer');
+  const orientation = challenge.turn === 'w' ? 'white' : 'black';
+  const studio = new URL('./', location.href);
+  studio.hash = new URLSearchParams({ fen: challenge.fen, orientation, lang: getLang() });
+  byId('challenge-analyze').href = studio.href;
   const form = byId('challenge-form');
   const moveField = byId('challenge-move');
   const board = new BoardUI(byId('challenge-board'), {
-    orientation: challenge.turn === 'w' ? 'white' : 'black',
+    orientation,
     onMove: move => submit(move.uci)
   });
   byId('challenge-play').hidden = false;

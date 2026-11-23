@@ -68,4 +68,6 @@
   border:1px solid var(--border-color);border-radius:9px;font:inherit;
 }
 .challenge-answer { border-top:1px solid var(--border-color);margin-top:16px;font-size:14px; }
+.challenge-answer-actions { display:flex;flex-wrap:wrap;gap:8px; }
+.challenge-answer-actions a { text-decoration:none; }
 .challenge-self-test { width:fit-content;max-width:100%;margin-top:14px;text-decoration:none; }
