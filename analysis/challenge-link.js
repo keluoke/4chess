@@ -43,3 +43,13 @@ export function decodeChallenge(token) {
     return null;
   }
 }
+
+export function challengeChoices({ fen, played, playedSan, best, bestSan }) {
+  const choices = [{ uci: played, san: playedSan }, { uci: best, san: bestSan }];
+  if (choices[0].uci > choices[1].uci) choices.reverse();
+  const seed = `${fen}|${choices[0].uci}|${choices[1].uci}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) hash = Math.imul(hash ^ seed.charCodeAt(i), 16777619);
+  if (hash < 0) choices.reverse();
+  return choices;
+}

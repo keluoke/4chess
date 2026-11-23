@@ -1,5 +1,5 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-account-selection';
-import { normalizeAlias } from './study-store.js?v=20261123-checkup-account-selection';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-challenge-choice';
+import { normalizeAlias } from './study-store.js?v=20261123-challenge-choice';
 
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
 export const MAX_ELO_SAMPLES = 24;

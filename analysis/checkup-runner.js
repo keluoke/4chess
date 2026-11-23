@@ -1,25 +1,25 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-account-selection';
-import { getLang, t } from './i18n.js?v=20261123-checkup-account-selection';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-challenge-choice';
+import { getLang, t } from './i18n.js?v=20261123-challenge-choice';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-account-selection';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-account-selection';
+} from './checkup-archives.js?v=20261123-challenge-choice';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-challenge-choice';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupWindow, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-checkup-account-selection';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-account-selection';
-import { CheckupShare, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-account-selection';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-account-selection';
+} from './checkup-insights.js?v=20261123-challenge-choice';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-challenge-choice';
+import { CheckupShare, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-challenge-choice';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-challenge-choice';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-account-selection';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-account-selection';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-account-selection';
+} from './checkup-archives.js?v=20261123-challenge-choice';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-challenge-choice';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-challenge-choice';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 

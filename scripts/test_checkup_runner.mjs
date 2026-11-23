@@ -12,7 +12,8 @@ import {
 } from '../analysis/checkup-runner.js';
 import { StudyStore } from '../analysis/study-store.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
-import { checkupChallengeUrl, decodeChallenge } from '../analysis/challenge-link.js';
+import { challengeChoices, checkupChallengeUrl, decodeChallenge } from '../analysis/challenge-link.js';
+import { ChessBoard } from '../engine/chess-core.js';
 import { overviewSummary, clockErrorTone } from '../analysis/checkup-overview.js';
 import { diagnosticCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
 import {
@@ -161,6 +162,13 @@ const challengeToken = new URLSearchParams(challengeUrl.hash.slice(1)).get('p');
 const challenge = decodeChallenge(challengeToken);
 assert.equal(challengeUrl.pathname, '/analysis/challenge.html');
 assert.deepEqual([challenge.playedSan, challenge.bestSan, challenge.elo, challenge.probability], ['Bb3', 'c3', 1900, 48]);
+const choices = challengeChoices(challenge);
+assert.deepEqual(choices.map(choice => choice.uci).sort(), [challenge.best, challenge.played].sort());
+assert.deepEqual(challengeChoices({ ...challenge, best: challenge.played, bestSan: challenge.playedSan,
+  played: challenge.best, playedSan: challenge.bestSan }), choices, 'Display order is independent of which move is best');
+const legal = new ChessBoard(challenge.fen).getLegalMoves().filter(move => move.uci !== challenge.played);
+const playedFirst = legal.filter(move => challengeChoices({ ...challenge, best: move.uci })[0].uci === challenge.played).length;
+assert(Math.abs(playedFirst / legal.length - 0.5) < 0.25, 'Both display orders occur across different move pairs');
 assert(!JSON.stringify(challenge).includes('KidPlayer'), 'A challenge carries no chess account or original PGN');
 assert.equal(checkupChallengeUrl({ ...report.topTraps[0], bestUci: 'a8a1' }, 'en'), null);
 assert.equal(checkupChallengeUrl({ ...report.topTraps[0], divergenceStatus: 'unconfirmed' }, 'en'), null);
