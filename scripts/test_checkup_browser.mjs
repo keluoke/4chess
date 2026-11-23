@@ -23,7 +23,7 @@ const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNE
 try {
   const context = await browser.newContext({ viewport: { width: 1200, height: 850 },
     serviceWorkers: 'block', permissions: ['clipboard-read', 'clipboard-write'] });
-  const first = '[White "Seanyan"]\n[WhiteElo "2180"]\n[Black "Rival"]\n[BlackElo "1400"]\n[ECO "C60"]\n[Opening "Ruy Lopez"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 1-0';
+  const first = '[TimeControl "300+0"]\n[White "Seanyan"]\n[WhiteElo "2180"]\n[Black "Rival"]\n[BlackElo "1400"]\n[ECO "C60"]\n[Opening "Ruy Lopez"]\n[Result "1-0"]\n\n1. e4 {[%clk 0:00:22]} e5 2. Nf3 {[%clk 0:00:22]} Nc6 3. Bb5 {[%clk 0:00:22]} a6 4. Ba4 {[%clk 0:00:22]} Nf6 5. O-O {[%clk 0:00:22]} Be7 6. Re1 {[%clk 0:00:22]} b5 7. Bb3 {[%clk 0:00:22]} d6 8. c3 {[%clk 0:00:22]} O-O 1-0';
   const second = '[White "Rival"]\n[Black "Seanyan"]\n[BlackElo "2180"]\n[Result "0-1"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 Nbd7 7. Rc1 c6 8. Bd3 dxc4 0-1';
   await context.route('https://weights.4chess.cc/**', route => route.abort());
   let clarkNew = false;
@@ -108,6 +108,12 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.gameCount === 2 &&
     !window.__maiaStudioApp.checkup.busy);
   assert(await clark.isHidden());
+  await page.evaluate(async () => {
+    const bank = window.__maiaStudioApp.mistakeBank;
+    await bank.store.saveCheckupReviewEvidence('default', { platform: 'chesscom', gameId: 'live:12345673' },
+      { w: { errors: { 3: true, 5: false, 7: false, 9: true, 11: false } } });
+    await bank.refreshState();
+  });
   const initialReport = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id);
   await settings();
   await link('Clarkyan');
@@ -118,6 +124,9 @@ try {
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id), initialReport);
   assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
   assert.equal(await page.locator(':focus').getAttribute('id'), 'checkup-report-box');
+  const clockText = await reportBox.locator('.checkup-stability-clock').innerText();
+  assert(clockText.includes('40%') && clockText.includes('5 of 7 low-clock decisions reviewed'));
+
   const findNew = () => page.locator('#checkup-report-tools').getByRole('button', { name: /check for new games/i }).click();
   await findNew();
   await page.getByText('No new games to analyze.').waitFor();
@@ -133,6 +142,17 @@ try {
   assert.equal(await reportBox.locator('.checkup-charts svg').count(), 2);
   assert.equal(await reportBox.locator('.checkup-chart-endpoint').count(), 4);
   assert.equal(await reportBox.locator('.checkup-chart-guide').count(), 7);
+  const fitSpeed = page.getByRole('combobox', { name: 'Time control for intuition fit' });
+  assert.equal(await fitSpeed.inputValue(), 'rapid');
+  assert((await reportBox.locator('.checkup-fit-section').innerText()).includes('Long-term fit · Rapid · 2/30 games'));
+  assert.match(await reportBox.locator('.checkup-stability-section').innerText(), /This view · 3 games/);
+  await fitSpeed.selectOption('blitz');
+  assert((await reportBox.locator('.checkup-fit-section').innerText()).includes('Blitz · 1/30 games'));
+  assert.match(await reportBox.locator('.checkup-stability-section').innerText(), /This view · 3 games/);
+  await fitSpeed.selectOption('rapid');
+  const cached = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.fitWindow.games.length);
+  assert.equal(cached, 3);
+
   const scope = page.getByRole('combobox', { name: 'Report scope' });
   await scope.selectOption('batch');
   assert.equal(await reportBox.locator('.checkup-window-coverage').count(), 0);
@@ -214,6 +234,7 @@ try {
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const combinedSummary = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(combinedSummary, /3 games · 67% score.*All speeds/);
+  assert(combinedSummary.includes('Long-term fit · Rapid · 2/30 games · Last 10 games'));
   assert.doesNotMatch(combinedSummary, /Clarkyan/);
   assert.equal(archiveLookups, overviewFetches, 'Report share reuses the same account’s overview cache');
   if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-combined.png' });
@@ -492,7 +513,7 @@ try {
   assert.equal(await puzzle.locator('input').count(), 0);
   assert.equal(await options.count(), 2);
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-fit');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-windows');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   const labelOrder = await options.allTextContents();

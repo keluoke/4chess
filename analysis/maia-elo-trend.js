@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261123-checkup-fit';
+import { t } from './i18n.js?v=20261123-checkup-windows';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const RATINGS = [600, 1000, 1400, 1800, 2200, 2600];

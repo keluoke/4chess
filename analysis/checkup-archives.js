@@ -1,19 +1,21 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-fit';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-fit';
-import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261123-checkup-fit';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-windows';
+import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261123-checkup-windows';
 
 export const MAX_LOCAL_GAMES = 15;
 
 export function parsePgnMeta(pgnText = '') {
   const read = tag => pgnText.match(new RegExp(`^\\[${tag}\\s+"([^"]*)"\\]`, 'im'))?.[1]?.trim() || '';
   const site = read('Site');
+  const initial = read('TimeControl').match(/^(\d+)(?:[+|]\d+)?$/)?.[1];
   return {
     white: read('White'),
     black: read('Black'),
     result: read('Result') || '*',
-    date: read('Date'),
+    date: read('UTCDate') || read('Date'),
+    initialSeconds: initial === undefined ? null : Number(initial),
     url: site.startsWith('http') ? site : '',
     site
   };
@@ -116,7 +118,7 @@ function archivedCheckupGame(platform, item, pgn, result) {
   const tags = readPgnTags(pgn);
   const meta = parsePgnMeta(pgn);
   const loser = result === '1-0' ? item.black : result === '0-1' ? item.white : null;
-  const initial = tags.timecontrol?.match(/^(\d+)(?:[+|]\d+)?$/)?.[1];
+  const playedAt = item.createdAt ?? (Number.isFinite(item.end_time) ? item.end_time * 1000 : null);
   const explicitOpening = [item.opening?.name, tags.opening]
     .map(name => typeof name === 'string' ? name.trim() : '')
     .find(name => name && !/^(?:[?*-]|unknown)$/i.test(name));
@@ -125,11 +127,11 @@ function archivedCheckupGame(platform, item, pgn, result) {
     gameId: checkupGameId(platform, platform === 'lichess' ? item.id : item.url),
     clocks: Array.isArray(item.clocks) ? item.clocks : null,
     meta: {
-      ...meta, result, timeClass: item.speed || item.time_class || '',
+      ...meta, result, playedAt, timeClass: item.speed || item.time_class || '',
       eco: item.opening?.eco || tags.eco || '',
       opening: explicitOpening || chesscomOpeningName(tags.ecourl),
       termination: item.status?.name || item.status || loser?.result || tags.termination || '',
-      initialSeconds: item.clock?.initial ?? (initial !== undefined ? Number(initial) : null)
+      initialSeconds: item.clock?.initial ?? meta.initialSeconds
     }
   };
 }

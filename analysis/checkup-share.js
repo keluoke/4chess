@@ -1,11 +1,13 @@
 import { ChessBoard } from '../engine/chess-core.js';
-import { t, getLang } from './i18n.js?v=20261123-checkup-fit';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-checkup-fit';
-import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-fit';
-import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-checkup-fit';
-import { checkupFitHeadline, formatPgnRatings } from './checkup-fit-view.js?v=20261123-checkup-fit';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-fit';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-fit';
+import { t, getLang } from './i18n.js?v=20261123-checkup-windows';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-checkup-windows';
+import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-windows';
+import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-checkup-windows';
+import {
+  checkupFitHeadline, checkupFitScope, checkupFitStatusLabel, densityText, formatPgnRatings, lowClockRate
+} from './checkup-fit-view.js?v=20261123-checkup-windows';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-windows';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-windows';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];
@@ -59,17 +61,23 @@ export function diagnosticCardData(report, rolling, topicsFor, speedLabel = valu
     position = { fen: highlight.fenBefore, first: highlight.uci, second: alternative?.uci,
       firstSan: highlight.san, secondSan: highlight.evidence?.alternative };
   }
+  const intuition = report.intuition || report;
+  const stability = report.stability;
+  const rate = lowClockRate(stability);
+  const pressure = rate ? t('checkupStabilityClockShare', { ...stability, rate }) : '';
+  const density = stability?.density != null ? t('checkupStabilityShare', { value: densityText(stability.density) }) : '';
   return {
     kind: 'report', title: t('checkupShareReport'), label: t('checkupDiagnosticCardLabel'), name: report.playerName,
     scope: rolling ? t('checkupWindowCoverage', { count: report.gameCount }) : t('checkupShareBatchScope', { games }),
-    sample: report.eloSampleCount, elo: report.closestElo, position, theme,
-    clearLead: !report.fit || report.fit.logLead >= CHECKUP_CLOSE_LOG_GAP,
-    bands: report.fit?.bands || checkupFitBands(report.fitMethod),
-    fit: report.fit?.weights || report.eloFit || {}, relativeFit: Boolean(report.fit),
-    headline: checkupFitHeadline(report),
-    range: report.fit?.estimate && (report.fit.estimate.low === report.fit.estimate.high ? String(report.fit.estimate.low)
-      : `${report.fit.estimate.low}–${report.fit.estimate.high}`),
-    ratings: formatPgnRatings(report.games, speedLabel),
+    fitScope: intuition.isFitWindow ? checkupFitScope(intuition, speedLabel) : '',
+    sample: intuition.eloSampleCount, elo: intuition.closestElo, position, theme,
+    clearLead: !intuition.fit || intuition.fit.logLead >= CHECKUP_CLOSE_LOG_GAP,
+    bands: intuition.fit?.bands || checkupFitBands(intuition.fitMethod),
+    fit: intuition.fit?.weights || intuition.eloFit || {}, relativeFit: Boolean(intuition.fit),
+    headline: checkupFitHeadline(intuition),
+    fitStatus: checkupFitStatusLabel(intuition.fit),
+    ratings: formatPgnRatings(intuition.games, speedLabel),
+    density, pressure,
     summary: t(hits === 1 ? 'checkupShareTrapOne' : 'checkupShareTrapSummary', { games, hits })
   };
 }
@@ -99,12 +107,13 @@ export function summarizeCheckupCard(data, anonymous) {
   const name = !anonymous && data.name ? ' · ' + data.name : '';
   if (data.kind === 'combined') {
     const overview = data.overview;
-    return [data.headline + name + ' · ' + data.scope,
+    return [[data.headline + name, data.fitScope, data.scope, data.density].filter(Boolean).join(' · '),
       [scoreLine(overview), overview.scope, wdl(overview.total), overview.summary].filter(Boolean).join(' · '),
       CHECKUP_URL].join('\n');
   }
   if (data.kind === 'report') {
-    return [data.headline + name, [data.scope, data.summary, data.theme].filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
+    return [[data.headline + name, data.fitScope, data.fitStatus].filter(Boolean).join(' · '),
+      [data.scope, data.density || data.summary, data.pressure || data.theme].filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
   }
   return [scoreLine(data) + name + ' · ' + wdl(data.total),
     data.summary || pressureLines(data.pressure).join(' · '), CHECKUP_URL].join('\n');
@@ -165,15 +174,15 @@ function drawDiagnostic(ctx, data, portrait, images) {
   const boxWidth = portrait ? 856 : 522;
   const y = portrait ? 128 : 109;
   text(ctx, data.headline, 52, y, portrait ? 65 : 49, '#edf4e9', 740, boxWidth);
-  text(ctx, [data.scope, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
+  text(ctx, [data.fitScope || data.scope, data.fitStatus, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
     54, y + (portrait ? 83 : 65), 20, '#d4e5d7', 500, boxWidth);
-  if (data.range || data.ratings.length) {
-    text(ctx, [data.range && t('checkupShareRange', { range: data.range }),
-      data.ratings.length && t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') })].filter(Boolean).join(' · '),
+  if (data.ratings.length) {
+    text(ctx, t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') }),
       54, y + (portrait ? 116 : 95), 19, '#d4e5d7', 550, boxWidth);
   }
-  text(ctx, data.summary, 54, y + (portrait ? 154 : 125), 25, '#edf4e9', 650, boxWidth);
-  if (data.theme) text(ctx, data.theme, 54, y + (portrait ? 188 : 161), 20, '#f0c281', 540, boxWidth);
+  text(ctx, [data.fitScope && data.scope, data.density || data.summary].filter(Boolean).join(' · '),
+    54, y + (portrait ? 154 : 125), 25, '#edf4e9', 650, boxWidth);
+  if (data.pressure || data.theme) text(ctx, data.pressure || data.theme, 54, y + (portrait ? 188 : 161), 20, '#f0c281', 540, boxWidth);
   drawFit(ctx, data, 52, portrait ? 365 : 315, boxWidth, portrait ? 230 : 203);
   if (data.position) {
     const at = portrait ? { x: 62, y: 649, size: 386, tx: 484, ty: 742, w: 420 }
@@ -235,9 +244,9 @@ function drawCombined(ctx, data, portrait) {
   const w = portrait ? 856 : 490;
   const overview = data.overview;
   text(ctx, data.headline, 52, 120, portrait ? 66 : 49, '#edf4e9', 740, w);
-  text(ctx, [data.scope, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
+  text(ctx, [data.fitScope || data.scope, data.fitStatus, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
     52, portrait ? 204 : 186, 21, '#d4e5d7', 550, w);
-  if (data.range) text(ctx, t('checkupShareRange', { range: data.range }), 52, portrait ? 247 : 218, 22, '#f0c281', 650, w);
+  if (data.density) text(ctx, [data.scope, data.density].join(' · '), 52, portrait ? 247 : 218, 22, '#f0c281', 650, w);
   if (data.ratings.length) text(ctx, t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') }),
     52, portrait ? 285 : 249, 18, '#d4e5d7', 550, w);
   drawFit(ctx, data, 52, portrait ? 328 : 283, w, portrait ? 235 : 205);

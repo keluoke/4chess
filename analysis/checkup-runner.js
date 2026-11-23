@@ -1,27 +1,28 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-fit';
-import { getLang, t } from './i18n.js?v=20261123-checkup-fit';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-windows';
+import { getLang, t } from './i18n.js?v=20261123-checkup-windows';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-fit';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-fit';
+} from './checkup-archives.js?v=20261123-checkup-windows';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-windows';
 import {
-  CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupWindow, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-checkup-fit';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-fit';
-import { CheckupShare, combinedCardData, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-fit';
-import { checkupFitBands } from './checkup-fit.js?v=20261123-checkup-fit';
-import { renderCheckupFit, withCheckupFit } from './checkup-fit-view.js?v=20261123-checkup-fit';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-fit';
+  CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
+  checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
+} from './checkup-insights.js?v=20261123-checkup-windows';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-windows';
+import { CheckupShare, combinedCardData, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-windows';
+import { checkupFitBands } from './checkup-fit.js?v=20261123-checkup-windows';
+import { renderCheckupFit, renderCheckupStability, withCheckupFit } from './checkup-fit-view.js?v=20261123-checkup-windows';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-windows';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-fit';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-fit';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-fit';
+} from './checkup-archives.js?v=20261123-checkup-windows';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-windows';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-windows';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 
@@ -350,6 +351,7 @@ export class IntuitionCheckup {
     const profileChanged = this.activeProfileId !== profileId;
     if (gameChanged || profileChanged) {
       this.lastRunReportId = null;
+      this.fitSpeedSelection = null;
       this.latestReport = null;
       this.pendingBatch = null;
       this.setStatus('');
@@ -386,6 +388,7 @@ export class IntuitionCheckup {
     if (returnReport) {
       this.latestReport = returnReport;
       this.reportScope = replay.scope;
+      this.fitSpeedSelection = replay.fitSpeedSelection;
     }
     this.renderAccounts();
     this.renderSourceControls();
@@ -954,7 +957,7 @@ export class IntuitionCheckup {
         this.progress = { phase: 'fetching' };
         this.renderSourceControls();
         games = source === 'lichess'
-          ? await fetchLichessRecentGames(username, { signal: controller.signal })
+          ? await fetchLichessRecentGames(username, { signal: controller.signal, clocks: true })
           : await fetchChesscomRecentGames(username, { signal: controller.signal });
         sourceLabel = `${source}:${username}`;
         suggestedName = username;
@@ -969,7 +972,8 @@ export class IntuitionCheckup {
       }
 
       if (source !== 'local') {
-        const windowIds = games.map(game => game.gameId);
+        const archives = games;
+        const windowIds = archives.map(game => game.gameId);
         let reusedScreen;
         const account = onlyNew && normalizeAccount(source, suggestedName);
         if (account) {
@@ -988,8 +992,9 @@ export class IntuitionCheckup {
             this.applyHistoryContext();
             this.latestReport = reports.find(item => !item.partial) || reports[0] || null;
             if (compatible && this.latestReport?.evidenceKey === compatible.evidenceKey) {
-              const rolling = buildCheckupWindow(windowIds, compatible.evidenceKey, reports);
+              const rolling = buildCheckupWindow(windowIds, compatible.evidenceKey, reports, Date.now(), archives);
               this.latestReport = { ...this.latestReport, rolling };
+              this.latestReport.fitWindow = buildCheckupFitWindow(this.latestReport, reports, windowIds);
               await this.app.mistakeBank.store.put('checkups', this.latestReport);
               if (!current()) return;
               this.history = this.history.map(report => report.id === this.latestReport.id ? this.latestReport : report);
@@ -1004,7 +1009,7 @@ export class IntuitionCheckup {
           }
         }
         this.fetching = false;
-        await this.startRun({ games, sourceLabel, profileId: startProfileId, windowIds, reusedScreen, fitMethod }, suggestedName);
+        await this.startRun({ games, sourceLabel, profileId: startProfileId, windowIds, archives, reusedScreen, fitMethod }, suggestedName);
         return;
       }
       this.pendingBatch = { games, sourceLabel, profileId: startProfileId };
@@ -1081,7 +1086,8 @@ export class IntuitionCheckup {
         const account = normalizeAccount(checkupSourceType(report.sourceLabel), report.playerName);
         if (account && batch.windowIds?.some(Boolean)) {
           const reports = this.history.filter(item => checkupReportMatchesAccount(item, account));
-          report.rolling = buildCheckupWindow(batch.windowIds, report.evidenceKey, [report, ...reports]);
+          report.rolling = buildCheckupWindow(batch.windowIds, report.evidenceKey, [report, ...reports], report.createdAt, batch.archives);
+          report.fitWindow = buildCheckupFitWindow(report, reports, batch.windowIds);
         }
         if (!current()) return;
         const savedRecord = report;
@@ -1224,14 +1230,12 @@ export class IntuitionCheckup {
     metaRow.append(metaActions);
     summary.append(metaRow);
     const archivedReport = report;
+    report = this.displayedReport(report);
     if (report.rolling && this.reportScope === 'rolling') {
-      report = this.displayedReport(report);
       const coverage = document.createElement('p');
       coverage.className = 'checkup-elo-note checkup-window-coverage';
       coverage.textContent = t('checkupWindowCoverage', { count: report.gameCount });
       summary.append(coverage);
-    } else {
-      report = withCheckupFit(report);
     }
 
     const title = document.createElement('strong');
@@ -1240,8 +1244,15 @@ export class IntuitionCheckup {
       games: report.gameCount,
       moves: report.analyzedMoves
     });
-    summary.append(title, renderCheckupFit(report, (game, move) => this.openReportGame(report, game, move),
-      value => this.speedLabel(value)));
+    const profile = document.createElement('div');
+    profile.className = 'checkup-profile-grid';
+    profile.append(renderCheckupFit(report.intuition || report, (game, move) => this.openReportGame(report, game, move),
+      value => this.speedLabel(value), speed => {
+        this.fitSpeedSelection = { reportId: report.id, speed };
+        this.renderReport(archivedReport);
+        this.reportBox.querySelector('.checkup-fit-speed')?.focus({ preventScroll: true });
+      }), renderCheckupStability(report.stability, report.gameCount));
+    summary.append(title, profile);
 
     const phaseLine = document.createElement('p');
     phaseLine.className = 'checkup-phase-line';
@@ -1265,9 +1276,18 @@ export class IntuitionCheckup {
   }
 
   displayedReport(report) {
-    if (!report.rolling || this.reportScope !== 'rolling') return withCheckupFit(report);
-    return withCheckupFit({ ...report, ...report.rolling, fit: report.rolling.fit,
-      highlights: report.rolling.highlights || [], topTraps: [] });
+    const rolling = this.reportScope === 'rolling' ? report.rolling : null;
+    const display = rolling ? withCheckupFit({ ...report, ...rolling, fit: rolling.fit,
+      highlights: rolling.highlights || [], topTraps: [] }) : withCheckupFit(report);
+    const reviews = this.app.mistakeBank?.activeProfile?.id === report.profileId
+      ? this.app.mistakeBank.activeProfile.checkupReviews : undefined;
+    const stability = checkupReportStability(display, reviews);
+    if (!rolling) return { ...display, stability };
+    const fitWindow = report.fitWindow || buildCheckupFitWindow(report, this.history, rolling.windowIds || []);
+    if (!fitWindow.games.length) return { ...display, stability };
+    const preferred = this.fitSpeedSelection?.reportId === report.id ? this.fitSpeedSelection.speed : undefined;
+    const intuition = checkupFitForSpeed(fitWindow.games, report.fitMethod, preferred);
+    return { ...display, intuition: { ...intuition, isFitWindow: true }, stability };
   }
 
   renderReportTools(report) {
@@ -1527,7 +1547,9 @@ export class IntuitionCheckup {
 
   openReportGame(report, game, trap) {
     const focusMove = trap ? { ply: trap.ply, uci: trap.playedUci || trap.uci, fenBefore: trap.fenBefore } : null;
-    this.openReplay(game, focusMove, { reportId: report.id, profileId: report.profileId, scope: this.reportScope });
+    this.openReplay(game, focusMove, {
+      reportId: report.id, profileId: report.profileId, scope: this.reportScope, fitSpeedSelection: this.fitSpeedSelection
+    });
   }
 
   openReplay(game, focusMove, returnTo) {

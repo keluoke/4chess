@@ -32,12 +32,9 @@ function planReferenceCandidates(groups) {
   });
 }
 
-function selectReferenceCandidate(candidates, topProbability) {
-  const [center, alternative] = candidates;
-  if (!alternative) return center;
-  const first = topProbability(center);
-  const second = topProbability(alternative);
-  return Number.isFinite(second) && second < 0.65 && (!Number.isFinite(first) || second < first) ? alternative : center;
+function policyEntropy(policy) {
+  const values = policy.moves.map(move => move.rawProb ?? move.prob / 100).filter(p => p > 0);
+  return values.length > 1 ? -values.reduce((sum, p) => sum + p * Math.log(p), 0) / Math.log(values.length) : 0;
 }
 
 function decisions(game, username) {
@@ -82,10 +79,18 @@ async function evaluate(training, test, method) {
     }
     games.push({ fitSamples });
   }
-  const { closestElo, eloSampleCount } = summarizeCheckupFit(games, method);
-  let loss = 0;
-  for (const position of test) loss -= await logProbability(position, closestElo);
-  return { closestElo, n: eloSampleCount, loss: loss / test.length };
+  const { closestElo, eloSampleCount, fit } = summarizeCheckupFit(games, method);
+  let loss = 0, weightedLoss = 0;
+  for (const position of test) {
+    let total = 0;
+    for (const [i, band] of bands.entries()) {
+      const log = await logProbability(position, band);
+      total += fit.weights[i] * Math.exp(log);
+      if (band === closestElo) loss -= log;
+    }
+    weightedLoss -= Math.log(total);
+  }
+  return { closestElo, n: eloSampleCount, loss: loss / test.length, weightedLoss: weightedLoss / test.length };
 }
 
 for (const source of sources) {
@@ -101,25 +106,29 @@ for (const source of sources) {
     const uniform = planCheckupSamples(train);
     const candidateGroups = planReferenceCandidates(train);
     let changed = 0;
-    const uncertainty = [];
+    let stratum = 0;
+    const mixed = [];
     for (const group of candidateGroups) {
       const selected = [];
       for (const candidates of group) {
-        const probs = new Map();
-        for (const position of candidates) {
-          const top = (await prediction(position, 1900)).moves[0];
-          probs.set(position, top.rawProb ?? top.prob / 100);
+        const [center, other] = candidates;
+        let position = center;
+        // One in three strata stays uniform. Each other stratum still
+        // contributes exactly one move, selected before looking at its UCI.
+        if (stratum++ % 3 !== 1 && other) {
+          const reference = await prediction(other, 1900);
+          const baseline = await prediction(center, 1900);
+          const top = reference.moves[0];
+          if ((top.rawProb ?? top.prob / 100) < 0.65 && policyEntropy(reference) > policyEntropy(baseline)) position = other;
         }
-        const position = selectReferenceCandidate(candidates, item => probs.get(item));
         if (position !== candidates[0]) changed++;
         selected.push(position);
       }
-      uncertainty.push(selected);
+      mixed.push(selected);
     }
     results.push({ fold, heldOut: test.length, changed,
       uniform: await evaluate(uniform, test, 'standard'),
-      uncertainty: await evaluate(uncertainty, test, 'standard'),
-      fine: await evaluate(uniform, test, 'fine') });
+      mixed: await evaluate(mixed, test, 'standard') });
   }
   console.log(JSON.stringify({ user, games: games.length, results }));
 }

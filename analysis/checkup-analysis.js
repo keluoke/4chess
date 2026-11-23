@@ -1,13 +1,13 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-fit';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261117-review-policy';
-import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261123-checkup-fit';
-import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261123-checkup-fit';
-import { FEATURED_TRAPS, summarizeCheckupGames } from './checkup-insights.js?v=20261123-checkup-fit';
+import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261123-checkup-windows';
+import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261123-checkup-windows';
+import { FEATURED_TRAPS, checkupClockSample, summarizeCheckupGames } from './checkup-insights.js?v=20261123-checkup-windows';
 
-import { CHECKUP_ELOS, checkupFitBands, LOG_PROB_FLOOR, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-fit';
+import { CHECKUP_ELOS, checkupFitBands, LOG_PROB_FLOOR, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-windows';
 
 const VERIFY_ROOT_MIN_DEPTH = 14;
 const VERIFY_AFTER_MIN_DEPTH = 13;
@@ -176,13 +176,14 @@ export async function runIntuitionCheckup({
       const bKey = normalizeAlias(meta.black);
       const userSide = wKey === targetKey ? 'w' : bKey === targetKey ? 'b' : null;
       if (!userSide) return null;
-      const parsedMoves = GameAnalyzer.parsePgn(entry.pgn || '');
+      const parsedMoves = GameAnalyzer.parsePgn(entry.pgn || '', { clocks: true });
       if (!parsedMoves?.length) return null;
       const positions = GameAnalyzer.buildPositionChain(parsedMoves);
       if (!positions || positions.length <= 1 || positions.isPartial) return null;
       const rating = userSide === 'w' ? parsedMoves.whiteElo : parsedMoves.blackElo;
       const decisions = [...checkupDecisions(positions, userSide)];
-      return { entry, meta, userSide, positions, decisions, rating: /^\d{3,4}$/.test(rating) ? Number(rating) : 0 };
+      const clockSample = checkupClockSample(parsedMoves, userSide, entry.clocks, meta.initialSeconds);
+      return { entry, meta, userSide, positions, decisions, clockSample, rating: /^\d{3,4}$/.test(rating) ? Number(rating) : 0 };
     })
     .filter(Boolean);
   if (!batch.length) return emptyResult(false);
@@ -258,7 +259,7 @@ export async function runIntuitionCheckup({
 
   for (let gi = 0; gi < batch.length; gi++) {
     if (cancelled()) { partial = true; break; }
-    const { entry, meta, userSide, positions, decisions, rating } = batch[gi];
+    const { entry, meta, userSide, positions, decisions, rating, clockSample } = batch[gi];
 
     const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
       phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
@@ -369,7 +370,7 @@ export async function runIntuitionCheckup({
     const platform = checkupSourceType(sourceLabel);
     gameReports.push({
       gameId: entry.gameId || null, platform, url: checkupReplayUrl(platform, entry.gameId),
-      white: meta.white, black: meta.black, result: meta.result, date: meta.date,
+      white: meta.white, black: meta.black, result: meta.result, date: meta.date, playedAt: meta.playedAt, clockSample,
       orientation: userSide === 'w' ? 'white' : 'black', playedRating: rating || null,
       analyzedMoves: gameMoves, screenedMoves, trapCount: gameTraps.length, timeClass: meta.timeClass || '',
       eloSampleCount: fitSamples.length, fitSamples, trapEvidence: gameTraps, highlights,

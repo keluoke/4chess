@@ -1,7 +1,7 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-fit';
-import { normalizeAlias } from './study-store.js?v=20261123-checkup-fit';
-import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-fit';
-export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-fit';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
+import { checkupReportMatchesAccount, normalizeAccount, normalizeAlias } from './study-store.js?v=20261123-checkup-windows';
+import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-windows';
+export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-windows';
 export const FEATURED_TRAPS = 5;
 export const OVERVIEW_GAME_LIMIT = 100;
 const WINDOW_SIZE = 10;
@@ -30,7 +30,7 @@ export function summarizeCheckupGames(games, fitMethod = 'standard') {
   };
 }
 
-export function buildCheckupWindow(ids, evidenceKey, reports, observedAt = Date.now()) {
+export function buildCheckupWindow(ids, evidenceKey, reports, observedAt = Date.now(), archives = []) {
   const windowIds = [...new Set(ids.filter(Boolean))].slice(0, WINDOW_SIZE);
   const evidence = new Map();
   const compatible = reports.filter(report => report.evidenceKey === evidenceKey);
@@ -39,8 +39,68 @@ export function buildCheckupWindow(ids, evidenceKey, reports, observedAt = Date.
       if (game.gameId && !evidence.has(game.gameId)) evidence.set(game.gameId, game);
     }
   }
-  const games = windowIds.map(id => evidence.get(id)).filter(Boolean);
+  const archived = new Map(archives.map(game => [game.gameId, game]));
+  const games = windowIds.flatMap(id => {
+    const game = evidence.get(id);
+    if (!game) return [];
+    const recent = archived.get(id);
+    if (!recent || game.clockSample?.observed) return [game];
+    const side = game.orientation === 'white' ? 'w' : 'b';
+    const moves = GameAnalyzer.parsePgn(recent.pgn, { clocks: true });
+    const clockSample = checkupClockSample(moves, side, recent.clocks, recent.meta?.initialSeconds);
+    return [{ ...game, clockSample, playedAt: game.playedAt ?? recent.meta?.playedAt }];
+  });
   return { ...summarizeCheckupGames(games, compatible[0]?.fitMethod), windowIds, observedAt };
+}
+
+export const FIT_WINDOW_SIZE = 30;
+
+function fitEvidenceKey(report) {
+  // The fit uses the Maia model and the sample scheme independently of
+  // Stockfish and the screening band. This also reads pre-window reports.
+  const match = String(report.evidenceKey || '').match(/^(window-v1|window-fine-v1)\|[^|]+\|([^|]+)\|\d+$/);
+  return match ? `${match[1]}|${match[2]}` : null;
+}
+
+export function checkupPlayedAt(game) {
+  if (Number.isFinite(game.playedAt) && game.playedAt > 0) return game.playedAt;
+  const date = String(game.date || '').replaceAll('.', '-');
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(date) || 0 : 0;
+}
+
+export function buildCheckupFitWindow(report, history, recentIds) {
+  const account = normalizeAccount(String(report.sourceLabel || '').split(':')[0], report.playerName);
+  const key = fitEvidenceKey(report);
+  if (!key || !checkupReportMatchesAccount(report, account)) return { games: [] };
+  const observedAt = report.rolling?.observedAt ?? report.createdAt;
+  const seen = new Map();
+  for (const entry of [report, ...history]) {
+    if (entry.profileId !== report.profileId || !checkupReportMatchesAccount(entry, account) ||
+        fitEvidenceKey(entry) !== key || entry.createdAt > observedAt) continue;
+    const previous = entry.fitWindow?.observedAt > observedAt ? [] : entry.fitWindow?.games || [];
+    for (const game of [...(entry.games || []), ...(entry.rolling?.games || []), ...previous]) {
+      if (game.platform !== account.platform || !game.gameId || !game.fitSamples?.length || seen.has(game.gameId)) continue;
+      const { gameId, platform, white, black, date, playedAt, orientation, playedRating, timeClass, pgn, fitSamples } = game;
+      seen.set(gameId, { gameId, platform, white, black, date, playedAt, orientation, playedRating, timeClass, pgn, fitSamples });
+    }
+  }
+  const order = new Map(recentIds.map((id, i) => [id, i]));
+  const recent = game => order.get(game.gameId) ?? order.size;
+  const games = [...seen.values()].sort((a, b) => recent(a) - recent(b) || checkupPlayedAt(b) - checkupPlayedAt(a));
+  return { observedAt, games: games.slice(0, FIT_WINDOW_SIZE) };
+}
+
+export function checkupFitForSpeed(games, method, preferred) {
+  const groups = new Map();
+  for (const game of games) {
+    const speed = game.timeClass || '';
+    if (!groups.has(speed)) groups.set(speed, []);
+    groups.get(speed).push(game);
+  }
+  const speeds = [...groups.keys()].sort((a, b) => groups.get(b).length - groups.get(a).length);
+  const speed = groups.has(preferred) ? preferred : speeds[0];
+  const selected = groups.get(speed) || [];
+  return { ...summarizeCheckupFit(selected, method, { rolling: true }), games: selected, fitMethod: method, speed, speeds };
 }
 
 export function checkupTrend(reports, evidenceKey, timeClass) {
@@ -77,35 +137,63 @@ function terminationGroup(reason) {
   return 'other';
 }
 
-function clockPressure(game, side, review, timeoutLoss) {
-  const pressure = emptyPressure();
-  pressure.timeoutLosses = Number(timeoutLoss);
-  const moves = GameAnalyzer.parsePgn(game.pgn, { clocks: true });
+export function checkupClockSample(moves, side, clocks, initial) {
   const startsBlack = moves.startFen?.split(' ')[1] === 'b';
   const decisions = moves.flatMap(move => {
     const turn = startsBlack ? (move.turn === 'w' ? 'b' : 'w') : move.turn;
     if (turn !== side) return [];
-    const rawClock = game.clocks?.[move.ply - 1];
+    const rawClock = clocks?.[move.ply - 1];
     const clock = move.clockSeconds ?? (Number.isFinite(rawClock) ? rawClock / 100 : null);
     return [{ ply: move.ply, clock }];
   });
-  if (!decisions.some(move => Number.isFinite(move.clock))) return pressure;
-  let remaining = game.meta.initialSeconds;
+  const low = [];
+  let observed = 0;
+  if (!decisions.some(move => Number.isFinite(move.clock))) return { observed, low };
+  let remaining = initial;
   for (const move of decisions) {
     if (Number.isFinite(remaining)) {
-      pressure.observed++;
-      if (remaining < 30) {
-        pressure.low++;
-        const error = review?.errors?.[move.ply];
-        if (typeof error === 'boolean') {
-          pressure.reviewedLow++;
-          if (error) pressure.errors++;
-        }
-      }
+      observed++;
+      if (remaining < 30) low.push(move.ply);
     }
     remaining = move.clock;
   }
+  return { observed, low };
+}
+
+function clockPressure(game, side, review, timeoutLoss) {
+  const pressure = emptyPressure();
+  pressure.timeoutLosses = Number(timeoutLoss);
+  const moves = GameAnalyzer.parsePgn(game.pgn, { clocks: true });
+  const { observed, low } = checkupClockSample(moves, side, game.clocks, game.meta.initialSeconds);
+  pressure.observed = observed;
+  pressure.low = low.length;
+  for (const ply of low) {
+    const error = review?.errors?.[ply];
+    if (typeof error !== 'boolean') continue;
+    pressure.reviewedLow++;
+    if (error) pressure.errors++;
+  }
   return pressure;
+}
+
+export function checkupReportStability(report, reviews = {}) {
+  const hits = Object.values(report.phaseTraps || {}).reduce((sum, count) => sum + count, 0);
+  const screened = report.screenedMoves || 0;
+  let observed = 0, low = 0, reviewed = 0, errors = 0;
+  for (const game of report.games || []) {
+    if (!game.clockSample || !Array.isArray(game.clockSample.low)) continue;
+    const side = game.orientation === 'white' ? 'w' : 'b';
+    const review = reviews[`${game.platform}:${game.gameId}`]?.[side];
+    observed += game.clockSample.observed || 0;
+    low += game.clockSample.low.length;
+    for (const ply of game.clockSample.low) {
+      const error = review?.errors?.[ply];
+      if (typeof error !== 'boolean') continue;
+      reviewed++;
+      if (error) errors++;
+    }
+  }
+  return { hits, screened, density: screened ? hits * 100 / screened : null, observed, low, reviewed, errors };
 }
 
 export function prepareCheckupOverview(games, username, reviews = {}) {

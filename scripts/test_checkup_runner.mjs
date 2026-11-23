@@ -19,7 +19,8 @@ import { combinedCardData, diagnosticCardData, overviewCardData, summarizeChecku
 import { checkupFitBands, summarizeCheckupFit } from '../analysis/checkup-fit.js';
 import { pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
 import {
-  buildCheckupWindow, checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
+  buildCheckupFitWindow, buildCheckupWindow, checkupClockSample, checkupFitForSpeed, checkupReportStability,
+  checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
 } from '../analysis/checkup-insights.js';
 
 const pgn1 = `[Event "Match 1"]
@@ -608,6 +609,56 @@ const uncertain = summarizeCheckupFit(fineGames.map(game => ({ ...game,
   fitSamples: game.fitSamples.map(sample => ({ ...sample, scores: [-2, -4, -4, -4, -4, -2] })) })), 'fine');
 assert.equal(uncertain.fit.estimate, null);
 assert.equal(uncertain.fit.logLead, 0);
+assert.equal(uncertain.fit.status, 'variation');
+assert.deepEqual(uncertain.fit.ranges, [{ low: 1000, high: 1000 }, { low: 2500, high: 2500 }]);
+const contested = summarizeCheckupFit([
+  ...['p', 'q', 'r'].map(id => makeEvidence(id, 0, [-5, -3, -5, -2.8])),
+  makeEvidence('s', 0, [-5, -1, -5, -3.8])
+], 'standard', { rolling: true });
+assert.deepEqual(contested.fit.influence, { gameIndex: 3, shift: 700, elo: 2200 });
+assert.deepEqual(contested.fit.ranges, [{ low: 1500, high: 1500 }, { low: 2200, high: 2200 }]);
+assert.equal(contested.fit.status, 'variation');
+assert.equal(fineFit.fit.status, 'stable');
+assert.equal(example.fit.status, 'limited');
+
+const makeWindowGame = index => ({
+  ...makeEvidence('game-' + index, 7), platform: 'lichess', playedAt: 100 * index, orientation: 'white',
+  timeClass: index === 33 ? 'rapid' : 'blitz', fitSamples: [{ ply: 15, scores: [-5, -3, -2, -1] },
+    { ply: 17, scores: [-5, -3, -2, -1] }, { ply: 19, scores: [-5, -3, -2, -1] }]
+});
+const latestLong = { profileId: 'default', sourceLabel: 'lichess:KidPlayer', playerName: 'KidPlayer',
+  evidenceKey: 'window-v1|sf-new|maia-x|2200', createdAt: 10000, games: [makeWindowGame(29), makeWindowGame(33)] };
+const previousLong = { ...latestLong, evidenceKey: 'window-v1|sf-old|maia-x|1900', createdAt: 9000,
+  games: Array.from({ length: 34 }, (_, i) => makeWindowGame(i)) };
+const foreign = [makeWindowGame(90)];
+const historyWindow = buildCheckupFitWindow(latestLong, [
+  { ...previousLong, profileId: 'other', games: foreign },
+  { ...previousLong, sourceLabel: 'lichess:Other', playerName: 'Other', games: foreign },
+  { ...previousLong, evidenceKey: 'window-v1|sf-old|maia-y|1900', games: foreign },
+  { ...previousLong, evidenceKey: 'window-fine-v1|sf-old|maia-x|1900', games: foreign },
+  { ...previousLong, createdAt: 11000, games: foreign },
+  previousLong
+], ['game-29', 'game-33']);
+assert.equal(historyWindow.games.length, 30);
+assert.deepEqual(historyWindow.games.slice(0, 3).map(game => game.gameId), ['game-29', 'game-33', 'game-32']);
+assert.equal(new Set(historyWindow.games.map(game => game.gameId)).size, 30);
+assert(!historyWindow.games.some(game => game.gameId === 'game-90' || 'trapEvidence' in game));
+const blitzFit = checkupFitForSpeed(historyWindow.games, 'standard');
+assert.equal(blitzFit.speed, 'blitz');
+assert.equal(blitzFit.fitGameCount, 29);
+assert.equal(blitzFit.eloSampleCount, 87, 'The rolling fit uses all cached moves, without the batch cap');
+assert.equal(checkupFitForSpeed(historyWindow.games, 'standard', 'rapid').eloSampleCount, 3);
+const restored = buildCheckupFitWindow(latestLong, [{ ...previousLong, games: [], fitWindow: historyWindow }], []);
+assert.equal(restored.games.length, 30, 'Older evidence survives after its batch record leaves the report archive');
+const clockParsed = GameAnalyzer.parsePgn('1. e4 {[%clk 0:00:22]} e5 2. Nf3 {[%clk 0:00:10]} Nc6 3. Bb5 a6', { clocks: true });
+assert.deepEqual(checkupClockSample(clockParsed, 'w', null, 60), { observed: 3, low: [3, 5] });
+assert.deepEqual(checkupReportStability({
+  games: [{ ...makeWindowGame(1), clockSample: { observed: 4, low: [3, 5, 7] } }],
+  screenedMoves: 25, phaseTraps: { opening: 1, middlegame: 1, endgame: 0 }
+}, {
+  'lichess:game-1': { w: { errors: { 3: true, 5: false } }, b: { errors: { 7: true } } }
+}), { hits: 2, screened: 25, density: 8, observed: 4, low: 3, reviewed: 2, errors: 1 });
+
 const combined = combinedCardData({ ...fineFit, gameCount: 4, playerName: 'KidPlayer' }, true,
   () => [], value => value, mixed, { username: 'KidPlayer' });
 assert.equal(combined.bands.length, 6);
@@ -616,6 +667,13 @@ assert.equal(combined.position, null);
 assert(!summarizeCheckupCard(combined, true).includes('KidPlayer'));
 assert(summarizeCheckupCard(combined, false).includes('KidPlayer'));
 
+const ties = summarizeCheckupFit([makeEvidence('tie', 0, [-2.4, -2.4, -2.4, -2.32])], 'standard');
+assert.deepEqual(ties.fit.ranges, [{ low: 1100, high: 2200 }], 'An exact tie at the support boundary must not favor the lowest band');
+const older = { ...makeWindowGame(1), clockSample: undefined };
+const withClocks = buildCheckupWindow([older.gameId], 'legacy', [{ evidenceKey: 'legacy', games: [older] }], 1,
+  [{ gameId: older.gameId, pgn: '1. e4 {[%clk 0:00:22]} e5 2. Nf3 {[%clk 0:00:10]} Nc6 3. Bb5 a6',
+    meta: { initialSeconds: 60, playedAt: 2000 } }]);
+assert.deepEqual(withClocks.games[0].clockSample, { observed: 3, low: [3, 5] });
 const historyGames = Array.from({ length: 10 }, (_, i) => makeEvidence(`g${i}`, i + 10));
 const firstWindow = buildCheckupWindow(historyGames.map(game => game.gameId), 'sf:maia:2200',
   [{ evidenceKey: 'sf:maia:2200', games: historyGames }], 1);

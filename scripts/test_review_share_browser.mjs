@@ -104,7 +104,7 @@ try {
   await page.locator('#review-share-copy').click();
   const anonymous = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   const data = await view.evaluate(async hash => {
-    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261123-checkup-fit');
+    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261123-checkup-windows');
     return decodeReviewSnapshot(new URLSearchParams(hash.slice(1)).get('review'));
   }, anonymous.hash);
   assert.deepEqual([data.white, data.black, data.source], ['', '', null]);

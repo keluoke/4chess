@@ -29,18 +29,24 @@ export function planCheckupSamples(groups) {
 
 const rank = scores => scores.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
 
-export function summarizeCheckupFit(games, method) {
+export function summarizeCheckupFit(games, method, { rolling = false } = {}) {
   const bands = checkupFitBands(method);
   const grouped = games.map((game, gameIndex) => (game.fitSamples || []).filter(sample =>
     Array.isArray(sample?.scores) && sample.scores.length === bands.length && sample.scores.every(Number.isFinite))
     .map(sample => ({ ...sample, gameIndex })));
-  const fitted = planCheckupSamples(grouped);
+  const fitted = rolling ? grouped : planCheckupSamples(grouped);
   const samples = fitted.flat();
   const eloFit = Object.fromEntries(bands.map(band => [band, 0]));
   const summary = { fit: null, closestElo: null, eloSampleCount: samples.length, fitGameCount: fitted.filter(group => group.length).length, eloFit };
   if (!samples.length) return summary;
 
-  const totals = bands.map((_, i) => samples.reduce((sum, sample) => sum + sample.scores[i], 0));
+  // Use every cached move. Limit the statistical weight of a single game
+  // when an older run spent much of its budget on that game alone.
+  const gameScores = fitted.map(group => {
+    const weight = rolling && group.length > 3 ? 3 / group.length : 1;
+    return bands.map((_, i) => group.reduce((sum, sample) => sum + sample.scores[i], 0) * weight);
+  });
+  const totals = bands.map((_, i) => gameScores.reduce((sum, scores) => sum + scores[i], 0));
   const [leader, runner] = rank(totals);
   const relative = totals.map(value => Math.exp(value - totals[leader]));
   const sum = relative.reduce((a, b) => a + b, 0);
@@ -56,14 +62,44 @@ export function summarizeCheckupFit(games, method) {
   const first = examples[0];
   const second = first && (examples.find(example => example.gameIndex !== first.gameIndex) || examples[1]);
 
+  const supported = new Set();
+  let mass = 0;
+  let edge = totals[leader];
+  for (const i of rank(totals)) {
+    const tiedAtEdge = edge - totals[i] <= 1e-9;
+    if (mass >= 0.8 && !tiedAtEdge && totals[leader] - totals[i] >= CHECKUP_CLOSE_LOG_GAP) break;
+    supported.add(i);
+    mass += weights[i];
+    edge = totals[i];
+  }
+
   let retained = 0, checked = 0;
-  for (const group of fitted) {
+  let influence = null;
+  for (const [gameIndex, group] of fitted.entries()) {
     if (!group.length || group.length === samples.length) continue;
-    const remaining = totals.map((total, i) => group.reduce((acc, sample) => acc - sample.scores[i], total));
+    const remaining = totals.map((total, i) => total - gameScores[gameIndex][i]);
     const [winner, other] = rank(remaining);
-    if (winner === leader && remaining[winner] - remaining[other] > 1e-9) retained++;
+    if (remaining[winner] - remaining[other] > 1e-9) {
+      supported.add(winner);
+      if (winner === leader) retained++;
+      else {
+        const shift = bands[winner] - bands[leader];
+        if (!influence || Math.abs(shift) > Math.abs(influence.shift)) {
+          influence = { gameIndex, shift, elo: bands[winner] };
+        }
+      }
+    }
     checked++;
   }
+
+  const ranges = [];
+  bands.forEach((band, i) => {
+    if (!supported.has(i)) return;
+    if (supported.has(i - 1)) ranges.at(-1).high = band;
+    else ranges.push({ low: band, high: band });
+  });
+  const status = samples.length < 12 || checked < 3 ? 'limited'
+    : ranges.length === 1 && retained / checked >= 0.8 && logLead >= CHECKUP_CLOSE_LOG_GAP ? 'stable' : 'variation';
   const separated = Math.abs(leader - runner) > 1 && weights[runner] >= 0.2;
   let estimate = null;
   if (method === 'fine' && samples.length >= 12 && checked >= 3 && retained === checked && logLead >= CHECKUP_CLOSE_LOG_GAP && !separated) {
@@ -75,8 +111,11 @@ export function summarizeCheckupFit(games, method) {
     const high = bands[limits.findIndex(p => p >= 0.9)];
     if (value >= low && value <= high) estimate = { value, low, high };
   }
-  bands.forEach((band, i) => { eloFit[band] = Math.round(Math.exp(totals[i] / samples.length) * 1000) / 1000; });
+  bands.forEach((band, i) => {
+    const raw = samples.reduce((sum, sample) => sum + sample.scores[i], 0);
+    eloFit[band] = Math.round(Math.exp(raw / samples.length) * 1000) / 1000;
+  });
   return { ...summary, closestElo: bands[leader], fit: {
-    bands, weights, logLead, runner: bands[runner], checked, retained, estimate, examples: [first, second].filter(Boolean)
+    bands, weights, logLead, runner: bands[runner], checked, retained, estimate, ranges, status, influence, examples: [first, second].filter(Boolean)
   } };
 }

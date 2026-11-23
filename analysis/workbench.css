@@ -635,7 +635,22 @@ button,input,select,textarea { font-family:inherit; }
 .study-mini-dialog input { min-width:0;padding:8px 10px;border:1px solid var(--dg-line);border-radius:8px;background:var(--dg-paper);color:var(--text-main);font:inherit; }
 .study-mini-actions { display:flex;flex-wrap:wrap;gap:7px;margin-top:10px; }
 .study-mini-actions .btn-header[hidden] { display:none; }
-.checkup-fit-section { margin:12px 0; }
+.checkup-profile-grid { display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start;gap:12px;margin:12px 0; }
+.checkup-fit-section,.checkup-stability-section { min-width:0; }
+.checkup-stability-section { padding:12px;border:1px solid var(--dg-line);border-radius:12px;background:var(--dg-surface); }
+.checkup-profile-label,.checkup-stability-label { margin:0 0 6px;font-size:12px;font-weight:620; }
+.checkup-profile-label { color:var(--text-muted); }
+.checkup-stability-value { display:block;font-size:clamp(22px,4vw,32px);font-variant-numeric:tabular-nums;line-height:1.2;margin:4px 0; }
+.checkup-stability-clock { margin-top:12px;padding-top:12px;border-top:1px solid var(--dg-line); }
+.checkup-fit-context { display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-bottom:6px; }
+.checkup-fit-context .checkup-fit-title,.checkup-fit-context .checkup-profile-label { margin:0; }
+.checkup-fit-status { border-radius:999px;padding:2px 7px;font-size:11px;background:var(--dg-surface);color:var(--text-muted); }
+.checkup-fit-status.stable { color:var(--dg-green);background:var(--dg-green-soft); }
+.checkup-fit-status.variation { color:var(--dg-gold);border:1px solid var(--dg-line); }
+.checkup-fit-influence { margin:8px 0;font-size:12px; }
+@media (max-width:600px) {
+  .checkup-profile-grid { grid-template-columns:minmax(0,1fr); }
+}
 .checkup-fit-title { margin:0 0 8px;font-size:clamp(16px,3vw,22px); }
 .checkup-fit-bars { display:grid;gap:5px;max-width:470px;margin:0 0 8px; }
 .checkup-fit-bar { display:grid;grid-template-columns:82px minmax(32px,1fr) 66px;align-items:center;gap:10px;font-size:12px;font-variant-numeric:tabular-nums; }
