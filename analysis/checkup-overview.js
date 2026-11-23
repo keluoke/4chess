@@ -1,5 +1,5 @@
-import { rankCheckupOpenings, summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-opening-names';
-import { t } from './i18n.js?v=20261123-checkup-opening-names';
+import { rankCheckupOpenings, summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-account-selection';
+import { t } from './i18n.js?v=20261123-checkup-account-selection';
 
 const outcomes = ['win', 'draw', 'loss'];
 const color = side => t(side === 'w' ? 'checkupColorWhite' : 'checkupColorBlack');

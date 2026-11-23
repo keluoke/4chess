@@ -1,7 +1,7 @@
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { t } from './i18n.js?v=20261123-checkup-opening-names';
+import { t } from './i18n.js?v=20261123-checkup-account-selection';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { MaiaEloTrend } from './maia-elo-trend.js?v=20261123-checkup-opening-names';
+import { MaiaEloTrend } from './maia-elo-trend.js?v=20261123-checkup-account-selection';
 
 import { engineLines, legalVariation, whiteEvaluation } from '../engine/position-lines.js';
 export { engineLines, legalVariation, whiteEvaluation };

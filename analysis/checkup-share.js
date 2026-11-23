@@ -1,9 +1,9 @@
 import { ChessBoard } from '../engine/chess-core.js';
-import { t, getLang } from './i18n.js?v=20261123-checkup-opening-names';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-checkup-opening-names';
-import { CHECKUP_ELOS, summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-opening-names';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-opening-names';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-opening-names';
+import { t, getLang } from './i18n.js?v=20261123-checkup-account-selection';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-checkup-account-selection';
+import { CHECKUP_ELOS, summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-account-selection';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-account-selection';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-account-selection';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];

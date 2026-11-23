@@ -1,25 +1,25 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-opening-names';
-import { getLang, t } from './i18n.js?v=20261123-checkup-opening-names';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-account-selection';
+import { getLang, t } from './i18n.js?v=20261123-checkup-account-selection';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-opening-names';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-opening-names';
+} from './checkup-archives.js?v=20261123-checkup-account-selection';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-account-selection';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupWindow, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-checkup-opening-names';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-opening-names';
-import { CheckupShare, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-opening-names';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-opening-names';
+} from './checkup-insights.js?v=20261123-checkup-account-selection';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-account-selection';
+import { CheckupShare, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-account-selection';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-account-selection';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-opening-names';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-opening-names';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-opening-names';
+} from './checkup-archives.js?v=20261123-checkup-account-selection';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-account-selection';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-account-selection';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 
@@ -662,25 +662,32 @@ export class IntuitionCheckup {
       const label = this.accountLabel(account);
       const row = document.createElement('li');
       row.dataset.account = accountKey(account);
-      const identity = document.createElement('div');
+      const identity = document.createElement('button');
+      identity.type = 'button';
       identity.className = 'checkup-account-identity';
+      identity.setAttribute('aria-label', t('checkupSelectAccount', { account: label }));
+      identity.setAttribute('aria-pressed', 'false');
       const name = document.createElement('strong');
       name.className = 'checkup-account-name';
       name.textContent = label;
       const selectAccount = () => {
+        if (this.busy || !this.allowed()) return false;
         this.source = account.platform;
         this.usernameInput.value = account.username;
+        this.pendingBatch = null;
+        this.reportScope = 'rolling';
         this.setStatus('');
         this.applyHistoryContext();
         this.renderSourceControls();
         this.renderReport(this.latestReport);
+        return true;
       };
+      identity.onclick = selectAccount;
       const run = document.createElement('button');
       run.type = 'button';
-      run.className = 'btn-header';
+      run.className = 'btn-header checkup-account-run';
       run.onclick = () => {
-        if (this.busy || !this.allowed()) return;
-        selectAccount();
+        if (!selectAccount()) return;
         const { record, pending } = this.app.checkupReminders?.accountState(account) || {};
         this.prepareBatch({ onlyNew: !!(pending?.length || record?.lastDiagnosedAt || this.latestReport) });
       };
@@ -692,6 +699,8 @@ export class IntuitionCheckup {
       unlink.onclick = () => this.updateAccount(account.platform, account.username, { remove: true });
       const status = document.createElement('span');
       status.className = 'checkup-account-status';
+      status.id = `checkup-account-status-${account.platform}-${account.username.toLowerCase()}`;
+      identity.setAttribute('aria-describedby', status.id);
       const ignore = document.createElement('button');
       ignore.type = 'button';
       ignore.className = 'btn-header checkup-ignore';
@@ -715,10 +724,7 @@ export class IntuitionCheckup {
       view.textContent = t('checkupViewReport');
       view.setAttribute('aria-label', `${t('checkupViewReport')} · ${label}`);
       view.onclick = () => {
-        if (this.busy || !this.allowed()) return;
-        selectAccount();
-        this.reportScope = 'rolling';
-        this.renderReport(this.latestReport);
+        if (!selectAccount()) return;
         this.setView('report', true);
       };
       identity.append(name, status);
@@ -761,7 +767,7 @@ export class IntuitionCheckup {
         : recent || t('checkupAwaitingCheck');
       row.querySelector('.checkup-ignore').hidden = count === 0;
       row.querySelector('.checkup-view-report').hidden = !report;
-      const run = row.querySelector('button');
+      const run = row.querySelector('.checkup-account-run');
       const action = count ? 'checkupRunNew' : diagnosed ? 'checkupFindNew' : 'checkupRunFirst';
       run.textContent = t(action);
       run.classList.add('btn-primary');
@@ -773,7 +779,7 @@ export class IntuitionCheckup {
     ordered.forEach((row, index) => {
       if (this.accountList.children[index] !== row) this.accountList.insertBefore(row, this.accountList.children[index]);
     });
-    const nextFocus = focused?.hidden ? focused.closest('li').querySelector('button') : focused;
+    const nextFocus = focused?.hidden ? focused.closest('li').querySelector('.checkup-account-identity') : focused;
     if (nextFocus && document.activeElement !== nextFocus) nextFocus.focus({ preventScroll: true });
   }
 
@@ -789,7 +795,9 @@ export class IntuitionCheckup {
     for (const button of this.accountList?.querySelectorAll('button') || []) button.disabled = busy;
     const account = normalizeAccount(this.source, this.usernameInput?.value);
     for (const row of this.accountList?.children || []) {
-      row.dataset.selected = String(!!account && row.dataset.account === accountKey(account));
+      const selected = String(!!account && row.dataset.account === accountKey(account));
+      row.dataset.selected = selected;
+      row.querySelector('.checkup-account-identity').setAttribute('aria-pressed', selected);
     }
     for (const tab of this.sourceTabs) {
       tab.setAttribute('aria-pressed', String(tab.dataset.checkupSource === this.source));

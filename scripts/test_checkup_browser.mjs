@@ -89,6 +89,8 @@ try {
   };
   const clark = page.locator('[data-account="chesscom:clarkyan"]');
   const sean = page.locator('[data-account="chesscom:seanyan"]');
+  const clarkIdentity = clark.getByRole('button', { name: 'Select Chess.com · Clarkyan' });
+  const seanIdentity = sean.getByRole('button', { name: 'Select Chess.com · Seanyan' });
   await page.evaluate(() => {
     const app = window.__maiaStudioApp;
     const initialize = app.stockfish.initialize.bind(app.stockfish);
@@ -204,6 +206,21 @@ try {
   await page.locator('#study-profile-keep').click();
   await sean.waitFor();
   await page.waitForFunction(() => !window.__maiaStudioApp.checkup.busy);
+  const clarkHitArea = await clarkIdentity.boundingBox();
+  assert(clarkHitArea.width >= 165 && clarkHitArea.height >= 44);
+  await clarkIdentity.click({ position: { x: clarkHitArea.width - 12, y: clarkHitArea.height / 2 } });
+  assert.equal(await clark.getAttribute('data-selected'), 'true');
+  assert.equal(await clarkIdentity.getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#checkup-username').inputValue(), 'Clarkyan');
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport?.playerName), 'Clarkyan');
+  assert.equal(await page.locator('#checkup-tab-settings').getAttribute('aria-selected'), 'true');
+  await seanIdentity.press('Space');
+  assert.equal(await seanIdentity.getAttribute('aria-pressed'), 'true');
+  assert.equal(await clarkIdentity.getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#checkup-username').inputValue(), 'Seanyan');
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport), null);
+  assert.equal(await page.evaluate(() => window.checkupStarts), 2, 'Selecting accounts does not launch a checkup');
+  await clarkIdentity.press('Enter');
 
   await page.evaluate(async () => {
     const app = window.__maiaStudioApp;
@@ -219,6 +236,7 @@ try {
   assert.equal(await page.locator('#checkup-accounts li').first().getAttribute('data-account'), 'chesscom:seanyan');
   await sean.locator('.checkup-ignore').click();
   await badge.waitFor({ state: 'hidden' });
+  assert.equal(await clarkIdentity.getAttribute('aria-pressed'), 'true', 'Ignoring another account does not change selection');
   await page.evaluate(async () => {
     const app = window.__maiaStudioApp;
     const store = app.mistakeBank.store;
@@ -237,7 +255,7 @@ try {
     };
     window.restoreStockfish = () => { app.stockfish.initialize = initialize; };
   });
-  await sean.locator('button').first().click();
+  await sean.locator('.checkup-account-run').click();
   await page.waitForFunction(() => Boolean(window.releasePrediction));
   assert.match(await page.locator('#checkup-eta').innerText(), /seconds remaining/);
   await page.mouse.click(5, 5);
@@ -270,6 +288,10 @@ try {
 
   await page.locator('#btn-intuition-checkup').click();
   await settings();
+  await clarkIdentity.click();
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport?.playerName), 'Clarkyan');
+  await seanIdentity.click();
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport?.playerName), 'Seanyan');
   await sean.getByRole('button', { name: /move.*new profile/i }).click();
   assert.match(await editor.innerText(), /previous practice traps and reports/i);
   await page.locator('#study-profile-save').click();
@@ -314,6 +336,8 @@ try {
     splitReports: [splitReport], splitDiagnosed: ['live:12345676', 'live:12345677']
   });
   await page.setViewportSize({ width: 390, height: 844 });
+  assert(await alt.evaluate(row => row.querySelector('.checkup-account-identity').offsetWidth >= row.clientWidth - 18),
+    'The tap target spans the account row on mobile');
   assert(await page.locator('#btn-checkup-new-profile').isVisible());
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   await page.locator('#btn-close-checkup').click();
@@ -427,7 +451,7 @@ try {
   const analyze = puzzle.getByRole('link', { name: 'Analyze this position in the studio' });
   assert(await analyze.isHidden(), 'Studio handoff is revealed after an answer');
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-opening-names');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-account-selection');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   await puzzle.locator('#challenge-move').fill(parsed.played);
