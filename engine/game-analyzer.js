@@ -34,7 +34,7 @@ export class GameAnalyzer {
   /**
    * Parse PGN string into array of SAN moves
    */
-  static parsePgn(pgnText) {
+  static parsePgn(pgnText, { clocks = false } = {}) {
     if (!pgnText || typeof pgnText !== 'string') return [];
 
     // Extract starting FEN if specified via [FEN "..."] header
@@ -53,9 +53,20 @@ export class GameAnalyzer {
 
     // Keep the main line while skipping nested RAVs and both PGN comment forms.
     let clean = '', variation = 0, brace = false, lineComment = false, header = false, quoted = false, escaped = false;
+    let comment = '';
     for (const char of pgnText) {
       if (lineComment) { if (char === '\n' || char === '\r') { lineComment = false; clean += ' '; } continue; }
-      if (brace) { if (char === '}') brace = false; continue; }
+      if (brace) {
+        if (char === '}') {
+          brace = false;
+          const time = comment.match(/\[%clk\s+((?:\d+:)?[0-5]?\d:[0-5]?\d(?:\.\d+)?)\]/i)?.[1];
+          if (time) clean += ` @clk=${time.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0)} `;
+          comment = '';
+        } else if (clocks && !variation) {
+          comment += char;
+        }
+        continue;
+      }
       if (header) {
         if (escaped) escaped = false;
         else if (quoted && char === '\\') escaped = true;
@@ -78,6 +89,10 @@ export class GameAnalyzer {
 
     for (const token of tokens) {
       if (!token) continue;
+      if (clocks && /^@clk=\d+(?:\.\d+)?$/.test(token)) {
+        if (moves.length) moves.at(-1).clockSeconds = Number(token.slice(5));
+        continue;
+      }
       // Skip pure move numbers like "1.", "12...", "1..."
       if (/^\d+\.*$/.test(token)) continue;
 

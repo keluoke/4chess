@@ -30,8 +30,9 @@ export async function onRequest(context) {
   }
 
   const rawMax = Number.parseInt(url.searchParams.get('max') || '10', 10);
-  const max = Number.isFinite(rawMax) ? Math.max(1, Math.min(10, rawMax)) : 10;
-  const targetUrl = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${max}&pgnInJson=true&clocks=false&evals=false&perfType=bullet,blitz,rapid,classical`;
+  const clocks = url.searchParams.get('clocks') === 'true';
+  const max = Number.isFinite(rawMax) ? Math.max(1, Math.min(clocks ? 100 : 10, rawMax)) : 10;
+  const targetUrl = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${max}&pgnInJson=true&clocks=${clocks}&opening=${clocks}&evals=false&finished=true&ongoing=false&perfType=bullet,blitz,rapid,classical`;
 
   try {
     const response = await fetch(targetUrl, {
@@ -39,7 +40,7 @@ export async function onRequest(context) {
         'Accept': 'application/x-ndjson',
         'User-Agent': 'DivergeChess/1.2 (+https://4chess.cc)'
       },
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(clocks ? 20000 : 8000)
     });
 
     const bodyText = await response.text();

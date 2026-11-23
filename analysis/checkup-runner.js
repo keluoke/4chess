@@ -1,16 +1,18 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v129';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-window';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { accountKey, buildTrapRecord, checkupReportMatchesAccount, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-v127';
-import { t } from './i18n.js?v=20261122-v129';
-import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261121-v127';
+import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261117-review-policy';
+import { accountKey, buildTrapRecord, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261123-checkup-window';
+import { t } from './i18n.js?v=20261123-checkup-window';
+import {
+  CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupWindow, checkupTrend,
+  planCheckupSamples, summarizeCheckupGames, summarizeCheckupOverview
+} from './checkup-insights.js?v=20261123-checkup-window';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-window';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-window';
 
-export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
 const MAX_LOCAL_GAMES = 15;
-const MAX_ELO_SAMPLES = 24;
-const FEATURED_TRAPS = 5;
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 const VERIFY_ROOT_MIN_DEPTH = 14;
 const VERIFY_AFTER_MIN_DEPTH = 13;
@@ -106,66 +108,69 @@ export function detectBatchPlayer(games = [], profile = null) {
   };
 }
 
-export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIMIT, signal, fetchImpl = fetch } = {}) {
-  const clean = String(username || '').trim();
-  if (!clean) throw new Error('Username is required');
-  const url = `https://lichess.org/api/games/user/${encodeURIComponent(clean)}?max=${max}&pgnInJson=true&clocks=false&evals=false&perfType=${LICHESS_CHECKUP_SPEEDS}`;
-  const useBrowserProxy = fetchImpl === fetch && typeof location !== 'undefined' && location.protocol.startsWith('http');
-  if (useBrowserProxy) {
-    const proxyUrl = `/api/lichess?username=${encodeURIComponent(clean)}&max=${max}`;
-    try {
-      const resp = await fetchImpl(proxyUrl, { signal, cache: 'no-store' });
-      const contentType = resp.headers?.get?.('content-type') || '';
-      const isProxyResponse = contentType.includes('ndjson') || contentType.includes('json');
-      if (resp.ok) {
-        const text = await resp.text();
-        const games = [];
-        for (const line of text.split('\n')) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          let item;
-          try { item = JSON.parse(trimmed); } catch { continue; }
-          if (item.variant && item.variant !== 'standard') continue;
-          if (!item.pgn) continue;
-          const verdict = FairPlayGuard.verifyConcludedGame(item);
-          if (!verdict.ok) continue;
-          games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn), gameId: checkupGameId('lichess', item.id) });
-          if (games.length >= max) break;
-        }
-        return games;
-      }
-      if (isProxyResponse && resp.status === 404) throw new Error('Lichess HTTP 404');
-    } catch (err) {
-      if (err?.name === 'AbortError' || String(err?.message).includes('Lichess HTTP 404')) throw err;
+function archivedCheckupGame(platform, item, pgn, result) {
+  const tags = readPgnTags(pgn);
+  const meta = parsePgnMeta(pgn);
+  const loser = result === '1-0' ? item.black : result === '0-1' ? item.white : null;
+  const initial = tags.timecontrol?.match(/^(\d+)(?:[+|]\d+)?$/)?.[1];
+  const openingPath = tags.ecourl?.match(/^https:\/\/(?:www\.)?chess\.com\/openings\/([A-Za-z0-9-]+)\/?$/i)?.[1];
+  return {
+    pgn,
+    gameId: checkupGameId(platform, platform === 'lichess' ? item.id : item.url),
+    clocks: Array.isArray(item.clocks) ? item.clocks : null,
+    meta: {
+      ...meta, result, timeClass: item.speed || item.time_class || '',
+      eco: item.opening?.eco || tags.eco || '',
+      opening: item.opening?.name || tags.opening || openingPath?.replaceAll('-', ' ') || '',
+      termination: item.status?.name || item.status || loser?.result || tags.termination || '',
+      initialSeconds: item.clock?.initial ?? (initial !== undefined ? Number(initial) : null)
     }
-  }
-  const resp = await fetchImpl(url, {
-    headers: { Accept: 'application/x-ndjson' },
-    signal
-  });
-  if (!resp.ok) throw new Error(`Lichess HTTP ${resp.status}`);
-  const text = await resp.text();
+  };
+}
+
+function lichessCheckupGames(text, max) {
   const games = [];
   for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
     let item;
-    try { item = JSON.parse(trimmed); } catch { continue; }
-    if (item.variant && item.variant !== 'standard') continue;
-    if (!item.pgn) continue;
+    try { item = JSON.parse(line); } catch { continue; }
+    if (!item?.pgn || (item.variant && item.variant !== 'standard')) continue;
     const verdict = FairPlayGuard.verifyConcludedGame(item);
     if (!verdict.ok) continue;
-    games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn), gameId: checkupGameId('lichess', item.id) });
+    games.push(archivedCheckupGame('lichess', item, item.pgn, verdict.result));
     if (games.length >= max) break;
   }
   return games;
 }
 
+export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIMIT, clocks = false, signal, fetchImpl = fetch } = {}) {
+  const clean = String(username || '').trim();
+  if (!clean) throw new Error('Username is required');
+  const query = new URLSearchParams({ max: String(max), pgnInJson: 'true', clocks: String(clocks),
+    opening: String(clocks), evals: 'false', finished: 'true', ongoing: 'false', perfType: LICHESS_CHECKUP_SPEEDS });
+  const url = `https://lichess.org/api/games/user/${encodeURIComponent(clean)}?${query}`;
+  const useBrowserProxy = fetchImpl === fetch && typeof location !== 'undefined' && location.protocol.startsWith('http');
+  if (useBrowserProxy) {
+    const proxyUrl = `/api/lichess?username=${encodeURIComponent(clean)}&max=${max}${clocks ? '&clocks=true' : ''}`;
+    try {
+      const resp = await fetchImpl(proxyUrl, { signal, cache: 'no-store' });
+      const contentType = resp.headers?.get?.('content-type') || '';
+      if (resp.ok) return lichessCheckupGames(await resp.text(), max);
+      if ((contentType.includes('ndjson') || contentType.includes('json')) && resp.status === 404) throw new Error('Lichess HTTP 404');
+    } catch (err) {
+      if (err?.name === 'AbortError' || String(err?.message).includes('Lichess HTTP 404')) throw err;
+    }
+  }
+  const resp = await fetchImpl(url, { headers: { Accept: 'application/x-ndjson' }, signal });
+  if (!resp.ok) throw new Error(`Lichess HTTP ${resp.status}`);
+  return lichessCheckupGames(await resp.text(), max);
+}
+
 export async function fetchChesscomRecentGames(username, { max = CHECKUP_GAME_LIMIT, signal, fetchImpl = fetch } = {}) {
   const clean = String(username || '').trim().toLowerCase();
   if (!clean) throw new Error('Username is required');
-  const archives = await chesscomCheckupArchives(clean, { signal, fetchImpl });
+  const archives = await chesscomCheckupArchives(clean, { signal, fetchImpl, limit: max > CHECKUP_GAME_LIMIT ? 12 : 6 });
   const games = [];
+  const seen = new Set();
   for (const { url } of archives) {
     const resp = await fetchImpl(url, { signal });
     if (!resp.ok) continue;
@@ -176,7 +181,10 @@ export async function fetchChesscomRecentGames(username, { max = CHECKUP_GAME_LI
       if (!item.pgn) continue;
       const verdict = FairPlayGuard.verifyConcludedGame({ pgn: item.pgn, isFinished: true, status: 'finished' });
       if (!verdict.ok) continue;
-      games.push({ pgn: item.pgn, meta: parsePgnMeta(item.pgn), gameId: checkupGameId('chesscom', item.url) });
+      const game = archivedCheckupGame('chesscom', item, item.pgn, verdict.result);
+      if (game.gameId && seen.has(game.gameId)) continue;
+      if (game.gameId) seen.add(game.gameId);
+      games.push(game);
       if (games.length >= max) return games;
     }
   }
@@ -200,6 +208,25 @@ function isReliableVerificationReply(res) {
     !res.isBound &&
     (res.terminal || res.depth >= VERIFY_AFTER_MIN_DEPTH)
   );
+}
+
+async function verifyCheckupHighlight(stockfish, move, fenBefore, maiaTop, probability, maiaProbability, cancelled) {
+  const root = await stockfish.evaluate(fenBefore, 14, 6000, 2);
+  if (cancelled() || !isReliableVerificationRoot(root) || root.bestMove.uci !== move.uci) return null;
+  const board = new ChessBoard(fenBefore);
+  const alternative = board.getLegalMoves().find(legal => legal.uci === maiaTop.uci);
+  if (!alternative) return null;
+  board.makeMove(alternative);
+  const reply = await stockfish.evaluate(board.getFen(), 14, 6000, 1);
+  if (cancelled() || !isReliableVerificationReply(reply)) return null;
+  const kind = positiveIntuition({
+    lossCp: 0, stableBest: true, probability, maiaProbability,
+    maiaAdvantageCp: root.scoreCp + reply.scoreCp,
+    maiaESL: (expectedScore(root.scoreCp) - expectedScore(-reply.scoreCp)) * 100
+  });
+  if (!kind) return null;
+  const { ply, moveNumber, turn, san, uci } = move;
+  return { ply, moveNumber, turn, san, uci, fenBefore, kind: kind === 'beyond_intuition' ? 'beyond' : 'precise' };
 }
 
 async function initializeCheckupEngine(engine, signal) {
@@ -226,22 +253,8 @@ function* checkupDecisions(positions, userSide) {
   }
 }
 
-// Allocate one sample per game per pass, then spread each game's samples along its timeline.
-function planCheckupSamples(games) {
-  const quotas = games.map(() => 0);
-  let remaining = Math.min(MAX_ELO_SAMPLES, games.reduce((sum, game) => sum + game.decisions.length, 0));
-  while (remaining) {
-    games.forEach(({ decisions }, index) => {
-      if (remaining && quotas[index] < decisions.length) {
-        quotas[index]++;
-        remaining--;
-      }
-    });
-  }
-  return games.map(({ decisions }, index) => {
-    const count = quotas[index];
-    return new Set(Array.from({ length: count }, (_, i) => decisions[Math.floor((i + 0.5) * decisions.length / count)]));
-  });
+function checkupEvidenceBase(stockfish, maia) {
+  return `window-v1|${stockfish?.engineKey || 'stockfish'}|${maia?.modelKey || 'maia'}`;
 }
 
 function checkupReplay(pgn, positions, result) {
@@ -292,6 +305,7 @@ export async function runIntuitionCheckup({
   profileId = 'default',
   sourceLabel = 'local-pgn-batch',
   elo,
+  reusedScreen,
   defaultElo = 1900,
   stockfish,
   maiaEngine,
@@ -305,8 +319,8 @@ export async function runIntuitionCheckup({
   if (!stockfish || !maiaEngine) throw new Error('Engines are required');
   const cancelled = () => signal?.aborted || isCancelled();
   const manual = Number.isFinite(elo) && elo > 0;
-  if (!manual) elo = defaultElo;
-  let screenEloSource = manual ? 'manual' : 'default';
+  if (!manual) elo = reusedScreen?.elo ?? defaultElo;
+  let screenEloSource = manual ? 'manual' : reusedScreen ? 'rolling' : 'default';
 
   const emptyResult = (partial = true) => ({
     id: `checkup_${now}_${Math.random().toString(36).slice(2, 7)}`,
@@ -352,7 +366,7 @@ export async function runIntuitionCheckup({
   if (!batch.length) return emptyResult(false);
 
   const ratings = batch.map(game => game.rating).filter(Boolean).sort((a, b) => a - b);
-  if (!manual && ratings.length) {
+  if (!manual && !reusedScreen && ratings.length) {
     const midpoint = Math.floor(ratings.length / 2);
     const median = (ratings[midpoint] + ratings[Math.floor((ratings.length - 1) / 2)]) / 2;
     elo = CHECKUP_ELOS.reduce((best, rating) => Math.abs(rating - median) < Math.abs(best - median) ? rating : best);
@@ -369,18 +383,15 @@ export async function runIntuitionCheckup({
   await initializeCheckupEngine(maiaEngine, signal);
   if (cancelled()) return emptyResult(true);
 
-  const phaseTraps = { opening: 0, middlegame: 0, endgame: 0 };
-  const eloLogSums = Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0]));
-  const collectedTraps = [];
   const gameReports = [];
-  let fitGameCount = 0;
   const analyzedGameIds = new Set();
   let analyzedMoves = 0;
-  let eloSampleCount = 0;
   let partial = false;
+  let highlightAttempts = 0;
+  let highlightCount = 0;
 
-  const needsEarlyFit = !manual && !ratings.length;
-  const fitPlan = planCheckupSamples(batch);
+  const needsEarlyFit = !manual && !reusedScreen && !ratings.length;
+  const fitPlan = planCheckupSamples(batch.map(game => game.decisions)).map(group => new Set(group));
   const prefit = new Map();
   const predict = (fen, rating, history) => maiaEngine.predict(fen, rating, null, cancelled, history);
   const fitScores = async ({ move, fenBefore, historySlice }, predictions) => {
@@ -434,10 +445,10 @@ export async function runIntuitionCheckup({
     reportProgress('analyzing', 0);
 
     let gameMoves = 0;
-    let gameEloSamples = 0;
-    const gameEloLogSums = Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0]));
-    const gamePhaseTraps = { opening: 0, middlegame: 0, endgame: 0 };
+    let screenedMoves = 0;
+    const fitSamples = [];
     const gameTraps = [];
+    const highlights = [];
     let gameCancelled = false;
 
     for (const decision of decisions) {
@@ -448,22 +459,32 @@ export async function runIntuitionCheckup({
       const maiaPred = predictions?.has(elo) ? predictions.get(elo) : await predict(fenBefore, elo, historySlice);
       if (cancelled()) { gameCancelled = true; break; }
 
+      if (maiaPred?.moves?.length) screenedMoves++;
       const humanRawProb = playedProbability(maiaPred, move.uci);
       const maiaTop = maiaPred?.moves?.[0] || null;
+      const maiaTopProbability = maiaTop ? playedProbability(maiaPred, maiaTop.uci) : 0;
 
       if (fitPlan[gi].has(decision)) {
         const scores = needsEarlyFit ? prefit.get(decision)?.scores
           : await fitScores(decision, new Map([[elo, maiaPred]]));
         if (cancelled()) { gameCancelled = true; break; }
-        if (scores) {
-          addScores(gameEloLogSums, scores);
-          gameEloSamples++;
-        }
+        if (scores) fitSamples.push({ ply, scores });
       }
 
-      // Stockfish is only needed for moves eligible for trap verification.
+      // Positive examples reuse the trap screen's root and have a small verification budget.
       const sfBefore = humanRawProb >= 0.12 ? await stockfish.evaluate(fenBefore, 10, 4000, 2) : null;
       if (cancelled()) { gameCancelled = true; break; }
+      if (highlightAttempts < 4 && highlightCount < 2 && sfBefore?.bestMove?.uci === move.uci &&
+          maiaTop?.uci && maiaTop.uci !== move.uci && isLessLikelyChoice(humanRawProb, maiaTopProbability)) {
+        highlightAttempts++;
+        reportProgress('verifying', gameMoves, mi);
+        const highlight = await verifyCheckupHighlight(stockfish, move, fenBefore, maiaTop, humanRawProb, maiaTopProbability, cancelled);
+        if (cancelled()) { gameCancelled = true; break; }
+        if (highlight) {
+          highlights.push(highlight);
+          highlightCount++;
+        }
+      }
       if (sfBefore?.bestMove && sfBefore.bestMove.uci !== move.uci) {
         const sfAfter = await stockfish.evaluate(fenAfter, 10, 4000, 1);
         if (cancelled()) { gameCancelled = true; break; }
@@ -504,7 +525,6 @@ export async function runIntuitionCheckup({
                   const triggerMove = prevMove?.from && prevMove?.to ? { from: prevMove.from, to: prevMove.to, san: prevMove.san || '' } : null;
                   const trap = buildTrapRecord(enrichedMove, { elo }, { profileId, source: meta, triggerMove, now });
                   if (trap) {
-                    gamePhaseTraps[trap.phase || detectPhase(enrichedMove)]++;
                     gameTraps.push({
                       ...trap, gameIndex: gi,
                       topics: classifyCheckupTrap(trap, move, verifyRoot.scoreCp, verifiedPlayedCp)
@@ -529,54 +549,27 @@ export async function runIntuitionCheckup({
       gameId: entry.gameId || null, platform, url: checkupReplayUrl(platform, entry.gameId),
       white: meta.white, black: meta.black, result: meta.result, date: meta.date,
       orientation: userSide === 'w' ? 'white' : 'black',
-      analyzedMoves: gameMoves, trapCount: gameTraps.length, eloSampleCount: gameEloSamples,
+      analyzedMoves: gameMoves, screenedMoves, trapCount: gameTraps.length, timeClass: meta.timeClass || '',
+      eloSampleCount: fitSamples.length, fitSamples, trapEvidence: gameTraps, highlights,
       pgn: checkupReplay(entry.pgn, positions, meta.result)
     });
     reportProgress('analyzing', gameMoves, positions.length - 1);
     if (entry.gameId) analyzedGameIds.add(entry.gameId);
     analyzedMoves += gameMoves;
-    eloSampleCount += gameEloSamples;
-    if (gameEloSamples) fitGameCount++;
-    for (const r of CHECKUP_ELOS) eloLogSums[r] += gameEloLogSums[r];
-    for (const phase of ['opening', 'middlegame', 'endgame']) phaseTraps[phase] += gamePhaseTraps[phase];
-    collectedTraps.push(...gameTraps);
   }
 
-  const eloFit = Object.fromEntries(
-    CHECKUP_ELOS.map(r => [
-      r,
-      eloSampleCount ? Math.round(Math.exp(eloLogSums[r] / eloSampleCount) * 1000) / 1000 : 0
-    ])
-  );
-  const closestElo = eloSampleCount ? closestRating(eloLogSums) : null;
-
-  const dedup = new Map();
-  for (const trap of collectedTraps) {
-    const previous = dedup.get(trap.id);
-    const best = !previous || trap.eslLoss > previous.eslLoss ? trap : previous;
-    const occurrences = [...(previous?.occurrences || []), { gameIndex: trap.gameIndex, ply: trap.ply }];
-    dedup.set(trap.id, { ...best, occurrences });
-  }
-  const traps = [...dedup.values()].sort((a, b) => b.eslLoss - a.eslLoss);
-  const topTraps = traps.slice(0, FEATURED_TRAPS);
-
+  const summary = summarizeCheckupGames(gameReports);
+  const topTraps = summary.traps.slice(0, FEATURED_TRAPS);
   return {
     id: `checkup_${now}_${Math.random().toString(36).slice(2, 7)}`,
     profileId,
     sourceLabel,
     playerName: targetPlayer.trim(),
-    gameCount: gameReports.length,
+    ...summary,
     analyzedGameIds: [...analyzedGameIds],
-    games: gameReports,
-    analyzedMoves,
-    fitGameCount,
-    eloSampleCount,
-    eloFit,
-    closestElo,
+    evidenceKey: `${checkupEvidenceBase(stockfish, maiaEngine)}|${elo}`,
     screenElo: elo,
     screenEloSource,
-    phaseTraps,
-    traps,
     topTrapIds: topTraps.map(item => item.id),
     topTraps,
     partial,
@@ -640,6 +633,9 @@ export class IntuitionCheckup {
   history = [];
   scopedHistory = [];
   fallbackReport = null;
+  view = 'settings';
+  reportScope = 'rolling';
+  overviewCache = new Map();
 
   constructor(app) {
     this.app = app;
@@ -678,6 +674,14 @@ export class IntuitionCheckup {
     this.historyHintEl = document.getElementById('checkup-history-hint');
     this.reportBox = document.getElementById('checkup-report-box');
     this.statusEl = document.getElementById('checkup-status');
+    this.viewTabs = [...document.querySelectorAll('[data-checkup-view]')];
+    this.reportTools = document.getElementById('checkup-report-tools');
+    this.reportEmpty = document.getElementById('checkup-report-empty');
+    this.replayBanner = document.getElementById('checkup-replay-banner');
+    this.overviewAccount = document.getElementById('checkup-overview-account');
+    this.overviewButton = document.getElementById('btn-checkup-overview');
+    this.overviewStatus = document.getElementById('checkup-overview-status');
+    this.overviewBody = document.getElementById('checkup-overview-body');
 
     if (!this.supported) {
       if (this.button) this.button.hidden = true;
@@ -702,6 +706,29 @@ export class IntuitionCheckup {
   syncVisibility() {
     if (this.button) this.button.hidden = !this.allowed();
     this.app.checkupReminders?.render();
+    this.syncReplayBanner();
+  }
+
+  syncReplayBanner() {
+    const back = this.replayReturn;
+    if (this.replayBanner) this.replayBanner.hidden = !back || !this.allowed() ||
+      this.app.gameEpoch !== back.epoch || this.app.mistakeBank?.activeProfile?.id !== back.profileId;
+  }
+
+  setView(view, focus = false) {
+    this.view = view;
+    for (const tab of this.viewTabs) {
+      const selected = tab.dataset.checkupView === view;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
+    }
+    if (this.dialog) this.dialog.scrollTop = 0;
+    if (view === 'overview') {
+      this.refreshOverviewAccounts();
+      this.renderOverview();
+    }
+    if (focus && view === 'report' && this.latestReport) this.reportBox?.focus({ preventScroll: true });
   }
 
   bindEvents() {
@@ -709,6 +736,21 @@ export class IntuitionCheckup {
       this.button.hidden = !this.allowed();
       this.button.onclick = () => this.open();
     }
+    for (const [index, tab] of this.viewTabs.entries()) {
+      tab.onclick = () => this.setView(tab.dataset.checkupView);
+      tab.onkeydown = event => {
+        const delta = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+        if (!delta) return;
+        event.preventDefault();
+        const target = this.viewTabs[(index + delta + this.viewTabs.length) % this.viewTabs.length];
+        this.setView(target.dataset.checkupView);
+        target.focus();
+      };
+    }
+    const replayBack = document.getElementById('btn-checkup-replay-back');
+    if (replayBack) replayBack.onclick = () => this.open();
+    if (this.overviewButton) this.overviewButton.onclick = () => this.loadOverview();
+    if (this.overviewAccount) this.overviewAccount.onchange = () => this.renderOverview();
     if (this.closeBtn) this.closeBtn.onclick = () => this.requestStop({ close: true });
     if (this.profileSelect) this.profileSelect.onchange = () => this.switchProfile(this.profileSelect.value);
     if (this.newProfileBtn) this.newProfileBtn.onclick = () => this.changeProfile(() => this.app.studyProfiles.createProfile());
@@ -737,6 +779,8 @@ export class IntuitionCheckup {
       });
       this.dialog.addEventListener('close', () => {
         this.lastRunReportId = null;
+        this.overviewController?.abort();
+        this.overviewController = null;
         if (this.updatingProfile && this.app.studyProfiles?.editor.open) this.app.studyProfiles.editor.close();
         if (this.stopDialog?.open) this.stopDialog.close();
         this.openGeneration++;
@@ -811,6 +855,7 @@ export class IntuitionCheckup {
     this.source = 'local';
     this.pendingBatch = null;
     if (this.localPgnInput) this.localPgnInput.value = texts.join('\n\n').trim();
+    this.setView('settings');
     this.renderSourceControls();
     if (autoPrepare) await this.prepareBatch();
   }
@@ -821,6 +866,7 @@ export class IntuitionCheckup {
     this.source = 'local';
     this.pendingBatch = null;
     if (this.localPgnInput) this.localPgnInput.value = String(text || '').trim();
+    this.setView('settings');
     this.renderSourceControls();
     await this.prepareBatch();
   }
@@ -862,24 +908,31 @@ export class IntuitionCheckup {
     const currentProfileId = this.app.mistakeBank?.activeProfile?.id || 'default';
     if (generation !== this.openGeneration || epoch !== this.app.gameEpoch || currentProfileId !== profileId || !this.allowed()) return;
     this.history = loadedHistory;
+    this.reportScope = 'rolling';
     const replay = this.replayReturn;
     const returnReport = !account && replay?.epoch === epoch && replay.profileId === profileId
       ? loadedHistory.find(item => item.id === replay.reportId) : null;
     if (returnReport) {
-      this.replayReturn = null;
       this.source = checkupSourceType(returnReport.sourceLabel);
       if (this.usernameInput) this.usernameInput.value = returnReport.playerName;
     }
     this.applyHistoryContext();
-    if (returnReport) this.latestReport = returnReport;
+    if (returnReport) {
+      this.latestReport = returnReport;
+      this.reportScope = replay.scope;
+    }
     this.renderAccounts();
     this.renderSourceControls();
     this.renderReport(this.latestReport);
     if (!this.dialog.open) {
       this.dialog.showModal();
-      const selected = this.accountList?.querySelector('[data-selected="true"] button');
-      (selected || this.accountList?.querySelector('button') || (this.usernameInput?.value ? this.btnFetch : this.usernameInput))?.focus();
+      this.setView(!account && (this.latestReport || this.fallbackReport) ? 'report' : 'settings', !!this.latestReport && !account);
+    } else if (returnReport) {
+      this.setView('report', true);
+    } else {
+      this.setView(this.view);
     }
+    this.syncReplayBanner();
     this.app.checkupReminders?.refresh();
   }
 
@@ -988,6 +1041,145 @@ export class IntuitionCheckup {
     return `${formatSourceBadge(account.platform)} · ${account.username}`;
   }
 
+  refreshOverviewAccounts() {
+    const profile = this.app.mistakeBank?.activeProfile;
+    const selected = this.overviewAccount.value;
+    const current = normalizeAccount(this.source, this.usernameInput?.value);
+    const reported = this.latestReport && normalizeAccount(checkupSourceType(this.latestReport.sourceLabel), this.latestReport.playerName);
+    const candidates = [...(profile?.accounts || []), reported, current].filter(Boolean);
+    const unique = new Map(candidates.map(account => [accountKey(account), account]));
+    this.overviewAccounts = unique;
+    this.overviewAccount.replaceChildren(...[...unique].map(([key, account]) => new Option(this.accountLabel(account), key)));
+    if (unique.has(selected)) this.overviewAccount.value = selected;
+    else if (reported) this.overviewAccount.value = accountKey(reported);
+  }
+
+  overviewKey() {
+    const profileId = this.app.mistakeBank?.activeProfile?.id;
+    return profileId && this.overviewAccount.value ? JSON.stringify([profileId, this.overviewAccount.value]) : '';
+  }
+
+  async loadOverview() {
+    const key = this.overviewKey();
+    const bank = this.app.mistakeBank;
+    const profileId = bank?.activeProfile?.id;
+    const account = this.overviewAccounts?.get(this.overviewAccount.value);
+    if (!key || !account || this.busy || this.overviewController || !this.dialog.open || !this.allowed()) return;
+    const controller = this.overviewController = new AbortController();
+    this.overviewPendingKey = key;
+    this.overviewCache.delete(key);
+    const current = () => this.overviewController === controller && this.dialog.open && this.allowed() &&
+      bank.activeProfile?.id === profileId;
+    this.renderOverview();
+    try {
+      const options = { max: OVERVIEW_GAME_LIMIT, signal: controller.signal };
+      const games = account.platform === 'lichess'
+        ? await fetchLichessRecentGames(account.username, { ...options, clocks: true })
+        : await fetchChesscomRecentGames(account.username, options);
+      if (!current()) return;
+      const profile = await bank.store.get('profiles', profileId);
+      if (!current()) return;
+      const reviews = {};
+      for (const game of games) {
+        const review = profile?.checkupReviews?.[`${account.platform}:${game.gameId}`];
+        if (review) reviews[game.gameId] = review;
+      }
+      if (this.overviewCache.size >= 12) this.overviewCache.delete(this.overviewCache.keys().next().value);
+      this.overviewCache.set(key, { games, account, reviews });
+    } catch (error) {
+      if (current() && error?.name !== 'AbortError') this.overviewCache.set(key, { error: error.message });
+    } finally {
+      if (this.overviewController === controller) {
+        this.overviewController = null;
+        if (this.dialog.open && this.view === 'overview') this.renderOverview();
+      }
+    }
+  }
+
+  renderOverview() {
+    const key = this.overviewKey();
+    const cached = this.overviewCache.get(key);
+    this.overviewAccount.disabled = !key || !!this.overviewController;
+    this.renderSourceControls();
+    this.overviewBody.replaceChildren();
+    this.overviewStatus.textContent = !key ? t('checkupOverviewNoAccount')
+      : this.overviewController && this.overviewPendingKey === key ? t('checkupOverviewLoading')
+      : cached?.error ? t('checkupFetchFailed', { error: cached.error })
+      : !cached ? t('checkupOverviewHelp') : !cached.games.length ? t('checkupNoGames') : '';
+    if (!cached?.games?.length) return;
+    const speeds = [...new Set(cached.games.map(game => game.meta.timeClass).filter(Boolean))];
+    const mode = document.createElement('select');
+    mode.className = 'btn-header';
+    mode.setAttribute('aria-label', t('checkupTimeClass'));
+    mode.add(new Option(t('checkupAllSpeeds'), ''));
+    for (const value of speeds) mode.add(new Option(this.speedLabel(value), value));
+    const stats = document.createElement('div');
+    stats.className = 'checkup-overview-grid';
+    this.overviewBody.append(mode, stats);
+    const render = () => {
+      const result = summarizeCheckupOverview(cached.games, cached.account.username, cached.reviews, mode.value);
+      this.overviewStatus.textContent = t('checkupOverviewSample', { count: result.count });
+      const color = side => t(side === 'w' ? 'checkupColorWhite' : 'checkupColorBlack');
+      const percent = (n, d) => d ? `${Math.round(n * 100 / d)}%` : '—';
+      const card = (title, rows) => {
+        const section = document.createElement('section');
+        section.className = 'checkup-insight-section';
+        const heading = document.createElement('h3');
+        heading.className = 'checkup-report-section-title';
+        heading.textContent = t(title);
+        const list = document.createElement('ul');
+        for (const text of rows) {
+          const row = document.createElement('li');
+          row.textContent = text;
+          list.append(row);
+        }
+        section.append(heading, list);
+        return section;
+      };
+      const wins = Object.entries(result.colors).map(([side, { count, wins }]) =>
+        t('checkupOverviewWinRow', { side: color(side), wins, count, rate: percent(wins, count) }));
+      const endings = Object.entries(result.endings).map(([kind, n]) =>
+        `${t(`checkupEnding_${kind}`)} · ${n} · ${percent(n, result.count)}`);
+      const rank = result.openings.filter(opening => opening.count >= 3)
+        .sort((a, b) => b.points / b.count - a.points / a.count || b.count - a.count);
+      const openings = [];
+      for (const side of ['w', 'b']) {
+        const popular = result.openings.filter(item => item.side === side).sort((a, b) => b.count - a.count)[0];
+        if (popular) openings.push(t('checkupOverviewOpeningRow', {
+          label: t('checkupOpeningPopular'), side: color(side), eco: popular.eco, name: popular.name || popular.eco,
+          speed: this.speedLabel(popular.timeClass), count: popular.count, rate: percent(popular.points, popular.count)
+        }));
+        const choices = rank.filter(item => item.side === side);
+        const best = choices[0];
+        const worst = choices.at(-1);
+        for (const [item, label] of [[best, 'checkupOpeningBest'], [worst !== best ? worst : null, 'checkupOpeningWorst']]) {
+          if (!item) continue;
+          openings.push(t('checkupOverviewOpeningRow', { label: t(label), side: color(side), eco: item.eco,
+            name: item.name || item.eco, speed: this.speedLabel(item.timeClass), count: item.count,
+            rate: percent(item.points, item.count) }));
+        }
+      }
+      if (!rank.length) openings.push(t('checkupOpeningFew'));
+      const { low, observed, reviewedLow, errors, timeoutLosses } = result.pressure;
+      const clock = [
+        observed ? t('checkupClockLow', { low, observed, rate: percent(low, observed) }) : t('checkupClockUnavailable'),
+        t('checkupClockTimeoutLosses', { count: timeoutLosses }),
+        reviewedLow ? t('checkupClockErrors', { errors, reviewed: reviewedLow, low, rate: percent(errors, reviewedLow) }) : t('checkupClockNoReviews')
+      ];
+      stats.replaceChildren(card('checkupOverviewWins', wins), card('checkupOverviewEndings', endings),
+        card('checkupOverviewOpenings', openings), card('checkupOverviewPressure', clock));
+    };
+    mode.onchange = render;
+    render();
+  }
+
+  speedLabel(value) {
+    if (!value) return t('checkupUnknownSpeed');
+    const key = `checkupSpeed_${value}`;
+    const label = t(key);
+    return label === key ? value : label;
+  }
+
   renderAccounts() {
     const bank = this.app.mistakeBank;
     if (bank) bank.renderProfilePicker(this.profileSelect, this.profileName);
@@ -1052,7 +1244,11 @@ export class IntuitionCheckup {
       view.textContent = t('checkupViewReport');
       view.setAttribute('aria-label', `${t('checkupViewReport')} · ${label}`);
       view.onclick = () => {
-        if (!this.busy && this.allowed()) selectAccount();
+        if (this.busy || !this.allowed()) return;
+        selectAccount();
+        this.reportScope = 'rolling';
+        this.renderReport(this.latestReport);
+        this.setView('report', true);
       };
       identity.append(name, status);
       row.append(identity, run, view, ignore);
@@ -1097,6 +1293,7 @@ export class IntuitionCheckup {
       const run = row.querySelector('button');
       const action = count ? 'checkupRunNew' : diagnosed ? 'checkupFindNew' : 'checkupRunFirst';
       run.textContent = t(action);
+      run.classList.add('btn-primary');
       run.setAttribute('aria-label', `${t(action)} · ${this.accountLabel(account)}`);
     }
     const count = row => states.get(row.dataset.account)?.pending?.length || 0;
@@ -1133,6 +1330,10 @@ export class IntuitionCheckup {
     if (this.confirmBox) this.confirmBox.hidden = busy || !this.pendingBatch;
     if (this.progressBox) this.progressBox.hidden = !this.running && !this.fetching;
     if (this.reportBox) this.reportBox.hidden = busy || !this.latestReport;
+    if (this.reportEmpty) this.reportEmpty.hidden = busy || !!this.latestReport || !!this.fallbackReport;
+    if (this.reportTools) this.reportTools.hidden = busy;
+    for (const button of this.reportTools?.querySelectorAll('button') || []) button.disabled = busy;
+    if (this.overviewButton) this.overviewButton.disabled = busy || !this.overviewAccount?.value || !!this.overviewController;
     if (this.usernameInput) this.usernameInput.disabled = busy;
     if (this.localPgnInput) this.localPgnInput.disabled = busy;
     if (this.btnSelectFiles) this.btnSelectFiles.disabled = busy;
@@ -1145,7 +1346,8 @@ export class IntuitionCheckup {
     if (this.btnFetch) {
       this.btnFetch.disabled = busy;
       const hasReport = account && this.history.some(item => checkupReportMatchesAccount(item, account));
-      this.btnFetch.textContent = t(isLocal ? 'checkupParseLocal' : hasReport ? 'checkupRunAgain' : 'checkupFetchGames');
+      this.btnFetch.textContent = t(isLocal ? 'checkupParseLocal' : hasReport ? 'checkupRerunWindow' : 'checkupFetchGames');
+      this.btnFetch.classList.toggle('btn-primary', isLocal || !hasReport);
     }
     if (this.playerChoices) {
       this.playerChoices.replaceChildren();
@@ -1272,27 +1474,42 @@ export class IntuitionCheckup {
       }
 
       if (source !== 'local') {
+        const windowIds = games.map(game => game.gameId);
+        let reusedScreen;
         const account = onlyNew && normalizeAccount(source, suggestedName);
         if (account) {
           const state = await this.app.mistakeBank?.store.loadCheckupProfile(startProfileId);
           if (!current()) return;
           if (state) this.history = state.reports;
           const reports = this.history.filter(item => checkupReportMatchesAccount(item, account));
+          const evidenceBase = checkupEvidenceBase(this.app.stockfish, this.app.maiaEngine);
+          const compatible = reports.find(item => item.evidenceKey?.startsWith(evidenceBase + '|'));
+          if (!this.screenEloSelect?.value && compatible) reusedScreen = { elo: compatible.screenElo };
           const record = state?.profile?.checkupReminders?.[accountKey(account)];
           const known = new Set([...(record?.baseline || []), ...(record?.diagnosed || []),
             ...reports.flatMap(report => report.analyzedGameIds || [])]);
           games = games.filter(game => !game.gameId || !known.has(game.gameId));
           if (!games.length) {
             this.applyHistoryContext();
-            this.latestReport = reports.find(report => !report.partial) || reports[0] || null;
+            this.latestReport = reports.find(item => !item.partial) || reports[0] || null;
+            if (compatible && this.latestReport?.evidenceKey === compatible.evidenceKey) {
+              const rolling = buildCheckupWindow(windowIds, compatible.evidenceKey, reports);
+              this.latestReport = { ...this.latestReport, rolling };
+              await this.app.mistakeBank.store.put('checkups', this.latestReport);
+              if (!current()) return;
+              this.history = this.history.map(report => report.id === this.latestReport.id ? this.latestReport : report);
+              this.scopedHistory = this.scopedHistory.map(report => report.id === this.latestReport.id ? this.latestReport : report);
+            }
             this.fallbackReport = null;
+            this.reportScope = 'rolling';
             this.renderReport(this.latestReport);
+            this.setView('report', true);
             this.setStatus(t('checkupNoNewGames'));
             return;
           }
         }
         this.fetching = false;
-        await this.startRun({ games, sourceLabel, profileId: startProfileId }, suggestedName);
+        await this.startRun({ games, sourceLabel, profileId: startProfileId, windowIds, reusedScreen }, suggestedName);
         return;
       }
       this.pendingBatch = { games, sourceLabel, profileId: startProfileId };
@@ -1345,6 +1562,7 @@ export class IntuitionCheckup {
         profileId: batch.profileId,
         sourceLabel: batch.sourceLabel,
         elo: Number(this.screenEloSelect?.value) || undefined,
+        reusedScreen: batch.reusedScreen,
         defaultElo: this.app.profileDefaultElo?.() || 1900,
         stockfish: this.app.stockfish,
         maiaEngine: this.app.maiaEngine,
@@ -1364,7 +1582,14 @@ export class IntuitionCheckup {
       if (!current()) return;
 
       if (report.gameCount > 0) {
+        const account = normalizeAccount(checkupSourceType(report.sourceLabel), report.playerName);
+        if (account && batch.windowIds?.some(Boolean)) {
+          const reports = this.history.filter(item => checkupReportMatchesAccount(item, account));
+          report.rolling = buildCheckupWindow(batch.windowIds, report.evidenceKey, [report, ...reports]);
+        }
+        if (!current()) return;
         const savedRecord = report;
+        this.reportScope = 'rolling';
         this.history = [savedRecord, ...this.history.filter(item => item.id !== report.id)];
         this.applyHistoryContext();
         if (!this.scopedHistory.some(item => item.id === savedRecord.id)) {
@@ -1380,6 +1605,7 @@ export class IntuitionCheckup {
         }
         if (!current()) return;
         this.renderReport(savedRecord);
+        this.setView('report');
         this.setStatus(report.partial ? t('checkupCancelledPartial') : t('checkupDone'));
       } else if (this.cancelled || report.partial) {
         this.setStatus(t('checkupCancelledEmpty'));
@@ -1430,6 +1656,7 @@ export class IntuitionCheckup {
         btn.textContent = t('checkupHistoryView', { label });
         btn.onclick = () => {
           this.latestReport = item;
+          this.reportScope = 'rolling';
           this.renderReport(item);
         };
         this.historyHintEl.append(btn);
@@ -1438,6 +1665,8 @@ export class IntuitionCheckup {
 
     if (!this.reportBox) return;
     this.reportBox.replaceChildren();
+    this.renderReportTools(report);
+    if (this.reportEmpty) this.reportEmpty.hidden = this.busy || !!report || !!this.fallbackReport;
     if (!report) {
       this.reportBox.hidden = true;
       return;
@@ -1466,7 +1695,8 @@ export class IntuitionCheckup {
         const opt = document.createElement('option');
         opt.value = item.id;
         const rel = formatRelativeTime(item.createdAt);
-        opt.textContent = `${item.playerName} · ${formatSourceBadge(item.sourceLabel)}${rel ? ` (${rel})` : ''}`;
+        const scope = item.rolling ? t('checkupWindowCoverage', { count: item.rolling.gameCount }) : t('checkupBatchScope', { count: item.gameCount });
+        opt.textContent = [item.playerName, formatSourceBadge(item.sourceLabel), scope, rel].filter(Boolean).join(' · ');
         if (item.id === report.id) opt.selected = true;
         select.append(opt);
       }
@@ -1474,6 +1704,7 @@ export class IntuitionCheckup {
         const picked = switcherList.find(item => item.id === select.value);
         if (picked) {
           this.latestReport = picked;
+          this.reportScope = 'rolling';
           this.renderReport(picked);
         }
       };
@@ -1496,6 +1727,14 @@ export class IntuitionCheckup {
     }
     metaRow.append(metaActions);
     summary.append(metaRow);
+    const archivedReport = report;
+    if (report.rolling && this.reportScope === 'rolling') {
+      report = { ...report, ...report.rolling, highlights: report.rolling.highlights || [] };
+      const coverage = document.createElement('p');
+      coverage.className = 'checkup-elo-note checkup-window-coverage';
+      coverage.textContent = t('checkupWindowCoverage', { count: report.gameCount });
+      summary.append(coverage);
+    }
 
     const title = document.createElement('strong');
     title.textContent = t('checkupSummaryTitle', {
@@ -1539,15 +1778,147 @@ export class IntuitionCheckup {
       middlegame: report.phaseTraps?.middlegame || 0,
       endgame: report.phaseTraps?.endgame || 0
     });
-    const screenLabel = { pgn: 'checkupScreenPgn', fit: 'checkupScreenFit', manual: 'checkupScreenManual', default: 'checkupScreenDefault' };
+    const screenLabel = { pgn: 'checkupScreenPgn', fit: 'checkupScreenFit', manual: 'checkupScreenManual',
+      default: 'checkupScreenDefault', rolling: 'checkupScreenRolling' };
     phaseLine.textContent = Number.isFinite(report.screenElo)
       ? `${phaseText} · ${t(screenLabel[report.screenEloSource] || 'checkupScreenElo', { elo: report.screenElo })}`
       : phaseText;
     summary.append(phaseLine);
     this.reportBox.append(summary);
 
+    this.renderHighlights(report);
     this.renderReportTraps(report);
     this.renderReportGames(report);
+    this.renderTrends(archivedReport);
+  }
+
+  renderReportTools(report) {
+    if (!this.reportTools) return;
+    this.reportTools.replaceChildren();
+    const platform = checkupSourceType(report?.sourceLabel);
+    const account = report && normalizeAccount(platform, report.playerName);
+    if (account) {
+      const update = this.reportButton(t('checkupFindNew'), () => {
+        if (this.busy || !this.allowed()) return;
+        this.source = account.platform;
+        this.usernameInput.value = account.username;
+        this.prepareBatch({ onlyNew: true });
+      }, 'btn-primary');
+      update.disabled = this.busy;
+      this.reportTools.append(update);
+    }
+    if (report?.rolling) {
+      const view = document.createElement('select');
+      view.className = 'btn-header';
+      view.setAttribute('aria-label', t('checkupReportScope'));
+      view.add(new Option(t('checkupWindowScope'), 'rolling'));
+      view.add(new Option(t('checkupBatchScope', { count: report.gameCount }), 'batch'));
+      view.value = this.reportScope;
+      view.onchange = () => {
+        this.reportScope = view.value;
+        this.renderReport(report);
+        this.reportTools.querySelector('select')?.focus();
+      };
+      this.reportTools.append(view);
+    }
+  }
+
+  renderHighlights(report) {
+    if (!report.highlights?.length) return;
+    const section = document.createElement('section');
+    section.className = 'checkup-insight-section';
+    const heading = document.createElement('h3');
+    heading.className = 'checkup-report-section-title';
+    heading.textContent = t('checkupHighlights');
+    section.append(heading);
+    for (const move of report.highlights) {
+      const game = report.games?.[move.gameIndex];
+      const label = `${move.moveNumber}${move.turn === 'w' ? '. ' : '… '}${move.san} · ${t(`checkupHighlight_${move.kind}`)}`;
+      section.append(this.reportButton(label, () => this.openReportGame(report, game, move)));
+    }
+    this.reportBox.append(section);
+  }
+
+  renderTrends(report) {
+    if (!report.rolling || !report.evidenceKey) return;
+    const account = normalizeAccount(checkupSourceType(report.sourceLabel), report.playerName);
+    const history = this.history.filter(item => checkupReportMatchesAccount(item, account));
+    if (checkupTrend(history, report.evidenceKey).length < 2) return;
+    const section = document.createElement('section');
+    section.className = 'checkup-insight-section';
+    const title = document.createElement('h3');
+    title.className = 'checkup-report-section-title';
+    title.textContent = t('checkupTrendTitle');
+    const mode = document.createElement('select');
+    mode.className = 'btn-header';
+    mode.setAttribute('aria-label', t('checkupTimeClass'));
+    const classes = [...new Set(history.flatMap(item => (item.rolling?.games || []).map(game => game.timeClass)).filter(Boolean))];
+    mode.add(new Option(t('checkupAllSpeeds'), ''));
+    for (const value of classes) mode.add(new Option(this.speedLabel(value), value));
+    const charts = document.createElement('div');
+    charts.className = 'checkup-charts';
+    const update = () => {
+      charts.replaceChildren();
+      const points = checkupTrend(history, report.evidenceKey, mode.value);
+      if (points.length < 2) {
+        charts.textContent = t('checkupTrendFew');
+        return;
+      }
+      for (const [metric, label] of [['elo', 'checkupTrendElo'], ['density', 'checkupTrendDensity']]) {
+        charts.append(this.renderTrendChart(points, metric, t(label)));
+      }
+    };
+    mode.onchange = update;
+    section.append(title, mode, charts);
+    update();
+    this.reportBox.append(section);
+  }
+
+  renderTrendChart(points, metric, title) {
+    const figure = document.createElement('figure');
+    const caption = document.createElement('figcaption');
+    caption.textContent = title;
+    figure.append(caption);
+    const valid = points.filter(point => Number.isFinite(point[metric]));
+    if (!valid.length) {
+      figure.append(document.createTextNode(t('checkupTrendFew')));
+      return figure;
+    }
+    const chart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    chart.setAttribute('viewBox', '0 0 240 60');
+    chart.setAttribute('role', 'img');
+    const format = value => metric === 'density' ? value.toFixed(1) : String(value);
+    chart.setAttribute('aria-label', `${title} · ${valid.map(point => `${format(point[metric])} (${t('checkupWindowCoverage', { count: point.count })})`).join(' / ')}`);
+    const lo = metric === 'elo' ? CHECKUP_ELOS[0] : 0;
+    const hi = metric === 'elo' ? CHECKUP_ELOS.at(-1) : Math.max(1, ...valid.map(point => point.density));
+    let path = '';
+    let previous = false;
+    for (const [i, point] of points.entries()) {
+      if (!Number.isFinite(point[metric])) {
+        previous = false;
+        continue;
+      }
+      const x = 7 + i * 226 / (points.length - 1);
+      const y = 53 - 46 * (point[metric] - lo) / (hi - lo);
+      path += `${previous ? 'L' : 'M'}${x} ${y} `;
+      previous = true;
+      const dot = document.createElementNS(chart.namespaceURI, 'circle');
+      dot.setAttribute('cx', x);
+      dot.setAttribute('cy', y);
+      dot.setAttribute('r', 3);
+      const label = document.createElementNS(chart.namespaceURI, 'title');
+      label.textContent = `${new Date(point.time).toLocaleDateString()} · ${format(point[metric])} · ${t('checkupWindowCoverage', { count: point.count })}`;
+      dot.append(label);
+      chart.append(dot);
+    }
+    const line = document.createElementNS(chart.namespaceURI, 'path');
+    line.setAttribute('d', path);
+    chart.prepend(line);
+    const last = valid.at(-1);
+    const note = document.createElement('small');
+    note.textContent = `${format(last[metric])} · ${t('checkupWindowCoverage', { count: last.count })}`;
+    figure.append(chart, note);
+    return figure;
   }
 
   reportButton(label, action, classes = '') {
@@ -1602,7 +1973,8 @@ export class IntuitionCheckup {
       focusMove, autoReview: false
     });
     if (opened) {
-      this.replayReturn = { reportId: report.id, profileId: report.profileId, epoch: this.app.gameEpoch };
+      this.replayReturn = { reportId: report.id, profileId: report.profileId, epoch: this.app.gameEpoch, scope: this.reportScope };
+      this.syncReplayBanner();
     } else {
       this.setStatus(t('checkupReplayUnavailable'));
     }
@@ -1677,6 +2049,9 @@ export class IntuitionCheckup {
         details.ontoggle = null;
         details.append(this.renderTrapRows(report, traps.slice(featured.length)));
       };
+      const saveAll = this.reportButton(t('checkupSaveAll', { count: traps.length }),
+        () => this.saveReportTraps(report, traps));
+      details.append(saveAll);
       this.reportBox.append(details);
     }
 

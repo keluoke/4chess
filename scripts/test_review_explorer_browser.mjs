@@ -325,7 +325,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261122-v129');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261123-checkup-window');
     setLanguage('en');
     window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {
@@ -743,11 +743,13 @@ try {
   assert.equal(await checkup.locator('#checkup-report-box').isVisible(), false);
   assert.equal(await studioProfile.inputValue(), 'default');
   await profile.selectOption('child');
+  await checkup.locator('#checkup-tab-settings').click();
   await checkup.getByRole('button', { name: /Unlink Lichess · LichessChild/ }).click();
   await checkup.getByRole('button', { name: /Unlink Lichess · LichessChild/ }).waitFor({ state: 'detached' });
   await checkup.reload();
   await checkup.waitForFunction(() => window.__maiaStudioApp?.positions.length > 1);
   await checkup.locator('#btn-intuition-checkup').click();
+  await checkup.locator('#checkup-tab-settings').click();
   await cards.first().waitFor();
   assert.equal(await profile.inputValue(), 'child');
   assert.equal(await cards.count(), 1, 'IndexedDB preserves linked accounts and removals after reload');

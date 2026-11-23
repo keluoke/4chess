@@ -12,6 +12,7 @@ import {
 } from '../analysis/checkup-runner.js';
 import { StudyStore } from '../analysis/study-store.js';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
+import { buildCheckupWindow, checkupTrend, summarizeCheckupOverview } from '../analysis/checkup-insights.js';
 
 const pgn1 = `[Event "Match 1"]
 [White "KidPlayer"]
@@ -130,6 +131,23 @@ assert.equal(Object.keys(report.eloFit).length, CHECKUP_ELOS.length);
 assert.equal(report.topTraps.length, 1);
 assert.equal(report.topTraps[0].playedSan, 'Bb3');
 assert.equal(report.topTraps[0].turn, 'w', 'Only targetPlayer moves are collected');
+
+const highlight = await runIntuitionCheckup({
+  games: [{ pgn: pgn1 }], targetPlayer: 'KidPlayer', elo: 1900,
+  maiaEngine: { async predict() {
+    return { moves: [{ uci: 'c2c3', rawProb: 0.55 }, { uci: 'a4b3', rawProb: 0.14 }] };
+  } },
+  stockfish: { async evaluate(fen, depth) {
+    const white = fen.split(' ')[1] === 'w';
+    const uci = white ? 'a4b3' : 'd7d6';
+    return { depth, scoreCp: white ? 250 : 100, bestMove: { uci }, pv: [uci] };
+  } }
+});
+assert.equal(highlight.highlights.length, 1);
+assert.equal(highlight.highlights[0].kind, 'beyond');
+assert.equal(highlight.highlights[0].uci, 'a4b3');
+assert.equal(GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(highlight.games[0].pgn))
+  [highlight.highlights[0].ply - 1].fen, highlight.highlights[0].fenBefore);
 
 const progress = [];
 const lowProbabilityReport = await runIntuitionCheckup({
@@ -447,6 +465,61 @@ const postResp = await lichessProxy({ request: new Request('https://example.inva
 assert.equal(postResp.status, 405);
 const badUserResp = await lichessProxy({ request: new Request('https://example.invalid/api/lichess?username=bad/user') });
 assert.equal(badUserResp.status, 400);
+const fetchBeforeProxyTest = globalThis.fetch;
+try {
+  let requested;
+  globalThis.fetch = async url => {
+    requested = new URL(url);
+    return new Response('', { headers: { 'content-type': 'application/x-ndjson' } });
+  };
+  await lichessProxy({ request: new Request('https://example.invalid/api/lichess?username=KidPlayer&max=100') });
+  assert.equal(requested.searchParams.get('max'), '10');
+  assert.equal(requested.searchParams.get('clocks'), 'false');
+  await lichessProxy({ request: new Request('https://example.invalid/api/lichess?username=KidPlayer&max=900&clocks=true') });
+  for (const [key, value] of Object.entries({ max: '100', clocks: 'true', opening: 'true', finished: 'true', ongoing: 'false' })) {
+    assert.equal(requested.searchParams.get(key), value);
+  }
+} finally {
+  globalThis.fetch = fetchBeforeProxyTest;
+}
+
+const clockPgn = `[White "KidPlayer"]\n[Black "Rival"]\n[Result "0-1"]
+1. e4 { [%clk 0:00:25.5] } (1. d4 {[%clk 0:12:00]}) e5 {[%clk 0:00:50]}
+2. Nf3 { [%clk 0:00:10] } Nc6 0-1`;
+assert.deepEqual(GameAnalyzer.parsePgn(clockPgn, { clocks: true }).map(move => move.clockSeconds), [25.5, 50, 10, undefined]);
+assert.equal(GameAnalyzer.parsePgn(clockPgn)[0].clockSeconds, undefined);
+const clockGame = { gameId: 'live:1', pgn: clockPgn, meta: {
+  white: 'KidPlayer', black: 'Rival', result: '0-1', eco: 'C20', timeClass: 'blitz', termination: 'timeout', initialSeconds: 60
+} };
+const overview = summarizeCheckupOverview([clockGame], 'kidplayer', { 'live:1': { w: { errors: { 3: true } } } });
+assert.deepEqual(overview.pressure, { observed: 2, low: 1, reviewedLow: 1, errors: 1, timeoutLosses: 1 });
+assert.equal(overview.openings[0].count, 1);
+assert.equal(summarizeCheckupOverview([clockGame], 'KidPlayer', {}, 'rapid').count, 0);
+assert.equal(summarizeCheckupOverview([{ ...clockGame, pgn: pgn1 }], 'KidPlayer').pressure.observed, 0);
+assert.equal(summarizeCheckupOverview([{ ...clockGame, pgn: clockPgn.replaceAll(/\[%clk [^\]]+\]/g, ''),
+  clocks: [2550, 5000, 1000] }], 'KidPlayer').pressure.low, 1);
+
+const makeEvidence = (id, loss, scores = [-4, -3, -2, -1]) => ({
+  gameId: id, analyzedMoves: 10, screenedMoves: 8, timeClass: 'blitz',
+  fitSamples: Array.from({ length: 24 }, (_, i) => ({ ply: i + 13, scores })),
+  trapEvidence: [{ id: 'same-trap', ply: 15, phase: 'middlegame', eslLoss: loss }]
+});
+const historyGames = Array.from({ length: 10 }, (_, i) => makeEvidence(`g${i}`, i + 10));
+const firstWindow = buildCheckupWindow(historyGames.map(game => game.gameId), 'sf:maia:2200',
+  [{ evidenceKey: 'sf:maia:2200', games: historyGames }], 1);
+const nextWindow = buildCheckupWindow(['new', 'ignored', ...historyGames.map(game => game.gameId)], 'sf:maia:2200', [
+  { evidenceKey: 'different-engine', games: [makeEvidence('ignored', 90)] },
+  { evidenceKey: 'sf:maia:2200', games: [makeEvidence('new', 16)], rolling: firstWindow }
+], 2);
+assert.equal(nextWindow.gameCount, 9, 'Unanalyzed or incompatible games do not count toward coverage');
+assert.equal(nextWindow.games[0].gameId, 'new');
+assert.equal(nextWindow.eloSampleCount, 24);
+assert.equal(nextWindow.fitGameCount, 9);
+assert.equal(nextWindow.phaseTraps.middlegame, 9);
+assert.equal(nextWindow.traps[0].eslLoss, 17, 'The strongest occurrence is recalculated after older games leave');
+assert.equal(nextWindow.traps[0].occurrences.length, 9);
+assert.deepEqual(checkupTrend([nextWindow, firstWindow].map(rolling => ({ evidenceKey: 'sf:maia:2200', rolling })),
+  'sf:maia:2200', 'blitz').map(point => [point.count, point.elo, point.density]), [[10, 2200, 12.5], [9, 2200, 12.5]]);
 
 // 7. Fast-fail when no games match targetPlayer (must NOT start engines)
 const noMatchReport = await runIntuitionCheckup({

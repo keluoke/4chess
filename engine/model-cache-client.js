@@ -1,4 +1,4 @@
-import { readModelBytes } from './model-loader.js?v=20261122-v129';
+import { readModelBytes } from './model-loader.js?v=20261123-checkup-window';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
 let frameReady;

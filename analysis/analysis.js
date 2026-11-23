@@ -1,19 +1,19 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261122-v129';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261123-checkup-window';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261122-v129';
-import { ReviewExplorer } from './review-explorer.js?v=20261122-v129';
-import { ReviewOverview } from './review-overview.js?v=20261122-v129';
-import { ReviewCommentary } from './review-commentary.js?v=20261122-v129';
-import { ConsequencePlayer } from './consequence-player.js?v=20261122-v129';
-import { MistakeBank } from './mistake-bank.js?v=20261122-v129';
-import { resolvePerspective } from './study-store.js?v=20261121-v127';
-import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261122-v129';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261122-v129';
-import { CheckupReminders } from './checkup-reminders.js?v=20261122-v129';
-import { ReviewShare } from './review-share.js?v=20261122-v129';
-import { ShareCardModal } from './share-card.js?v=20261122-v129';
+import { IntuitionReview } from './intuition-review.js?v=20261123-checkup-window';
+import { ReviewExplorer } from './review-explorer.js?v=20261123-checkup-window';
+import { ReviewOverview } from './review-overview.js?v=20261123-checkup-window';
+import { ReviewCommentary } from './review-commentary.js?v=20261123-checkup-window';
+import { ConsequencePlayer } from './consequence-player.js?v=20261123-checkup-window';
+import { MistakeBank } from './mistake-bank.js?v=20261123-checkup-window';
+import { resolvePerspective } from './study-store.js?v=20261123-checkup-window';
+import { checkupGameContext, IntuitionCheckup } from './checkup-runner.js?v=20261123-checkup-window';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261123-checkup-window';
+import { CheckupReminders } from './checkup-reminders.js?v=20261123-checkup-window';
+import { ReviewShare } from './review-share.js?v=20261123-checkup-window';
+import { ShareCardModal } from './share-card.js?v=20261123-checkup-window';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261122-v129';
+import { ReviewPractice } from './review-practice.js?v=20261123-checkup-window';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -21,17 +21,17 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
  */
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261122-v129';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261122-v129';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v129';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261123-checkup-window';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261123-checkup-window';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-window';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261122-v129';
+import { EvalChart } from './eval-chart.js?v=20261123-checkup-window';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261122-v129';
+import { PositionAnalysis } from './position-analysis.js?v=20261123-checkup-window';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261122-v129';
-import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261122-v129';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261123-checkup-window';
+import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261123-checkup-window';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
 const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource', 'overview'];
@@ -1223,6 +1223,7 @@ class AnalysisStudioApp {
     this.analyzer.cancel();
     this.intuitionReview?.dispose();
     this.gameEpoch++;
+    this.checkup?.syncReplayBanner();
     this.reviewEpoch++;
     this.practice?.stop();
     this.practiceResults = new Map();
@@ -1362,6 +1363,7 @@ class AnalysisStudioApp {
 
   studyProfilesChanged(previousId) {
     this.studyProfiles?.render();
+    this.checkup?.syncReplayBanner();
     this.checkupReminders?.profileChanged();
     if (previousId && previousId !== this.mistakeBank.activeProfile?.id
       && this.checkup?.dialog?.open && !this.checkup.updatingProfile) this.checkup.close();
@@ -1670,6 +1672,17 @@ class AnalysisStudioApp {
         if (!this.moves.isPartial && !result.isPartial && result.positionEvaluations?.length === this.positions.length) {
           this.checkupReminders?.recordReview(targetProfileId, checkupGame)
             .catch(error => console.warn('[Checkup reminders] Could not record review:', error));
+          if (checkupGame?.gameId && this.checkup?.allowed()) {
+            const sides = { w: { errors: {} }, b: { errors: {} } };
+            for (const move of result.allMoves || []) {
+              const quality = moveQuality(move);
+              if (quality !== 'unknown' && sides[move.turn]) {
+                sides[move.turn].errors[move.ply] = quality === 'mistake' || quality === 'blunder';
+              }
+            }
+            this.mistakeBank?.store.saveCheckupReviewEvidence(targetProfileId, checkupGame, sides)
+              .catch(error => console.warn('[Checkup] Could not save clock-pressure evidence:', error));
+          }
         }
       }
     } catch (err) {

@@ -1,4 +1,4 @@
-import { checkupGameIds, markCheckupGames } from '../engine/checkup-watch.js?v=20261121-v127';
+import { checkupGameIds, markCheckupGames } from '../engine/checkup-watch.js?v=20261123-checkup-window';
 import { parseStudioElo } from '../engine/chess-notation.js?v=20261120-import';
 
 const DB_NAME = 'diverge_study_v1';
@@ -472,10 +472,16 @@ export class StudyStore {
       const scopeTrap = trap => ({
         ...trap, profileId: profile.id, id: trapId(profile.id, trap.fenBefore, trap.playedUci || trap.uci)
       });
+      const scopeSummary = summary => ({
+        ...(Array.isArray(summary.traps) ? { traps: summary.traps.map(scopeTrap) } : {}),
+        ...(Array.isArray(summary.games) ? { games: summary.games.map(game => Array.isArray(game.trapEvidence)
+          ? { ...game, trapEvidence: game.trapEvidence.map(scopeTrap) } : game) } : {})
+      });
       const topTraps = (report.topTraps || []).map(scopeTrap);
       moved = {
         ...report, profileId: profile.id, topTraps, topTrapIds: topTraps.map(trap => trap.id),
-        ...(Array.isArray(report.traps) ? { traps: report.traps.map(scopeTrap) } : {})
+        ...scopeSummary(report),
+        ...(report.rolling ? { rolling: { ...report.rolling, ...scopeSummary(report.rolling) } } : {})
       };
       profile = restoreCheckupReminders(profile, [moved]);
     }
@@ -680,6 +686,19 @@ export class StudyStore {
     return record;
   }
 
+  async saveCheckupReviewEvidence(profileId, game, sides) {
+    if (!profileId || !game?.platform || !game.gameId) return;
+    await this.init();
+    const key = `${game.platform}:${game.gameId}`;
+    return this.writeProfile(profileId, profile => {
+      if (!profile) return null;
+      const reviews = new Map(Object.entries(profile.checkupReviews || {}));
+      reviews.delete(key);
+      reviews.set(key, sides);
+      return { ...profile, checkupReviews: Object.fromEntries([...reviews].slice(-100)) };
+    });
+  }
+
   async listCheckups(profileId = this.getActiveProfileId()) {
     await this.init();
     return (await this.getAll('checkups'))
@@ -700,7 +719,7 @@ export class StudyStore {
       version: 1,
       exportedAt: new Date(now).toISOString(),
       activeProfileId: this.getActiveProfileId(),
-      profiles: (await this.listProfiles()).map(({ checkupReminders, backgroundCheckup, ...profile }) => profile),
+      profiles: (await this.listProfiles()).map(({ checkupReminders, backgroundCheckup, checkupReviews, ...profile }) => profile),
       traps: await this.getAll('traps'),
       checkups: await this.getAll('checkups')
     };

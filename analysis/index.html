@@ -19,8 +19,8 @@
   <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261123-checkup-insights">
-  <link rel="stylesheet" href="./review-share.css?v=20261122-v129">
+  <link rel="stylesheet" href="workbench.css?v=20261123-checkup-window">
+  <link rel="stylesheet" href="./review-share.css?v=20261123-checkup-window">
 </head>
 <body class="diverge-ui">
   <script>
@@ -179,6 +179,9 @@
       <div id="temp-analysis-banner" class="consequence-bar temp-analysis-banner" hidden>
         <span id="temp-analysis-label" data-i18n="tempAnalysisBanner">正在用双引擎分析错题局面</span>
         <button type="button" class="btn-header btn-primary" id="btn-temp-analysis-back" data-i18n="tempAnalysisBackPractice">返回错题练习</button>
+      </div>
+      <div id="checkup-replay-banner" class="consequence-bar checkup-replay-banner" hidden>
+        <button type="button" class="btn-header btn-primary" id="btn-checkup-replay-back" data-i18n="checkupReplayBack">返回诊断报告</button>
       </div>
       <section class="position-analysis">
         <div class="position-heading">
@@ -477,6 +480,12 @@
       <select id="checkup-profile-select" class="btn-header" aria-labelledby="checkup-profile-label" hidden></select>
       <button type="button" id="btn-checkup-new-profile" class="btn-header" aria-haspopup="dialog" data-i18n="studyNewProfileAction">＋ 新建档案</button>
     </div>
+    <div class="checkup-view-tabs" role="tablist" data-i18n-aria="checkupViews">
+      <button type="button" class="btn-header" role="tab" id="checkup-tab-report" tabindex="-1" data-checkup-view="report" aria-controls="checkup-panel-report" aria-selected="false" data-i18n="checkupReportTab">报告</button>
+      <button type="button" class="btn-header" role="tab" id="checkup-tab-settings" data-checkup-view="settings" aria-controls="checkup-panel-settings" aria-selected="true" data-i18n="checkupSettingsTab">诊断设置</button>
+      <button type="button" class="btn-header" role="tab" id="checkup-tab-overview" tabindex="-1" data-checkup-view="overview" aria-controls="checkup-panel-overview" aria-selected="false" data-i18n="checkupOverviewTab">对局概览</button>
+    </div>
+    <section id="checkup-panel-settings" role="tabpanel" aria-labelledby="checkup-tab-settings">
     <p id="checkup-reminder-note" class="checkup-reminder-note" hidden></p>
     <p id="checkup-background-tip" class="checkup-reminder-note" data-i18n="checkupBackgroundOffer" hidden>开启提醒后，扩展约每 6 小时检查此档案的新完赛对局。</p>
     <label id="checkup-background-control" class="checkup-background-control" hidden>
@@ -519,6 +528,7 @@
         <button type="button" class="btn-header btn-primary" id="btn-checkup-start" data-i18n="checkupStart">开始体检</button>
       </div>
     </div>
+    </section>
     <div id="checkup-progress-box" class="checkup-progress-box" hidden>
       <div class="checkup-progress-info">
         <span id="checkup-progress-text" role="status"></span>
@@ -528,12 +538,24 @@
       <div id="checkup-progress-details" class="checkup-progress-details">
         <p id="checkup-eta" hidden></p>
         <p data-i18n="checkupKeepPage">请保持页面开启。诊断期间主棋盘复盘暂停。</p>
-        <p data-i18n="checkupResultsPreview">完成后可查看实战直觉分段、开中残局陷阱分布，并一键收录最多 5 个陷阱。</p>
+        <p data-i18n="checkupResultsPreview">完成后可查看实战直觉分段和已复核陷阱，回到原局或按主题练习。</p>
       </div>
     </div>
     <p id="checkup-status" class="bank-status-note" role="status"></p>
-    <div id="checkup-history-hint" class="checkup-history-hint" hidden></div>
-    <div id="checkup-report-box" class="checkup-report-box" hidden></div>
+    <section id="checkup-panel-report" role="tabpanel" aria-labelledby="checkup-tab-report" hidden>
+      <div id="checkup-report-tools" class="checkup-report-actions"></div>
+      <div id="checkup-history-hint" class="checkup-history-hint" hidden></div>
+      <p id="checkup-report-empty" data-i18n="checkupReportEmpty" hidden>暂无可查看的报告。</p>
+      <div id="checkup-report-box" class="checkup-report-box" tabindex="-1" hidden></div>
+    </section>
+    <section id="checkup-panel-overview" role="tabpanel" aria-labelledby="checkup-tab-overview" hidden>
+      <div class="checkup-report-actions">
+        <select id="checkup-overview-account" class="btn-header" data-i18n-aria="checkupOverviewAccount"></select>
+        <button type="button" class="btn-header btn-primary" id="btn-checkup-overview" data-i18n="checkupOverviewLoad">读取最近 100 盘</button>
+      </div>
+      <p id="checkup-overview-status" role="status"></p>
+      <div id="checkup-overview-body"></div>
+    </section>
   </dialog>
 
   <dialog class="checkup-dialog study-mini-dialog" id="checkup-stop-dialog" aria-labelledby="checkup-stop-title" aria-describedby="checkup-stop-message">
@@ -580,12 +602,12 @@
     <p id="share-card-status" class="bank-status-note" role="status"></p>
   </dialog>
 
-  <script type="module" src="../ui/theme.js?v=20261122-v129"></script>
-  <script type="module" src="analysis.js?v=20261122-v129"></script>
+  <script type="module" src="../ui/theme.js?v=20261123-checkup-window"></script>
+  <script type="module" src="analysis.js?v=20261123-checkup-window"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261123-checkup-insights').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261123-checkup-window').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

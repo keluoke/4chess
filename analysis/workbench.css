@@ -648,3 +648,52 @@ button,input,select,textarea { font-family:inherit; }
 .share-card-formats [aria-pressed="true"] { background:var(--dg-green-soft);border-color:transparent;color:var(--brand-green); }
 .share-card-preview-wrap { display:flex;justify-content:center;align-items:center;padding:10px;border-radius:12px;background:var(--dg-paper);border:1px solid var(--dg-line); }
 #share-card-canvas { max-width:100%;max-height:60vh;height:auto;border-radius:8px;display:block; }
+
+.checkup-view-tabs {
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin:0 0 16px;
+  padding-bottom:9px;
+  border-bottom:1px solid var(--dg-line);
+}
+.checkup-view-tabs .btn-header {
+  height:34px;
+  box-shadow:none;
+}
+.checkup-view-tabs .btn-header[aria-selected="true"] {
+  border-color:var(--brand-green);
+  color:var(--brand-green);
+  font-weight:650;
+}
+#checkup-report-tools { margin-bottom:12px; }
+#checkup-report-tools[hidden] { display:none; }
+#checkup-report-box:focus { outline:none; }
+#checkup-overview-status,#checkup-report-empty { color:var(--text-muted);font-size:13px; }
+.checkup-overview-grid,.checkup-charts {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(225px,100%),1fr));
+  gap:8px;
+  margin:10px 0 0;
+}
+.checkup-insight-section {
+  padding:10px 12px;
+  margin-top:12px;
+  border:1px solid var(--dg-line);
+  border-radius:12px;
+}
+.checkup-overview-grid .checkup-insight-section { margin:0; }
+.checkup-insight-section .checkup-report-section-title { margin-top:0; }
+.checkup-insight-section ul { margin:0;padding-inline-start:17px;font-size:12px;line-height:1.6; }
+.checkup-insight-section .btn-header + .btn-header { margin-inline-start:6px; }
+.checkup-charts figure {
+  margin:0;
+  padding:8px;
+  border:1px solid var(--dg-line);
+  border-radius:8px;
+  font-size:12px;
+}
+.checkup-charts svg { display:block;width:100%;margin:3px 0;color:var(--brand-green); }
+.checkup-charts path { fill:none;stroke:currentColor;stroke-width:2; }
+.checkup-charts circle { fill:currentColor; }
+.checkup-replay-banner { margin-bottom:8px; }

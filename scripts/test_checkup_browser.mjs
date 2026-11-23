@@ -50,6 +50,8 @@ try {
     app.positionAnalysis.refresh = () => {};
   });
   const dialog = page.locator('#checkup-dialog');
+  const settings = () => page.locator('#checkup-tab-settings').click();
+  const reportBox = page.locator('#checkup-report-box');
   const editor = page.locator('#study-profile-dialog');
   const profileSelect = page.locator('#checkup-profile-select');
   const badge = page.locator('#checkup-new-dot');
@@ -89,23 +91,39 @@ try {
     !window.__maiaStudioApp.checkup.busy);
   assert(await clark.isHidden());
   const initialReport = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id);
+  await settings();
   await link('Clarkyan');
   await clark.getByRole('button', { name: /check for new games/i }).waitFor();
   assert.match(await clark.locator('.checkup-account-status').innerText(), /last checkup/i);
-  assert.match(await page.locator('#btn-checkup-fetch').innerText(), /run again/i);
+  assert.match(await page.locator('#btn-checkup-fetch').innerText(), /reanalyze the last 10 games/i);
   await clark.getByRole('button', { name: /view report/i }).click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id), initialReport);
-  await clark.getByRole('button', { name: /check for new games/i }).click();
+  assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
+  assert.equal(await page.locator(':focus').getAttribute('id'), 'checkup-report-box');
+  const findNew = () => page.locator('#checkup-report-tools').getByRole('button', { name: /check for new games/i }).click();
+  await findNew();
   await page.getByText('No new games to analyze.').waitFor();
   assert.equal(await page.evaluate(() => window.checkupStarts), 1, 'An unchanged batch does not start the engines');
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id), initialReport);
   clarkNew = true;
-  await clark.getByRole('button', { name: /check for new games/i }).click();
+  await findNew();
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.gameCount === 1 &&
     !window.__maiaStudioApp.checkup.busy);
   assert.deepEqual(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.analyzedGameIds), ['live:12345675']);
   assert.equal(await page.evaluate(() => window.checkupStarts), 2);
+  assert.match(await reportBox.innerText(), /3\/10 covered/);
+  assert.equal(await reportBox.locator('.checkup-charts svg').count(), 2);
+  const scope = page.getByRole('combobox', { name: 'Report scope' });
+  await scope.selectOption('batch');
+  assert.equal(await reportBox.locator('.checkup-window-coverage').count(), 0);
+  await scope.selectOption('rolling');
+  await page.locator('#checkup-tab-overview').click();
+  await page.locator('#btn-checkup-overview').click();
+  await page.getByText('3 completed games', { exact: true }).waitFor();
+  assert.match(await page.locator('#checkup-overview-body').innerText(), /Win rate by color/);
+  assert.equal(await page.evaluate(() => window.checkupStarts), 2, 'The overview does not start an engine');
   await page.evaluate(() => window.restoreInitialStockfish());
+  await settings();
   await link('Seanyan');
   assert.match(await editor.innerText(), /another player/i);
   await page.locator('#study-profile-keep').click();
@@ -176,6 +194,7 @@ try {
   await badge.waitFor({ state: 'hidden' });
 
   await page.locator('#btn-intuition-checkup').click();
+  await settings();
   await sean.getByRole('button', { name: /move.*new profile/i }).click();
   assert.match(await editor.innerText(), /previous practice traps and reports/i);
   await page.locator('#study-profile-save').click();
@@ -193,6 +212,7 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.playerName === 'Altplayer' &&
     !window.__maiaStudioApp.checkup.busy);
   const splitReport = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id);
+  await settings();
   await link('Altplayer');
   assert.match(await editor.innerText(), /move the report you just ran/i);
   await page.locator('#study-profile-save').click();
@@ -264,6 +284,7 @@ try {
   const replayPgn = '[Event "Replay fixture"]\n[White "Trainee"]\n[Black "Rival"]\n[WhiteElo "2200"]\n[Result "1/2-1/2"]\n\n' +
     replayMoves + ' 1/2-1/2';
   await page.locator('#btn-intuition-checkup').click();
+  await settings();
   await page.locator('[data-checkup-source="local"]').click();
   await page.locator('#checkup-pgn-text').fill(replayPgn);
   await page.locator('#btn-checkup-fetch').click();
@@ -271,7 +292,6 @@ try {
   await page.locator('#btn-checkup-start').click();
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.traps?.length > 5 &&
     !window.__maiaStudioApp.checkup.busy);
-  const reportBox = page.locator('#checkup-report-box');
   assert.match(await reportBox.innerText(), /fit samples from 1 game/);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), 5);
   await reportBox.getByText(/Show .* more traps/).click();
@@ -279,6 +299,12 @@ try {
   await sixthJump.waitFor();
   const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
+  await reportBox.getByRole('button', { name: `Save all ${replay.traps.length} traps` }).click();
+  await page.waitForFunction(async count => {
+    const bank = window.__maiaStudioApp.mistakeBank;
+    return (await bank.store.listTraps(bank.activeProfile.id)).length === count &&
+      !window.__maiaStudioApp.checkup.savingTraps;
+  }, replay.traps.length);
   assert(await reportBox.evaluate(box => box.scrollWidth <= box.clientWidth), 'Expanded traps fit the mobile dialog');
   const sixth = replay.traps[5];
   await sixthJump.click();
@@ -288,7 +314,7 @@ try {
     return { ply: app.currentPly, before: app.isReviewingMove, fen: app.boardUI.chess.getFen() };
   });
   assert.deepEqual(focused, { ply: sixth.ply, before: true, fen: sixth.fenBefore });
-  await page.locator('#btn-intuition-checkup').click();
+  await page.locator('#btn-checkup-replay-back').click();
   await reportBox.getByText(/Game details/).click();
   assert.match(await reportBox.innerText(), /Trainee – Rival/);
   await reportBox.getByRole('button', { name: /Practice high-temptation moves/ }).click();
