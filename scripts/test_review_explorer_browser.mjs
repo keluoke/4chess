@@ -707,23 +707,26 @@ try {
   const profile = checkup.locator('#checkup-profile-select');
   const cards = checkup.locator('#checkup-accounts li');
   await checkup.locator('#btn-intuition-checkup').click();
-  await checkup.getByRole('button', { name: /Analyze the last 10 games for Chess.com · StudyPlayer/ }).waitFor();
+  await checkup.getByRole('button', { name: /Analyze new games · Chess.com · StudyPlayer/ }).waitFor();
   assert.equal(await profile.inputValue(), 'child');
   await checkup.locator('[data-checkup-source="lichess"]').click();
   await checkup.locator('#checkup-username').fill('LichessChild');
   await checkup.locator('#btn-checkup-save-account').click();
-  await checkup.getByRole('button', { name: /Analyze the last 10 games for Lichess · LichessChild/ }).waitFor();
+  await checkup.getByRole('button', { name: /Run first checkup · Lichess · LichessChild/ }).waitFor();
 
-  await checkup.getByRole('button', { name: /Analyze the last 10 games for Chess.com · StudyPlayer/ }).click();
+  await checkup.getByRole('button', { name: /Analyze new games · Chess.com · StudyPlayer/ }).click();
   await checkup.locator('#checkup-report-box').waitFor();
   await dot.waitFor({ state: 'hidden' });
   assert.match(await checkup.locator('#checkup-report-box').innerText(), /StudyPlayer/);
-  assert.equal(await checkup.evaluate(async () => {
+  assert.deepEqual(await checkup.evaluate(async () => {
     const store = __maiaStudioApp.mistakeBank.store;
     const report = (await store.listCheckups('child'))[0];
-    if (!report.analyzedGameIds.includes('live:12345679')) return 'missing newer game';
-    return report.sourceLabel + '|' + (await store.listCheckups('default')).length;
-  }), 'chesscom:StudyPlayer|0');
+    return {
+      source: report.sourceLabel,
+      analyzedGameIds: report.analyzedGameIds,
+      otherProfileReports: (await store.listCheckups('default')).length
+    };
+  }), { source: 'chesscom:StudyPlayer', analyzedGameIds: ['live:12345679'], otherProfileReports: 0 });
   await checkup.evaluate(async () => {
     const app = __maiaStudioApp;
     const store = app.mistakeBank.store;
