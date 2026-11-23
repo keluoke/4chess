@@ -553,7 +553,7 @@ try {
   assert.equal(await puzzle.locator('input').count(), 0);
   assert.equal(await options.count(), 2);
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-playing-profile');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-rerun');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   const labelOrder = await options.allTextContents();
@@ -656,17 +656,65 @@ try {
   await dialog.waitFor({ state: 'hidden' });
   await page.locator('#btn-intuition-checkup').click();
   await page.locator('#checkup-tab-report').click();
+  const stability = reportBox.locator('.checkup-stability-section');
   await page.evaluate(() => {
     const checkup = window.__maiaStudioApp.checkup;
-    const legacy = { ...checkup.latestReport, games: [], fit: null, closestElo: 2200, screenedMoves: undefined };
+    const legacy = { ...checkup.latestReport, id: 'legacy-local-saved',
+      games: checkup.latestReport.games.map(game => ({ ...game, screenedMoves: undefined })),
+      fit: null, closestElo: 2200, screenedMoves: undefined };
     checkup.latestReport = legacy;
     checkup.renderReport(legacy);
   });
-  assert.equal(await reportBox.locator('.checkup-stability-value').count(), 0);
-  assert.match(await reportBox.locator('.checkup-stability-section').innerText(), /older report has no count of screened moves/);
+  assert.equal(await stability.locator('.checkup-stability-value').count(), 0);
+  assert.match(await stability.innerText(), /older report is missing screening data/);
+  await stability.getByRole('button', { name: 'Recheck these games' }).click();
+  await page.waitForFunction(() => {
+    const { latestReport, busy } = window.__maiaStudioApp.checkup;
+    return !busy && latestReport.id !== 'legacy-local-saved' && latestReport.screenedMoves > 0;
+  });
+  assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
+
+  await page.evaluate(() => {
+    const checkup = window.__maiaStudioApp.checkup;
+    const legacy = { ...checkup.latestReport, id: 'legacy-local-no-pgn', games: [],
+      fit: null, closestElo: 2200, screenedMoves: undefined };
+    checkup.latestReport = legacy;
+    checkup.renderReport(legacy);
+  });
   assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves in these games looked most like Maia 2200');
-  await reportBox.locator('.checkup-stability-section').getByRole('button', { name: 'Checkup settings' }).click();
+  const choosingPgn = page.waitForEvent('filechooser');
+  await stability.getByRole('button', { name: 'Import PGN to recheck' }).click();
+  const fileChooser = await choosingPgn;
+  assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
+  await fileChooser.setFiles({ name: 'saved.pgn', mimeType: 'application/x-chess-pgn', buffer: Buffer.from(replayPgn) });
+  await page.locator('#btn-checkup-start').waitFor();
   assert.equal(await page.locator('#checkup-tab-settings').getAttribute('aria-selected'), 'true');
+  await page.locator('#checkup-confirm-name').fill('Trainee');
+  await page.locator('#btn-checkup-start').click();
+  await page.waitForFunction(() => {
+    const { latestReport, busy } = window.__maiaStudioApp.checkup;
+    return !busy && latestReport.id !== 'legacy-local-no-pgn' && latestReport.screenedMoves > 0;
+  });
+
+  await page.evaluate(() => {
+    const checkup = window.__maiaStudioApp.checkup;
+    const legacy = { ...checkup.latestReport, id: 'legacy-online', playerName: 'Altplayer', sourceLabel: 'chesscom:Altplayer',
+      games: [], fit: null, screenedMoves: undefined, analyzedGameIds: ['live:12345676', 'live:12345677'] };
+    checkup.source = 'chesscom';
+    checkup.usernameInput.value = 'Clarkyan';
+    checkup.latestReport = legacy;
+    checkup.history = [legacy, ...checkup.history];
+    checkup.renderReport(legacy);
+  });
+  assert.equal(await page.locator('#checkup-report-tools').getByRole('button', { name: 'Check for new games' }).count(), 0);
+  await stability.getByRole('button', { name: 'Reanalyze the last 10 games' }).click();
+  await page.waitForFunction(() => {
+    const { latestReport, busy } = window.__maiaStudioApp.checkup;
+    return !busy && latestReport.id !== 'legacy-online' && latestReport.screenedMoves > 0;
+  });
+  assert.deepEqual(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.analyzedGameIds),
+    ['live:12345676', 'live:12345677']);
+  assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
 
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(errors, []);

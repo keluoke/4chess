@@ -1,8 +1,8 @@
-import { t } from './i18n.js?v=20261123-playing-profile';
+import { t } from './i18n.js?v=20261123-checkup-rerun';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { retryVerdict, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
-import { legalVariation } from './position-analysis.js?v=20261123-playing-profile';
-import { buildReplaySteps } from './consequence-player.js?v=20261123-playing-profile';
+import { legalVariation } from './position-analysis.js?v=20261123-checkup-rerun';
+import { buildReplaySteps } from './consequence-player.js?v=20261123-checkup-rerun';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
 
 export class ReviewPractice {

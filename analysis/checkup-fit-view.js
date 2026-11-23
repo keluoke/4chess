@@ -1,8 +1,8 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-playing-profile';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-rerun';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261123-playing-profile';
-import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261123-playing-profile';
-import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands, summarizeCheckupFit } from './checkup-fit.js?v=20261123-playing-profile';
+import { getLang, t } from './i18n.js?v=20261123-checkup-rerun';
+import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261123-checkup-rerun';
+import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-rerun';
 
 export function withCheckupFit(report) {
   if (report.fit?.ranges || !report.games?.some(game => game.fitSamples?.length)) return report;
@@ -195,18 +195,17 @@ export function renderCheckupFit(report, openMove, speedLabel, changeSpeed) {
 export const densityText = density => density.toFixed(1);
 export const lowClockRate = stability => stability?.reviewed >= 5 ? Math.round(stability.errors * 100 / stability.reviewed) + '%' : null;
 
-export function renderCheckupStability(stability, count, openSettings) {
+export function renderCheckupStability(stability, count, rerun) {
   const section = node('section', '', 'checkup-stability-section');
   section.append(node('p', t(count === 1 ? 'checkupStabilityScopeOne' : 'checkupStabilityScope', { count }), 'checkup-profile-label'));
   section.append(node('h3', t('checkupStabilityTitle'), 'checkup-fit-title'));
   if (stability.density == null) {
     const empty = node('div', '', 'checkup-stability-empty');
-    empty.append(node('p', t('checkupStabilityPending'), 'checkup-stability-label'),
-      node('p', t(stability.missingCoverage ? 'checkupStabilityLegacy' : 'checkupStabilityNotScreened'), 'checkup-elo-note'));
-    const settings = node('button', t('checkupSettingsTab'), 'btn-header');
-    settings.type = 'button';
-    settings.onclick = openSettings;
-    empty.append(settings);
+    empty.append(node('p', t(stability.missingCoverage ? 'checkupStabilityLegacy' : 'checkupStabilityNotScreened'), 'checkup-elo-note'));
+    const button = node('button', t(rerun.label), 'btn-header btn-primary');
+    button.type = 'button';
+    button.onclick = rerun.run;
+    empty.append(button);
     section.append(empty);
   } else if (!stability.hits) {
     section.append(node('p', t('checkupStabilityNoTraps'), 'checkup-stability-label'),

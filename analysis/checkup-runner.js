@@ -1,28 +1,28 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-playing-profile';
-import { getLang, t } from './i18n.js?v=20261123-playing-profile';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-rerun';
+import { getLang, t } from './i18n.js?v=20261123-checkup-rerun';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-playing-profile';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-playing-profile';
+} from './checkup-archives.js?v=20261123-checkup-rerun';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-rerun';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-playing-profile';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-playing-profile';
-import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-playing-profile';
-import { checkupFitBands } from './checkup-fit.js?v=20261123-playing-profile';
-import { renderCheckupFit, renderCheckupStability, withCheckupFit } from './checkup-fit-view.js?v=20261123-playing-profile';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-playing-profile';
+} from './checkup-insights.js?v=20261123-checkup-rerun';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-rerun';
+import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-rerun';
+import { checkupFitBands } from './checkup-fit.js?v=20261123-checkup-rerun';
+import { renderCheckupFit, renderCheckupStability, withCheckupFit } from './checkup-fit-view.js?v=20261123-checkup-rerun';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-rerun';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-playing-profile';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-playing-profile';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-playing-profile';
+} from './checkup-archives.js?v=20261123-checkup-rerun';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-rerun';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-rerun';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 
@@ -299,7 +299,7 @@ export class IntuitionCheckup {
         const files = [...(event.target.files || [])];
         this.localFilesInput.value = '';
         if (!files.length) return;
-        await this.readFilesForBatch(files, { autoPrepare: false });
+        await this.readFilesForBatch(files, { autoPrepare: this.view === 'report' });
       };
     }
     if (this.btnFetch) this.btnFetch.onclick = () => this.prepareBatch();
@@ -322,7 +322,10 @@ export class IntuitionCheckup {
     if (this.localPgnInput) this.localPgnInput.value = texts.join('\n\n').trim();
     this.setView('settings');
     this.renderSourceControls();
-    if (autoPrepare) await this.prepareBatch();
+    if (autoPrepare) {
+      await this.prepareBatch();
+      if (this.dialog.open && this.view === 'settings' && this.pendingBatch) this.confirmNameInput?.focus();
+    }
   }
 
   async receiveDroppedPgn(text) {
@@ -1172,8 +1175,10 @@ export class IntuitionCheckup {
     }
 
     if (!this.reportBox) return;
+    const archivedReport = report;
+    report = report ? this.displayedReport(report) : null;
     this.reportBox.replaceChildren();
-    this.renderReportTools(report);
+    this.renderReportTools(archivedReport, report?.stability.density == null);
     if (this.reportEmpty) this.reportEmpty.hidden = this.busy || !!report || !!this.fallbackReport;
     if (!report) {
       this.reportBox.hidden = true;
@@ -1235,8 +1240,6 @@ export class IntuitionCheckup {
     }
     metaRow.append(metaActions);
     summary.append(metaRow);
-    const archivedReport = report;
-    report = this.displayedReport(report);
     if (report.rolling && this.reportScope === 'rolling') {
       const coverage = document.createElement('p');
       coverage.className = 'checkup-elo-note checkup-window-coverage';
@@ -1257,14 +1260,8 @@ export class IntuitionCheckup {
         this.fitSpeedSelection = { reportId: report.id, speed };
         this.renderReport(archivedReport);
         this.reportBox.querySelector('.checkup-fit-speed')?.focus({ preventScroll: true });
-      }), renderCheckupStability(report.stability, report.gameCount, () => {
-        this.source = checkupSourceType(report.sourceLabel);
-        if (this.source !== 'local') this.usernameInput.value = report.playerName;
-        this.pendingBatch = null;
-        this.renderSourceControls();
-        this.setView('settings');
-        this.viewTabs.find(tab => tab.dataset.checkupView === 'settings')?.focus();
-      }));
+      }), renderCheckupStability(report.stability, report.gameCount,
+      report.stability.density == null ? this.reportRerunAction(report) : null));
     summary.append(title, profile);
 
     const phaseLine = document.createElement('p');
@@ -1303,13 +1300,51 @@ export class IntuitionCheckup {
     return { ...display, intuition: { ...intuition, isFitWindow: true }, stability };
   }
 
-  renderReportTools(report) {
+  reportRerunAction(report) {
+    const platform = checkupSourceType(report.sourceLabel);
+    const account = normalizeAccount(platform, report.playerName);
+    const online = checkupReportMatchesAccount(report, account);
+    const target = normalizeAlias(report.playerName);
+    const games = platform === 'local' && target ? (report.games || []).flatMap(({ pgn }) => {
+      if (typeof pgn !== 'string' || !FairPlayGuard.verifyConcludedGame(pgn).ok) return [];
+      const meta = parsePgnMeta(pgn);
+      return [meta.white, meta.black].some(name => normalizeAlias(name) === target) ? [{ pgn, meta }] : [];
+    }) : [];
+    const saved = games.length > 0 && games.length === report.gameCount && games.length <= MAX_LOCAL_GAMES;
+
+    return {
+      label: online ? 'checkupRerunWindow' : saved ? 'checkupRerunSaved' : 'checkupRerunImport',
+      run: () => {
+        if (this.busy || !this.allowed() || !this.dialog.open || this.latestReport?.id !== report.id ||
+            this.app.mistakeBank?.activeProfile?.id !== report.profileId) return;
+        const fitMethod = report.fitMethod || 'standard';
+        if (this.fitMethodSelect) this.fitMethodSelect.value = fitMethod;
+        if (this.screenEloSelect) this.screenEloSelect.value = report.screenEloSource === 'manual' &&
+          CHECKUP_ELOS.includes(report.screenElo) ? String(report.screenElo) : '';
+        if (!online && !saved) {
+          this.localFilesInput?.click();
+          return;
+        }
+        this.pendingBatch = null;
+        this.dialog.scrollTop = 0;
+        if (online) {
+          this.source = account.platform;
+          this.usernameInput.value = account.username;
+          return this.prepareBatch({ onlyNew: false, fitMethod });
+        }
+        this.source = 'local';
+        return this.startRun({ games, sourceLabel: 'local-pgn-batch', profileId: report.profileId, fitMethod }, report.playerName);
+      }
+    };
+  }
+
+  renderReportTools(report, needsRerun) {
     if (!this.reportTools) return;
     this.profileShareController?.abort();
     this.reportTools.replaceChildren();
     const platform = checkupSourceType(report?.sourceLabel);
     const account = report && normalizeAccount(platform, report.playerName);
-    if (account) {
+    if (account && !needsRerun) {
       const update = this.reportButton(t('checkupFindNew'), () => {
         if (this.busy || !this.allowed()) return;
         this.source = account.platform;

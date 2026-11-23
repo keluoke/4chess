@@ -1,6 +1,6 @@
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { getLang, initI18n, t } from './i18n.js?v=20261123-playing-profile';
-import { challengeChoices, decodeChallenge } from './challenge-link.js?v=20261123-playing-profile';
+import { getLang, initI18n, t } from './i18n.js?v=20261123-checkup-rerun';
+import { challengeChoices, decodeChallenge } from './challenge-link.js?v=20261123-checkup-rerun';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const params = new URLSearchParams(location.hash.slice(1));

@@ -1,13 +1,13 @@
 import { ChessBoard } from '../engine/chess-core.js';
-import { t, getLang } from './i18n.js?v=20261123-playing-profile';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261123-playing-profile';
-import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-playing-profile';
-import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-playing-profile';
+import { t, getLang } from './i18n.js?v=20261123-checkup-rerun';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261123-checkup-rerun';
+import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-rerun';
+import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-checkup-rerun';
 import {
   checkupFitBandLabel, checkupFitHeadline, checkupFitScope, checkupFitStatusLabel, densityText, lowClockRate
-} from './checkup-fit-view.js?v=20261123-playing-profile';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-playing-profile';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-playing-profile';
+} from './checkup-fit-view.js?v=20261123-checkup-rerun';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-rerun';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-rerun';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];

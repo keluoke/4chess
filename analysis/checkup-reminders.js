@@ -1,10 +1,10 @@
 import {
   CHECKUP_FAILURE_MS, CHECKUP_REFRESH_MS, checkupProbeDue, fetchCheckupObservation,
   checkupSubscriptionKey, isCheckupReminderToken, markCheckupGames, mergeCheckupObservation, mergeCheckupSnapshot, pendingCheckupGameIds
-} from '../engine/checkup-watch.js?v=20261123-playing-profile';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount } from './study-store.js?v=20261123-playing-profile';
-import { formatRelativeTime } from './checkup-runner.js?v=20261123-playing-profile';
-import { t } from './i18n.js?v=20261123-playing-profile';
+} from '../engine/checkup-watch.js?v=20261123-checkup-rerun';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount } from './study-store.js?v=20261123-checkup-rerun';
+import { formatRelativeTime } from './checkup-runner.js?v=20261123-checkup-rerun';
+import { t } from './i18n.js?v=20261123-checkup-rerun';
 
 const STALE_DIAGNOSIS_MS = 7 * 86400_000;
 

@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { intuitionKind } from '../engine/review-policy.js?v=20261117-review-policy';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { getLang, t } from './i18n.js?v=20261123-playing-profile';
+import { getLang, t } from './i18n.js?v=20261123-checkup-rerun';
 
 export const SHARE_CARD_FORMATS = {
   landscape: { width: 1200, height: 675 },
