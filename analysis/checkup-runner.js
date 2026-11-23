@@ -1,28 +1,28 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-windows';
-import { getLang, t } from './i18n.js?v=20261123-checkup-windows';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-playing-profile';
+import { getLang, t } from './i18n.js?v=20261123-playing-profile';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-windows';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-windows';
+} from './checkup-archives.js?v=20261123-playing-profile';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-playing-profile';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-checkup-windows';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-windows';
-import { CheckupShare, combinedCardData, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-windows';
-import { checkupFitBands } from './checkup-fit.js?v=20261123-checkup-windows';
-import { renderCheckupFit, renderCheckupStability, withCheckupFit } from './checkup-fit-view.js?v=20261123-checkup-windows';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-windows';
+} from './checkup-insights.js?v=20261123-playing-profile';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-playing-profile';
+import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-playing-profile';
+import { checkupFitBands } from './checkup-fit.js?v=20261123-playing-profile';
+import { renderCheckupFit, renderCheckupStability, withCheckupFit } from './checkup-fit-view.js?v=20261123-playing-profile';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-playing-profile';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-windows';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-windows';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-windows';
+} from './checkup-archives.js?v=20261123-playing-profile';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-playing-profile';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-playing-profile';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 
@@ -174,7 +174,7 @@ export class IntuitionCheckup {
   }
 
   setView(view, focus = false) {
-    if (view !== 'report') this.combinedShareController?.abort();
+    if (view !== 'report') this.profileShareController?.abort();
     this.view = view;
     for (const tab of this.viewTabs) {
       const selected = tab.dataset.checkupView === view;
@@ -242,7 +242,7 @@ export class IntuitionCheckup {
       this.dialog.addEventListener('close', () => {
         this.lastRunReportId = null;
         if (this.share.dialog.open) this.share.dialog.close();
-        this.combinedShareController?.abort();
+        this.profileShareController?.abort();
         this.overviewController?.abort();
         this.overviewController = null;
         this.overviewPendingKey = null;
@@ -605,11 +605,17 @@ export class IntuitionCheckup {
     const cached = this.overviewCache.get(key);
     const loading = !!this.overviewController && this.overviewPendingKey === key;
     this.overviewShare.hidden = !cached?.games?.length;
-    this.overviewShare.title = t('checkupShareOverview');
+    this.overviewShare.title = t('checkupShareProfile');
     this.overviewShare.onclick = () => {
       if (this.overviewKey() !== key || !cached?.games?.length) return;
       const { speed } = cached.state;
-      this.share.open(overviewCardData(cached.games, cached.account, speed, speed ? this.speedLabel(speed) : t('checkupAllSpeeds')));
+      const overview = overviewCardData(cached.games, cached.account, speed, speed ? this.speedLabel(speed) : t('checkupAllSpeeds'));
+      const report = this.history.find(item => item.profileId === this.overviewProfileId && !item.partial &&
+        checkupReportMatchesAccount(item, cached.account));
+      this.share.open(checkupCardData({
+        report: report && this.displayedReport(report, { scope: 'rolling', preferredSpeed: speed || undefined }),
+        rolling: Boolean(report?.rolling), topicsFor: checkupTrapTopics, speedLabel: value => this.speedLabel(value), overview
+      }));
     };
     this.overviewAccount.disabled = !key || this.busy;
     this.renderSourceControls();
@@ -1251,7 +1257,14 @@ export class IntuitionCheckup {
         this.fitSpeedSelection = { reportId: report.id, speed };
         this.renderReport(archivedReport);
         this.reportBox.querySelector('.checkup-fit-speed')?.focus({ preventScroll: true });
-      }), renderCheckupStability(report.stability, report.gameCount));
+      }), renderCheckupStability(report.stability, report.gameCount, () => {
+        this.source = checkupSourceType(report.sourceLabel);
+        if (this.source !== 'local') this.usernameInput.value = report.playerName;
+        this.pendingBatch = null;
+        this.renderSourceControls();
+        this.setView('settings');
+        this.viewTabs.find(tab => tab.dataset.checkupView === 'settings')?.focus();
+      }));
     summary.append(title, profile);
 
     const phaseLine = document.createElement('p');
@@ -1275,8 +1288,8 @@ export class IntuitionCheckup {
     this.renderTrends(archivedReport);
   }
 
-  displayedReport(report) {
-    const rolling = this.reportScope === 'rolling' ? report.rolling : null;
+  displayedReport(report, { scope = this.reportScope, preferredSpeed } = {}) {
+    const rolling = scope === 'rolling' ? report.rolling : null;
     const display = rolling ? withCheckupFit({ ...report, ...rolling, fit: rolling.fit,
       highlights: rolling.highlights || [], topTraps: [] }) : withCheckupFit(report);
     const reviews = this.app.mistakeBank?.activeProfile?.id === report.profileId
@@ -1286,13 +1299,13 @@ export class IntuitionCheckup {
     const fitWindow = report.fitWindow || buildCheckupFitWindow(report, this.history, rolling.windowIds || []);
     if (!fitWindow.games.length) return { ...display, stability };
     const preferred = this.fitSpeedSelection?.reportId === report.id ? this.fitSpeedSelection.speed : undefined;
-    const intuition = checkupFitForSpeed(fitWindow.games, report.fitMethod, preferred);
+    const intuition = checkupFitForSpeed(fitWindow.games, report.fitMethod, preferredSpeed ?? preferred);
     return { ...display, intuition: { ...intuition, isFitWindow: true }, stability };
   }
 
   renderReportTools(report) {
     if (!this.reportTools) return;
-    this.combinedShareController?.abort();
+    this.profileShareController?.abort();
     this.reportTools.replaceChildren();
     const platform = checkupSourceType(report?.sourceLabel);
     const account = report && normalizeAccount(platform, report.playerName);
@@ -1307,13 +1320,7 @@ export class IntuitionCheckup {
       this.reportTools.append(update);
     }
     if (report) {
-      this.reportTools.append(this.reportButton(t('checkupShareReport'), () => {
-        const rolling = Boolean(report.rolling && this.reportScope === 'rolling');
-        this.share.open(diagnosticCardData(this.displayedReport(report), rolling, checkupTrapTopics, value => this.speedLabel(value)));
-      }));
-    }
-    if (checkupReportMatchesAccount(report, account)) {
-      const share = this.reportButton(t('checkupShareCombined'), () => this.openCombinedShare(report, account, share));
+      const share = this.reportButton(t('checkupShareProfile'), () => this.openReportShare(report, account, share));
       share.disabled = this.busy;
       this.reportTools.append(share);
     }
@@ -1333,42 +1340,47 @@ export class IntuitionCheckup {
     }
   }
 
-  async openCombinedShare(report, account, button) {
+  async openReportShare(report, account, button) {
     const profileId = this.app.mistakeBank?.activeProfile?.id;
-    if (this.busy || !this.dialog.open || !this.allowed() || !profileId || profileId !== report.profileId) return;
+    if (this.busy || !this.dialog.open || !this.allowed() || profileId !== report.profileId) return;
+    const card = {
+      report: this.displayedReport(report), rolling: Boolean(report.rolling && this.reportScope === 'rolling'),
+      topicsFor: checkupTrapTopics, speedLabel: value => this.speedLabel(value)
+    };
+    if (!checkupReportMatchesAccount(report, account)) {
+      this.share.open(checkupCardData(card));
+      return;
+    }
     const key = JSON.stringify([profileId, accountKey(account)]);
-    const rolling = Boolean(report.rolling && this.reportScope === 'rolling');
-    const display = this.displayedReport(report);
     const controller = new AbortController();
-    this.combinedShareController?.abort();
-    this.combinedShareController = controller;
+    this.profileShareController?.abort();
+    this.profileShareController = controller;
     const current = () => !controller.signal.aborted && !this.busy && button.isConnected &&
       this.dialog.open && this.view === 'report' && this.allowed() && this.app.mistakeBank?.activeProfile?.id === profileId;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
-    button.textContent = t('checkupShareCombinedLoading');
+    button.textContent = t('checkupShareLoading');
     try {
       let games = this.overviewCache.get(key)?.games;
-      if (!games) {
+      if (!games?.length) {
         games = await this.fetchOverviewGames(account, profileId, controller.signal);
         if (!current()) return;
         const speeds = [...new Set(games.map(game => game.meta.timeClass).filter(Boolean))];
         this.saveOverviewCache(key, { games, account, speeds, state: { speed: '', side: 'w', expanded: new Set() } });
       }
       if (!current()) return;
-      if (!games.length) {
-        this.setStatus(t('checkupShareCombinedEmpty'));
-        return;
-      }
-      this.share.open(combinedCardData(display, rolling, checkupTrapTopics, value => this.speedLabel(value), games, account));
+      if (games.length) card.overview = overviewCardData(games, account, '', t('checkupAllSpeeds'));
+      else card.notice = t('checkupShareOverviewUnavailable');
     } catch (error) {
-      if (current() && error?.name !== 'AbortError') this.setStatus(t('checkupFetchFailed', { error: error.message }));
+      if (!current() || error?.name === 'AbortError') return;
+      card.notice = t('checkupShareOverviewUnavailable');
     } finally {
-      if (this.combinedShareController === controller) this.combinedShareController = null;
+      if (this.profileShareController === controller) this.profileShareController = null;
       button.removeAttribute('aria-busy');
       button.disabled = this.busy;
-      button.textContent = t('checkupShareCombined');
+      button.textContent = t('checkupShareProfile');
     }
+    if (current()) this.share.open(checkupCardData(card));
   }
 
   renderHighlights(report) {

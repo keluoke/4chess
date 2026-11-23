@@ -1,8 +1,8 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-playing-profile';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261123-checkup-windows';
-import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261123-checkup-windows';
-import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-windows';
+import { getLang, t } from './i18n.js?v=20261123-playing-profile';
+import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261123-playing-profile';
+import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands, summarizeCheckupFit } from './checkup-fit.js?v=20261123-playing-profile';
 
 export function withCheckupFit(report) {
   if (report.fit?.ranges || !report.games?.some(game => game.fitSamples?.length)) return report;
@@ -41,10 +41,17 @@ const node = (tag, value, className) => {
   return element;
 };
 
+export function checkupFitBandLabel(report) {
+  if (report.fit?.ranges?.length) {
+    return report.fit.ranges.map(({ low, high }) => low === high ? String(low) : `${low}–${high}`).join(' / ');
+  }
+  return report.closestElo == null ? '' : String(report.closestElo);
+}
+
 export function checkupFitHeadline(report) {
   if (report.closestElo == null) return t('checkupNoEloFit');
   if (report.fit?.ranges?.length) {
-    const ranges = report.fit.ranges.map(({ low, high }) => low === high ? String(low) : `${low}–${high}`).join(' / ');
+    const ranges = checkupFitBandLabel(report);
     return t(report.fit.status === 'limited' ? 'checkupFitProvisional' : 'checkupFitMainRange', { ranges });
   }
   if (report.fit && report.fit.logLead < CHECKUP_CLOSE_LOG_GAP) {
@@ -185,18 +192,31 @@ export function renderCheckupFit(report, openMove, speedLabel, changeSpeed) {
   return section;
 }
 
-export const densityText = density => density == null ? '—' : density.toFixed(1);
+export const densityText = density => density.toFixed(1);
 export const lowClockRate = stability => stability?.reviewed >= 5 ? Math.round(stability.errors * 100 / stability.reviewed) + '%' : null;
 
-export function renderCheckupStability(stability, count) {
+export function renderCheckupStability(stability, count, openSettings) {
   const section = node('section', '', 'checkup-stability-section');
   section.append(node('p', t(count === 1 ? 'checkupStabilityScopeOne' : 'checkupStabilityScope', { count }), 'checkup-profile-label'));
   section.append(node('h3', t('checkupStabilityTitle'), 'checkup-fit-title'));
-  section.append(node('strong', densityText(stability.density), 'checkup-stability-value'));
-  section.append(node('p', t('checkupStabilityDensity'), 'checkup-stability-label'));
-  if (stability.screened) {
-    section.append(node('p', t('checkupStabilityCoverage', stability), 'checkup-elo-note'));
+  if (stability.density == null) {
+    const empty = node('div', '', 'checkup-stability-empty');
+    empty.append(node('p', t('checkupStabilityPending'), 'checkup-stability-label'),
+      node('p', t(stability.missingCoverage ? 'checkupStabilityLegacy' : 'checkupStabilityNotScreened'), 'checkup-elo-note'));
+    const settings = node('button', t('checkupSettingsTab'), 'btn-header');
+    settings.type = 'button';
+    settings.onclick = openSettings;
+    empty.append(settings);
+    section.append(empty);
+  } else if (!stability.hits) {
+    section.append(node('p', t('checkupStabilityNoTraps'), 'checkup-stability-label'),
+      node('p', t('checkupStabilityCoverage', stability), 'checkup-elo-note'));
+  } else {
+    section.append(node('strong', densityText(stability.density), 'checkup-stability-value'),
+      node('p', t('checkupStabilityDensity'), 'checkup-stability-label'),
+      node('p', t('checkupStabilityCoverage', stability), 'checkup-elo-note'));
   }
+  if (!stability.observed && stability.density == null) return section;
   const clock = node('div', '', 'checkup-stability-clock');
   const rate = lowClockRate(stability);
   clock.append(node('p', t('checkupClockErrorRate'), 'checkup-stability-label'));

@@ -1,8 +1,8 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-playing-profile';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-checkup-windows';
-import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261123-checkup-windows';
+import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261123-playing-profile';
+import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261123-playing-profile';
 
 export const MAX_LOCAL_GAMES = 15;
 

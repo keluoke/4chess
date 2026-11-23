@@ -8,11 +8,13 @@
   padding: 20px;
   box-sizing: border-box;
 }
+#checkup-share-dialog { width:min(620px,calc(100vw - 28px)); }
 :is(#review-share-dialog,#checkup-share-dialog)::backdrop { background: #142c25aa; }
 .review-share-heading, .review-share-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
 .review-share-heading h2 { margin: 0; font-size: 20px; }
 .review-share-options { display: flex; gap: 8px; margin: 12px 0; }
 :is(#review-share-preview,#checkup-share-canvas) { display: block; box-sizing: border-box; max-width: 100%; max-height: 50dvh; width: auto; height: auto; margin: 0 auto 12px; border-radius: 8px; object-fit: contain; }
+@media (min-height:760px) { #checkup-share-canvas { max-height:57dvh; } }
 :is(#review-share-preview,#checkup-share-canvas)[hidden], .snapshot-page [hidden] { display: none !important; }
 :is(#review-share-status,#checkup-share-status) { min-height: 1.35em; font-size: 14px; }
 :is(#review-share-field,#checkup-share-field) { width: 100%; box-sizing: border-box; margin-top: 12px; }

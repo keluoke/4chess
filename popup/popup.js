@@ -1,7 +1,7 @@
 import { initScanView } from './scan-view.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { CHECKUP_BACKGROUND_KEY, hasNewCheckupGames, isCheckupReminderToken } from '../engine/checkup-watch.js';
-import { initializePreferences, getPreferences, savePreferences, subscribePreferences, engineExperienceHint, readEnginePreferences, studioUrl } from '../engine/engine-preferences.js?v=20261123-checkup-windows';
+import { initializePreferences, getPreferences, savePreferences, subscribePreferences, engineExperienceHint, readEnginePreferences, studioUrl } from '../engine/engine-preferences.js?v=20261123-playing-profile';
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initializePreferences();

@@ -1,7 +1,7 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
-import { checkupReportMatchesAccount, normalizeAccount, normalizeAlias } from './study-store.js?v=20261123-checkup-windows';
-import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-windows';
-export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-windows';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-playing-profile';
+import { checkupReportMatchesAccount, normalizeAccount, normalizeAlias } from './study-store.js?v=20261123-playing-profile';
+import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-playing-profile';
+export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-playing-profile';
 export const FEATURED_TRAPS = 5;
 export const OVERVIEW_GAME_LIMIT = 100;
 const WINDOW_SIZE = 10;
@@ -178,7 +178,10 @@ function clockPressure(game, side, review, timeoutLoss) {
 
 export function checkupReportStability(report, reviews = {}) {
   const hits = Object.values(report.phaseTraps || {}).reduce((sum, count) => sum + count, 0);
-  const screened = report.screenedMoves || 0;
+  const games = report.games || [];
+  const coverage = report.screenedMoves ?? (games.length && games.every(game => Number.isFinite(game.screenedMoves))
+    ? games.reduce((total, game) => total + game.screenedMoves, 0) : null);
+  const screened = Number.isFinite(coverage) && coverage > 0 ? coverage : 0;
   let observed = 0, low = 0, reviewed = 0, errors = 0;
   for (const game of report.games || []) {
     if (!game.clockSample || !Array.isArray(game.clockSample.low)) continue;
@@ -193,7 +196,9 @@ export function checkupReportStability(report, reviews = {}) {
       if (error) errors++;
     }
   }
-  return { hits, screened, density: screened ? hits * 100 / screened : null, observed, low, reviewed, errors };
+  return { hits, screened, density: screened ? hits * 100 / screened : null,
+    missingCoverage: coverage == null || (!screened && games.length > 0 &&
+      games.every(game => !Number.isFinite(game.screenedMoves))), observed, low, reviewed, errors };
 }
 
 export function prepareCheckupOverview(games, username, reviews = {}) {

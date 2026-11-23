@@ -1,20 +1,20 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261123-checkup-windows';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261123-playing-profile';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261123-checkup-windows';
-import { ReviewExplorer } from './review-explorer.js?v=20261123-checkup-windows';
-import { ReviewOverview } from './review-overview.js?v=20261123-checkup-windows';
-import { ReviewCommentary } from './review-commentary.js?v=20261123-checkup-windows';
-import { ConsequencePlayer } from './consequence-player.js?v=20261123-checkup-windows';
-import { MistakeBank } from './mistake-bank.js?v=20261123-checkup-windows';
-import { resolvePerspective } from './study-store.js?v=20261123-checkup-windows';
-import { IntuitionCheckup } from './checkup-runner.js?v=20261123-checkup-windows';
-import { checkupGameContext } from './checkup-archives.js?v=20261123-checkup-windows';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261123-checkup-windows';
-import { CheckupReminders } from './checkup-reminders.js?v=20261123-checkup-windows';
-import { ReviewShare } from './review-share.js?v=20261123-checkup-windows';
-import { ShareCardModal } from './share-card.js?v=20261123-checkup-windows';
+import { IntuitionReview } from './intuition-review.js?v=20261123-playing-profile';
+import { ReviewExplorer } from './review-explorer.js?v=20261123-playing-profile';
+import { ReviewOverview } from './review-overview.js?v=20261123-playing-profile';
+import { ReviewCommentary } from './review-commentary.js?v=20261123-playing-profile';
+import { ConsequencePlayer } from './consequence-player.js?v=20261123-playing-profile';
+import { MistakeBank } from './mistake-bank.js?v=20261123-playing-profile';
+import { resolvePerspective } from './study-store.js?v=20261123-playing-profile';
+import { IntuitionCheckup } from './checkup-runner.js?v=20261123-playing-profile';
+import { checkupGameContext } from './checkup-archives.js?v=20261123-playing-profile';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261123-playing-profile';
+import { CheckupReminders } from './checkup-reminders.js?v=20261123-playing-profile';
+import { ReviewShare } from './review-share.js?v=20261123-playing-profile';
+import { ShareCardModal } from './share-card.js?v=20261123-playing-profile';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261123-checkup-windows';
+import { ReviewPractice } from './review-practice.js?v=20261123-playing-profile';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -22,17 +22,17 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
  */
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261123-checkup-windows';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261123-checkup-windows';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-windows';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261123-playing-profile';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261123-playing-profile';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-playing-profile';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261123-checkup-windows';
+import { EvalChart } from './eval-chart.js?v=20261123-playing-profile';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261123-checkup-windows';
+import { PositionAnalysis } from './position-analysis.js?v=20261123-playing-profile';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261123-checkup-windows';
-import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261123-checkup-windows';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261123-playing-profile';
+import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261123-playing-profile';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
 const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource', 'overview'];

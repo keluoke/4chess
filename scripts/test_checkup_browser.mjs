@@ -183,7 +183,7 @@ try {
   assert.match(await overview.locator('.checkup-result-total').innerText(), /0%[\s\S]*0 W[\s\S]*0 D[\s\S]*1 L/);
   assert.match(await overview.locator('.checkup-result-b').innerText(), /—/);
   assert.equal(await overview.locator('.checkup-result-b .checkup-result-bar > span').count(), 0);
-  await page.getByRole('button', { name: 'Share game overview card' }).click();
+  await page.getByRole('button', { name: 'Share playing profile' }).click();
   await readyToShare();
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
   await share.getByRole('button', { name: 'Copy text summary' }).click();
@@ -228,13 +228,15 @@ try {
   assert.match(await reportBox.locator('.checkup-fit-rating').innerText(), /2180/);
   await page.getByText('Method and raw values', { exact: true }).click();
   assert(await reportBox.locator('.checkup-fit-raw').isVisible());
-  await page.getByRole('button', { name: 'Share player profile card' }).click();
+  await page.getByRole('button', { name: 'Share playing profile' }).click();
   await readyToShare();
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const combinedSummary = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(combinedSummary, /3 games · 67% score.*All speeds/);
-  assert(combinedSummary.includes('Long-term fit · Rapid · 2/30 games · Last 10 games'));
+  assert(combinedSummary.includes('Long-term fit · Rapid · 2/30 games'));
+  assert(combinedSummary.includes('Last 10 games'));
+  assert.equal(await page.locator('#checkup-report-tools').getByRole('button', { name: 'Share playing profile' }).count(), 1);
   assert.doesNotMatch(combinedSummary, /Clarkyan/);
   assert.equal(archiveLookups, overviewFetches, 'Report share reuses the same account’s overview cache');
   if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-combined.png' });
@@ -376,9 +378,15 @@ try {
     newAccounts: ['Altplayer'], movedAccounts: ['Seanyan'], originalAccounts: ['Clarkyan'], originalReports: 3, movedReports: 0,
     splitReports: [splitReport], splitDiagnosed: ['live:12345676', 'live:12345677']
   });
-  const missingOverviewFetches = archiveLookups;
   await alt.getByRole('button', { name: 'View report' }).click();
-  await page.getByRole('button', { name: 'Share player profile card' }).click();
+  failArchive = true;
+  await page.getByRole('button', { name: 'Share playing profile' }).click();
+  await readyToShare();
+  await share.getByText('Recent results couldn’t be loaded. You can still share this diagnosis.').waitFor();
+  await closeShare();
+  failArchive = false;
+  const missingOverviewFetches = archiveLookups;
+  await page.getByRole('button', { name: 'Share playing profile' }).click();
   await readyToShare();
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const splitCardSummary = await page.evaluate(() => navigator.clipboard.readText());
@@ -454,12 +462,44 @@ try {
   await sixthJump.waitFor();
   const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
-  await page.getByRole('button', { name: 'Share diagnosis card' }).click();
+  await page.getByRole('button', { name: 'Share playing profile' }).click();
   await readyToShare();
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
+  const palette = () => preview.evaluate(canvas => {
+    const ctx = canvas.getContext('2d');
+    const expected = ['light', 'dark'].map(name => {
+      const elem = document.querySelector(`#board-container .maia-square.${name}:not(.last-move-from):not(.last-move-to):not(.selected):not(.check)`);
+      return getComputedStyle(elem).backgroundColor.match(/\d+/g).slice(0, 3).join(',');
+    });
+    const counts = [0, 0];
+    const zoom = canvas.width / 960;
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let y = 342; y < 784; y += 7) {
+      for (let x = 85; x < 523; x += 7) {
+        const offset = 4 * (Math.round(y * zoom) * canvas.width + Math.round(x * zoom));
+        const index = expected.indexOf([...pixels.slice(offset, offset + 3)].join(','));
+        if (index >= 0) counts[index]++;
+      }
+    }
+    return { counts, expected };
+  });
+  const lightBoard = await palette();
+  assert(lightBoard.counts.every(count => count > 300), 'Shared board uses the workbench’s computed colors');
+  if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-portrait.png' });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForFunction(() => {
+    const elem = document.querySelector('#board-container .maia-square.light:not(.last-move-from):not(.last-move-to)');
+    return getComputedStyle(elem).backgroundColor === 'rgb(191, 205, 190)';
+  });
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
   await share.getByRole('checkbox', { name: 'Hide player names' }).uncheck();
+  await readyToShare();
+  const darkBoard = await palette();
+  assert.notDeepEqual(darkBoard.expected, lightBoard.expected);
+  assert(darkBoard.counts.every(count => count > 300), 'Shared board follows dark mode');
+  await page.emulateMedia({ colorScheme: 'light' });
+
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   assert.match(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
   await share.getByRole('button', { name: '16:9' }).click();
@@ -468,7 +508,7 @@ try {
   await share.getByRole('button', { name: 'Download PNG' }).click();
   const png = await download;
   const bytes = fs.readFileSync(await png.path());
-  assert.equal(png.suggestedFilename(), 'diverge-report.png');
+  assert.equal(png.suggestedFilename(), 'diverge-profile.png');
   assert.deepEqual([bytes.readUInt32BE(16), bytes.readUInt32BE(20)], [1280, 720]);
   if (process.env.TEST_CHECKUP_CARDS) await png.saveAs(process.env.TEST_CHECKUP_CARDS + '-report.png');
   await share.getByRole('button', { name: 'Copy image' }).click();
@@ -513,7 +553,7 @@ try {
   assert.equal(await puzzle.locator('input').count(), 0);
   assert.equal(await options.count(), 2);
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-windows');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-playing-profile');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   const labelOrder = await options.allTextContents();
@@ -613,6 +653,21 @@ try {
   });
   assert.deepEqual(practiced.queue, replay.traps.map(trap => trap.id));
   assert.equal(practiced.stored, replay.traps.length);
+  await dialog.waitFor({ state: 'hidden' });
+  await page.locator('#btn-intuition-checkup').click();
+  await page.locator('#checkup-tab-report').click();
+  await page.evaluate(() => {
+    const checkup = window.__maiaStudioApp.checkup;
+    const legacy = { ...checkup.latestReport, games: [], fit: null, closestElo: 2200, screenedMoves: undefined };
+    checkup.latestReport = legacy;
+    checkup.renderReport(legacy);
+  });
+  assert.equal(await reportBox.locator('.checkup-stability-value').count(), 0);
+  assert.match(await reportBox.locator('.checkup-stability-section').innerText(), /older report has no count of screened moves/);
+  assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves in these games looked most like Maia 2200');
+  await reportBox.locator('.checkup-stability-section').getByRole('button', { name: 'Checkup settings' }).click();
+  assert.equal(await page.locator('#checkup-tab-settings').getAttribute('aria-selected'), 'true');
+
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(errors, []);
   console.log('PASS checkup workbench: incremental reports, overview cache and openings, profile isolation, reminders, safe cancellation, exact replay, topic practice, scoped share cards, PNG export and anonymous engine-free challenges.');

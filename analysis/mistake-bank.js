@@ -7,8 +7,8 @@ import {
   parseAliases,
   resolvePerspective,
   trapId
-} from './study-store.js?v=20261123-checkup-windows';
-import { t } from './i18n.js?v=20261123-checkup-windows';
+} from './study-store.js?v=20261123-playing-profile';
+import { t } from './i18n.js?v=20261123-playing-profile';
 
 export class MistakeBank {
   filter = 'due';

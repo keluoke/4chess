@@ -15,7 +15,7 @@ import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { challengeChoices, checkupChallengeUrl, decodeChallenge } from '../analysis/challenge-link.js';
 import { ChessBoard } from '../engine/chess-core.js';
 import { overviewSummary, clockErrorTone } from '../analysis/checkup-overview.js';
-import { combinedCardData, diagnosticCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
+import { checkupCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
 import { checkupFitBands, summarizeCheckupFit } from '../analysis/checkup-fit.js';
 import { pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
 import {
@@ -176,7 +176,7 @@ assert(!JSON.stringify(challenge).includes('KidPlayer'), 'A challenge carries no
 assert.equal(checkupChallengeUrl({ ...report.topTraps[0], bestUci: 'a8a1' }, 'en'), null);
 assert.equal(checkupChallengeUrl({ ...report.topTraps[0], divergenceStatus: 'unconfirmed' }, 'en'), null);
 assert.equal(decodeChallenge('a'.repeat(321)), null);
-const card = diagnosticCardData(report, false, trap => trap.topics || []);
+const card = checkupCardData({ report, topicsFor: trap => trap.topics || [] });
 assert.equal(card.position.firstSan, 'c3');
 assert(!summarizeCheckupCard(card, true).includes('KidPlayer'));
 assert.match(summarizeCheckupCard(card, false), /KidPlayer/);
@@ -579,7 +579,7 @@ assert.deepEqual([clockErrorTone(1, 0), clockErrorTone(11, 100), clockErrorTone(
 const statsCard = overviewCardData(mixed, { username: 'KidPlayer' }, 'blitz', 'Blitz');
 assert.equal(statsCard.count, 3);
 assert.equal(statsCard.summary, overviewSummary(summarizeCheckupOverview(mixed, 'blitz')));
-assert(!summarizeCheckupCard(statsCard, true).includes('KidPlayer'));
+assert(!summarizeCheckupCard(checkupCardData({ overview: statsCard }), true).includes('KidPlayer'));
 assert.deepEqual(mixedOverview.total, { count: 7, win: 2, draw: 1, loss: 4, points: 2.5 });
 assert.deepEqual(mixedOverview.colors.w, mixedOverview.total);
 const ranked = rankCheckupOpenings(mixedOverview.openings, 'w');
@@ -657,13 +657,15 @@ assert.deepEqual(checkupReportStability({
   screenedMoves: 25, phaseTraps: { opening: 1, middlegame: 1, endgame: 0 }
 }, {
   'lichess:game-1': { w: { errors: { 3: true, 5: false } }, b: { errors: { 7: true } } }
-}), { hits: 2, screened: 25, density: 8, observed: 4, low: 3, reviewed: 2, errors: 1 });
+}), { hits: 2, screened: 25, density: 8, missingCoverage: false, observed: 4, low: 3, reviewed: 2, errors: 1 });
 
-const combined = combinedCardData({ ...fineFit, gameCount: 4, playerName: 'KidPlayer' }, true,
-  () => [], value => value, mixed, { username: 'KidPlayer' });
+const combined = checkupCardData({
+  report: { ...report, ...fineFit, gameCount: 4, playerName: 'KidPlayer' }, rolling: true,
+  overview: overviewCardData(mixed, { username: 'KidPlayer' }, '', 'All speeds')
+});
 assert.equal(combined.bands.length, 6);
 assert.equal(combined.overview.count, 7);
-assert.equal(combined.position, null);
+assert.equal(combined.position.firstSan, card.position.firstSan);
 assert(!summarizeCheckupCard(combined, true).includes('KidPlayer'));
 assert(summarizeCheckupCard(combined, false).includes('KidPlayer'));
 

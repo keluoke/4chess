@@ -1,13 +1,13 @@
 import { ChessBoard } from '../engine/chess-core.js';
-import { t, getLang } from './i18n.js?v=20261123-checkup-windows';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-checkup-windows';
-import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-windows';
-import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-checkup-windows';
+import { t, getLang } from './i18n.js?v=20261123-playing-profile';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261123-playing-profile';
+import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-playing-profile';
+import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-playing-profile';
 import {
-  checkupFitHeadline, checkupFitScope, checkupFitStatusLabel, densityText, formatPgnRatings, lowClockRate
-} from './checkup-fit-view.js?v=20261123-checkup-windows';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-windows';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-windows';
+  checkupFitBandLabel, checkupFitHeadline, checkupFitScope, checkupFitStatusLabel, densityText, lowClockRate
+} from './checkup-fit-view.js?v=20261123-playing-profile';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-playing-profile';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-playing-profile';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];
@@ -31,12 +31,11 @@ function overviewOpenings(openings) {
 export function overviewCardData(games, account, speed, speedLabel) {
   const result = summarizeCheckupOverview(games, speed);
   const { count, total, colors, pressure, openings } = result;
-  return { kind: 'overview', title: t('checkupShareOverview'), label: t('checkupOverviewCardLabel'), name: account.username,
-    scope: speedLabel, summary: overviewSummary(result), count, total, colors, pressure,
+  return { name: account.username, scope: speedLabel, summary: overviewSummary(result), count, total, colors, pressure,
     openings: overviewOpenings(openings) };
 }
 
-export function diagnosticCardData(report, rolling, topicsFor, speedLabel = value => value) {
+function reportCardData(report, rolling, topicsFor, speedLabel) {
   const games = report.gameCount === 1 ? t('checkupShareOneGame') : t('checkupOverviewGameCount', { count: report.gameCount });
   const traps = report.traps || report.topTraps || [];
   const phases = Object.entries(report.phaseTraps || {}).sort((a, b) => b[1] - a[1]);
@@ -65,9 +64,10 @@ export function diagnosticCardData(report, rolling, topicsFor, speedLabel = valu
   const stability = report.stability;
   const rate = lowClockRate(stability);
   const pressure = rate ? t('checkupStabilityClockShare', { ...stability, rate }) : '';
-  const density = stability?.density != null ? t('checkupStabilityShare', { value: densityText(stability.density) }) : '';
+  const density = stability?.density == null ? ''
+    : stability.hits ? t('checkupStabilityShare', { value: densityText(stability.density) }) : t('checkupStabilityNoTraps');
   return {
-    kind: 'report', title: t('checkupShareReport'), label: t('checkupDiagnosticCardLabel'), name: report.playerName,
+    name: report.playerName,
     scope: rolling ? t('checkupWindowCoverage', { count: report.gameCount }) : t('checkupShareBatchScope', { games }),
     fitScope: intuition.isFitWindow ? checkupFitScope(intuition, speedLabel) : '',
     sample: intuition.eloSampleCount, elo: intuition.closestElo, position, theme,
@@ -76,16 +76,18 @@ export function diagnosticCardData(report, rolling, topicsFor, speedLabel = valu
     fit: intuition.fit?.weights || intuition.eloFit || {}, relativeFit: Boolean(intuition.fit),
     headline: checkupFitHeadline(intuition),
     fitStatus: checkupFitStatusLabel(intuition.fit),
-    ratings: formatPgnRatings(intuition.games, speedLabel),
+    bandLabel: checkupFitBandLabel(intuition),
     density, pressure,
     summary: t(hits === 1 ? 'checkupShareTrapOne' : 'checkupShareTrapSummary', { games, hits })
   };
 }
 
-export function combinedCardData(report, rolling, topicsFor, speedLabel, games, account) {
-  const diagnostic = diagnosticCardData(report, rolling, topicsFor, speedLabel);
-  return { ...diagnostic, kind: 'combined', title: t('checkupShareCombined'), label: t('checkupShareCombinedLabel'),
-    position: null, overview: overviewCardData(games, account, '', t('checkupAllSpeeds')) };
+export function checkupCardData({ report, rolling = false, topicsFor = () => [], speedLabel = value => value,
+  overview, notice = '' } = {}) {
+  return {
+    ...(report ? reportCardData(report, rolling, topicsFor, speedLabel) : { name: overview?.name }),
+    kind: 'profile', title: t('checkupShareProfileTitle'), overview, notice
+  };
 }
 
 function wdl(record) {
@@ -104,28 +106,38 @@ function color(side) {
 }
 
 export function summarizeCheckupCard(data, anonymous) {
+  const overview = data.overview;
   const name = !anonymous && data.name ? ' · ' + data.name : '';
-  if (data.kind === 'combined') {
-    const overview = data.overview;
-    return [[data.headline + name, data.fitScope, data.scope, data.density].filter(Boolean).join(' · '),
-      [scoreLine(overview), overview.scope, wdl(overview.total), overview.summary].filter(Boolean).join(' · '),
-      CHECKUP_URL].join('\n');
-  }
-  if (data.kind === 'report') {
-    return [[data.headline + name, data.fitScope, data.fitStatus].filter(Boolean).join(' · '),
-      [data.scope, data.density || data.summary, data.pressure || data.theme].filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
-  }
-  return [scoreLine(data) + name + ' · ' + wdl(data.total),
-    data.summary || pressureLines(data.pressure).join(' · '), CHECKUP_URL].join('\n');
+  const first = data.headline ? [data.headline + name, data.fitScope, data.fitStatus].filter(Boolean).join(' · ')
+    : scoreLine(overview) + name;
+  const stats = overview && [data.headline && scoreLine(overview), overview.scope, wdl(overview.total), overview.summary]
+    .filter(Boolean).join(' · ');
+  const second = [data.scope, data.density || data.summary, data.pressure || (!overview && data.theme), stats]
+    .filter(Boolean).join(' · ');
+  return [first, second, CHECKUP_URL].join('\n');
 }
 
-function text(ctx, value, x, y, size, color = '#17362d', weight = 600, max = 860) {
-  ctx.fillStyle = color;
-  ctx.font = `${weight} ${size}px system-ui, sans-serif`;
-  ctx.fillText(String(value), x, y, max);
+const ink = '#192e23', muted = '#4d6355', green = '#146b49', line = '#d6e2d8', paper = '#eef3ed';
+const font = 'Inter, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
+
+function type(ctx, value, x, y, width, { size = 22, weight = 500, tone = ink, minimum = size } = {}) {
+  if (!value) return;
+  let label = String(value);
+  ctx.fillStyle = tone;
+  ctx.font = `${weight} ${size}px ${font}`;
+  while (ctx.measureText(label).width > width && size > minimum) {
+    size -= 1;
+    ctx.font = `${weight} ${size}px ${font}`;
+  }
+  if (ctx.measureText(label).width > width) {
+    const chars = Array.from(label);
+    while (chars.length && ctx.measureText(chars.join('') + '…').width > width) chars.pop();
+    label = chars.join('').trimEnd() + '…';
+  }
+  ctx.fillText(label, x, y);
 }
 
-function panel(ctx, x, y, w, h, fill = '#fbfcf7') {
+function panel(ctx, x, y, w, h, fill = '#ffffff') {
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, 18);
@@ -133,174 +145,207 @@ function panel(ctx, x, y, w, h, fill = '#fbfcf7') {
 }
 
 function fillBar(ctx, x, y, w, height, segments) {
-  ctx.fillStyle = '#dce7df';
-  ctx.fillRect(x, y, w, height);
+  panel(ctx, x, y, w, height, '#dae5dc');
+  ctx.save();
+  ctx.clip();
   for (const [fraction, tone] of segments) {
     if (fraction <= 0) continue;
     ctx.fillStyle = tone;
     ctx.fillRect(x, y, w * fraction, height);
     x += w * fraction;
   }
+  ctx.restore();
 }
 
-function drawFit(ctx, data, x, y, w, h) {
-  panel(ctx, x, y, w, h);
-  text(ctx, t(data.relativeFit ? 'checkupFitWeights' : 'checkupShareLegacyFit'), x + 19, y + 14, 22, '#17362d', 600, w - 38);
-  if (data.elo == null) {
-    text(ctx, t('checkupNoEloFit'), x + 19, y + 61, 18, '#52675f', 500, w - 38);
+function drawFit(ctx, data, x, y, width, portrait, full = false) {
+  const height = full ? 275 : portrait ? 218 : 178;
+  panel(ctx, x, y, width, height);
+  type(ctx, t(data.relativeFit ? 'checkupFitWeights' : 'checkupShareLegacyFit'), x + 19, y + 15, width - 38,
+    { size: portrait ? 22 : 18, weight: 650 });
+  const max = data.relativeFit ? 1 : Math.max(.001, ...data.bands.map(elo => data.fit[elo] || 0));
+  const step = (height - 53) / data.bands.length;
+  data.bands.forEach((elo, index) => {
+    const top = y + 48 + index * step;
+    const value = (data.relativeFit ? data.fit[index] : data.fit[elo]) || 0;
+    type(ctx, elo, x + 20, top, 58, { size: 16, weight: 620 });
+    fillBar(ctx, x + 74, top + 6, width - 163, 7, [[value / max, data.clearLead && elo === data.elo ? green : '#798e80']]);
+    ctx.textAlign = 'right';
+    type(ctx, pct(value), x + width - 20, top, 65, { size: 16, weight: 620 });
+    ctx.textAlign = 'left';
+  });
+  return height;
+}
+
+function drawPosition(ctx, item, pieces, theme, x, y, width, size, portrait, wide) {
+  const padding = portrait ? 20 : 13;
+  const board = parseFenBoard(item.fen);
+  const label = t(item.trap ? 'checkupSharePrompt' : 'checkupHighlights');
+  const colors = [theme?.stockfish || '#2e6086', (item.trap ? theme?.played : theme?.maia) || '#966033'];
+  const arrows = [item.first, item.second].flatMap((uci, index) => {
+    const squares = parseUciSquares(uci);
+    return squares ? [{ ...squares, color: colors[index] }] : [];
+  });
+  panel(ctx, x, y, width, size + (wide ? 48 : portrait ? 126 : 94));
+  const top = y + (wide ? 24 : portrait ? 60 : 44);
+  const left = wide ? x + 24 : x + (width - size) / 2;
+  drawShareBoard(ctx, { board, orientation: board.turn === 'b' ? 'black' : 'white', arrows, theme }, pieces, left, top, size);
+  const names = ['Stockfish', item.trap ? t('snapshotPlayed') : 'Maia'];
+  const moves = [item.firstSan, item.secondSan];
+  if (wide) {
+    const right = left + size + 36;
+    const available = x + width - right - 24;
+    type(ctx, label, right, y + 83, available, { size: 27, weight: 680, minimum: 20 });
+    moves.forEach((move, i) => {
+      if (!move) return;
+      const row = y + 154 + i * 119;
+      panel(ctx, right, row + 6, 10, 10, colors[i]);
+      type(ctx, names[i], right + 19, row, available - 19, { size: 20, weight: 620, tone: muted });
+      type(ctx, move, right, row + 31, available, { size: 43, weight: 680 });
+    });
     return;
   }
-  const max = data.relativeFit ? 1 : Math.max(.001, ...data.bands.map(elo => data.fit[elo] || 0));
-  const step = (h - 52) / data.bands.length;
-  data.bands.forEach((elo, index) => {
-    const top = y + 49 + index * step;
-    const value = (data.relativeFit ? data.fit[index] : data.fit[elo]) || 0;
-    text(ctx, elo, x + 20, top, data.bands.length > 4 ? 16 : 19);
-    fillBar(ctx, x + 78, top + 7, w - 168, 9, [[value / max, data.clearLead && elo === data.elo ? '#167b58' : '#738c7f']]);
-    text(ctx, pct(value), x + w - 79, top, data.bands.length > 4 ? 16 : 18);
+  type(ctx, label, x + padding, y + padding, width - 2 * padding, { size: portrait ? 23 : 18, weight: 650 });
+  moves.forEach((move, i) => {
+    if (!move) return;
+    const row = top + size + 12 + i * (portrait ? 24 : 18);
+    panel(ctx, x + padding, row + 4, 8, 8, colors[i]);
+    type(ctx, names[i] + '  ' + move, x + padding + 16, row, width - 2 * padding - 16,
+      { size: portrait ? 17 : 14, weight: 600 });
   });
 }
 
-function drawPosition(ctx, item, pieceImages, x, y, size) {
-  const board = parseFenBoard(item.fen);
-  const arrows = [item.first, item.second].map((uci, index) => {
-    const squares = parseUciSquares(uci);
-    return squares && { ...squares, color: index ? '#dd9b26' : '#285fb9' };
-  }).filter(Boolean);
-  drawShareBoard(ctx, { board, orientation: board.turn === 'b' ? 'black' : 'white', arrows }, pieceImages, x, y, size);
+function drawStability(ctx, data, x, y, width, portrait) {
+  const p = portrait ? 20 : 16;
+  const column = width - 2 * p;
+  const size = portrait ? 22 : 16;
+  panel(ctx, x, y, width, portrait ? 160 : 117);
+  type(ctx, t('checkupStabilityTitle'), x + p, y + 13, column, { size, weight: 680 });
+  type(ctx, data.density || data.summary, x + p, y + (portrait ? 51 : 42), column,
+    { size: portrait ? 23 : 18, weight: 650, minimum: portrait ? 18 : 14, tone: green });
+  type(ctx, data.scope, x + p, y + (portrait ? 89 : 67), column, { size: portrait ? 17 : 14, tone: muted });
+  type(ctx, data.pressure || data.theme, x + p, y + (portrait ? 117 : 88), column,
+    { size: portrait ? 17 : 14, tone: muted });
 }
 
-function drawDiagnostic(ctx, data, portrait, images) {
-  const boxWidth = portrait ? 856 : 522;
-  const y = portrait ? 128 : 109;
-  text(ctx, data.headline, 52, y, portrait ? 65 : 49, '#edf4e9', 740, boxWidth);
-  text(ctx, [data.fitScope || data.scope, data.fitStatus, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
-    54, y + (portrait ? 83 : 65), 20, '#d4e5d7', 500, boxWidth);
-  if (data.ratings.length) {
-    text(ctx, t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') }),
-      54, y + (portrait ? 116 : 95), 19, '#d4e5d7', 550, boxWidth);
-  }
-  text(ctx, [data.fitScope && data.scope, data.density || data.summary].filter(Boolean).join(' · '),
-    54, y + (portrait ? 154 : 125), 25, '#edf4e9', 650, boxWidth);
-  if (data.pressure || data.theme) text(ctx, data.pressure || data.theme, 54, y + (portrait ? 188 : 161), 20, '#f0c281', 540, boxWidth);
-  drawFit(ctx, data, 52, portrait ? 365 : 315, boxWidth, portrait ? 230 : 203);
-  if (data.position) {
-    const at = portrait ? { x: 62, y: 649, size: 386, tx: 484, ty: 742, w: 420 }
-      : { x: 653, y: 91, size: 345, tx: 650, ty: 454, w: 325 };
-    if (portrait) panel(ctx, 52, 619, 856, 456);
-    drawPosition(ctx, data.position, images, at.x, at.y, at.size);
-    text(ctx, t(data.position.trap ? 'checkupSharePrompt' : 'checkupHighlights'), at.tx, at.ty, 29,
-      portrait ? '#17362d' : '#edf4e9', 700, at.w);
-    const legend = (label, move, y, dark, light) => {
-      if (move) text(ctx, label + ' · ' + move, at.tx, y, 19, portrait ? dark : light, 600, at.w);
-    };
-    legend('Stockfish', data.position.firstSan, at.ty + 46, '#285fb9', '#a9c5ff');
-    legend(data.position.trap ? t('snapshotPlayed') : 'Maia', data.position.secondSan, at.ty + 75, '#865015', '#f0c281');
-  } else if (portrait) {
-    panel(ctx, 52, 619, 856, 160);
-    text(ctx, data.elo == null ? t('checkupNoEloFit') : t('checkupShareNoPosition'), 74, 666, 27);
-  }
-}
-
-function drawOverview(ctx, data, portrait) {
-  const width = portrait ? 856 : 518;
-  const y = portrait ? 128 : 109;
-  text(ctx, scoreLine(data),
-    52, y, portrait ? 63 : 47, '#edf4e9', 740, width);
-  text(ctx, data.scope, 54, y + (portrait ? 96 : 67), 21, '#d4e5d7', 500, width);
-  text(ctx, data.summary || pressureLines(data.pressure)[0], 54, y + (portrait ? 132 : 102), 25, '#edf4e9', 650, width);
-  fillBar(ctx, 54, portrait ? 325 : 255, width - 4, 13, outcomes.map((key, i) => [data.count ? data.total[key] / data.count : 0, tones[i]]));
-  text(ctx, wdl(data.total), 54, portrait ? 351 : 282, 21, '#d4e5d7', 500, width);
-  const sidesY = portrait ? 423 : 333;
-  const sideW = (width - 12) / 2;
+function drawOverview(ctx, data, x, y, width, landscape, standalone) {
+  const small = landscape ? 16 : 19;
+  const extra = standalone ? 36 : 0;
+  const p = 20;
+  panel(ctx, x, y, width, landscape ? 306 : 199 + extra + (standalone ? 35 : 0));
+  const column = width - 2 * p;
+  const split = landscape ? 0 : Math.min(360, width * .42);
+  type(ctx, t('checkupOverviewRecord'), x + p, y + 18, column, { size: small + 2, weight: 650, tone: green });
+  type(ctx, scoreLine(data), x + p, y + 46, column - split, { size: standalone ? 47 : landscape ? 29 : 35, minimum: 23, weight: 700 });
+  type(ctx, data.scope, x + p, y + 89 + extra, column - split, { size: small, tone: muted });
+  fillBar(ctx, x + p, y + 121 + extra, column - split, 9,
+    outcomes.map((key, i) => [data.count ? data.total[key] / data.count : 0, tones[i]]));
+  type(ctx, wdl(data.total), x + p, y + 141 + extra, column - split, { size: small, tone: muted });
+  const between = x + width - p - split;
   ['w', 'b'].forEach((side, index) => {
-    const x = 52 + index * (sideW + 12);
-    const record = data.colors[side];
-    panel(ctx, x, sidesY, sideW, portrait ? 161 : 151);
-    text(ctx, color(side), x + 17, sidesY + 13, 22);
-    text(ctx, score(record), x + 17, sidesY + 42, 47);
-    text(ctx, wdl(record), x + 17, sidesY + 103, 18, '#52675f', 560, sideW - 34);
+    const start = landscape ? x + p + index * column / 2 : between + index * split / 2 + 20;
+    const top = y + (landscape ? 172 : 45 + extra / 2);
+    type(ctx, color(side), start, top, landscape ? column / 2 : split / 2 - 14, { size: small, tone: muted });
+    type(ctx, data.colors[side]?.count ? score(data.colors[side]) : t('checkupShareNoGamesSide'),
+      start, top + 22, landscape ? column / 2 : split / 2 - 14,
+      { size: 27, weight: 690, minimum: 17 });
   });
-  const x = portrait ? 52 : 602;
-  const sectionY = portrait ? 627 : 91;
-  const w = portrait ? 856 : 465;
-  panel(ctx, x, sectionY, w, portrait ? 215 : 202);
-  text(ctx, t('checkupOverviewOpenings'), x + 18, sectionY + 16, 23);
-  data.openings.forEach((opening, index) => {
-    if (!opening) return;
-    const row = sectionY + 55 + index * 62;
-    text(ctx, [t(index ? 'checkupOpeningWorst' : 'checkupOpeningBest'), color(opening.side)].join(' · '),
-      x + 18, row, 17, index ? '#aa4c4a' : '#146b49');
-    text(ctx, [opening.eco, opening.name, score(opening)].filter(Boolean).join(' · '), x + 18, row + 23, 20, '#17362d', 650, w - 36);
-  });
-  if (!data.openings[0]) text(ctx, t('checkupOpeningFew'), x + 18, sectionY + 60, 20, '#52675f', 500, w - 36);
-  const clockY = sectionY + (portrait ? 243 : 217);
-  panel(ctx, x, clockY, w, 127);
-  text(ctx, t('checkupOverviewPressure'), x + 18, clockY + 15, 23);
-  pressureLines(data.pressure).forEach((line, index) => text(ctx, line, x + 18, clockY + 51 + 30 * index, 19, '#52675f', 550, w - 36));
+  const featured = data.openings[0];
+  const left = landscape ? x + p : between + 20;
+  const available = landscape ? column : split - 20;
+  if (featured) {
+    type(ctx, [t('checkupOpeningBest'), featured.eco, featured.name].filter(Boolean).join(' · '),
+      left, y + (landscape ? 237 : 111 + extra), available, { size: small - 1 });
+  }
+  const pressure = data.pressure;
+  if (pressure.observed || pressure.timeoutLosses) {
+    const parts = [pressure.timeoutLosses && t('checkupShareTimeLoss', { count: pressure.timeoutLosses }),
+      pressure.observed && t('checkupShareClockShare', { value: checkupPercent(pressure.low, pressure.observed) })];
+    type(ctx, parts.filter(Boolean).join(' · '), left, y + (landscape ? 265 : 146 + extra), available,
+      { size: small - 1, tone: muted });
+  }
 }
 
-function drawCombined(ctx, data, portrait) {
-  const w = portrait ? 856 : 490;
-  const overview = data.overview;
-  text(ctx, data.headline, 52, 120, portrait ? 66 : 49, '#edf4e9', 740, w);
-  text(ctx, [data.fitScope || data.scope, data.fitStatus, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
-    52, portrait ? 204 : 186, 21, '#d4e5d7', 550, w);
-  if (data.density) text(ctx, [data.scope, data.density].join(' · '), 52, portrait ? 247 : 218, 22, '#f0c281', 650, w);
-  if (data.ratings.length) text(ctx, t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') }),
-    52, portrait ? 285 : 249, 18, '#d4e5d7', 550, w);
-  drawFit(ctx, data, 52, portrait ? 328 : 283, w, portrait ? 235 : 205);
-
-  const x = portrait ? 52 : 578;
-  const y = portrait ? 611 : 125;
-  panel(ctx, x, y, w, portrait ? 378 : 364);
-  text(ctx, scoreLine(overview), x + 22, y + 20, portrait ? 40 : 30, '#17362d', 740, w - 44);
-  text(ctx, overview.scope, x + 23, y + 73, 19, '#52675f', 550, w - 46);
-  fillBar(ctx, x + 23, y + 114, w - 46, 13, outcomes.map((key, i) => [overview.count ? overview.total[key] / overview.count : 0, tones[i]]));
-  text(ctx, wdl(overview.total), x + 23, y + 137, 20, '#52675f', 550, w - 46);
-  ['w', 'b'].forEach((side, index) => {
-    const left = x + 23 + index * (w - 44) / 2;
-    text(ctx, color(side), left, y + 183, 18, '#52675f');
-    text(ctx, score(overview.colors[side]), left, y + 208, 33);
-  });
-  const featured = overview.openings[0];
-  if (featured) text(ctx, [t('checkupOpeningBest'), color(featured.side), featured.eco, featured.name, score(featured)]
-    .filter(Boolean).join(' · '), x + 23, y + 269, 19, '#146b49', 650, w - 46);
-  const clock = pressureLines(overview.pressure);
-  text(ctx, clock.join(' · '), x + 23, y + 309, 18, '#52675f', 550, w - 46);
+function drawProfileHeader(ctx, data, portrait, width, pad, anonymous) {
+  const right = width - pad;
+  const glow = ctx.createLinearGradient(0, 0, width, portrait ? 280 : 195);
+  glow.addColorStop(0, '#dce9df');
+  glow.addColorStop(1, paper);
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, portrait ? 290 : 199);
+  type(ctx, 'Diverge', pad, portrait ? 47 : 29, 140, { size: portrait ? 27 : 24, weight: 760, tone: green });
+  ctx.textAlign = 'right';
+  type(ctx, !anonymous && data.name ? data.name : t('checkupShareProfileTitle'), right, portrait ? 50 : 32, width * .47,
+    { size: portrait ? 23 : 19, weight: 620, tone: muted });
+  ctx.textAlign = 'left';
+  ctx.fillStyle = line;
+  ctx.fillRect(pad, portrait ? 90 : 66, width - 2 * pad, 1);
+  const label = data.headline ? t('checkupShareMoveProfile') : t('checkupOverviewRecord');
+  type(ctx, label, pad, portrait ? 121 : 83, 380, { size: portrait ? 26 : 21, weight: 630, tone: muted });
+  const title = data.headline ? data.bandLabel || t('checkupShareFitPending') : score(data.overview.total);
+  type(ctx, title, pad, portrait ? 150 : 105, width - 2 * pad,
+    { size: portrait ? 83 : 59, weight: 710, minimum: portrait ? 50 : 38 });
+  const meta = data.headline ? [data.fitScope || data.scope, data.fitStatus,
+    data.sample && t('checkupShareFitCount', { count: data.sample })] : [data.overview.scope, scoreLine(data.overview)];
+  type(ctx, meta.filter(Boolean).join(' · '), pad, portrait ? 245 : 170, width - 2 * pad,
+    { size: portrait ? 22 : 18, weight: 540, tone: muted });
 }
 
 async function drawCanvas(canvas, data, portrait, anonymous, current) {
-  const images = data.position ? await prepareShareBoards() : null;
+  const pieces = data.position ? await prepareShareBoards() : null;
   if (!current()) return false;
+  const theme = pieces && readStudioShareBoard(canvas.ownerDocument.getElementById('board-container'));
   const width = portrait ? 960 : 1120, height = portrait ? 1280 : 630;
+  const pad = portrait ? 52 : 42;
+  const content = width - 2 * pad;
   canvas.width = portrait ? 1080 : 1280;
   canvas.height = portrait ? 1440 : 720;
   const ctx = canvas.getContext('2d');
   if (!ctx) return false;
   ctx.scale(canvas.width / width, canvas.height / height);
   ctx.textBaseline = 'top';
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, '#162f2a');
-  bg.addColorStop(1, '#254a40');
-  ctx.fillStyle = bg;
+  ctx.fillStyle = paper;
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = '#dfb371';
-  ctx.fillRect(52, 43, 38, 4);
-  text(ctx, 'Diverge  /  ' + data.label, 52, 59, 24, '#dceadd', 650, width * .52);
-  if (!anonymous && data.name) {
-    ctx.textAlign = 'right';
-    text(ctx, data.name, width - 52, 59, 23, '#dceadd', 550, width * .38);
-    ctx.textAlign = 'left';
+  drawProfileHeader(ctx, data, portrait, width, pad, anonymous);
+
+  const y = portrait ? 308 : 209, gap = portrait ? 22 : 16;
+  const showPosition = Boolean(data.position && pieces);
+  const side = portrait ? (content - gap) / 2 : 282;
+  const detailX = showPosition ? pad + side + gap : pad;
+  const full = portrait && !showPosition;
+  const detailWidth = portrait ? (full ? content : side)
+    : (data.overview && data.headline ? 336 : width - pad - detailX);
+  const wideBoard = portrait && showPosition && !data.overview;
+  if (wideBoard) {
+    drawPosition(ctx, data.position, pieces, theme, pad, y, content, 462, true, true);
+    if (data.elo != null) drawFit(ctx, data, pad, y + 510 + gap, side, true);
+    drawStability(ctx, data, data.elo != null ? pad + side + gap : pad, y + 510 + gap,
+      data.elo != null ? side : content, true);
+  } else if (showPosition) {
+    drawPosition(ctx, data.position, pieces, theme, pad, y, side, side - (portrait ? 44 : 66), portrait, false);
   }
-  if (data.kind === 'report') drawDiagnostic(ctx, data, portrait, images);
-  else if (data.kind === 'combined') drawCombined(ctx, data, portrait);
-  else drawOverview(ctx, data, portrait);
-  const qrSize = portrait ? 132 : 85;
-  const footer = height - qrSize - 25;
-  drawShareQr(ctx, shareQr(CHECKUP_URL + '&lang=' + getLang()), width - 52, footer, qrSize);
-  text(ctx, t('challengeSelfTest'), 52, footer + (portrait ? 31 : 29), portrait ? 23 : 20, '#edf4e9', 650, width - qrSize - 123);
-  text(ctx, '4chess.cc', 52, footer + (portrait ? 64 : 55), 15, '#c7d9cb', 500);
+  let contentBottom = y;
+  if (data.headline && !wideBoard) {
+    const fitHeight = data.elo != null ? drawFit(ctx, data, detailX, y, detailWidth, portrait, full) : 0;
+    const stabilityY = fitHeight ? y + fitHeight + gap : y;
+    drawStability(ctx, data, detailX, stabilityY, detailWidth, portrait);
+    contentBottom = stabilityY + (portrait ? 160 : 117);
+  }
+  if (data.overview) {
+    const overviewX = portrait || !data.headline ? pad : detailX + detailWidth + gap;
+    const overviewY = portrait ? (showPosition ? 850 : data.headline ? contentBottom + gap : 360) : y;
+    drawOverview(ctx, data.overview, overviewX, overviewY, width - pad - overviewX,
+      !portrait && !!data.headline, !data.headline);
+  }
+
+  const qrSize = portrait ? 106 : 86;
+  const qrY = height - qrSize - (portrait ? 34 : 8);
+  ctx.fillStyle = line;
+  ctx.fillRect(pad, qrY - 14, content, 1);
+  drawShareQr(ctx, shareQr(CHECKUP_URL + '&lang=' + getLang()), width - pad - qrSize, qrY, qrSize);
+  type(ctx, t('challengeSelfTest'), pad, qrY + (portrait ? 22 : 12), content - qrSize - 16,
+    { size: portrait ? 23 : 18, weight: 650 });
+  type(ctx, '4chess.cc', pad, qrY + (portrait ? 59 : 40), content - qrSize - 16,
+    { size: portrait ? 19 : 15, tone: muted });
   return true;
 }
 
@@ -371,7 +416,7 @@ export class CheckupShare {
       this.blob = blob;
       this.canvas.hidden = false;
       this.png.disabled = this.image.disabled = false;
-      this.status.textContent = '';
+      this.status.textContent = data.notice || '';
     } catch {
       if (current()) this.status.textContent = t('reviewShareError');
     }

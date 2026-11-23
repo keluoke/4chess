@@ -641,6 +641,8 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-profile-label,.checkup-stability-label { margin:0 0 6px;font-size:12px;font-weight:620; }
 .checkup-profile-label { color:var(--text-muted); }
 .checkup-stability-value { display:block;font-size:clamp(22px,4vw,32px);font-variant-numeric:tabular-nums;line-height:1.2;margin:4px 0; }
+.checkup-stability-empty { margin-top:10px; }
+.checkup-stability-empty .btn-header { margin-top:6px;height:32px;box-shadow:none;border-color:var(--dg-line); }
 .checkup-stability-clock { margin-top:12px;padding-top:12px;border-top:1px solid var(--dg-line); }
 .checkup-fit-context { display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-bottom:6px; }
 .checkup-fit-context .checkup-fit-title,.checkup-fit-context .checkup-profile-label { margin:0; }
