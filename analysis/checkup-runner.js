@@ -1,6 +1,7 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v129';
+import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
 import { accountKey, buildTrapRecord, checkupReportMatchesAccount, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-v127';
 import { t } from './i18n.js?v=20261122-v129';
@@ -9,6 +10,8 @@ import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomChec
 export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
 const MAX_LOCAL_GAMES = 15;
 const MAX_ELO_SAMPLES = 24;
+const FEATURED_TRAPS = 5;
+const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 const VERIFY_ROOT_MIN_DEPTH = 14;
 const VERIFY_AFTER_MIN_DEPTH = 13;
 const LOG_PROB_FLOOR = 1e-4;
@@ -223,6 +226,61 @@ function* checkupDecisions(positions, userSide) {
   }
 }
 
+// Allocate one sample per game per pass, then spread each game's samples along its timeline.
+function planCheckupSamples(games) {
+  const quotas = games.map(() => 0);
+  let remaining = Math.min(MAX_ELO_SAMPLES, games.reduce((sum, game) => sum + game.decisions.length, 0));
+  while (remaining) {
+    games.forEach(({ decisions }, index) => {
+      if (remaining && quotas[index] < decisions.length) {
+        quotas[index]++;
+        remaining--;
+      }
+    });
+  }
+  return games.map(({ decisions }, index) => {
+    const count = quotas[index];
+    return new Set(Array.from({ length: count }, (_, i) => decisions[Math.floor((i + 0.5) * decisions.length / count)]));
+  });
+}
+
+function checkupReplay(pgn, positions, result) {
+  const tags = readPgnTags(pgn);
+  const fen = positions[0].fen === ChessBoard.INITIAL_FEN ? '' : positions[0].fen;
+  const fields = {
+    White: tags.white, Black: tags.black, WhiteElo: tags.whiteelo, BlackElo: tags.blackelo,
+    Date: tags.date, Result: result, Termination: tags.termination,
+    SetUp: fen ? '1' : '', FEN: fen
+  };
+  const header = Object.entries(fields).filter(([, value]) => value)
+    .map(([key, value]) => `[${key} ${JSON.stringify(value)}]`).join('\n');
+  const moves = positions.slice(1).map(({ san, turn, moveNumber }, index) =>
+    (turn === 'w' ? `${moveNumber}. ` : index === 0 ? `${moveNumber}... ` : '') + san);
+  return `${header}\n\n${moves.join(' ')} ${result}`;
+}
+
+function checkupReplayUrl(platform, id) {
+  if (platform === 'lichess' && checkupGameId(platform, id)) return `https://lichess.org/${id}`;
+  const match = platform === 'chesscom' && typeof id === 'string' && id.match(/^(live|daily):(\d{1,16})$/);
+  return match ? `https://www.chess.com/game/${match[1]}/${match[2]}` : null;
+}
+
+function classifyCheckupTrap(trap, move, bestCp, playedCp) {
+  const topics = [];
+  if (trap.humanProb >= 0.40) topics.push('tempting');
+  const reply = trap.playedPv[1];
+  if (trap.playedSan.includes('x') && reply?.slice(2, 4) === move.to &&
+    new ChessBoard(move.fen).getLegalMoves().some(candidate => candidate.uci === reply && candidate.captured)) {
+    topics.push('recapture');
+  }
+  if (trap.phase === 'endgame' && bestCp >= 200 && playedCp < 100) topics.push('endgameAdvantage');
+  return topics;
+}
+
+function checkupTrapTopics(trap) {
+  return Array.isArray(trap.topics) ? trap.topics : trap.humanProb >= 0.40 ? ['tempting'] : [];
+}
+
 function playedProbability(prediction, uci) {
   const candidate = prediction?.moves?.find(move => move.uci === uci);
   return candidate ? (candidate.rawProb ?? (candidate.prob / 100)) : 0;
@@ -257,12 +315,16 @@ export async function runIntuitionCheckup({
     playerName: targetPlayer.trim(),
     gameCount: 0,
     analyzedGameIds: [],
+    games: [],
     analyzedMoves: 0,
+    fitGameCount: 0,
+    eloSampleCount: 0,
     eloFit: Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0])),
     closestElo: null,
     screenElo: elo,
     screenEloSource,
     phaseTraps: { opening: 0, middlegame: 0, endgame: 0 },
+    traps: [],
     topTrapIds: [],
     topTraps: [],
     partial,
@@ -271,7 +333,9 @@ export async function runIntuitionCheckup({
 
   const batch = games.slice(0, MAX_LOCAL_GAMES)
     .map(entry => {
-      const meta = entry.meta || parsePgnMeta(entry.pgn || '');
+      const conclusion = FairPlayGuard.verifyConcludedGame(entry.pgn);
+      if (!conclusion.ok) return null;
+      const meta = { ...(entry.meta || parsePgnMeta(entry.pgn)), result: conclusion.result };
       const wKey = normalizeAlias(meta.white);
       const bKey = normalizeAlias(meta.black);
       const userSide = wKey === targetKey ? 'w' : bKey === targetKey ? 'b' : null;
@@ -281,7 +345,8 @@ export async function runIntuitionCheckup({
       const positions = GameAnalyzer.buildPositionChain(parsedMoves);
       if (!positions || positions.length <= 1 || positions.isPartial) return null;
       const rating = userSide === 'w' ? parsedMoves.whiteElo : parsedMoves.blackElo;
-      return { entry, meta, userSide, positions, rating: /^\d{3,4}$/.test(rating) ? Number(rating) : 0 };
+      const decisions = [...checkupDecisions(positions, userSide)];
+      return { entry, meta, userSide, positions, decisions, rating: /^\d{3,4}$/.test(rating) ? Number(rating) : 0 };
     })
     .filter(Boolean);
   if (!batch.length) return emptyResult(false);
@@ -307,58 +372,64 @@ export async function runIntuitionCheckup({
   const phaseTraps = { opening: 0, middlegame: 0, endgame: 0 };
   const eloLogSums = Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0]));
   const collectedTraps = [];
-  let analyzedGames = 0;
+  const gameReports = [];
+  let fitGameCount = 0;
   const analyzedGameIds = new Set();
   let analyzedMoves = 0;
   let eloSampleCount = 0;
   let partial = false;
 
   const needsEarlyFit = !manual && !ratings.length;
-  const fitPredictions = new Map();
+  const fitPlan = planCheckupSamples(batch);
+  const prefit = new Map();
   const predict = (fen, rating, history) => maiaEngine.predict(fen, rating, null, cancelled, history);
-  const fitScores = async (move, fen, history, predictions, sums) => {
-    const probabilities = [];
+  const fitScores = async ({ move, fenBefore, historySlice }, predictions) => {
+    const values = [];
     for (const rating of CHECKUP_ELOS) {
-      if (!predictions.has(rating)) predictions.set(rating, await predict(fen, rating, history));
-      if (cancelled()) return false;
+      if (!predictions.has(rating)) predictions.set(rating, await predict(fenBefore, rating, historySlice));
+      if (cancelled()) return null;
       const prediction = predictions.get(rating);
-      if (!prediction?.moves?.length) return false;
-      probabilities.push(playedProbability(prediction, move.uci));
+      if (!prediction?.moves?.length) return null;
+      values.push(Math.log(Math.max(playedProbability(prediction, move.uci), LOG_PROB_FLOOR)));
     }
-    CHECKUP_ELOS.forEach((rating, i) => { sums[rating] += Math.log(Math.max(probabilities[i], LOG_PROB_FLOOR)); });
-    return true;
+    return values;
   };
-  const closestRating = () => eloSampleCount
-    ? CHECKUP_ELOS.reduce((best, rating) => eloLogSums[rating] > eloLogSums[best] ? rating : best)
-    : null;
+  const closestRating = sums =>
+    CHECKUP_ELOS.reduce((best, rating) => sums[rating] > sums[best] ? rating : best);
+  const addScores = (sums, values) => {
+    CHECKUP_ELOS.forEach((rating, index) => { sums[rating] += values[index]; });
+  };
 
   if (needsEarlyFit) {
     startupProgress('fitting');
-    // Reuse the sampled predictions when screening these positions later.
-    fit: for (const { positions, userSide } of batch) {
-      for (const { move, fenBefore, historySlice } of checkupDecisions(positions, userSide)) {
+    const sums = Object.fromEntries(CHECKUP_ELOS.map(rating => [rating, 0]));
+    let valid = 0;
+    for (const selection of fitPlan) {
+      for (const decision of selection) {
         if (cancelled()) return emptyResult(true);
         const predictions = new Map();
-        fitPredictions.set(move, predictions);
-        if (await fitScores(move, fenBefore, historySlice, predictions, eloLogSums)) eloSampleCount++;
-        if (eloSampleCount === MAX_ELO_SAMPLES || fitPredictions.size === MAX_ELO_SAMPLES * 2) break fit;
+        const scores = await fitScores(decision, predictions);
+        prefit.set(decision, { predictions, scores });
+        if (scores) {
+          addScores(sums, scores);
+          valid++;
+        }
       }
     }
     if (cancelled()) return emptyResult(true);
-    const fitted = closestRating();
-    if (fitted !== null) {
-      elo = fitted;
+    if (valid) {
+      elo = closestRating(sums);
       screenEloSource = 'fit';
     }
   }
 
   for (let gi = 0; gi < batch.length; gi++) {
     if (cancelled()) { partial = true; break; }
-    const { entry, meta, userSide, positions } = batch[gi];
+    const { entry, meta, userSide, positions, decisions } = batch[gi];
 
     const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
       phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
-      completedGames: analyzedGames, workDone: gi + checkedPlies / (positions.length - 1)
+      completedGames: gameReports.length, workDone: gi + checkedPlies / (positions.length - 1)
     });
     reportProgress('analyzing', 0);
 
@@ -369,20 +440,25 @@ export async function runIntuitionCheckup({
     const gameTraps = [];
     let gameCancelled = false;
 
-    for (const { move, mi, fenBefore, historySlice } of checkupDecisions(positions, userSide)) {
+    for (const decision of decisions) {
       if (cancelled()) { gameCancelled = true; break; }
+      const { move, mi, fenBefore, historySlice } = decision;
       const { fen: fenAfter, turn, ply, moveNumber } = move;
-      const predictions = fitPredictions.get(move);
+      const predictions = prefit.get(decision)?.predictions;
       const maiaPred = predictions?.has(elo) ? predictions.get(elo) : await predict(fenBefore, elo, historySlice);
       if (cancelled()) { gameCancelled = true; break; }
 
       const humanRawProb = playedProbability(maiaPred, move.uci);
       const maiaTop = maiaPred?.moves?.[0] || null;
 
-      if (!needsEarlyFit && eloSampleCount + gameEloSamples < MAX_ELO_SAMPLES && maiaPred?.moves?.length) {
-        const sample = new Map([[elo, maiaPred]]);
-        if (await fitScores(move, fenBefore, historySlice, sample, gameEloLogSums)) gameEloSamples++;
+      if (fitPlan[gi].has(decision)) {
+        const scores = needsEarlyFit ? prefit.get(decision)?.scores
+          : await fitScores(decision, new Map([[elo, maiaPred]]));
         if (cancelled()) { gameCancelled = true; break; }
+        if (scores) {
+          addScores(gameEloLogSums, scores);
+          gameEloSamples++;
+        }
       }
 
       // Stockfish is only needed for moves eligible for trap verification.
@@ -429,7 +505,10 @@ export async function runIntuitionCheckup({
                   const trap = buildTrapRecord(enrichedMove, { elo }, { profileId, source: meta, triggerMove, now });
                   if (trap) {
                     gamePhaseTraps[trap.phase || detectPhase(enrichedMove)]++;
-                    gameTraps.push(trap);
+                    gameTraps.push({
+                      ...trap, gameIndex: gi,
+                      topics: classifyCheckupTrap(trap, move, verifyRoot.scoreCp, verifiedPlayedCp)
+                    });
                   }
                 }
               }
@@ -445,11 +524,19 @@ export async function runIntuitionCheckup({
       break;
     }
 
-    analyzedGames++;
+    const platform = checkupSourceType(sourceLabel);
+    gameReports.push({
+      gameId: entry.gameId || null, platform, url: checkupReplayUrl(platform, entry.gameId),
+      white: meta.white, black: meta.black, result: meta.result, date: meta.date,
+      orientation: userSide === 'w' ? 'white' : 'black',
+      analyzedMoves: gameMoves, trapCount: gameTraps.length, eloSampleCount: gameEloSamples,
+      pgn: checkupReplay(entry.pgn, positions, meta.result)
+    });
     reportProgress('analyzing', gameMoves, positions.length - 1);
     if (entry.gameId) analyzedGameIds.add(entry.gameId);
     analyzedMoves += gameMoves;
     eloSampleCount += gameEloSamples;
+    if (gameEloSamples) fitGameCount++;
     for (const r of CHECKUP_ELOS) eloLogSums[r] += gameEloLogSums[r];
     for (const phase of ['opening', 'middlegame', 'endgame']) phaseTraps[phase] += gamePhaseTraps[phase];
     collectedTraps.push(...gameTraps);
@@ -461,31 +548,35 @@ export async function runIntuitionCheckup({
       eloSampleCount ? Math.round(Math.exp(eloLogSums[r] / eloSampleCount) * 1000) / 1000 : 0
     ])
   );
-  const closestElo = closestRating();
+  const closestElo = eloSampleCount ? closestRating(eloLogSums) : null;
 
   const dedup = new Map();
   for (const trap of collectedTraps) {
-    if (!dedup.has(trap.id) || trap.eslLoss > dedup.get(trap.id).eslLoss) {
-      dedup.set(trap.id, trap);
-    }
+    const previous = dedup.get(trap.id);
+    const best = !previous || trap.eslLoss > previous.eslLoss ? trap : previous;
+    const occurrences = [...(previous?.occurrences || []), { gameIndex: trap.gameIndex, ply: trap.ply }];
+    dedup.set(trap.id, { ...best, occurrences });
   }
-  const topTraps = [...dedup.values()]
-    .sort((a, b) => (b.eslLoss ?? 0) - (a.eslLoss ?? 0))
-    .slice(0, 5);
+  const traps = [...dedup.values()].sort((a, b) => b.eslLoss - a.eslLoss);
+  const topTraps = traps.slice(0, FEATURED_TRAPS);
 
   return {
     id: `checkup_${now}_${Math.random().toString(36).slice(2, 7)}`,
     profileId,
     sourceLabel,
     playerName: targetPlayer.trim(),
-    gameCount: analyzedGames,
+    gameCount: gameReports.length,
     analyzedGameIds: [...analyzedGameIds],
+    games: gameReports,
     analyzedMoves,
+    fitGameCount,
+    eloSampleCount,
     eloFit,
     closestElo,
     screenElo: elo,
     screenEloSource,
     phaseTraps,
+    traps,
     topTrapIds: topTraps.map(item => item.id),
     topTraps,
     partial,
@@ -771,7 +862,16 @@ export class IntuitionCheckup {
     const currentProfileId = this.app.mistakeBank?.activeProfile?.id || 'default';
     if (generation !== this.openGeneration || epoch !== this.app.gameEpoch || currentProfileId !== profileId || !this.allowed()) return;
     this.history = loadedHistory;
+    const replay = this.replayReturn;
+    const returnReport = !account && replay?.epoch === epoch && replay.profileId === profileId
+      ? loadedHistory.find(item => item.id === replay.reportId) : null;
+    if (returnReport) {
+      this.replayReturn = null;
+      this.source = checkupSourceType(returnReport.sourceLabel);
+      if (this.usernameInput) this.usernameInput.value = returnReport.playerName;
+    }
     this.applyHistoryContext();
+    if (returnReport) this.latestReport = returnReport;
     this.renderAccounts();
     this.renderSourceControls();
     this.renderReport(this.latestReport);
@@ -1264,24 +1364,7 @@ export class IntuitionCheckup {
       if (!current()) return;
 
       if (report.gameCount > 0) {
-        const savedRecord = {
-          id: report.id,
-          profileId: report.profileId,
-          sourceLabel: report.sourceLabel,
-          playerName: report.playerName,
-          gameCount: report.gameCount,
-          analyzedGameIds: report.analyzedGameIds,
-          analyzedMoves: report.analyzedMoves,
-          eloFit: report.eloFit,
-          closestElo: report.closestElo,
-          screenElo: report.screenElo,
-          screenEloSource: report.screenEloSource,
-          phaseTraps: report.phaseTraps,
-          topTrapIds: report.topTrapIds,
-          topTraps: report.topTraps,
-          partial: !!report.partial,
-          createdAt: report.createdAt
-        };
+        const savedRecord = report;
         this.history = [savedRecord, ...this.history.filter(item => item.id !== report.id)];
         this.applyHistoryContext();
         if (!this.scopedHistory.some(item => item.id === savedRecord.id)) {
@@ -1439,6 +1522,14 @@ export class IntuitionCheckup {
       eloNote.className = 'checkup-elo-note';
       eloNote.textContent = t('checkupEloFitNote');
       summary.append(eloGrid, eloNote);
+      if (Number.isInteger(report.eloSampleCount) && Number.isInteger(report.fitGameCount)) {
+        const coverage = document.createElement('small');
+        coverage.className = 'checkup-elo-note';
+        coverage.textContent = t(report.fitGameCount === 1 ? 'checkupFitCoverageSingle' : 'checkupFitCoverage', {
+          moves: report.eloSampleCount, games: report.fitGameCount
+        });
+        summary.append(coverage);
+      }
     }
 
     const phaseLine = document.createElement('p');
@@ -1455,94 +1546,186 @@ export class IntuitionCheckup {
     summary.append(phaseLine);
     this.reportBox.append(summary);
 
-    const scopeTrap = (trap, activeId) => {
-      if (trap.profileId === activeId && String(trap.id || '').startsWith(`${activeId}|`)) return trap;
-      const playedUci = trap.playedUci || trap.uci;
-      return { ...trap, profileId: activeId, id: trapId(activeId, trap.fenBefore, playedUci) };
-    };
+    this.renderReportTraps(report);
+    this.renderReportGames(report);
+  }
 
-    const traps = report.topTraps || [];
-    if (traps.length) {
-      const list = document.createElement('div');
-      list.className = 'checkup-top-traps';
+  reportButton(label, action, classes = '') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn-header ${classes}`.trim();
+    button.textContent = label;
+    button.onclick = action;
+    return button;
+  }
+
+  async saveReportTraps(report, traps, { practice = false } = {}) {
+    const bank = this.app.mistakeBank;
+    const profileId = bank?.activeProfile?.id;
+    const generation = this.openGeneration;
+    const current = () => this.allowed() && !this.busy && this.dialog?.open &&
+      this.openGeneration === generation && bank?.activeProfile?.id === profileId;
+    if (!bank || !profileId || !current() || this.savingTraps || (report.profileId && report.profileId !== profileId)) return;
+    this.savingTraps = true;
+    try {
+      let added = 0;
+      const queue = [];
       for (const trap of traps) {
-        const row = document.createElement('div');
-        row.className = 'checkup-trap-row';
-        const main = document.createElement('div');
-        main.className = 'checkup-trap-main';
-        const left = document.createElement('strong');
-        left.textContent = `${trap.moveNumber}${trap.turn === 'w' ? '. ' : '… '}${trap.playedSan} → ${trap.bestSan}`;
-        const opp = [trap.source?.white, trap.source?.black].find(name => name && normalizeAlias(name) !== normalizeAlias(report.playerName)) || '';
-        const sub = document.createElement('small');
-        sub.textContent = [t(`bankPhase_${trap.phase || 'middlegame'}`), `-${(trap.eslLoss || 0).toFixed(1)}%`, opp ? `vs ${opp}` : '', trap.source?.date || ''].filter(Boolean).join(' · ');
-        main.append(left, sub);
-        const oneBtn = document.createElement('button');
-        oneBtn.type = 'button';
-        oneBtn.className = 'btn-header checkup-trap-practice-btn';
-        oneBtn.textContent = t('checkupTrapPracticeOne');
-        oneBtn.onclick = async () => {
-          const bank = this.app.mistakeBank;
-          const startGen = this.openGeneration;
-          const activeId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
-          if (report.profileId && report.profileId !== activeId) return;
-          const scoped = scopeTrap(trap, activeId);
-          if (bank) {
-            await bank.store.upsertTrap(scoped);
-            await bank.refreshState();
-          }
-          const currentId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
-          if (!this.allowed() || !this.dialog?.open || startGen !== this.openGeneration || currentId !== activeId) return;
-          this.close();
-          bank?.startPracticeQueue([scoped], scoped);
-        };
-        row.append(main, oneBtn);
-        list.append(row);
+        if (!current()) return;
+        const scoped = { ...trap, profileId, id: trapId(profileId, trap.fenBefore, trap.playedUci || trap.uci) };
+        const saved = await bank.store.upsertTrap(scoped);
+        if (saved?.record) queue.push(saved.record);
+        if (saved?.added) added++;
       }
-      this.reportBox.append(list);
-
-      const actions = document.createElement('div');
-      actions.className = 'checkup-report-actions';
-
-      const btnSaveTop = document.createElement('button');
-      btnSaveTop.type = 'button';
-      btnSaveTop.className = 'btn-header';
-      btnSaveTop.textContent = t('checkupSaveTop', { count: traps.length });
-      btnSaveTop.onclick = async () => {
-        const bank = this.app.mistakeBank;
-        if (!bank) return;
-        const activeId = bank.activeProfile?.id || this.activeProfileId || report.profileId;
-        if (report.profileId && report.profileId !== activeId) return;
-        let added = 0;
-        for (const trap of traps) {
-          const res = await bank.store.upsertTrap(scopeTrap(trap, activeId));
-          if (res?.added) added++;
-        }
-        await bank.refreshState();
-        this.app.showToast?.(t('bankSavedBatchToast', { count: added }));
-      };
-
-      const btnPracticeTop = document.createElement('button');
-      btnPracticeTop.type = 'button';
-      btnPracticeTop.className = 'btn-header btn-primary';
-      btnPracticeTop.textContent = t('checkupPracticeTop', { count: traps.length });
-      btnPracticeTop.onclick = async () => {
-        const bank = this.app.mistakeBank;
-        const startGen = this.openGeneration;
-        const activeId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
-        if (report.profileId && report.profileId !== activeId) return;
-        const scopedTraps = traps.map(trap => scopeTrap(trap, activeId));
-        if (bank) {
-          for (const trap of scopedTraps) await bank.store.upsertTrap(trap);
-          await bank.refreshState();
-        }
-        const currentId = bank?.activeProfile?.id || this.activeProfileId || report.profileId;
-        if (!this.allowed() || !this.dialog?.open || startGen !== this.openGeneration || currentId !== activeId) return;
+      await bank.refreshState();
+      if (!current()) return;
+      if (practice && queue.length) {
         this.close();
-        bank?.startPracticeQueue(scopedTraps, scopedTraps[0]);
-      };
-
-      actions.append(btnSaveTop, btnPracticeTop);
-      this.reportBox.append(actions);
+        await bank.startPracticeQueue(queue);
+      } else {
+        this.app.showToast?.(t('bankSavedBatchToast', { count: added }));
+      }
+    } catch {
+      if (current()) this.setStatus(t('checkupTrapSaveError'));
+    } finally {
+      this.savingTraps = false;
     }
+  }
+
+  openReportGame(report, game, trap) {
+    if (this.busy || !this.allowed() || !this.dialog?.open || this.activeProfileId !== report.profileId) return;
+    if (typeof game?.pgn !== 'string' || !FairPlayGuard.verifyConcludedGame(game.pgn).ok) return;
+    const focusMove = trap ? { ply: trap.ply, uci: trap.playedUci || trap.uci, fenBefore: trap.fenBefore } : null;
+    const opened = this.app.startNewSession({
+      pgn: game.pgn, white: game.white, black: game.black, orientation: game.orientation,
+      publicGameUrl: checkupReplayUrl(game.platform, game.gameId), checkupSource: game.platform,
+      focusMove, autoReview: false
+    });
+    if (opened) {
+      this.replayReturn = { reportId: report.id, profileId: report.profileId, epoch: this.app.gameEpoch };
+    } else {
+      this.setStatus(t('checkupReplayUnavailable'));
+    }
+  }
+
+  renderTrapRows(report, traps) {
+    const list = document.createElement('div');
+    list.className = 'checkup-top-traps';
+    for (const trap of traps) {
+      const row = document.createElement('div');
+      row.className = 'checkup-trap-row';
+      const main = document.createElement('div');
+      main.className = 'checkup-trap-main';
+      const title = document.createElement('strong');
+      title.textContent = `${trap.moveNumber}${trap.turn === 'w' ? '. ' : '… '}${trap.playedSan} → ${trap.bestSan}`;
+      const opponent = [trap.source?.white, trap.source?.black].find(name => name && normalizeAlias(name) !== normalizeAlias(report.playerName));
+      const detail = document.createElement('small');
+      const repeats = trap.occurrences?.length || 0;
+      detail.textContent = [
+        t(`bankPhase_${trap.phase || 'middlegame'}`),
+        t('checkupTrapLoss', { loss: (trap.eslLoss || 0).toFixed(1) }),
+        opponent ? t('checkupTrapOpponent', { opponent }) : '',
+        trap.source?.date, repeats > 1 ? t('checkupTrapRepeats', { count: repeats }) : ''
+      ].filter(Boolean).join(' · ');
+      main.append(title, detail);
+      const topics = checkupTrapTopics(trap);
+      if (topics.length) {
+        const labels = document.createElement('small');
+        labels.className = 'checkup-trap-topics';
+        labels.textContent = topics.map(topic => t(`checkupTopic_${topic}`)).join(' · ');
+        main.append(labels);
+      }
+      row.append(main);
+      const actions = document.createElement('div');
+      actions.className = 'checkup-trap-actions';
+      const game = report.games?.[trap.gameIndex];
+      if (game?.pgn) {
+        const jump = this.reportButton(t('checkupOpenMove'), () => this.openReportGame(report, game, trap), 'checkup-trap-practice-btn');
+        jump.setAttribute('aria-label', `${jump.textContent} · ${title.textContent}`);
+        actions.append(jump);
+      }
+      actions.append(this.reportButton(t('checkupTrapPracticeOne'),
+        () => this.saveReportTraps(report, [trap], { practice: true }), 'checkup-trap-practice-btn'));
+      row.append(actions);
+      list.append(row);
+    }
+    return list;
+  }
+
+  renderReportTraps(report) {
+    const traps = report.traps || report.topTraps || [];
+    if (!traps.length) return;
+    const featured = traps.slice(0, FEATURED_TRAPS);
+    if (Array.isArray(report.traps)) {
+      const count = document.createElement('h3');
+      count.className = 'checkup-report-section-title';
+      count.textContent = t('checkupTrapTotals', {
+        hits: Object.values(report.phaseTraps || {}).reduce((sum, count) => sum + count, 0),
+        unique: traps.length
+      });
+      this.reportBox.append(count);
+    }
+    this.reportBox.append(this.renderTrapRows(report, featured));
+    if (traps.length > featured.length) {
+      const details = document.createElement('details');
+      details.className = 'checkup-report-details';
+      const summary = document.createElement('summary');
+      summary.textContent = t('checkupMoreTraps', { count: traps.length - featured.length });
+      details.append(summary);
+      details.ontoggle = () => {
+        if (!details.open) return;
+        details.ontoggle = null;
+        details.append(this.renderTrapRows(report, traps.slice(featured.length)));
+      };
+      this.reportBox.append(details);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'checkup-report-actions';
+    actions.append(
+      this.reportButton(t('checkupSaveTop', { count: featured.length }), () => this.saveReportTraps(report, featured)),
+      this.reportButton(t('checkupPracticeTop', { count: featured.length }),
+        () => this.saveReportTraps(report, featured, { practice: true }), 'btn-primary')
+    );
+    this.reportBox.append(actions);
+
+    const topics = document.createElement('div');
+    topics.className = 'checkup-report-actions checkup-report-topics';
+    for (const topic of TRAP_TOPICS) {
+      const matching = traps.filter(trap => checkupTrapTopics(trap).includes(topic));
+      if (!matching.length) continue;
+      topics.append(this.reportButton(t('checkupPracticeTopic', {
+        topic: t(`checkupTopic_${topic}`), count: matching.length
+      }), () => this.saveReportTraps(report, matching, { practice: true })));
+    }
+    if (topics.childElementCount) this.reportBox.append(topics);
+  }
+
+  renderReportGames(report) {
+    if (!report.games?.length) return;
+    const details = document.createElement('details');
+    details.className = 'checkup-report-details';
+    const summary = document.createElement('summary');
+    summary.textContent = t(report.games.length === 1 ? 'checkupGamesDetailsSingle' : 'checkupGamesDetails', { count: report.games.length });
+    details.append(summary);
+    const rows = document.createElement('div');
+    rows.className = 'checkup-top-traps';
+    for (const game of report.games) {
+      const row = document.createElement('div');
+      row.className = 'checkup-trap-row';
+      const main = document.createElement('div');
+      main.className = 'checkup-trap-main';
+      const title = document.createElement('strong');
+      title.textContent = `${game.white || t('whitePlayer')} – ${game.black || t('blackPlayer')} · ${game.result}`;
+      const detail = document.createElement('small');
+      detail.textContent = [game.date, t('checkupGameDetails', { moves: game.analyzedMoves, traps: game.trapCount })]
+        .filter(Boolean).join(' · ');
+      main.append(title, detail);
+      row.append(main);
+      if (game.pgn) row.append(this.reportButton(t('checkupOpenGame'), () => this.openReportGame(report, game), 'checkup-trap-practice-btn'));
+      rows.append(row);
+    }
+    details.append(rows);
+    this.reportBox.append(details);
   }
 }

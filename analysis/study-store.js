@@ -469,10 +469,14 @@ export class StudyStore {
     const matching = report?.profileId === profileId && checkupReportMatchesAccount(report, account);
     let moved;
     if (matching) {
-      const topTraps = (report.topTraps || []).map(trap => ({
+      const scopeTrap = trap => ({
         ...trap, profileId: profile.id, id: trapId(profile.id, trap.fenBefore, trap.playedUci || trap.uci)
-      }));
-      moved = { ...report, profileId: profile.id, topTraps, topTrapIds: topTraps.map(trap => trap.id) };
+      });
+      const topTraps = (report.topTraps || []).map(scopeTrap);
+      moved = {
+        ...report, profileId: profile.id, topTraps, topTrapIds: topTraps.map(trap => trap.id),
+        ...(Array.isArray(report.traps) ? { traps: report.traps.map(scopeTrap) } : {})
+      };
       profile = restoreCheckupReminders(profile, [moved]);
     }
     if (tx) {

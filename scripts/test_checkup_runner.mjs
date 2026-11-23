@@ -11,6 +11,7 @@ import {
   suggestCheckupPlayer
 } from '../analysis/checkup-runner.js';
 import { StudyStore } from '../analysis/study-store.js';
+import { GameAnalyzer } from '../engine/game-analyzer.js';
 
 const pgn1 = `[Event "Match 1"]
 [White "KidPlayer"]
@@ -187,6 +188,101 @@ assert.equal(fitted.screenElo, 2200);
 assert.equal(fitted.screenEloSource, 'fit');
 assert.equal(fitted.topTraps[0]?.elo, 2200, 'The fitted rating is used during trap screening');
 
+const repetition = Array.from({ length: 20 }, (_, i) =>
+  `${i + 1}. ${i % 2 ? 'Ng1 Ng8' : 'Nf3 Nf6'}`).join(' ');
+const longPgn = '[White "KidPlayer"]\n[Black "Rival"]\n[WhiteElo "2200"]\n[Result "1/2-1/2"]\n\n' +
+  repetition + ' {excluded private note} 1/2-1/2';
+const archivedGames = Array.from({ length: 10 }, (_, i) => ({ pgn: longPgn, gameId: `live:${1000 + i}` }));
+const sampleFens = new Set();
+const complete = await runIntuitionCheckup({
+  games: archivedGames, targetPlayer: 'KidPlayer', sourceLabel: 'chesscom:KidPlayer',
+  maiaEngine: {
+    async predict(fen, elo) {
+      if (elo === 1100) sampleFens.add(fen);
+      const uci = fen.startsWith('rnbqkb1r') ? 'f3g1' : 'g1f3';
+      return { moves: [{ uci, rawProb: 0.6 }] };
+    }
+  },
+  stockfish: {
+    async evaluate(fen, depth) {
+      const whiteTurn = fen.split(' ')[1] === 'w';
+      const uci = whiteTurn ? 'e2e4' : 'e7e5';
+      return { depth, scoreCp: whiteTurn ? 300 : 0, bestMove: { uci, san: whiteTurn ? 'e4' : 'e5' }, pv: [uci] };
+    }
+  }
+});
+assert.equal(complete.eloSampleCount, 24);
+assert.equal(complete.fitGameCount, 10, 'Long first games cannot consume the whole fit budget');
+assert.deepEqual(complete.games.map(game => game.eloSampleCount), [3, 3, 3, 3, 2, 2, 2, 2, 2, 2]);
+assert([...sampleFens].some(fen => Number(fen.split(' ').at(-1)) >= 16), 'Fit samples reach late decisions in each game');
+assert.equal(complete.games[0].url, 'https://www.chess.com/game/live/1000');
+assert(!complete.games[0].pgn.includes('private note'), 'Replay stores the main line without imported annotations');
+assert.equal(GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(complete.games[0].pgn)).length, 41);
+assert(complete.traps.length > 5);
+assert.deepEqual(complete.topTraps, complete.traps.slice(0, 5));
+assert(complete.traps.every(trap => trap.occurrences.length === 10 && trap.topics.includes('tempting')));
+assert.equal(complete.games.reduce((sum, game) => sum + game.trapCount, 0),
+  Object.values(complete.phaseTraps).reduce((sum, count) => sum + count, 0));
+assert.equal(complete.traps[5].gameIndex, 0);
+assert.equal(complete.traps[5].playedUci,
+  GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(complete.games[0].pgn))[complete.traps[5].ply].uci);
+
+const rejectedReplay = await runIntuitionCheckup({
+  games: [{ pgn: longPgn.replaceAll('1/2-1/2', '*') }], targetPlayer: 'KidPlayer',
+  stockfish: { initialize() { assert.fail('An ongoing game must never start the engines'); } },
+  maiaEngine: mockMaia
+});
+assert.equal(rejectedReplay.gameCount, 0);
+
+const customFen = '4k1n1/8/8/8/8/8/8/R3K1N1 b - - 0 40';
+const customMoves = Array.from({ length: 13 }, (_, i) =>
+  `${41 + i}. ${i % 2 ? 'Ng1 Nf6' : 'Nf3 Ng8'}`).join(' ');
+const customPgn = `[White "KidPlayer"]\n[Black "Rival"]\n[WhiteElo "2200"]\n[SetUp "1"]\n[FEN "${customFen}"]\n[Result "1/2-1/2"]\n\n40... Nf6 ${customMoves} 1/2-1/2`;
+const endgame = await runIntuitionCheckup({
+  games: [{ pgn: customPgn }], targetPlayer: 'KidPlayer',
+  maiaEngine: { async predict() {
+    return { moves: [{ uci: 'g1f3', rawProb: 0.55 }, { uci: 'f3g1', rawProb: 0.45 }] };
+  } },
+  stockfish: { async evaluate(fen, depth) {
+    const white = fen.split(' ')[1] === 'w';
+    const uci = white ? 'e1e2' : 'e8e7';
+    return { depth, scoreCp: white ? 300 : 0, bestMove: { uci, san: white ? 'Ke2' : 'Ke7' }, pv: [uci] };
+  } }
+});
+const customReplay = GameAnalyzer.parsePgn(endgame.games[0].pgn);
+assert.equal(customReplay.startFen, customFen);
+const customPositions = GameAnalyzer.buildPositionChain(customReplay);
+assert.equal(customPositions.isPartial, false);
+assert.equal(customPositions[1].turn, 'b');
+const endgameTrap = endgame.traps.find(trap => trap.topics.includes('endgameAdvantage'));
+assert(endgameTrap);
+assert.equal(customPositions[endgameTrap.ply - 1].fen, endgameTrap.fenBefore);
+
+const recapture = await runIntuitionCheckup({
+  games: [{ pgn: pgn2 }], targetPlayer: 'KidPlayer', elo: 1900,
+  maiaEngine: { async predict() { return { moves: [{ uci: 'd5c4', rawProb: 0.6 }] }; } },
+  stockfish: { async evaluate(fen, depth) {
+    const black = fen.split(' ')[1] === 'b';
+    const uci = black ? 'a7a6' : 'd3c4';
+    return { depth, scoreCp: black ? 300 : 0, bestMove: { uci, san: black ? 'a6' : 'Bxc4' }, pv: [uci] };
+  } }
+});
+assert.equal(recapture.traps[0]?.playedUci, 'd5c4');
+assert(recapture.traps[0]?.topics.includes('recapture'));
+assert.equal(recapture.traps[0]?.playedPv[1], 'd3c4');
+
+let stopAfterFirst = false;
+const partialReplay = await runIntuitionCheckup({
+  games: [{ pgn: pgn1 }, { pgn: pgn2 }], targetPlayer: 'KidPlayer',
+  stockfish: mockStockfish, maiaEngine: mockMaia,
+  onProgress: progress => { if (progress.completedGames === 1) stopAfterFirst = true; },
+  isCancelled: () => stopAfterFirst
+});
+assert.equal(partialReplay.partial, true);
+assert.equal(partialReplay.games.length, 1);
+assert.equal(partialReplay.fitGameCount, 1, 'Partial reports count prefit samples from completed games only');
+assert.equal(partialReplay.eloSampleCount, partialReplay.games[0].eloSampleCount);
+
 const abort = new AbortController();
 let releaseStockfish;
 const abortedStartup = runIntuitionCheckup({
@@ -306,6 +402,8 @@ const midCancelReport = await runIntuitionCheckup({
   },
   maiaEngine: mockMaia
 });
+assert.deepEqual(midCancelReport.games, [], 'A cancelled game does not add a replay snapshot');
+assert.equal(midCancelReport.eloSampleCount, 0);
 assert.equal(midCancelReport.gameCount, 0, 'Unfinished game 1 must not be counted on cancellation');
 assert.equal(midCancelReport.analyzedMoves, 0);
 assert.equal(midCancelReport.partial, true);

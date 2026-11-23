@@ -629,10 +629,17 @@ button,input,select,textarea { font-family:inherit; }
 .checkup-elo-pill.best { border-color:var(--brand-green);color:var(--brand-green);font-weight:650;background:var(--dg-green-soft); }
 .checkup-elo-note { display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px; }
 .checkup-phase-line { margin:6px 0 0;font-size:12px;color:var(--text-muted); }
+.checkup-report-section-title { margin:12px 0 8px;font-size:13px;font-weight:650; }
+.checkup-report-details { margin:10px 0 12px; }
+.checkup-report-details summary { cursor:pointer;color:var(--brand-green);font-size:13px;font-weight:650; }
+.checkup-report-details[open] summary { margin-bottom:8px; }
+.checkup-report-topics { margin-top:8px; }
 .checkup-top-traps { display:grid;gap:6px;margin-bottom:12px; }
-.checkup-trap-row { display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:var(--dg-paper);border:1px solid var(--dg-line);font-size:12px; }
-.checkup-trap-main { display:grid;gap:2px;min-width:0; }
-.checkup-trap-main small { font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.checkup-trap-row { display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 10px;padding:8px 12px;border-radius:10px;background:var(--dg-paper);border:1px solid var(--dg-line);font-size:12px; }
+.checkup-trap-main { display:grid;gap:2px;min-width:0;flex:1 1 165px; }
+.checkup-trap-actions { display:flex;flex-wrap:wrap;gap:6px; }
+.checkup-trap-main small { font-size:11px;color:var(--text-muted);overflow-wrap:anywhere; }
+.checkup-trap-main .checkup-trap-topics { color:var(--brand-green); }
 .checkup-trap-practice-btn { height:28px;padding:0 10px;font-size:11px;flex-shrink:0; }
 .share-card-dialog { width:min(760px,calc(100vw - 32px));max-height:88vh;margin:auto;border:1px solid var(--dg-line);border-radius:18px;background:var(--dg-surface);color:var(--text-main);padding:20px 22px;box-shadow:var(--dg-shadow);overflow:auto; }
 .share-card-dialog::backdrop { background:light-dark(#23392a55,#030d09a0);backdrop-filter:blur(3px); }

@@ -244,8 +244,64 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp.currentElo === 2200);
   await page.reload();
   await page.waitForFunction(() => window.__maiaStudioApp?.positions.length && window.__maiaStudioApp.currentElo === 2200);
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    app.positionAnalysis.refresh = () => {};
+    app.stockfish.initialize = async () => true;
+    app.stockfish.evaluate = async (fen, depth) => {
+      const white = fen.split(' ')[1] === 'w';
+      const uci = white ? 'e2e4' : 'e7e5';
+      return { depth, scoreCp: white ? 300 : 0, bestMove: { uci, san: white ? 'e4' : 'e5' }, pv: [uci] };
+    };
+    app.maiaEngine.initialize = async () => true;
+    app.maiaEngine.predict = async fen => ({
+      moves: [{ uci: fen.startsWith('rnbqkb1r') ? 'f3g1' : 'g1f3', rawProb: 0.6 }]
+    });
+    app.startPractice = (item, { queue }) => { window.reportPractice = { item, queue }; };
+  });
+  const replayMoves = Array.from({ length: 14 }, (_, i) =>
+    `${i + 1}. ${i % 2 ? 'Ng1 Ng8' : 'Nf3 Nf6'}`).join(' ');
+  const replayPgn = '[Event "Replay fixture"]\n[White "Trainee"]\n[Black "Rival"]\n[WhiteElo "2200"]\n[Result "1/2-1/2"]\n\n' +
+    replayMoves + ' 1/2-1/2';
+  await page.locator('#btn-intuition-checkup').click();
+  await page.locator('[data-checkup-source="local"]').click();
+  await page.locator('#checkup-pgn-text').fill(replayPgn);
+  await page.locator('#btn-checkup-fetch').click();
+  await page.locator('#checkup-confirm-name').fill('Trainee');
+  await page.locator('#btn-checkup-start').click();
+  await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.traps?.length > 5 &&
+    !window.__maiaStudioApp.checkup.busy);
+  const reportBox = page.locator('#checkup-report-box');
+  assert.match(await reportBox.innerText(), /fit samples from 1 game/);
+  assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), 5);
+  await reportBox.getByText(/Show .* more traps/).click();
+  const sixthJump = reportBox.getByRole('button', { name: /Review this move/ }).nth(5);
+  await sixthJump.waitFor();
+  const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
+  assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
+  assert(await reportBox.evaluate(box => box.scrollWidth <= box.clientWidth), 'Expanded traps fit the mobile dialog');
+  const sixth = replay.traps[5];
+  await sixthJump.click();
+  await dialog.waitFor({ state: 'hidden' });
+  const focused = await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    return { ply: app.currentPly, before: app.isReviewingMove, fen: app.boardUI.chess.getFen() };
+  });
+  assert.deepEqual(focused, { ply: sixth.ply, before: true, fen: sixth.fenBefore });
+  await page.locator('#btn-intuition-checkup').click();
+  await reportBox.getByText(/Game details/).click();
+  assert.match(await reportBox.innerText(), /Trainee – Rival/);
+  await reportBox.getByRole('button', { name: /Practice high-temptation moves/ }).click();
+  await page.waitForFunction(() => !!window.reportPractice);
+  const practiced = await page.evaluate(async () => {
+    const bank = window.__maiaStudioApp.mistakeBank;
+    return { queue: window.reportPractice.queue.map(trap => trap.id), stored: (await bank.store.listTraps(bank.activeProfile.id)).length };
+  });
+  assert.deepEqual(practiced.queue, replay.traps.map(trap => trap.id));
+  assert.equal(practiced.stored, replay.traps.length);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(errors, []);
-  console.log('PASS checkup workbench: diagnose before link, skip unchanged batches, check new games, move the latest report on split, badge dismissal, safe cancellation and completed-review acknowledgement.');
+  console.log('PASS checkup workbench: diagnose before link, skip unchanged batches, check new games, move the latest report on split, badge dismissal, safe cancellation, completed-review acknowledgement, full trap list, exact original move replay and topic practice.');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

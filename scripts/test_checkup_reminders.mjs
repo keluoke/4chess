@@ -101,7 +101,11 @@ assert.deepEqual(guestProfile.checkupReminders['lichess:guestchess'], {
 assert.deepEqual((await store.loadCheckupProfile('default')).profile, guestProfile, 'Repair is idempotent');
 
 const trap = { id: 'default|fen|e2e4', profileId: 'default', fenBefore: 'fen', playedUci: 'e2e4' };
-await store.saveCheckup({ ...full, id: 'transfer', topTraps: [trap], topTrapIds: [trap.id] });
+const secondTrap = { ...trap, id: 'default|fen|d2d4', playedUci: 'd2d4', gameIndex: 0 };
+const replays = [{ gameId: 'Guest123', pgn: '1. e4 e5 1-0' }];
+await store.saveCheckup({
+  ...full, id: 'transfer', games: replays, traps: [trap, secondTrap], topTraps: [trap], topTrapIds: [trap.id]
+});
 await store.put('traps', trap);
 const unrelated = await store.saveProfile({
   displayName: 'Other account', account: { platform: 'lichess', username: 'Another' },
@@ -115,6 +119,9 @@ const [transferred] = await store.listCheckups(moved.id);
 assert.equal(transferred.id, 'transfer');
 assert.deepEqual(transferred.topTrapIds, [`${moved.id}|fen|e2e4`]);
 assert.equal(transferred.topTraps[0].profileId, moved.id);
+assert.deepEqual(transferred.games, replays);
+assert.equal(transferred.traps[1].id, `${moved.id}|fen|d2d4`);
+assert.equal(transferred.traps[1].gameIndex, 0);
 assert.deepEqual(moved.checkupReminders['lichess:guestchess'].diagnosed, ['Guest123']);
 assert.equal((await store.listCheckups('default')).some(report => report.id === 'transfer'), false);
 assert.equal((await store.listCheckups('default')).some(report => report.id === full.id), true);

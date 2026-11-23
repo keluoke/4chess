@@ -1142,7 +1142,8 @@ class AnalysisStudioApp {
     eloProfileId = null,
     fallbackElo = null,
     ratingMatch = null,
-    landAtEnd = false
+    landAtEnd = false,
+    focusMove = null
   } = {}) {
     if (this.scanSourceLocked) return false;
     const positionOnly = !!fen && !pgn && !moves?.length;
@@ -1167,11 +1168,17 @@ class AnalysisStudioApp {
       }
     }
 
+    const tags = pgn ? readPgnTags(pgn) : {};
+    const conclusion = positionOnly ? null : FairPlayGuard.verifyConcludedGame(pgn || { result });
+    if (focusMove) {
+      const { ply, uci, fenBefore } = focusMove;
+      if (!conclusion?.ok || !Number.isSafeInteger(ply) || ply <= 0 || positions?.isPartial ||
+        positions?.[ply]?.uci !== uci || positions?.[ply - 1]?.fen !== fenBefore) return false;
+    }
+
     const entryOrientation = ['white', 'black'].includes(orientation) ? orientation : this.sessionOrientation || this.boardUI.orientation;
     this.boardUI.setOrientation(entryOrientation);
     document.getElementById('setting-orientation').value = this.boardUI.orientation;
-    const tags = pgn ? readPgnTags(pgn) : {};
-    const conclusion = positionOnly ? null : FairPlayGuard.verifyConcludedGame(pgn || { result });
     const game = positionOnly ? null : checkupGameContext(pgn, {
       source: checkupSource, publicGameUrl, orientation: checkupOrientation || this.boardUI.orientation, white, black
     });
@@ -1229,6 +1236,7 @@ class AnalysisStudioApp {
     this.sessionFallbackElo = fallbackElo;
     this.sessionInput = this.hasAnalysisInput ? {
       pgn, fen, white, black, result, checkupSource, publicGameUrl, landAtEnd,
+      ...(focusMove ? { focusMove, autoReview: false } : {}),
       positionInput: positionOnly,
       moves: !pgn && !positionOnly ? parsedMoves.map(({ element, ...move }) => move) : null,
       startFen: !pgn && !positionOnly ? parsedMoves.startFen : null
@@ -1311,7 +1319,8 @@ class AnalysisStudioApp {
       : String(this.moves.length);
 
     this.renderMoveList();
-    this.goToPly(landAtEnd && conclusion.ok && !positions.isPartial ? positions.length - 1 : 0, { silent: true });
+    const initialPly = focusMove?.ply ?? (landAtEnd && conclusion.ok && !positions.isPartial ? positions.length - 1 : 0);
+    this.goToPly(initialPly, { before: !!focusMove, silent: true });
     this.rememberSession();
     this.syncGameLink();
 
