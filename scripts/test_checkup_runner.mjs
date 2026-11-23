@@ -17,7 +17,7 @@ import { ChessBoard } from '../engine/chess-core.js';
 import { overviewSummary, clockErrorTone } from '../analysis/checkup-overview.js';
 import { checkupCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
 import { checkupFitBands, summarizeCheckupFit } from '../analysis/checkup-fit.js';
-import { pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
+import { checkupFitBandLabel, checkupFitHeadline, pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
 import {
   buildCheckupFitWindow, buildCheckupWindow, checkupClockSample, checkupFitForSpeed, checkupReportStability,
   checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
@@ -605,6 +605,23 @@ assert.equal(fineFit.fit.retained, 4);
 assert.equal(fineFit.fit.checked, 4);
 assert.deepEqual(fineFit.fit.estimate, { value: 1900, low: 1900, high: 1900 });
 assert.deepEqual(fineFit.fit.examples.map(move => move.gameIndex), [0, 1], 'Show evidence from separate games when possible');
+const exemplarGames = [
+  { fitSamples: [
+    { ply: 13, scores: [.003, .004, .017, .0009].map(Math.log) },
+    { ply: 15, scores: [.1, .1, .6, .2].map(Math.log) }
+  ] },
+  { fitSamples: [{ ply: 19, scores: [.1, .1, .12, .3].map(Math.log) }] }
+];
+const exemplars = summarizeCheckupFit(exemplarGames, 'standard');
+assert.equal(exemplars.eloSampleCount, 3, 'A low-probability move still contributes to the fit');
+assert.deepEqual(exemplars.fit.examples.map(move => move.ply), [15, 19], 'Show a common enough move on each side of the comparison');
+assert(exemplars.fit.examples[0].leaderProbability > exemplars.fit.examples[0].runnerProbability);
+assert(exemplars.fit.examples[1].leaderProbability < exemplars.fit.examples[1].runnerProbability);
+const broadStable = { closestElo: 1900, fit: {
+  status: 'stable', ranges: [{ low: 1500, high: 2200 }], logLead: Math.log(2), weights: [.05, .24, .484, .226], runner: 1500
+} };
+assert.match(checkupFitHeadline(broadStable), /Maia 1900/);
+assert.equal(checkupFitBandLabel(broadStable), '1900');
 const uncertain = summarizeCheckupFit(fineGames.map(game => ({ ...game,
   fitSamples: game.fitSamples.map(sample => ({ ...sample, scores: [-2, -4, -4, -4, -4, -2] })) })), 'fine');
 assert.equal(uncertain.fit.estimate, null);

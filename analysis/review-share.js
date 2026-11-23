@@ -1,8 +1,8 @@
-import { t, getLang } from './i18n.js?v=20261123-checkup-rerun';
+import { t, getLang } from './i18n.js?v=20261123-fit-report';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards } from './share-card.js?v=20261123-checkup-rerun';
-import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261123-checkup-rerun';
-import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-rerun';
+import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards } from './share-card.js?v=20261123-fit-report';
+import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261123-fit-report';
+import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-fit-report';
 
 const VIEWER = 'https://4chess.cc/analysis/shared.html';
 const byId = id => document.getElementById(id);

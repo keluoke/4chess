@@ -3,6 +3,15 @@ export const FINE_CHECKUP_ELOS = [1000, 1300, 1600, 1900, 2200, 2500];
 export const MAX_ELO_SAMPLES = 24;
 export const LOG_PROB_FLOOR = 1e-4;
 export const CHECKUP_CLOSE_LOG_GAP = Math.log(1.25);
+export const CHECKUP_EXAMPLE_POLICY = 2;
+const MIN_EXAMPLE_PROBABILITY = 0.08;
+
+export function isCheckupFitExample(sample) {
+  const { leaderProbability, runnerProbability } = sample;
+  const high = Math.max(leaderProbability, runnerProbability);
+  const low = Math.min(leaderProbability, runnerProbability);
+  return high + 1e-12 >= MIN_EXAMPLE_PROBABILITY && high + 1e-12 >= low * 1.5;
+}
 
 export function checkupFitBands(method) {
   return method === 'fine' ? FINE_CHECKUP_ELOS : CHECKUP_ELOS;
@@ -55,12 +64,16 @@ export function summarizeCheckupFit(games, method, { rolling = false } = {}) {
   const examples = samples.map(sample => ({
     gameIndex: sample.gameIndex, ply: sample.ply, moveNumber: sample.moveNumber, turn: sample.turn,
     san: sample.san, uci: sample.uci, fenBefore: sample.fenBefore,
-    leaderProbability: Math.exp(sample.scores[leader]), runnerProbability: Math.exp(sample.scores[runner]),
-    gap: Math.abs(sample.scores[leader] - sample.scores[runner])
-  })).filter(example => Number.isInteger(example.ply) && example.gap >= Math.log(1.5))
-    .sort((a, b) => b.gap - a.gap);
-  const first = examples[0];
-  const second = first && (examples.find(example => example.gameIndex !== first.gameIndex) || examples[1]);
+    leaderProbability: Math.exp(sample.scores[leader]), runnerProbability: Math.exp(sample.scores[runner])
+  })).filter(example => Number.isInteger(example.ply) && isCheckupFitExample(example))
+    .sort((a, b) => Math.abs(b.leaderProbability - b.runnerProbability) - Math.abs(a.leaderProbability - a.runnerProbability));
+  const supportsLeader = example => example.leaderProbability > example.runnerProbability;
+  const first = examples.find(supportsLeader) || examples[0];
+  const second = first && (
+    examples.find(example => example.gameIndex !== first.gameIndex && supportsLeader(example) !== supportsLeader(first)) ||
+    examples.find(example => example.gameIndex !== first.gameIndex) ||
+    examples.find(example => supportsLeader(example) !== supportsLeader(first)) ||
+    examples.find(example => example !== first));
 
   const supported = new Set();
   let mass = 0;
@@ -116,6 +129,6 @@ export function summarizeCheckupFit(games, method, { rolling = false } = {}) {
     eloFit[band] = Math.round(Math.exp(raw / samples.length) * 1000) / 1000;
   });
   return { ...summary, closestElo: bands[leader], fit: {
-    bands, weights, logLead, runner: bands[runner], checked, retained, estimate, ranges, status, influence, examples: [first, second].filter(Boolean)
+    bands, weights, logLead, runner: bands[runner], checked, retained, estimate, ranges, status, influence, examplePolicy: CHECKUP_EXAMPLE_POLICY, examples: [first, second].filter(Boolean)
   } };
 }

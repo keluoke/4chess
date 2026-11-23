@@ -1,7 +1,7 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-rerun';
-import { checkupReportMatchesAccount, normalizeAccount, normalizeAlias } from './study-store.js?v=20261123-checkup-rerun';
-import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-rerun';
-export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-rerun';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-fit-report';
+import { checkupReportMatchesAccount, normalizeAccount, normalizeAlias } from './study-store.js?v=20261123-fit-report';
+import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-fit-report';
+export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-fit-report';
 export const FEATURED_TRAPS = 5;
 export const OVERVIEW_GAME_LIMIT = 100;
 const WINDOW_SIZE = 10;

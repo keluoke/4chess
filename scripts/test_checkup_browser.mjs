@@ -144,18 +144,21 @@ try {
   assert.equal(await reportBox.locator('.checkup-chart-guide').count(), 7);
   const fitSpeed = page.getByRole('combobox', { name: 'Time control for intuition fit' });
   assert.equal(await fitSpeed.inputValue(), 'rapid');
-  assert((await reportBox.locator('.checkup-fit-section').innerText()).includes('Long-term fit · Rapid · 2/30 games'));
-  assert.match(await reportBox.locator('.checkup-stability-section').innerText(), /This view · 3 games/);
+  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /fit samples across 2 games/);
+  assert.doesNotMatch(await reportBox.locator('.checkup-report-context').innerText(), /30 games/);
+  assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /3\/10 covered/);
+  assert.equal(await reportBox.locator('.checkup-stability-phase').count(), 3);
   await fitSpeed.selectOption('blitz');
-  assert((await reportBox.locator('.checkup-fit-section').innerText()).includes('Blitz · 1/30 games'));
-  assert.match(await reportBox.locator('.checkup-stability-section').innerText(), /This view · 3 games/);
+  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /fit samples from 1 game/);
+  assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /3\/10 covered/);
+  assert.equal(await reportBox.locator('.checkup-stability-phase').count(), 3);
   await fitSpeed.selectOption('rapid');
   const cached = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.fitWindow.games.length);
   assert.equal(cached, 3);
 
   const scope = page.getByRole('combobox', { name: 'Report scope' });
   await scope.selectOption('batch');
-  assert.equal(await reportBox.locator('.checkup-window-coverage').count(), 0);
+  assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /This batch · 1 game/);
   await scope.selectOption('rolling');
   await page.evaluate(() => {
     const Analyzer = window.__maiaStudioApp.analyzer.constructor;
@@ -452,7 +455,7 @@ try {
   await page.locator('#btn-checkup-start').click();
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.traps?.length > 5 &&
     !window.__maiaStudioApp.checkup.busy);
-  assert.match(await reportBox.innerText(), /fit samples from 1 game/);
+  assert.match(await reportBox.innerText(), /moves in the fit/);
   assert.equal(await reportBox.locator('.checkup-fit-bar').count(), 6);
   assert.equal(await reportBox.locator('.checkup-fit-evidence-row').count(), 2);
   assert.match(await reportBox.locator('.checkup-fit-evidence').innerText(), /predicted 60\.0%/);
@@ -553,7 +556,7 @@ try {
   assert.equal(await puzzle.locator('input').count(), 0);
   assert.equal(await options.count(), 2);
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-rerun');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-fit-report');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   const labelOrder = await options.allTextContents();
@@ -681,7 +684,7 @@ try {
     checkup.latestReport = legacy;
     checkup.renderReport(legacy);
   });
-  assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves in these games looked most like Maia 2200');
+  assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves were closest to Maia 2200');
   const choosingPgn = page.waitForEvent('filechooser');
   await stability.getByRole('button', { name: 'Import PGN to recheck' }).click();
   const fileChooser = await choosingPgn;
@@ -715,6 +718,63 @@ try {
   assert.deepEqual(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.analyzedGameIds),
     ['live:12345676', 'live:12345677']);
   assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
+
+  await page.setViewportSize({ width: 1200, height: 920 });
+  await page.evaluate(() => {
+    const checkup = window.__maiaStudioApp.checkup;
+    const base = checkup.latestReport;
+    const games = Array.from({ length: 10 }, (_, i) => ({
+      ...base.games[i % 2], gameId: `live:${80000000 + i}`, timeClass: 'rapid',
+      playedRating: 1409, playedAt: Date.UTC(2026, 10, 19 + (i % 4))
+    }));
+    const fit = { bands: [1100, 1500, 1900, 2200], weights: [.057, .224, .484, .235], logLead: Math.log(.484 / .235),
+      runner: 2200, status: 'stable', checked: 10, retained: 9, ranges: [{ low: 1500, high: 2200 }], examplePolicy: 2,
+      examples: [
+        { ...games[0].fitSamples[0], gameIndex: 0, leaderProbability: .017, runnerProbability: .007 },
+        { ...games[0].fitSamples[0], gameIndex: 0, leaderProbability: .24, runnerProbability: .1 },
+        { ...games[1].fitSamples[0], gameIndex: 1, leaderProbability: .09, runnerProbability: .3 }
+      ]
+    };
+    const summary = { games, gameCount: 10, analyzedMoves: 197, screenedMoves: 197, eloSampleCount: 24, fitGameCount: 10,
+      closestElo: 1900, fit, phaseTraps: { opening: 1, middlegame: 10, endgame: 0 } };
+    const report = { ...base, ...summary, rolling: summary, fitWindow: { games: [] } };
+    checkup.latestReport = report;
+    checkup.scopedHistory = [report, { ...report, id: 'old-summary', createdAt: report.createdAt - 180000 }];
+    checkup.renderReport(report);
+  });
+  assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves were closest to Maia 1900');
+  assert.match(await reportBox.locator('.checkup-fit-metadata').innerText(), /Rapid rating median 1409[\s\S]*1500–2200/);
+  assert.match(await reportBox.locator('.checkup-fit-status.stable').innerText(), /Consistent leader/);
+  assert.match(await reportBox.locator('.checkup-fit-bar.best').innerText(), /Maia 1900[\s\S]*48.4%/);
+  const evidenceBox = reportBox.locator('.checkup-fit-evidence');
+  assert.match(await evidenceBox.innerText(), /distinguish Maia 1900 and 2200/);
+  assert.deepEqual(await evidenceBox.locator('.checkup-fit-direction').allTextContents(), ['Closer to Maia 1900', 'Closer to Maia 2200']);
+  assert.doesNotMatch(await evidenceBox.innerText(), /1.7%/);
+  assert.match(await stability.innerText(), /5.6[\s\S]*About 1.1 traps per game/);
+  assert.deepEqual(await stability.locator('.checkup-stability-phase strong').allTextContents(), ['1', '10', '0']);
+  assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /Altplayer · Chess.com Rapid · Last 10 games \(197 decisions\)/);
+  assert.match(await reportBox.locator('.checkup-report-context-detail').innerText(), /Nov 19/);
+  const historyOptions = await reportBox.locator('.checkup-history-select option').allTextContents();
+  assert(historyOptions.every(option => option.startsWith('Last 10 games · ') && !/Altplayer|Chess.com/.test(option)));
+  const evidenceButton = evidenceBox.getByRole('button', { name: 'Review this move' }).first();
+  assert(await evidenceButton.evaluate(button => button.classList.contains('checkup-review-move') &&
+    getComputedStyle(button).borderTopWidth === '1px'));
+  if (process.env.TEST_CHECKUP_CARDS) {
+    await reportBox.locator('.checkup-summary-card').screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-report-layout.png' });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await reportBox.evaluate(box => box.scrollWidth <= box.clientWidth));
+
+  await page.evaluate(() => {
+    const checkup = window.__maiaStudioApp.checkup;
+    const report = checkup.latestReport;
+    const games = [...report.games, ...report.games.slice(0, 2)].map((game, index) => ({
+      ...game, gameId: `live:${90000000 + index}`
+    }));
+    report.fitWindow = { games };
+    checkup.renderReport(report);
+  });
+  assert.match(await reportBox.locator('.checkup-report-context-detail').innerText(), /Long-term fit · Rapid · 12\/30 games/);
 
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(errors, []);

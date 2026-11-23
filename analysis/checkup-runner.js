@@ -1,28 +1,30 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-rerun';
-import { getLang, t } from './i18n.js?v=20261123-checkup-rerun';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-fit-report';
+import { getLang, t } from './i18n.js?v=20261123-fit-report';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-rerun';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-rerun';
+} from './checkup-archives.js?v=20261123-fit-report';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-fit-report';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-checkup-rerun';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-rerun';
-import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-rerun';
-import { checkupFitBands } from './checkup-fit.js?v=20261123-checkup-rerun';
-import { renderCheckupFit, renderCheckupStability, withCheckupFit } from './checkup-fit-view.js?v=20261123-checkup-rerun';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-rerun';
+} from './checkup-insights.js?v=20261123-fit-report';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-fit-report';
+import { CheckupShare, checkupCardData, overviewCardData } from './checkup-share.js?v=20261123-fit-report';
+import { checkupFitBands } from './checkup-fit.js?v=20261123-fit-report';
+import {
+  checkupFitScope, checkupReportDateRange, renderCheckupFit, renderCheckupStability, withCheckupFit
+} from './checkup-fit-view.js?v=20261123-fit-report';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-fit-report';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-checkup-rerun';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-rerun';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-rerun';
+} from './checkup-archives.js?v=20261123-fit-report';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-fit-report';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-fit-report';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 
@@ -1191,11 +1193,32 @@ export class IntuitionCheckup {
 
     const metaRow = document.createElement('div');
     metaRow.className = 'checkup-report-meta';
-    const badge = document.createElement('span');
-    badge.className = 'checkup-source-badge';
-    const timeStr = formatRelativeTime(report.createdAt);
-    badge.textContent = `${formatSourceBadge(report.sourceLabel)}${timeStr ? ` · ${timeStr}` : ''}`;
-    metaRow.append(badge);
+    const overview = document.createElement('div');
+    overview.className = 'checkup-report-context';
+    const rolling = report.rolling && this.reportScope === 'rolling';
+    const fit = report.intuition || report;
+    const timeClasses = new Set((report.games || []).map(game => game.timeClass || ''));
+    const speed = timeClasses.values().next().value;
+    const speedLabel = timeClasses.size > 1 ? t('checkupReportMixedSpeed') : speed && this.speedLabel(speed);
+    const source = [formatSourceBadge(report.sourceLabel), speedLabel].filter(Boolean).join(' ');
+    const coverage = rolling ? (report.gameCount === 10 ? 'checkupSummaryWindow' : 'checkupSummaryWindowPartial')
+      : report.gameCount === 1 ? 'checkupSummaryBatchOne' : 'checkupSummaryBatch';
+    const title = document.createElement('strong');
+    title.className = 'checkup-report-byline';
+    title.textContent = [report.playerName, source, t(coverage, { games: report.gameCount, moves: report.analyzedMoves })]
+      .filter(Boolean).join(' · ');
+    overview.append(title);
+    const dateRange = checkupReportDateRange(report.games);
+    const fitScope = fit.isFitWindow && fit.fitGameCount > report.gameCount
+      ? checkupFitScope(fit, value => this.speedLabel(value)) : '';
+    const extra = [dateRange || formatRelativeTime(report.createdAt), fitScope].filter(Boolean);
+    if (extra.length) {
+      const context = document.createElement('p');
+      context.className = 'checkup-report-context-detail';
+      context.textContent = extra.join(' · ');
+      overview.append(context);
+    }
+    metaRow.append(overview);
 
     const metaActions = document.createElement('div');
     metaActions.className = 'checkup-meta-actions';
@@ -1208,8 +1231,13 @@ export class IntuitionCheckup {
         const opt = document.createElement('option');
         opt.value = item.id;
         const rel = formatRelativeTime(item.createdAt);
-        const scope = item.rolling ? t('checkupWindowCoverage', { count: item.rolling.gameCount }) : t('checkupBatchScope', { count: item.gameCount });
-        opt.textContent = [item.playerName, formatSourceBadge(item.sourceLabel), scope, rel].filter(Boolean).join(' · ');
+        const scope = item.rolling ? (item.rolling.gameCount === 10 ? t('checkupHistoryRecentWindow')
+          : t('checkupWindowCoverage', { count: item.rolling.gameCount })) : t(item.gameCount === 1 ? 'checkupHistoryOne' : 'checkupBatchScope', { count: item.gameCount });
+        const samePlayer = normalizeAlias(item.playerName) === normalizeAlias(report.playerName);
+        const sameSource = checkupSourceType(item.sourceLabel) === checkupSourceType(report.sourceLabel);
+        opt.textContent = [!samePlayer && item.playerName, !sameSource && formatSourceBadge(item.sourceLabel), scope, rel]
+          .filter(Boolean).join(' · ');
+        opt.title = [item.playerName, formatSourceBadge(item.sourceLabel), scope, rel].filter(Boolean).join(' · ');
         if (item.id === report.id) opt.selected = true;
         select.append(opt);
       }
@@ -1240,43 +1268,19 @@ export class IntuitionCheckup {
     }
     metaRow.append(metaActions);
     summary.append(metaRow);
-    if (report.rolling && this.reportScope === 'rolling') {
-      const coverage = document.createElement('p');
-      coverage.className = 'checkup-elo-note checkup-window-coverage';
-      coverage.textContent = t('checkupWindowCoverage', { count: report.gameCount });
-      summary.append(coverage);
-    }
-
-    const title = document.createElement('strong');
-    title.textContent = t('checkupSummaryTitle', {
-      player: report.playerName,
-      games: report.gameCount,
-      moves: report.analyzedMoves
-    });
     const profile = document.createElement('div');
     profile.className = 'checkup-profile-grid';
-    profile.append(renderCheckupFit(report.intuition || report, (game, move) => this.openReportGame(report, game, move),
-      value => this.speedLabel(value), speed => {
+    profile.append(renderCheckupFit(fit, {
+      openMove: (game, move) => this.openReportGame(report, game, move),
+      speedLabel: value => this.speedLabel(value),
+      viewCount: report.gameCount,
+      changeSpeed: speed => {
         this.fitSpeedSelection = { reportId: report.id, speed };
         this.renderReport(archivedReport);
         this.reportBox.querySelector('.checkup-fit-speed')?.focus({ preventScroll: true });
-      }), renderCheckupStability(report.stability, report.gameCount,
-      report.stability.density == null ? this.reportRerunAction(report) : null));
-    summary.append(title, profile);
-
-    const phaseLine = document.createElement('p');
-    phaseLine.className = 'checkup-phase-line';
-    const phaseText = t('checkupPhaseBreakdown', {
-      opening: report.phaseTraps?.opening || 0,
-      middlegame: report.phaseTraps?.middlegame || 0,
-      endgame: report.phaseTraps?.endgame || 0
-    });
-    const screenLabel = { pgn: 'checkupScreenPgn', fit: 'checkupScreenFit', manual: 'checkupScreenManual',
-      default: 'checkupScreenDefault', rolling: 'checkupScreenRolling' };
-    phaseLine.textContent = Number.isFinite(report.screenElo)
-      ? `${phaseText} · ${t(screenLabel[report.screenEloSource] || 'checkupScreenElo', { elo: report.screenElo })}`
-      : phaseText;
-    summary.append(phaseLine);
+      }
+    }), renderCheckupStability(report, report.stability.density == null ? this.reportRerunAction(report) : null));
+    summary.append(profile);
     this.reportBox.append(summary);
 
     this.renderHighlights(report);
@@ -1444,7 +1448,7 @@ export class IntuitionCheckup {
         advantage: evidence.advantage.toFixed(1)
       }) : t('checkupHighlightVerified');
       article.append(label, san, why);
-      if (game?.pgn) article.append(this.reportButton(t('checkupOpenMove'), () => this.openReportGame(report, game, move)));
+      if (game?.pgn) article.append(this.reportButton(t('checkupOpenMove'), () => this.openReportGame(report, game, move), 'checkup-review-move'));
       cards.append(article);
     }
     section.append(cards);

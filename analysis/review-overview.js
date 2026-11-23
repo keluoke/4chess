@@ -1,7 +1,7 @@
-import { getLang, t } from './i18n.js?v=20261123-checkup-rerun';
+import { getLang, t } from './i18n.js?v=20261123-fit-report';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { turningPointWording } from './review-commentary.js?v=20261123-checkup-rerun';
+import { turningPointWording } from './review-commentary.js?v=20261123-fit-report';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const byId = id => document.getElementById(id);

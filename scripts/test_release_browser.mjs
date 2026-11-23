@@ -12,7 +12,7 @@ const output = path.join(root, 'artifacts/delivery-2026-10-25');
 fs.mkdirSync(output, { recursive: true });
 const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
-const releaseVersion = '20261123-checkup-rerun';
+const releaseVersion = '20261123-fit-report';
 const releaseModules = new Set([
  '/ui/theme.js', '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
  '/analysis/checkup-runner.js', '/analysis/checkup-archives.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/checkup-overview.js', '/analysis/study-store.js',
