@@ -25,12 +25,20 @@ try {
   const first = '[White "Seanyan"]\n[WhiteElo "2180"]\n[Black "Rival"]\n[BlackElo "1400"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 1-0';
   const second = '[White "Rival"]\n[Black "Seanyan"]\n[BlackElo "2180"]\n[Result "0-1"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 Nbd7 7. Rc1 c6 8. Bd3 dxc4 0-1';
   await context.route('https://weights.4chess.cc/**', route => route.abort());
-  await context.route('https://api.chess.com/**', route => route.fulfill({ json: route.request().url().endsWith('/archives')
-    ? { archives: [] }
-    : { games: [
-      { rules: 'chess', url: 'https://www.chess.com/game/live/12345672', pgn: second },
-      { rules: 'chess', url: 'https://www.chess.com/game/live/12345671', pgn: first }
-    ] } }));
+  let clarkNew = false;
+  await context.route('https://api.chess.com/**', route => {
+    const url = route.request().url();
+    if (url.endsWith('/archives')) return route.fulfill({ json: { archives: [] } });
+    const player = new URL(url).pathname.split('/')[3];
+    const name = { clarkyan: 'Clarkyan', altplayer: 'Altplayer' }[player] || 'Seanyan';
+    const base = { clarkyan: 12345673, altplayer: 12345676 }[player] || 12345671;
+    const archived = (id, pgn) => ({
+      rules: 'chess', url: `https://www.chess.com/game/live/${id}`, pgn: pgn.replaceAll('Seanyan', name)
+    });
+    const games = [archived(base + 1, second), archived(base, first)];
+    if (clarkNew && player === 'clarkyan') games.push(archived(base + 2, first));
+    return route.fulfill({ json: { games } });
+  });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -64,10 +72,40 @@ try {
     await page.locator('#checkup-username').fill(username);
     await page.locator('#btn-checkup-save-account').click();
   };
-  await link('Clarkyan');
   const clark = page.locator('[data-account="chesscom:clarkyan"]');
   const sean = page.locator('[data-account="chesscom:seanyan"]');
-  await clark.waitFor();
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    const initialize = app.stockfish.initialize.bind(app.stockfish);
+    window.checkupStarts = 0;
+    app.stockfish.initialize = async () => { window.checkupStarts++; return true; };
+    app.maiaEngine.initialize = async () => true;
+    app.maiaEngine.predict = async () => ({ moves: [{ uci: 'a4b3', rawProb: 0.08 }] });
+    window.restoreInitialStockfish = () => { app.stockfish.initialize = initialize; };
+  });
+  await page.locator('#checkup-username').fill('Clarkyan');
+  await page.locator('#btn-checkup-fetch').click();
+  await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.gameCount === 2 &&
+    !window.__maiaStudioApp.checkup.busy);
+  assert(await clark.isHidden());
+  const initialReport = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id);
+  await link('Clarkyan');
+  await clark.getByRole('button', { name: /check for new games/i }).waitFor();
+  assert.match(await clark.locator('.checkup-account-status').innerText(), /last checkup/i);
+  assert.match(await page.locator('#btn-checkup-fetch').innerText(), /run again/i);
+  await clark.getByRole('button', { name: /view report/i }).click();
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id), initialReport);
+  await clark.getByRole('button', { name: /check for new games/i }).click();
+  await page.getByText('No new games to analyze.').waitFor();
+  assert.equal(await page.evaluate(() => window.checkupStarts), 1, 'An unchanged batch does not start the engines');
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id), initialReport);
+  clarkNew = true;
+  await clark.getByRole('button', { name: /check for new games/i }).click();
+  await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.gameCount === 1 &&
+    !window.__maiaStudioApp.checkup.busy);
+  assert.deepEqual(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.analyzedGameIds), ['live:12345675']);
+  assert.equal(await page.evaluate(() => window.checkupStarts), 2);
+  await page.evaluate(() => window.restoreInitialStockfish());
   await link('Seanyan');
   assert.match(await editor.innerText(), /another player/i);
   await page.locator('#study-profile-keep').click();
@@ -145,10 +183,23 @@ try {
   await sean.waitFor();
   assert(await clark.isHidden());
   assert.equal(await profileSelect.locator('option').count(), 2);
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    app.stockfish.initialize = async () => true;
+    app.maiaEngine.initialize = async () => true;
+  });
+  await page.locator('#checkup-username').fill('Altplayer');
+  await page.locator('#btn-checkup-fetch').click();
+  await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.playerName === 'Altplayer' &&
+    !window.__maiaStudioApp.checkup.busy);
+  const splitReport = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id);
   await link('Altplayer');
+  assert.match(await editor.innerText(), /move the report you just ran/i);
   await page.locator('#study-profile-save').click();
   await page.waitForFunction(() => window.__maiaStudioApp.mistakeBank.activeProfile?.displayName === 'Altplayer');
-  await page.locator('[data-account="chesscom:altplayer"]').waitFor();
+  const alt = page.locator('[data-account="chesscom:altplayer"]');
+  await alt.getByRole('button', { name: /check for new games/i }).waitFor();
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport?.id), splitReport);
   const isolation = await page.evaluate(async () => {
     const bank = window.__maiaStudioApp.mistakeBank;
     const player = bank.profiles.find(profile => profile.displayName === 'Seanyan');
@@ -158,11 +209,14 @@ try {
       movedAccounts: player.accounts.map(account => account.username),
       originalAccounts: original.accounts.map(account => account.username),
       originalReports: (await bank.store.listCheckups(original.id)).length,
-      movedReports: (await bank.store.listCheckups(player.id)).length
+      movedReports: (await bank.store.listCheckups(player.id)).length,
+      splitReports: (await bank.store.listCheckups(bank.activeProfile.id)).map(report => report.id),
+      splitDiagnosed: bank.activeProfile.checkupReminders['chesscom:altplayer'].diagnosed
     };
   });
   assert.deepEqual(isolation, {
-    newAccounts: ['Altplayer'], movedAccounts: ['Seanyan'], originalAccounts: ['Clarkyan'], originalReports: 1, movedReports: 0
+    newAccounts: ['Altplayer'], movedAccounts: ['Seanyan'], originalAccounts: ['Clarkyan'], originalReports: 3, movedReports: 0,
+    splitReports: [splitReport], splitDiagnosed: ['live:12345676', 'live:12345677']
   });
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await page.locator('#btn-checkup-new-profile').isVisible());
@@ -191,7 +245,7 @@ try {
   await page.reload();
   await page.waitForFunction(() => window.__maiaStudioApp?.positions.length && window.__maiaStudioApp.currentElo === 2200);
   assert.deepEqual(errors, []);
-  console.log('PASS checkup workbench: profile creation and account split, badge counts and dismissal, progress ETA, backdrop and Escape, partial persistence and completed-review acknowledgement.');
+  console.log('PASS checkup workbench: diagnose before link, skip unchanged batches, check new games, move the latest report on split, badge dismissal, safe cancellation and completed-review acknowledgement.');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

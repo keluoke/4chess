@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261122-v129';
 import { expectedScore } from '../engine/review-policy.js?v=20261117-review-policy';
-import { accountKey, buildTrapRecord, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-v127';
+import { accountKey, buildTrapRecord, checkupReportMatchesAccount, detectPhase, normalizeAccount, normalizeAlias, perspectiveNames, trapId } from './study-store.js?v=20261121-v127';
 import { t } from './i18n.js?v=20261122-v129';
 import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261121-v127';
 
@@ -645,6 +645,7 @@ export class IntuitionCheckup {
         this.requestStop({ close: true });
       });
       this.dialog.addEventListener('close', () => {
+        this.lastRunReportId = null;
         if (this.updatingProfile && this.app.studyProfiles?.editor.open) this.app.studyProfiles.editor.close();
         if (this.stopDialog?.open) this.stopDialog.close();
         this.openGeneration++;
@@ -747,6 +748,7 @@ export class IntuitionCheckup {
     const gameChanged = this.gameContext !== this.app.checkupGame;
     const profileChanged = this.activeProfileId !== profileId;
     if (gameChanged || profileChanged) {
+      this.lastRunReportId = null;
       this.latestReport = null;
       this.pendingBatch = null;
       this.setStatus('');
@@ -817,7 +819,11 @@ export class IntuitionCheckup {
     this.renderSourceControls();
     try {
       if (remove) await bank.updateProfileAccount(id, platform, username, { remove });
-      else if (!await this.app.studyProfiles.linkAccount(account)) return;
+      else {
+        const report = this.history.find(item => item.id === this.lastRunReportId);
+        const reportId = checkupReportMatchesAccount(report, account) ? report.id : null;
+        if (!await this.app.studyProfiles.linkAccount(account, { reportId })) return;
+      }
       if (generation !== this.openGeneration || !this.allowed()) return;
       if (bank.activeProfile?.id !== id) {
         await this.open({ account });
@@ -898,18 +904,22 @@ export class IntuitionCheckup {
       const name = document.createElement('strong');
       name.className = 'checkup-account-name';
       name.textContent = label;
+      const selectAccount = () => {
+        this.source = account.platform;
+        this.usernameInput.value = account.username;
+        this.setStatus('');
+        this.applyHistoryContext();
+        this.renderSourceControls();
+        this.renderReport(this.latestReport);
+      };
       const run = document.createElement('button');
       run.type = 'button';
       run.className = 'btn-header';
-      run.textContent = t('checkupRunAccount');
-      run.setAttribute('aria-label', t('checkupRunAccountLabel', { account: label }));
       run.onclick = () => {
         if (this.busy || !this.allowed()) return;
-        this.source = account.platform;
-        this.usernameInput.value = account.username;
-        this.applyHistoryContext();
-        this.renderReport(this.latestReport);
-        this.prepareBatch();
+        selectAccount();
+        const { record, pending } = this.app.checkupReminders?.accountState(account) || {};
+        this.prepareBatch({ onlyNew: !!(pending?.length || record?.lastDiagnosedAt || this.latestReport) });
       };
       const unlink = document.createElement('button');
       unlink.type = 'button';
@@ -936,8 +946,16 @@ export class IntuitionCheckup {
           ignore.disabled = this.busy;
         }
       };
+      const view = document.createElement('button');
+      view.type = 'button';
+      view.className = 'btn-header checkup-view-report';
+      view.textContent = t('checkupViewReport');
+      view.setAttribute('aria-label', `${t('checkupViewReport')} · ${label}`);
+      view.onclick = () => {
+        if (!this.busy && this.allowed()) selectAccount();
+      };
       identity.append(name, status);
-      row.append(identity, run, ignore);
+      row.append(identity, run, view, ignore);
       if (accounts.length > 1) {
         const move = document.createElement('button');
         move.type = 'button';
@@ -957,24 +975,31 @@ export class IntuitionCheckup {
     if (!this.accountList) return;
     const accounts = this.app.mistakeBank?.activeProfile?.accounts || [];
     const states = new Map(accounts.map(account => [
-      accountKey(account), this.app.checkupReminders?.accountState(account)
+      accountKey(account), { account, ...this.app.checkupReminders?.accountState(account) }
     ]));
     const rows = [...this.accountList.children];
     for (const row of rows) {
-      const { record, pending } = states.get(row.dataset.account) || {};
+      const state = states.get(row.dataset.account);
+      if (!state) continue;
+      const { account, record, pending } = state;
       const count = pending?.length || 0;
       const status = row.querySelector('.checkup-account-status');
       const checked = record?.checkedAt;
-      const diagnosed = record?.lastDiagnosedAt;
+      const report = this.history.find(item => checkupReportMatchesAccount(item, account));
+      const diagnosed = Math.max(record?.lastDiagnosedAt || 0, report?.createdAt || 0);
       status.dataset.pending = String(count > 0);
       const recent = diagnosed ? t('checkupLastDiagnosis', { when: formatRelativeTime(diagnosed) }) : '';
       status.textContent = count ? t('checkupAccountPending', { count })
         : checked ? [t('checkupCaughtUp'), recent].filter(Boolean).join(' · ')
         : recent || t('checkupAwaitingCheck');
       row.querySelector('.checkup-ignore').hidden = count === 0;
-      row.querySelector('button').textContent = t(count ? 'checkupRunAccount' : diagnosed ? 'checkupRunAgain' : 'checkupRunFirst');
+      row.querySelector('.checkup-view-report').hidden = !report;
+      const run = row.querySelector('button');
+      const action = count ? 'checkupRunNew' : diagnosed ? 'checkupFindNew' : 'checkupRunFirst';
+      run.textContent = t(action);
+      run.setAttribute('aria-label', `${t(action)} · ${this.accountLabel(account)}`);
     }
-    const count = row => states.get(row.dataset.account)?.pending.length || 0;
+    const count = row => states.get(row.dataset.account)?.pending?.length || 0;
     const ordered = [...rows].sort((a, b) => Number(count(b) > 0) - Number(count(a) > 0));
     const focused = this.accountList.contains(document.activeElement) ? document.activeElement : null;
     ordered.forEach((row, index) => {
@@ -1019,7 +1044,8 @@ export class IntuitionCheckup {
     }
     if (this.btnFetch) {
       this.btnFetch.disabled = busy;
-      this.btnFetch.textContent = t(isLocal ? 'checkupParseLocal' : 'checkupFetchGames');
+      const hasReport = account && this.history.some(item => checkupReportMatchesAccount(item, account));
+      this.btnFetch.textContent = t(isLocal ? 'checkupParseLocal' : hasReport ? 'checkupRunAgain' : 'checkupFetchGames');
     }
     if (this.playerChoices) {
       this.playerChoices.replaceChildren();
@@ -1099,7 +1125,7 @@ export class IntuitionCheckup {
     if (this.statusEl) this.statusEl.textContent = text;
   }
 
-  async prepareBatch() {
+  async prepareBatch({ onlyNew = false } = {}) {
     if (this.busy || !this.allowed()) return;
     const generation = this.openGeneration;
     const source = this.source;
@@ -1146,6 +1172,25 @@ export class IntuitionCheckup {
       }
 
       if (source !== 'local') {
+        const account = onlyNew && normalizeAccount(source, suggestedName);
+        if (account) {
+          const state = await this.app.mistakeBank?.store.loadCheckupProfile(startProfileId);
+          if (!current()) return;
+          if (state) this.history = state.reports;
+          const reports = this.history.filter(item => checkupReportMatchesAccount(item, account));
+          const record = state?.profile?.checkupReminders?.[accountKey(account)];
+          const known = new Set([...(record?.baseline || []), ...(record?.diagnosed || []),
+            ...reports.flatMap(report => report.analyzedGameIds || [])]);
+          games = games.filter(game => !game.gameId || !known.has(game.gameId));
+          if (!games.length) {
+            this.applyHistoryContext();
+            this.latestReport = reports.find(report => !report.partial) || reports[0] || null;
+            this.fallbackReport = null;
+            this.renderReport(this.latestReport);
+            this.setStatus(t('checkupNoNewGames'));
+            return;
+          }
+        }
         this.fetching = false;
         await this.startRun({ games, sourceLabel, profileId: startProfileId }, suggestedName);
         return;
@@ -1246,6 +1291,7 @@ export class IntuitionCheckup {
         this.fallbackReport = null;
         if (this.app.mistakeBank?.store) {
           await this.app.mistakeBank.store.saveCheckup(savedRecord);
+          if (current()) this.lastRunReportId = savedRecord.id;
           await this.app.checkupReminders?.reload(batch.profileId);
           this.app.checkupReminders?.syncBackground();
         }

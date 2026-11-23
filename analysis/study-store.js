@@ -1,4 +1,4 @@
-import { markCheckupGames } from '../engine/checkup-watch.js?v=20261121-v127';
+import { checkupGameIds, markCheckupGames } from '../engine/checkup-watch.js?v=20261121-v127';
 import { parseStudioElo } from '../engine/chess-notation.js?v=20261120-import';
 
 const DB_NAME = 'diverge_study_v1';
@@ -42,6 +42,44 @@ export function normalizeAccount(platform, username) {
 
 export function accountKey({ platform, username }) {
   return `${platform}:${username.toLowerCase()}`;
+}
+
+function checkupReportAccount(report) {
+  const [platform, username] = String(report?.sourceLabel || '').split(':');
+  const account = normalizeAccount(platform, report?.playerName);
+  return account && (!username || normalizeAlias(username) === normalizeAlias(account.username)) ? account : null;
+}
+
+export function checkupReportMatchesAccount(report, account) {
+  const reported = checkupReportAccount(report);
+  return !!reported && !!account && accountKey(reported) === accountKey(account);
+}
+
+function newestCheckups(a, b) {
+  return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+}
+
+function restoreCheckupReminders(profile, reports) {
+  const reminders = { ...profile.checkupReminders };
+  let changed = false;
+  for (const account of profile.accounts || []) {
+    const matches = reports.filter(report => checkupReportMatchesAccount(report, account));
+    const withIds = matches.map(report => ({ report, ids: checkupGameIds(account.platform, report.analyzedGameIds) }))
+      .filter(item => item.ids.length);
+    if (!withIds.length) continue;
+
+    const timestamp = Math.max(0, ...withIds.map(({ report }) => Number.isSafeInteger(report.createdAt) ? report.createdAt : 0));
+    const key = accountKey(account);
+    const current = reminders[key] || {};
+    // Keep existing acknowledgements when the historical IDs exceed the reminder limit.
+    const existing = current.diagnosed || [];
+    const next = markCheckupGames(current, account.platform, [...existing, ...withIds.flatMap(item => item.ids)], timestamp);
+    if (next.lastDiagnosedAt === (current.lastDiagnosedAt || 0) && next.diagnosed.length === existing.length &&
+      next.diagnosed.every((id, index) => id === existing[index])) continue;
+    reminders[key] = next;
+    changed = true;
+  }
+  return changed ? { ...profile, checkupReminders: reminders } : profile;
 }
 
 function mergeAccounts(...lists) {
@@ -377,7 +415,7 @@ export class StudyStore {
     return record;
   }
 
-  async saveProfile({ id, displayName, aliases = [], account, moveFrom }, now = Date.now()) {
+  async saveProfile({ id, displayName, aliases = [], account, moveFrom, transferCheckup }, now = Date.now()) {
     await this.init();
     const cleanName = String(displayName || '').trim();
     if (!cleanName) throw new Error('Profile name is required');
@@ -391,6 +429,9 @@ export class StudyStore {
       createdAt: existing?.createdAt || now,
       updatedAt: now
     });
+    if (!id && !moveFrom && account && typeof transferCheckup?.id === 'string') {
+      return this.createProfileWithCheckup(build(), account, transferCheckup);
+    }
     if (!moveFrom) return this.writeProfile(profileId, build);
 
     const key = accountKey(account);
@@ -421,6 +462,57 @@ export class StudyStore {
     return created;
   }
 
+  async createProfileWithCheckup(profile, account, { id, profileId }) {
+    const tx = this.db?.transaction(['profiles', 'checkups'], 'readwrite');
+    const reports = tx?.objectStore('checkups');
+    const report = reports ? await txRequest(reports.get(id)) : this.memory.checkups.get(id);
+    const matching = report?.profileId === profileId && checkupReportMatchesAccount(report, account);
+    let moved;
+    if (matching) {
+      const topTraps = (report.topTraps || []).map(trap => ({
+        ...trap, profileId: profile.id, id: trapId(profile.id, trap.fenBefore, trap.playedUci || trap.uci)
+      }));
+      moved = { ...report, profileId: profile.id, topTraps, topTrapIds: topTraps.map(trap => trap.id) };
+      profile = restoreCheckupReminders(profile, [moved]);
+    }
+    if (tx) {
+      this.requestPersistence();
+      const committed = transactionDone(tx);
+      tx.objectStore('profiles').add(profile);
+      if (moved) reports.put(moved);
+      await committed;
+    } else {
+      this.memory.profiles.set(profile.id, structuredClone(profile));
+      if (moved) this.memory.checkups.set(id, structuredClone(moved));
+    }
+    return profile;
+  }
+
+  async loadCheckupProfile(id, { addAccount } = {}) {
+    await this.init();
+    const tx = this.db?.transaction(['profiles', 'checkups'], 'readwrite');
+    const profiles = tx?.objectStore('profiles');
+    const [existing, reports] = profiles ? await Promise.all([
+      txRequest(profiles.get(id)),
+      txRequest(tx.objectStore('checkups').index('by_profile').getAll(id))
+    ]) : [this.memory.profiles.get(id), [...this.memory.checkups.values()].filter(report => report.profileId === id)];
+    reports.sort(newestCheckups);
+    if (!existing) return { profile: null, reports };
+    const profile = restoreCheckupReminders(addAccount
+      ? { ...existing, accounts: mergeAccounts(existing.accounts, [addAccount]) } : existing, reports);
+    if (profile !== existing) {
+      if (profiles) {
+        this.requestPersistence();
+        const committed = transactionDone(tx);
+        profiles.put(profile);
+        await committed;
+      } else {
+        this.memory.profiles.set(id, structuredClone(profile));
+      }
+    }
+    return { profile, reports };
+  }
+
   async setProfileElo(id, value, now = Date.now()) {
     const defaultElo = parseStudioElo(value);
     if (!defaultElo) throw new Error('Invalid Maia rating');
@@ -431,13 +523,11 @@ export class StudyStore {
   async setProfileAccount(id, platform, username, { remove = false } = {}) {
     const account = normalizeAccount(platform, username);
     if (!account) return null;
+    if (!remove) return (await this.loadCheckupProfile(id, { addAccount: account })).profile;
     await this.init();
     return this.writeProfile(id, existing => {
       if (!existing) return null;
-      const accounts = remove
-        ? (existing.accounts || []).filter(item => accountKey(item) !== accountKey(account))
-        : mergeAccounts(existing.accounts, [account]);
-      if (!remove) return { ...existing, accounts };
+      const accounts = (existing.accounts || []).filter(item => accountKey(item) !== accountKey(account));
       const checkupReminders = { ...existing.checkupReminders };
       delete checkupReminders[accountKey(account)];
       return { ...existing, accounts, checkupReminders };
@@ -557,7 +647,7 @@ export class StudyStore {
   async saveCheckup(record) {
     await this.init();
     if (!record?.id || !record.profileId) return null;
-    const account = normalizeAccount(String(record.sourceLabel || '').split(':')[0], record.playerName);
+    const account = checkupReportAccount(record);
     const ids = record.analyzedGameIds;
     if (account && ids?.length && this.db) {
       const key = accountKey(account);
@@ -590,7 +680,7 @@ export class StudyStore {
     await this.init();
     return (await this.getAll('checkups'))
       .filter(item => item.profileId === profileId)
-      .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      .sort(newestCheckups);
   }
 
   async deleteCheckup(id) {

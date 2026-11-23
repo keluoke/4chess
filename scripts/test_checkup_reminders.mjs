@@ -77,6 +77,49 @@ assert.equal(exported.backgroundCheckup, undefined, 'An exported profile does no
 await store.setProfileAccount('default', lichess.platform, lichess.username, { remove: true });
 assert.equal(await state(), undefined);
 
+// A report saved before linking still belongs to that profile and platform.
+const experienced = { platform: 'lichess', username: 'GuestChess' };
+const full = {
+  id: 'guest-full', profileId: 'default', sourceLabel: 'lichess:guestchess', playerName: 'GuestChess',
+  gameCount: 1, createdAt: now - 100, analyzedGameIds: ['Guest123']
+};
+await store.saveCheckup(full);
+await store.saveCheckup({ ...full, id: 'guest-partial', partial: true, createdAt: now, analyzedGameIds: ['Guest456'] });
+await store.saveCheckup({ ...full, id: 'guest-local', sourceLabel: 'local-pgn-batch', analyzedGameIds: ['Local123'] });
+await store.saveCheckup({ ...full, id: 'guest-other-platform', sourceLabel: 'chesscom:GuestChess', analyzedGameIds: ['live:12345'] });
+await store.saveCheckup({ ...full, id: 'guest-legacy', createdAt: now + 1, analyzedGameIds: undefined });
+let guestProfile = await store.setProfileAccount('default', 'lichess', 'GUESTCHESS');
+assert.deepEqual(guestProfile.checkupReminders['lichess:guestchess'].diagnosed, ['Guest456', 'Guest123']);
+assert.equal(guestProfile.checkupReminders['lichess:guestchess'].lastDiagnosedAt, now);
+await store.updateCheckupReminder('default', experienced, () => ({
+  checkedAt: now, baseline: ['Baseline'], diagnosed: ['Seen1234']
+}));
+guestProfile = (await store.loadCheckupProfile('default')).profile;
+assert.deepEqual(guestProfile.checkupReminders['lichess:guestchess'], {
+  checkedAt: now, baseline: ['Baseline'], diagnosed: ['Seen1234', 'Guest456', 'Guest123'], lastDiagnosedAt: now
+});
+assert.deepEqual((await store.loadCheckupProfile('default')).profile, guestProfile, 'Repair is idempotent');
+
+const trap = { id: 'default|fen|e2e4', profileId: 'default', fenBefore: 'fen', playedUci: 'e2e4' };
+await store.saveCheckup({ ...full, id: 'transfer', topTraps: [trap], topTrapIds: [trap.id] });
+await store.put('traps', trap);
+const unrelated = await store.saveProfile({
+  displayName: 'Other account', account: { platform: 'lichess', username: 'Another' },
+  transferCheckup: { id: 'transfer', profileId: 'default' }
+});
+assert.equal((await store.listCheckups(unrelated.id)).length, 0);
+const moved = await store.saveProfile({
+  displayName: 'Guest', account: experienced, transferCheckup: { id: 'transfer', profileId: 'default' }
+});
+const [transferred] = await store.listCheckups(moved.id);
+assert.equal(transferred.id, 'transfer');
+assert.deepEqual(transferred.topTrapIds, [`${moved.id}|fen|e2e4`]);
+assert.equal(transferred.topTraps[0].profileId, moved.id);
+assert.deepEqual(moved.checkupReminders['lichess:guestchess'].diagnosed, ['Guest123']);
+assert.equal((await store.listCheckups('default')).some(report => report.id === 'transfer'), false);
+assert.equal((await store.listCheckups('default')).some(report => report.id === full.id), true);
+assert.deepEqual(await store.get('traps', trap.id), trap);
+
 const events = () => ({ addListener(listener) { this.fire = listener; } });
 let storage = [];
 let alarm = null;

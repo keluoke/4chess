@@ -2,7 +2,7 @@ import {
   CHECKUP_FAILURE_MS, CHECKUP_REFRESH_MS, checkupProbeDue, fetchCheckupObservation,
   checkupSubscriptionKey, isCheckupReminderToken, markCheckupGames, mergeCheckupObservation, mergeCheckupSnapshot, pendingCheckupGameIds
 } from '../engine/checkup-watch.js?v=20261121-v127';
-import { accountKey, normalizeAccount } from './study-store.js?v=20261121-v127';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount } from './study-store.js?v=20261121-v127';
 import { formatRelativeTime } from './checkup-runner.js?v=20261122-v129';
 import { t } from './i18n.js?v=20261122-v129';
 
@@ -103,14 +103,14 @@ export class CheckupReminders {
     const generation = ++this.generation;
     const current = () => generation === this.generation && id === this.bank.activeProfile?.id && this.app.checkup.allowed();
     try {
-      await this.syncBackground();
-      if (!current()) return;
       const profile = await this.loadProfile(id, current);
       if (!current()) return;
-      if (document.hidden) return;
+      await this.syncBackground();
+      if (!current()) return;
       let updated = false;
       for (const account of profile?.accounts || []) {
-        if (!current() || document.hidden) return;
+        if (!current()) return;
+        if (document.hidden) break;
         updated = await this.probe(id, account) || updated;
       }
       if (!current()) return;
@@ -132,14 +132,11 @@ export class CheckupReminders {
   }
 
   async loadProfile(id, current) {
-    const [profile, reports] = await Promise.all([this.bank.store.get('profiles', id), this.bank.store.listCheckups(id)]);
+    const { profile, reports } = await this.bank.store.loadCheckupProfile(id);
     if (!current()) return;
     this.profile = profile;
-    const keys = new Set((profile?.accounts || []).map(accountKey));
-    this.lastDiagnosedAt = reports.find(report => {
-      const account = normalizeAccount(report.sourceLabel?.split(':')[0], report.playerName);
-      return account && keys.has(accountKey(account));
-    })?.createdAt || 0;
+    this.lastDiagnosedAt = reports.find(report =>
+      profile?.accounts?.some(account => checkupReportMatchesAccount(report, account)))?.createdAt || 0;
     this.render();
     return profile;
   }

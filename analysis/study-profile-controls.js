@@ -53,11 +53,11 @@ export class StudyProfileControls {
     }
   }
 
-  async askForProfile({ account, split, move, profile }) {
+  async askForProfile({ account, split, move, profile, reportId }) {
     if (this.editor.open) return null;
     const name = this.bank.profileLabel(profile);
     const title = move ? 'studyMoveProfile' : split ? 'studySplitTitle' : 'bankNewProfile';
-    const hint = move ? 'studyMoveHint' : split ? 'studySplitHint' : 'studyNewHint';
+    const hint = move ? 'studyMoveHint' : split ? (reportId ? 'studySplitReportHint' : 'studySplitHint') : 'studyNewHint';
     this.editorTitle.textContent = t(title);
     this.editorHint.textContent = t(hint, { account: account && this.app.checkup.accountLabel(account), profile: name });
     this.editorName.value = account?.username || '';
@@ -71,12 +71,12 @@ export class StudyProfileControls {
     }, { once: true }));
   }
 
-  async createProfile({ account, move = false, split = false } = {}) {
+  async createProfile({ account, move = false, split = false, reportId } = {}) {
     const profile = this.bank.activeProfile;
     if (!profile || !this.bank.allowed()) return false;
     const epoch = this.app.gameEpoch;
     const checkupOpen = this.app.checkup.dialog?.open;
-    const result = await this.askForProfile({ account, move, split, profile });
+    const result = await this.askForProfile({ account, move, split, profile, reportId });
     if (!this.bank.allowed() || this.bank.activeProfile?.id !== profile.id || this.app.gameEpoch !== epoch ||
       (checkupOpen && !this.app.checkup.dialog.open)) return false;
     if (result === 'keep') {
@@ -86,20 +86,23 @@ export class StudyProfileControls {
     if (result !== 'create') return false;
     const displayName = this.editorName.value.trim();
     if (!displayName) return false;
-    const saved = await this.bank.store.saveProfile({ displayName, account, moveFrom: move ? profile.id : undefined });
+    const saved = await this.bank.store.saveProfile({
+      displayName, account, moveFrom: move ? profile.id : undefined,
+      transferCheckup: split && reportId ? { id: reportId, profileId: profile.id } : undefined
+    });
     if (!this.bank.allowed() || this.bank.activeProfile?.id !== profile.id || this.app.gameEpoch !== epoch) return false;
     await this.bank.selectProfile(saved.id);
     if (account) this.app.checkupReminders?.offerAfterLink(saved);
     return true;
   }
 
-  async linkAccount(account) {
+  async linkAccount(account, { reportId } = {}) {
     const profile = this.bank.activeProfile;
     if (!profile || !this.bank.allowed()) return false;
     const key = accountKey(account);
     if (profile.accounts.some(item => accountKey(item) === key)) return false;
     if (profile.accounts.some(item => item.platform === account.platform)) {
-      return this.createProfile({ account, split: true });
+      return this.createProfile({ account, split: true, reportId });
     }
     await this.bank.updateProfileAccount(profile.id, account.platform, account.username);
     return true;
