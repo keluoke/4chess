@@ -1,9 +1,11 @@
 import { ChessBoard } from '../engine/chess-core.js';
-import { t, getLang } from './i18n.js?v=20261123-challenge-choice';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-challenge-choice';
-import { CHECKUP_ELOS, summarizeCheckupOverview } from './checkup-insights.js?v=20261123-challenge-choice';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-challenge-choice';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-challenge-choice';
+import { t, getLang } from './i18n.js?v=20261123-checkup-fit';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards } from './share-card.js?v=20261123-checkup-fit';
+import { summarizeCheckupOverview } from './checkup-insights.js?v=20261123-checkup-fit';
+import { CHECKUP_CLOSE_LOG_GAP, checkupFitBands } from './checkup-fit.js?v=20261123-checkup-fit';
+import { checkupFitHeadline, formatPgnRatings } from './checkup-fit-view.js?v=20261123-checkup-fit';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261123-checkup-fit';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261123-checkup-fit';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];
@@ -32,7 +34,7 @@ export function overviewCardData(games, account, speed, speedLabel) {
     openings: overviewOpenings(openings) };
 }
 
-export function diagnosticCardData(report, rolling, topicsFor) {
+export function diagnosticCardData(report, rolling, topicsFor, speedLabel = value => value) {
   const games = report.gameCount === 1 ? t('checkupShareOneGame') : t('checkupOverviewGameCount', { count: report.gameCount });
   const traps = report.traps || report.topTraps || [];
   const phases = Object.entries(report.phaseTraps || {}).sort((a, b) => b[1] - a[1]);
@@ -60,9 +62,22 @@ export function diagnosticCardData(report, rolling, topicsFor) {
   return {
     kind: 'report', title: t('checkupShareReport'), label: t('checkupDiagnosticCardLabel'), name: report.playerName,
     scope: rolling ? t('checkupWindowCoverage', { count: report.gameCount }) : t('checkupShareBatchScope', { games }),
-    sample: report.eloSampleCount, elo: report.closestElo, fit: report.eloFit || {}, position, theme,
+    sample: report.eloSampleCount, elo: report.closestElo, position, theme,
+    clearLead: !report.fit || report.fit.logLead >= CHECKUP_CLOSE_LOG_GAP,
+    bands: report.fit?.bands || checkupFitBands(report.fitMethod),
+    fit: report.fit?.weights || report.eloFit || {}, relativeFit: Boolean(report.fit),
+    headline: checkupFitHeadline(report),
+    range: report.fit?.estimate && (report.fit.estimate.low === report.fit.estimate.high ? String(report.fit.estimate.low)
+      : `${report.fit.estimate.low}–${report.fit.estimate.high}`),
+    ratings: formatPgnRatings(report.games, speedLabel),
     summary: t(hits === 1 ? 'checkupShareTrapOne' : 'checkupShareTrapSummary', { games, hits })
   };
+}
+
+export function combinedCardData(report, rolling, topicsFor, speedLabel, games, account) {
+  const diagnostic = diagnosticCardData(report, rolling, topicsFor, speedLabel);
+  return { ...diagnostic, kind: 'combined', title: t('checkupShareCombined'), label: t('checkupShareCombinedLabel'),
+    position: null, overview: overviewCardData(games, account, '', t('checkupAllSpeeds')) };
 }
 
 function wdl(record) {
@@ -82,9 +97,14 @@ function color(side) {
 
 export function summarizeCheckupCard(data, anonymous) {
   const name = !anonymous && data.name ? ' · ' + data.name : '';
+  if (data.kind === 'combined') {
+    const overview = data.overview;
+    return [data.headline + name + ' · ' + data.scope,
+      [scoreLine(overview), overview.scope, wdl(overview.total), overview.summary].filter(Boolean).join(' · '),
+      CHECKUP_URL].join('\n');
+  }
   if (data.kind === 'report') {
-    const fit = data.elo == null ? t('checkupNoEloFit') : t('checkupShareMaia', { elo: data.elo });
-    return [fit + name, [data.scope, data.summary, data.theme].filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
+    return [data.headline + name, [data.scope, data.summary, data.theme].filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
   }
   return [scoreLine(data) + name + ' · ' + wdl(data.total),
     data.summary || pressureLines(data.pressure).join(' · '), CHECKUP_URL].join('\n');
@@ -116,19 +136,19 @@ function fillBar(ctx, x, y, w, height, segments) {
 
 function drawFit(ctx, data, x, y, w, h) {
   panel(ctx, x, y, w, h);
-  text(ctx, t('checkupShareFit'), x + 19, y + 14, 22);
+  text(ctx, t(data.relativeFit ? 'checkupFitWeights' : 'checkupShareLegacyFit'), x + 19, y + 14, 22, '#17362d', 600, w - 38);
   if (data.elo == null) {
     text(ctx, t('checkupNoEloFit'), x + 19, y + 61, 18, '#52675f', 500, w - 38);
     return;
   }
-  const max = Math.max(.001, ...CHECKUP_ELOS.map(elo => data.fit[elo] || 0));
-  const step = (h - 58) / 4;
-  CHECKUP_ELOS.forEach((elo, index) => {
+  const max = data.relativeFit ? 1 : Math.max(.001, ...data.bands.map(elo => data.fit[elo] || 0));
+  const step = (h - 52) / data.bands.length;
+  data.bands.forEach((elo, index) => {
     const top = y + 49 + index * step;
-    const value = data.fit[elo] || 0;
-    text(ctx, elo, x + 20, top, 19);
-    fillBar(ctx, x + 78, top + 7, w - 168, 9, [[value / max, elo === data.elo ? '#167b58' : '#738c7f']]);
-    text(ctx, pct(value), x + w - 79, top, 18);
+    const value = (data.relativeFit ? data.fit[index] : data.fit[elo]) || 0;
+    text(ctx, elo, x + 20, top, data.bands.length > 4 ? 16 : 19);
+    fillBar(ctx, x + 78, top + 7, w - 168, 9, [[value / max, data.clearLead && elo === data.elo ? '#167b58' : '#738c7f']]);
+    text(ctx, pct(value), x + w - 79, top, data.bands.length > 4 ? 16 : 18);
   });
 }
 
@@ -144,12 +164,16 @@ function drawPosition(ctx, item, pieceImages, x, y, size) {
 function drawDiagnostic(ctx, data, portrait, images) {
   const boxWidth = portrait ? 856 : 522;
   const y = portrait ? 128 : 109;
-  text(ctx, data.elo === null || data.elo === undefined ? t('checkupNoEloFit') :
-    t('checkupShareMaia', { elo: data.elo }), 52, y, portrait ? 76 : 57, '#edf4e9', 740, boxWidth);
+  text(ctx, data.headline, 52, y, portrait ? 65 : 49, '#edf4e9', 740, boxWidth);
   text(ctx, [data.scope, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
-    54, y + (portrait ? 104 : 75), 21, '#d4e5d7', 500, boxWidth);
-  text(ctx, data.summary, 54, y + (portrait ? 143 : 112), 26, '#edf4e9', 650, boxWidth);
-  if (data.theme) text(ctx, data.theme, 54, y + (portrait ? 181 : 149), 22, '#f0c281', 540, boxWidth);
+    54, y + (portrait ? 83 : 65), 20, '#d4e5d7', 500, boxWidth);
+  if (data.range || data.ratings.length) {
+    text(ctx, [data.range && t('checkupShareRange', { range: data.range }),
+      data.ratings.length && t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') })].filter(Boolean).join(' · '),
+      54, y + (portrait ? 116 : 95), 19, '#d4e5d7', 550, boxWidth);
+  }
+  text(ctx, data.summary, 54, y + (portrait ? 154 : 125), 25, '#edf4e9', 650, boxWidth);
+  if (data.theme) text(ctx, data.theme, 54, y + (portrait ? 188 : 161), 20, '#f0c281', 540, boxWidth);
   drawFit(ctx, data, 52, portrait ? 365 : 315, boxWidth, portrait ? 230 : 203);
   if (data.position) {
     const at = portrait ? { x: 62, y: 649, size: 386, tx: 484, ty: 742, w: 420 }
@@ -165,7 +189,7 @@ function drawDiagnostic(ctx, data, portrait, images) {
     legend(data.position.trap ? t('snapshotPlayed') : 'Maia', data.position.secondSan, at.ty + 75, '#865015', '#f0c281');
   } else if (portrait) {
     panel(ctx, 52, 619, 856, 160);
-    text(ctx, data.elo == null ? t('checkupShareFit') : t('checkupShareNoPosition'), 74, 666, 27);
+    text(ctx, data.elo == null ? t('checkupNoEloFit') : t('checkupShareNoPosition'), 74, 666, 27);
   }
 }
 
@@ -207,6 +231,36 @@ function drawOverview(ctx, data, portrait) {
   pressureLines(data.pressure).forEach((line, index) => text(ctx, line, x + 18, clockY + 51 + 30 * index, 19, '#52675f', 550, w - 36));
 }
 
+function drawCombined(ctx, data, portrait) {
+  const w = portrait ? 856 : 490;
+  const overview = data.overview;
+  text(ctx, data.headline, 52, 120, portrait ? 66 : 49, '#edf4e9', 740, w);
+  text(ctx, [data.scope, data.sample && t('checkupShareFitCount', { count: data.sample })].filter(Boolean).join(' · '),
+    52, portrait ? 204 : 186, 21, '#d4e5d7', 550, w);
+  if (data.range) text(ctx, t('checkupShareRange', { range: data.range }), 52, portrait ? 247 : 218, 22, '#f0c281', 650, w);
+  if (data.ratings.length) text(ctx, t('checkupFitRatingLine', { ratings: data.ratings.slice(0, 2).join(' · ') }),
+    52, portrait ? 285 : 249, 18, '#d4e5d7', 550, w);
+  drawFit(ctx, data, 52, portrait ? 328 : 283, w, portrait ? 235 : 205);
+
+  const x = portrait ? 52 : 578;
+  const y = portrait ? 611 : 125;
+  panel(ctx, x, y, w, portrait ? 378 : 364);
+  text(ctx, scoreLine(overview), x + 22, y + 20, portrait ? 40 : 30, '#17362d', 740, w - 44);
+  text(ctx, overview.scope, x + 23, y + 73, 19, '#52675f', 550, w - 46);
+  fillBar(ctx, x + 23, y + 114, w - 46, 13, outcomes.map((key, i) => [overview.count ? overview.total[key] / overview.count : 0, tones[i]]));
+  text(ctx, wdl(overview.total), x + 23, y + 137, 20, '#52675f', 550, w - 46);
+  ['w', 'b'].forEach((side, index) => {
+    const left = x + 23 + index * (w - 44) / 2;
+    text(ctx, color(side), left, y + 183, 18, '#52675f');
+    text(ctx, score(overview.colors[side]), left, y + 208, 33);
+  });
+  const featured = overview.openings[0];
+  if (featured) text(ctx, [t('checkupOpeningBest'), color(featured.side), featured.eco, featured.name, score(featured)]
+    .filter(Boolean).join(' · '), x + 23, y + 269, 19, '#146b49', 650, w - 46);
+  const clock = pressureLines(overview.pressure);
+  text(ctx, clock.join(' · '), x + 23, y + 309, 18, '#52675f', 550, w - 46);
+}
+
 async function drawCanvas(canvas, data, portrait, anonymous, current) {
   const images = data.position ? await prepareShareBoards() : null;
   if (!current()) return false;
@@ -231,6 +285,7 @@ async function drawCanvas(canvas, data, portrait, anonymous, current) {
     ctx.textAlign = 'left';
   }
   if (data.kind === 'report') drawDiagnostic(ctx, data, portrait, images);
+  else if (data.kind === 'combined') drawCombined(ctx, data, portrait);
   else drawOverview(ctx, data, portrait);
   const qrSize = portrait ? 132 : 85;
   const footer = height - qrSize - 25;

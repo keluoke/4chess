@@ -97,7 +97,10 @@ try {
     window.checkupStarts = 0;
     app.stockfish.initialize = async () => { window.checkupStarts++; return true; };
     app.maiaEngine.initialize = async () => true;
-    app.maiaEngine.predict = async () => ({ moves: [{ uci: 'a4b3', rawProb: 0.08 }] });
+    app.maiaEngine.predict = async (fen, elo) => ({
+      moves: ['b3a4', 'b3c2', 'b3d5', 'c2c3', 'g8f6', 'f8e7', 'e8g8', 'b8d7', 'c7c6', 'd5c4', 'b7b5']
+        .map(uci => ({ uci, rawProb: elo === 2200 ? 0.08 : 0.04 }))
+    });
     window.restoreInitialStockfish = () => { app.stockfish.initialize = initialize; };
   });
   await page.locator('#checkup-username').fill('Clarkyan');
@@ -199,6 +202,23 @@ try {
   await page.waitForFunction(() => window.clockParses === 6);
   await speeds.getByRole('button', { name: 'Blitz', pressed: true }).waitFor();
   assert.equal(await page.evaluate(() => window.checkupStarts), 2, 'The overview does not start an engine');
+  const overviewFetches = archiveLookups;
+  await page.locator('#checkup-tab-report').click();
+  assert.equal(await reportBox.locator('.checkup-fit-bar').count(), 4);
+  assert.match(await reportBox.locator('.checkup-fit-rating').innerText(), /2180/);
+  await page.getByText('Method and raw values', { exact: true }).click();
+  assert(await reportBox.locator('.checkup-fit-raw').isVisible());
+  await page.getByRole('button', { name: 'Share player profile card' }).click();
+  await readyToShare();
+  assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  const combinedSummary = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(combinedSummary, /3 games · 67% score.*All speeds/);
+  assert.doesNotMatch(combinedSummary, /Clarkyan/);
+  assert.equal(archiveLookups, overviewFetches, 'Report share reuses the same account’s overview cache');
+  if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-combined.png' });
+  await closeShare();
+
   await page.evaluate(() => window.restoreInitialStockfish());
   await settings();
   await link('Seanyan');
@@ -335,6 +355,16 @@ try {
     newAccounts: ['Altplayer'], movedAccounts: ['Seanyan'], originalAccounts: ['Clarkyan'], originalReports: 3, movedReports: 0,
     splitReports: [splitReport], splitDiagnosed: ['live:12345676', 'live:12345677']
   });
+  const missingOverviewFetches = archiveLookups;
+  await alt.getByRole('button', { name: 'View report' }).click();
+  await page.getByRole('button', { name: 'Share player profile card' }).click();
+  await readyToShare();
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  const splitCardSummary = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(splitCardSummary, /2 games · 100% score/);
+  assert.equal(archiveLookups, missingOverviewFetches + 1, 'Loads the report account’s archive when it has no cached overview');
+  await closeShare();
+  await settings();
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await alt.evaluate(row => row.querySelector('.checkup-account-identity').offsetWidth >= row.clientWidth - 18),
     'The tap target spans the account row on mobile');
@@ -373,8 +403,8 @@ try {
       return { depth, scoreCp: white ? 300 : 0, bestMove: { uci, san: white ? 'e4' : 'e5' }, pv: [uci] };
     };
     app.maiaEngine.initialize = async () => true;
-    app.maiaEngine.predict = async fen => ({
-      moves: [{ uci: fen.startsWith('rnbqkb1r') ? 'f3g1' : 'g1f3', rawProb: 0.6 }]
+    app.maiaEngine.predict = async (fen, elo) => ({
+      moves: [{ uci: fen.startsWith('rnbqkb1r') ? 'f3g1' : 'g1f3', rawProb: elo === 2200 ? 0.6 : 0.25 }]
     });
     app.startPractice = (item, { queue }) => { window.reportPractice = { item, queue }; };
   });
@@ -386,15 +416,20 @@ try {
   await settings();
   await page.locator('[data-checkup-source="local"]').click();
   await page.locator('#checkup-pgn-text').fill(replayPgn);
+  await page.locator('#checkup-fit-method').selectOption('fine');
+
   await page.locator('#btn-checkup-fetch').click();
   await page.locator('#checkup-confirm-name').fill('Trainee');
   await page.locator('#btn-checkup-start').click();
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.traps?.length > 5 &&
     !window.__maiaStudioApp.checkup.busy);
   assert.match(await reportBox.innerText(), /fit samples from 1 game/);
+  assert.equal(await reportBox.locator('.checkup-fit-bar').count(), 6);
+  assert.equal(await reportBox.locator('.checkup-fit-evidence-row').count(), 2);
+  assert.match(await reportBox.locator('.checkup-fit-evidence').innerText(), /predicted 60\.0%/);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), 5);
   await reportBox.getByText(/Show .* more traps/).click();
-  const sixthJump = reportBox.getByRole('button', { name: /Review this move/ }).nth(5);
+  const sixthJump = reportBox.locator('.checkup-trap-row').getByRole('button', { name: /Review this move/ }).nth(5);
   await sixthJump.waitFor();
   const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
@@ -457,7 +492,7 @@ try {
   assert.equal(await puzzle.locator('input').count(), 0);
   assert.equal(await options.count(), 2);
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-challenge-choice');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261123-checkup-fit');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   const labelOrder = await options.allTextContents();
@@ -539,6 +574,13 @@ try {
     return { ply: app.currentPly, before: app.isReviewingMove, fen: app.boardUI.chess.getFen() };
   });
   assert.deepEqual(focused, { ply: sixth.ply, before: true, fen: sixth.fenBefore });
+  await page.locator('#btn-checkup-replay-back').click();
+  await reportBox.locator('.checkup-fit-evidence-row').first().getByRole('button').click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.deepEqual(await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    return [app.currentPly, app.boardUI.chess.getFen()];
+  }), [replay.fit.examples[0].ply, replay.fit.examples[0].fenBefore]);
   await page.locator('#btn-checkup-replay-back').click();
   await reportBox.getByText(/Game details/).click();
   assert.match(await reportBox.innerText(), /Trainee – Rival/);

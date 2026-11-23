@@ -7,8 +7,8 @@ import {
   parseAliases,
   resolvePerspective,
   trapId
-} from './study-store.js?v=20261123-challenge-choice';
-import { t } from './i18n.js?v=20261123-challenge-choice';
+} from './study-store.js?v=20261123-checkup-fit';
+import { t } from './i18n.js?v=20261123-checkup-fit';
 
 export class MistakeBank {
   filter = 'due';

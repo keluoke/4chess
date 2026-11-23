@@ -1,30 +1,12 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-challenge-choice';
-import { normalizeAlias } from './study-store.js?v=20261123-challenge-choice';
-
-export const CHECKUP_ELOS = [1100, 1500, 1900, 2200];
-export const MAX_ELO_SAMPLES = 24;
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-fit';
+import { normalizeAlias } from './study-store.js?v=20261123-checkup-fit';
+import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261123-checkup-fit';
+export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-fit';
 export const FEATURED_TRAPS = 5;
 export const OVERVIEW_GAME_LIMIT = 100;
 const WINDOW_SIZE = 10;
 
-export function planCheckupSamples(groups) {
-  const quotas = groups.map(() => 0);
-  let remaining = Math.min(MAX_ELO_SAMPLES, groups.reduce((sum, group) => sum + group.length, 0));
-  while (remaining) {
-    groups.forEach((group, index) => {
-      if (remaining && quotas[index] < group.length) {
-        quotas[index]++;
-        remaining--;
-      }
-    });
-  }
-  return groups.map((group, index) => {
-    const count = quotas[index];
-    return Array.from({ length: count }, (_, i) => group[Math.floor((i + 0.5) * group.length / count)]);
-  });
-}
-
-export function summarizeCheckupGames(games) {
+export function summarizeCheckupGames(games, fitMethod = 'standard') {
   const phaseTraps = { opening: 0, middlegame: 0, endgame: 0 };
   const dedup = new Map();
   let analyzedMoves = 0;
@@ -39,34 +21,26 @@ export function summarizeCheckupGames(games) {
       dedup.set(trap.id, { ...best, occurrences: [...(previous?.occurrences || []), { gameIndex, ply: trap.ply }] });
     }
   });
-  const fitted = planCheckupSamples(games.map(game => game.fitSamples || []));
-  const samples = fitted.flat();
-  const sums = CHECKUP_ELOS.map((_, i) => samples.reduce((sum, sample) => sum + sample.scores[i], 0));
-  const best = sums.reduce((index, score, i) => score > sums[index] ? i : index, 0);
   const traps = [...dedup.values()].sort((a, b) => b.eslLoss - a.eslLoss);
   const highlights = games.flatMap((game, gameIndex) => (game.highlights || [])
     .map(move => ({ ...move, gameIndex }))).slice(0, 2);
   return {
     games, gameCount: games.length, analyzedMoves, screenedMoves, phaseTraps, traps, highlights,
-    eloSampleCount: samples.length, fitGameCount: fitted.filter(group => group.length).length,
-    closestElo: samples.length ? CHECKUP_ELOS[best] : null,
-    eloFit: Object.fromEntries(CHECKUP_ELOS.map((elo, i) => [
-      elo, samples.length ? Math.round(Math.exp(sums[i] / samples.length) * 1000) / 1000 : 0
-    ]))
+    fitMethod, ...summarizeCheckupFit(games, fitMethod)
   };
 }
 
 export function buildCheckupWindow(ids, evidenceKey, reports, observedAt = Date.now()) {
   const windowIds = [...new Set(ids.filter(Boolean))].slice(0, WINDOW_SIZE);
   const evidence = new Map();
-  for (const report of reports) {
-    if (report.evidenceKey !== evidenceKey) continue;
+  const compatible = reports.filter(report => report.evidenceKey === evidenceKey);
+  for (const report of compatible) {
     for (const game of [...(report.games || []), ...(report.rolling?.games || [])]) {
       if (game.gameId && !evidence.has(game.gameId)) evidence.set(game.gameId, game);
     }
   }
   const games = windowIds.map(id => evidence.get(id)).filter(Boolean);
-  return { ...summarizeCheckupGames(games), windowIds, observedAt };
+  return { ...summarizeCheckupGames(games, compatible[0]?.fitMethod), windowIds, observedAt };
 }
 
 export function checkupTrend(reports, evidenceKey, timeClass) {
@@ -77,9 +51,10 @@ export function checkupTrend(reports, evidenceKey, timeClass) {
       const key = games.map(game => game.gameId).join('|');
       if (!games.length || seen.has(key)) return [];
       seen.add(key);
-      const result = summarizeCheckupGames(games);
+      const result = summarizeCheckupGames(games, report.fitMethod);
       const hits = Object.values(result.phaseTraps).reduce((sum, count) => sum + count, 0);
-      return [{ time: report.rolling.observedAt, elo: result.closestElo, count: games.length,
+      const elo = result.fit?.logLead >= CHECKUP_CLOSE_LOG_GAP ? result.closestElo : null;
+      return [{ time: report.rolling.observedAt, elo, count: games.length,
         density: result.screenedMoves ? hits * 100 / result.screenedMoves : null }];
     }).reverse();
 }

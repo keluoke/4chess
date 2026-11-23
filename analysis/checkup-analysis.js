@@ -1,15 +1,18 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-challenge-choice';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-checkup-fit';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261117-review-policy';
-import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261123-challenge-choice';
-import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261123-challenge-choice';
-import { CHECKUP_ELOS, FEATURED_TRAPS, planCheckupSamples, summarizeCheckupGames } from './checkup-insights.js?v=20261123-challenge-choice';
+import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261123-checkup-fit';
+import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261123-checkup-fit';
+import { FEATURED_TRAPS, summarizeCheckupGames } from './checkup-insights.js?v=20261123-checkup-fit';
+
+import { CHECKUP_ELOS, checkupFitBands, LOG_PROB_FLOOR, planCheckupSamples } from './checkup-fit.js?v=20261123-checkup-fit';
 
 const VERIFY_ROOT_MIN_DEPTH = 14;
 const VERIFY_AFTER_MIN_DEPTH = 13;
-const LOG_PROB_FLOOR = 1e-4;
+const closestScreenBand = elo => CHECKUP_ELOS.reduce((best, rating) =>
+  Math.abs(rating - elo) < Math.abs(best - elo) ? rating : best);
 
 function isReliableVerificationRoot(res) {
   return !!(
@@ -78,8 +81,9 @@ function* checkupDecisions(positions, userSide) {
   }
 }
 
-export function checkupEvidenceBase(stockfish, maia) {
-  return `window-v1|${stockfish?.engineKey || 'stockfish'}|${maia?.modelKey || 'maia'}`;
+export function checkupEvidenceBase(stockfish, maia, fitMethod) {
+  const version = fitMethod === 'fine' ? 'window-fine-v1' : 'window-v1';
+  return `${version}|${stockfish?.engineKey || 'stockfish'}|${maia?.modelKey || 'maia'}`;
 }
 
 function checkupReplay(pgn, positions, result) {
@@ -121,6 +125,7 @@ export async function runIntuitionCheckup({
   sourceLabel = 'local-pgn-batch',
   elo,
   reusedScreen,
+  fitMethod = 'standard',
   defaultElo = 1900,
   stockfish,
   maiaEngine,
@@ -129,6 +134,7 @@ export async function runIntuitionCheckup({
   signal,
   now = Date.now()
 } = {}) {
+  const fitBands = checkupFitBands(fitMethod);
   const targetKey = normalizeAlias(targetPlayer);
   if (!targetKey) throw new Error('Target player name is required');
   if (!stockfish || !maiaEngine) throw new Error('Engines are required');
@@ -148,7 +154,8 @@ export async function runIntuitionCheckup({
     analyzedMoves: 0,
     fitGameCount: 0,
     eloSampleCount: 0,
-    eloFit: Object.fromEntries(CHECKUP_ELOS.map(r => [r, 0])),
+    eloFit: Object.fromEntries(fitBands.map(r => [r, 0])),
+    fitMethod,
     closestElo: null,
     screenElo: elo,
     screenEloSource,
@@ -184,7 +191,7 @@ export async function runIntuitionCheckup({
   if (!manual && !reusedScreen && ratings.length) {
     const midpoint = Math.floor(ratings.length / 2);
     const median = (ratings[midpoint] + ratings[Math.floor((ratings.length - 1) / 2)]) / 2;
-    elo = CHECKUP_ELOS.reduce((best, rating) => Math.abs(rating - median) < Math.abs(best - median) ? rating : best);
+    elo = closestScreenBand(median);
     screenEloSource = 'pgn';
   }
 
@@ -211,7 +218,7 @@ export async function runIntuitionCheckup({
   const predict = (fen, rating, history) => maiaEngine.predict(fen, rating, null, cancelled, history);
   const fitScores = async ({ move, fenBefore, historySlice }, predictions) => {
     const values = [];
-    for (const rating of CHECKUP_ELOS) {
+    for (const rating of fitBands) {
       if (!predictions.has(rating)) predictions.set(rating, await predict(fenBefore, rating, historySlice));
       if (cancelled()) return null;
       const prediction = predictions.get(rating);
@@ -221,14 +228,14 @@ export async function runIntuitionCheckup({
     return values;
   };
   const closestRating = sums =>
-    CHECKUP_ELOS.reduce((best, rating) => sums[rating] > sums[best] ? rating : best);
+    fitBands.reduce((best, rating) => sums[rating] > sums[best] ? rating : best);
   const addScores = (sums, values) => {
-    CHECKUP_ELOS.forEach((rating, index) => { sums[rating] += values[index]; });
+    fitBands.forEach((rating, index) => { sums[rating] += values[index]; });
   };
 
   if (needsEarlyFit) {
     startupProgress('fitting');
-    const sums = Object.fromEntries(CHECKUP_ELOS.map(rating => [rating, 0]));
+    const sums = Object.fromEntries(fitBands.map(rating => [rating, 0]));
     let valid = 0;
     for (const selection of fitPlan) {
       for (const decision of selection) {
@@ -244,14 +251,14 @@ export async function runIntuitionCheckup({
     }
     if (cancelled()) return emptyResult(true);
     if (valid) {
-      elo = closestRating(sums);
+      elo = closestScreenBand(closestRating(sums));
       screenEloSource = 'fit';
     }
   }
 
   for (let gi = 0; gi < batch.length; gi++) {
     if (cancelled()) { partial = true; break; }
-    const { entry, meta, userSide, positions, decisions } = batch[gi];
+    const { entry, meta, userSide, positions, decisions, rating } = batch[gi];
 
     const reportProgress = (phase, decisions, checkedPlies = 0) => onProgress({
       phase, gameIndex: gi + 1, totalGames: batch.length, analyzedMoves: analyzedMoves + decisions,
@@ -283,7 +290,7 @@ export async function runIntuitionCheckup({
         const scores = needsEarlyFit ? prefit.get(decision)?.scores
           : await fitScores(decision, new Map([[elo, maiaPred]]));
         if (cancelled()) { gameCancelled = true; break; }
-        if (scores) fitSamples.push({ ply, scores });
+        if (scores) fitSamples.push({ ply, moveNumber, turn, san: move.san, uci: move.uci, fenBefore, scores });
       }
 
       // Positive examples reuse the trap screen's root and have a small verification budget.
@@ -363,7 +370,7 @@ export async function runIntuitionCheckup({
     gameReports.push({
       gameId: entry.gameId || null, platform, url: checkupReplayUrl(platform, entry.gameId),
       white: meta.white, black: meta.black, result: meta.result, date: meta.date,
-      orientation: userSide === 'w' ? 'white' : 'black',
+      orientation: userSide === 'w' ? 'white' : 'black', playedRating: rating || null,
       analyzedMoves: gameMoves, screenedMoves, trapCount: gameTraps.length, timeClass: meta.timeClass || '',
       eloSampleCount: fitSamples.length, fitSamples, trapEvidence: gameTraps, highlights,
       pgn: checkupReplay(entry.pgn, positions, meta.result)
@@ -373,7 +380,7 @@ export async function runIntuitionCheckup({
     analyzedMoves += gameMoves;
   }
 
-  const summary = summarizeCheckupGames(gameReports);
+  const summary = summarizeCheckupGames(gameReports, fitMethod);
   const topTraps = summary.traps.slice(0, FEATURED_TRAPS);
   return {
     id: `checkup_${now}_${Math.random().toString(36).slice(2, 7)}`,
@@ -382,7 +389,7 @@ export async function runIntuitionCheckup({
     playerName: targetPlayer.trim(),
     ...summary,
     analyzedGameIds: [...analyzedGameIds],
-    evidenceKey: `${checkupEvidenceBase(stockfish, maiaEngine)}|${elo}`,
+    evidenceKey: `${checkupEvidenceBase(stockfish, maiaEngine, fitMethod)}|${elo}`,
     screenElo: elo,
     screenEloSource,
     topTrapIds: topTraps.map(item => item.id),

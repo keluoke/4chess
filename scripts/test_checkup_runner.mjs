@@ -15,7 +15,9 @@ import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { challengeChoices, checkupChallengeUrl, decodeChallenge } from '../analysis/challenge-link.js';
 import { ChessBoard } from '../engine/chess-core.js';
 import { overviewSummary, clockErrorTone } from '../analysis/checkup-overview.js';
-import { diagnosticCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
+import { combinedCardData, diagnosticCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
+import { checkupFitBands, summarizeCheckupFit } from '../analysis/checkup-fit.js';
+import { pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
 import {
   buildCheckupWindow, checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
 } from '../analysis/checkup-insights.js';
@@ -238,6 +240,20 @@ const automatic = await runIntuitionCheckup(highRated);
 assert.equal(automatic.screenElo, 2200, 'The median is taken from target player ratings on either side');
 assert.equal(automatic.screenEloSource, 'pgn');
 assert.equal(automatic.closestElo, 1900, 'PGN rating and behavioral fit are independent');
+assert.equal(automatic.fit.weights.length, 4);
+assert.deepEqual(pgnRatingGroups(automatic.games), [{ speed: '', elo: 2180, count: 2 }]);
+assert.deepEqual(pgnRatingGroups([
+  { ...automatic.games[0], timeClass: 'blitz', playedRating: undefined },
+  { ...automatic.games[1], timeClass: 'rapid' }
+]).map(group => group.speed), ['blitz', 'rapid']);
+const detailed = await runIntuitionCheckup({ ...highRated, fitMethod: 'fine' });
+assert.deepEqual(detailed.fit.bands, checkupFitBands('fine'));
+assert.equal(detailed.screenElo, automatic.screenElo);
+assert.notEqual(detailed.evidenceKey, automatic.evidenceKey);
+assert.equal(detailed.fit.estimate, null, 'Two games cannot support a fine estimate');
+assert(detailed.games.every(game => game.fitSamples.every(sample => sample.uci && sample.fenBefore && sample.scores.length === 6)));
+assert.equal(buildCheckupWindow(detailed.analyzedGameIds, detailed.evidenceKey, [automatic, detailed]).fitMethod, 'fine');
+
 const manual = await runIntuitionCheckup({ ...highRated, elo: 1500 });
 assert.equal(manual.screenElo, 1500);
 assert.equal(manual.screenEloSource, 'manual');
@@ -578,6 +594,28 @@ const makeEvidence = (id, loss, scores = [-4, -3, -2, -1]) => ({
   fitSamples: Array.from({ length: 24 }, (_, i) => ({ ply: i + 13, scores })),
   trapEvidence: [{ id: 'same-trap', ply: 15, phase: 'middlegame', eslLoss: loss }]
 });
+const example = summarizeCheckupFit([makeEvidence('example', 7, [0.214, 0.238, 0.245, 0.231].map(Math.log))]);
+assert.deepEqual(example.fit.weights.map(weight => Math.round(weight * 1000)), [22, 280, 561, 137]);
+assert(Math.abs(Math.exp(example.fit.logLead) - Math.pow(.245 / .238, 24)) < 1e-12);
+assert.deepEqual(withCheckupFit({ closestElo: 1500, eloFit: { 1500: .25 } }), { closestElo: 1500, eloFit: { 1500: .25 } });
+const fineGames = ['a', 'b', 'c', 'd'].map(id => makeEvidence(id, 7, [-5, -5, -2.5, -2, -3, -5]));
+const fineFit = summarizeCheckupFit(fineGames, 'fine');
+assert.equal(fineFit.fit.retained, 4);
+assert.equal(fineFit.fit.checked, 4);
+assert.deepEqual(fineFit.fit.estimate, { value: 1900, low: 1900, high: 1900 });
+assert.deepEqual(fineFit.fit.examples.map(move => move.gameIndex), [0, 1], 'Show evidence from separate games when possible');
+const uncertain = summarizeCheckupFit(fineGames.map(game => ({ ...game,
+  fitSamples: game.fitSamples.map(sample => ({ ...sample, scores: [-2, -4, -4, -4, -4, -2] })) })), 'fine');
+assert.equal(uncertain.fit.estimate, null);
+assert.equal(uncertain.fit.logLead, 0);
+const combined = combinedCardData({ ...fineFit, gameCount: 4, playerName: 'KidPlayer' }, true,
+  () => [], value => value, mixed, { username: 'KidPlayer' });
+assert.equal(combined.bands.length, 6);
+assert.equal(combined.overview.count, 7);
+assert.equal(combined.position, null);
+assert(!summarizeCheckupCard(combined, true).includes('KidPlayer'));
+assert(summarizeCheckupCard(combined, false).includes('KidPlayer'));
+
 const historyGames = Array.from({ length: 10 }, (_, i) => makeEvidence(`g${i}`, i + 10));
 const firstWindow = buildCheckupWindow(historyGames.map(game => game.gameId), 'sf:maia:2200',
   [{ evidenceKey: 'sf:maia:2200', games: historyGames }], 1);

@@ -635,9 +635,22 @@ button,input,select,textarea { font-family:inherit; }
 .study-mini-dialog input { min-width:0;padding:8px 10px;border:1px solid var(--dg-line);border-radius:8px;background:var(--dg-paper);color:var(--text-main);font:inherit; }
 .study-mini-actions { display:flex;flex-wrap:wrap;gap:7px;margin-top:10px; }
 .study-mini-actions .btn-header[hidden] { display:none; }
-.checkup-elo-grid { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:8px 0 4px; }
-.checkup-elo-pill { padding:6px 8px;border-radius:8px;background:var(--dg-surface);border:1px solid var(--dg-line);font-size:12px;text-align:center;font-variant-numeric:tabular-nums; }
-.checkup-elo-pill.best { border-color:var(--brand-green);color:var(--brand-green);font-weight:650;background:var(--dg-green-soft); }
+.checkup-fit-section { margin:12px 0; }
+.checkup-fit-title { margin:0 0 8px;font-size:clamp(16px,3vw,22px); }
+.checkup-fit-bars { display:grid;gap:5px;max-width:470px;margin:0 0 8px; }
+.checkup-fit-bar { display:grid;grid-template-columns:82px minmax(32px,1fr) 66px;align-items:center;gap:10px;font-size:12px;font-variant-numeric:tabular-nums; }
+.checkup-fit-bar strong { text-align:right; }
+.checkup-fit-meter { background:var(--dg-surface);height:8px;border-radius:4px;overflow:hidden; }
+.checkup-fit-meter i { display:block;height:100%;background:var(--text-muted);border-radius:inherit; }
+.checkup-fit-bar.best { color:var(--dg-green);font-weight:700; }
+.checkup-fit-bar.best i { background:var(--dg-green); }
+.checkup-fit-rating,.checkup-fit-evidence { margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--dg-surface);font-size:12px; }
+.checkup-fit-evidence h4 { margin:0 0 4px;font-size:12px; }
+.checkup-fit-evidence-row { display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;min-height:30px; }
+.checkup-fit-details { margin-top:8px;font-size:11px;color:var(--text-muted); }
+.checkup-fit-details summary { cursor:pointer; }
+.checkup-fit-details p { margin:5px 0; }
+.checkup-fit-raw { font-size:11px;font-variant-numeric:tabular-nums;color:var(--text-muted); }
 .checkup-elo-note { display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px; }
 .checkup-phase-line { margin:6px 0 0;font-size:12px;color:var(--text-muted); }
 .checkup-report-section-title { margin:12px 0 8px;font-size:13px;font-weight:650; }

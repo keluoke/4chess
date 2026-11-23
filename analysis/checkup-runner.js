@@ -1,25 +1,27 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-challenge-choice';
-import { getLang, t } from './i18n.js?v=20261123-challenge-choice';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261123-checkup-fit';
+import { getLang, t } from './i18n.js?v=20261123-checkup-fit';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-challenge-choice';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-challenge-choice';
+} from './checkup-archives.js?v=20261123-checkup-fit';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-fit';
 import {
   CHECKUP_ELOS, FEATURED_TRAPS, OVERVIEW_GAME_LIMIT, buildCheckupWindow, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261123-challenge-choice';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-challenge-choice';
-import { CheckupShare, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-challenge-choice';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261123-challenge-choice';
+} from './checkup-insights.js?v=20261123-checkup-fit';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261123-checkup-fit';
+import { CheckupShare, combinedCardData, diagnosticCardData, overviewCardData } from './checkup-share.js?v=20261123-checkup-fit';
+import { checkupFitBands } from './checkup-fit.js?v=20261123-checkup-fit';
+import { renderCheckupFit, withCheckupFit } from './checkup-fit-view.js?v=20261123-checkup-fit';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261123-checkup-fit';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261123-challenge-choice';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-challenge-choice';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-challenge-choice';
+} from './checkup-archives.js?v=20261123-checkup-fit';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261123-checkup-fit';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261123-checkup-fit';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 
@@ -90,6 +92,7 @@ export class IntuitionCheckup {
     this.profileSelect = document.getElementById('checkup-profile-select');
     this.profileName = document.getElementById('checkup-profile-name');
     this.newProfileBtn = document.getElementById('btn-checkup-new-profile');
+    this.fitMethodSelect = document.getElementById('checkup-fit-method');
     this.screenEloSelect = document.getElementById('checkup-screen-elo');
     for (const rating of CHECKUP_ELOS) this.screenEloSelect?.add(new Option(`Maia ${rating}`, String(rating)));
     this.accountList = document.getElementById('checkup-accounts');
@@ -170,6 +173,7 @@ export class IntuitionCheckup {
   }
 
   setView(view, focus = false) {
+    if (view !== 'report') this.combinedShareController?.abort();
     this.view = view;
     for (const tab of this.viewTabs) {
       const selected = tab.dataset.checkupView === view;
@@ -237,6 +241,7 @@ export class IntuitionCheckup {
       this.dialog.addEventListener('close', () => {
         this.lastRunReportId = null;
         if (this.share.dialog.open) this.share.dialog.close();
+        this.combinedShareController?.abort();
         this.overviewController?.abort();
         this.overviewController = null;
         this.overviewPendingKey = null;
@@ -350,6 +355,7 @@ export class IntuitionCheckup {
       this.setStatus('');
       if (profileChanged && this.localPgnInput) this.localPgnInput.value = '';
       if (this.screenEloSelect) this.screenEloSelect.value = '';
+      if (this.fitMethodSelect) this.fitMethodSelect.value = 'standard';
       if (this.confirmNameInput) this.confirmNameInput.value = '';
       this.gameContext = this.app.checkupGame;
       this.source = this.gameContext?.platform || profile?.accounts?.[0]?.platform || 'lichess';
@@ -553,17 +559,8 @@ export class IntuitionCheckup {
       bank.activeProfile?.id === profileId;
     this.renderOverview();
     try {
-      const options = { max: OVERVIEW_GAME_LIMIT, signal: controller.signal };
-      const archived = account.platform === 'lichess'
-        ? await fetchLichessRecentGames(account.username, { ...options, clocks: true })
-        : await fetchChesscomRecentGames(account.username, options);
+      const games = await this.fetchOverviewGames(account, profileId, controller.signal);
       if (!current()) return;
-      const profile = await bank.store.get('profiles', profileId);
-      if (!current()) return;
-      const reviews = Object.fromEntries(archived.map(game => [
-        game.gameId, profile?.checkupReviews?.[`${account.platform}:${game.gameId}`]
-      ]));
-      const games = prepareCheckupOverview(archived, account.username, reviews);
       const speeds = [...new Set(games.map(game => game.meta.timeClass).filter(Boolean))];
       if (state.speed && !speeds.includes(state.speed)) state.speed = '';
       this.saveOverviewCache(key, { games, account, state, speeds });
@@ -578,6 +575,20 @@ export class IntuitionCheckup {
         if (this.dialog.open && this.view === 'overview' && this.overviewKey() === key) this.renderOverview();
       }
     }
+  }
+
+  async fetchOverviewGames(account, profileId, signal) {
+    const options = { max: OVERVIEW_GAME_LIMIT, signal };
+    const archived = account.platform === 'lichess'
+      ? await fetchLichessRecentGames(account.username, { ...options, clocks: true })
+      : await fetchChesscomRecentGames(account.username, options);
+    if (signal.aborted) return [];
+    const profile = await this.app.mistakeBank.store.get('profiles', profileId);
+    if (signal.aborted) return [];
+    const reviews = Object.fromEntries(archived.map(game => [
+      game.gameId, profile?.checkupReviews?.[`${account.platform}:${game.gameId}`]
+    ]));
+    return prepareCheckupOverview(archived, account.username, reviews);
   }
 
   saveOverviewCache(key, entry) {
@@ -689,7 +700,9 @@ export class IntuitionCheckup {
       run.onclick = () => {
         if (!selectAccount()) return;
         const { record, pending } = this.app.checkupReminders?.accountState(account) || {};
-        this.prepareBatch({ onlyNew: !!(pending?.length || record?.lastDiagnosedAt || this.latestReport) });
+        const existingMethod = this.latestReport && (this.latestReport.fitMethod || 'standard');
+        this.prepareBatch({ onlyNew: !!(pending?.length || record?.lastDiagnosedAt || this.latestReport),
+          fitMethod: existingMethod || undefined });
       };
       const unlink = document.createElement('button');
       unlink.type = 'button';
@@ -788,6 +801,7 @@ export class IntuitionCheckup {
     if (this.profileSelect) this.profileSelect.disabled = busy;
     if (this.newProfileBtn) this.newProfileBtn.disabled = busy;
     if (this.screenEloSelect) this.screenEloSelect.disabled = busy;
+    if (this.fitMethodSelect) this.fitMethodSelect.disabled = busy;
     if (this.btnCancelRun) {
       this.btnCancelRun.disabled = this.running && this.cancelled;
       this.btnCancelRun.textContent = t(this.running ? 'checkupStop' : 'btnCancel');
@@ -811,7 +825,9 @@ export class IntuitionCheckup {
     if (this.reportBox) this.reportBox.hidden = busy || !this.latestReport;
     if (this.reportEmpty) this.reportEmpty.hidden = busy || !!this.latestReport || !!this.fallbackReport;
     if (this.reportTools) this.reportTools.hidden = busy;
-    for (const button of this.reportTools?.querySelectorAll('button') || []) button.disabled = busy;
+    for (const button of this.reportTools?.querySelectorAll('button') || []) {
+      button.disabled = busy || button.hasAttribute('aria-busy');
+    }
     if (this.overviewButton) this.overviewButton.disabled = busy || !this.overviewAccount?.value || (!!this.overviewController && this.overviewPendingKey === this.overviewKey());
     if (this.usernameInput) this.usernameInput.disabled = busy;
     if (this.localPgnInput) this.localPgnInput.disabled = busy;
@@ -906,7 +922,7 @@ export class IntuitionCheckup {
     if (this.statusEl) this.statusEl.textContent = text;
   }
 
-  async prepareBatch({ onlyNew = false } = {}) {
+  async prepareBatch({ onlyNew = false, fitMethod = this.fitMethodSelect?.value } = {}) {
     if (this.busy || !this.allowed()) return;
     const generation = this.openGeneration;
     const source = this.source;
@@ -961,7 +977,7 @@ export class IntuitionCheckup {
           if (!current()) return;
           if (state) this.history = state.reports;
           const reports = this.history.filter(item => checkupReportMatchesAccount(item, account));
-          const evidenceBase = checkupEvidenceBase(this.app.stockfish, this.app.maiaEngine);
+          const evidenceBase = checkupEvidenceBase(this.app.stockfish, this.app.maiaEngine, fitMethod);
           const compatible = reports.find(item => item.evidenceKey?.startsWith(evidenceBase + '|'));
           if (!this.screenEloSelect?.value && compatible) reusedScreen = { elo: compatible.screenElo };
           const record = state?.profile?.checkupReminders?.[accountKey(account)];
@@ -988,7 +1004,7 @@ export class IntuitionCheckup {
           }
         }
         this.fetching = false;
-        await this.startRun({ games, sourceLabel, profileId: startProfileId, windowIds, reusedScreen }, suggestedName);
+        await this.startRun({ games, sourceLabel, profileId: startProfileId, windowIds, reusedScreen, fitMethod }, suggestedName);
         return;
       }
       this.pendingBatch = { games, sourceLabel, profileId: startProfileId };
@@ -1042,6 +1058,7 @@ export class IntuitionCheckup {
         sourceLabel: batch.sourceLabel,
         elo: Number(this.screenEloSelect?.value) || undefined,
         reusedScreen: batch.reusedScreen,
+        fitMethod: batch.fitMethod || this.fitMethodSelect?.value,
         defaultElo: this.app.profileDefaultElo?.() || 1900,
         stockfish: this.app.stockfish,
         maiaEngine: this.app.maiaEngine,
@@ -1213,6 +1230,8 @@ export class IntuitionCheckup {
       coverage.className = 'checkup-elo-note checkup-window-coverage';
       coverage.textContent = t('checkupWindowCoverage', { count: report.gameCount });
       summary.append(coverage);
+    } else {
+      report = withCheckupFit(report);
     }
 
     const title = document.createElement('strong');
@@ -1221,34 +1240,8 @@ export class IntuitionCheckup {
       games: report.gameCount,
       moves: report.analyzedMoves
     });
-    const eloLine = document.createElement('p');
-    eloLine.textContent = report.closestElo != null
-      ? t('checkupClosestElo', { elo: report.closestElo })
-      : t('checkupNoEloFit');
-    summary.append(title, eloLine);
-
-    if (report.closestElo != null) {
-      const eloGrid = document.createElement('div');
-      eloGrid.className = 'checkup-elo-grid';
-      for (const r of CHECKUP_ELOS) {
-        const cell = document.createElement('div');
-        cell.className = `checkup-elo-pill${r === report.closestElo ? ' best' : ''}`;
-        cell.textContent = `${r}: ${((report.eloFit?.[r] || 0) * 100).toFixed(1)}%`;
-        eloGrid.append(cell);
-      }
-      const eloNote = document.createElement('small');
-      eloNote.className = 'checkup-elo-note';
-      eloNote.textContent = t('checkupEloFitNote');
-      summary.append(eloGrid, eloNote);
-      if (Number.isInteger(report.eloSampleCount) && Number.isInteger(report.fitGameCount)) {
-        const coverage = document.createElement('small');
-        coverage.className = 'checkup-elo-note';
-        coverage.textContent = t(report.fitGameCount === 1 ? 'checkupFitCoverageSingle' : 'checkupFitCoverage', {
-          moves: report.eloSampleCount, games: report.fitGameCount
-        });
-        summary.append(coverage);
-      }
-    }
+    summary.append(title, renderCheckupFit(report, (game, move) => this.openReportGame(report, game, move),
+      value => this.speedLabel(value)));
 
     const phaseLine = document.createElement('p');
     phaseLine.className = 'checkup-phase-line';
@@ -1272,12 +1265,14 @@ export class IntuitionCheckup {
   }
 
   displayedReport(report) {
-    if (!report.rolling || this.reportScope !== 'rolling') return report;
-    return { ...report, ...report.rolling, highlights: report.rolling.highlights || [], topTraps: [] };
+    if (!report.rolling || this.reportScope !== 'rolling') return withCheckupFit(report);
+    return withCheckupFit({ ...report, ...report.rolling, fit: report.rolling.fit,
+      highlights: report.rolling.highlights || [], topTraps: [] });
   }
 
   renderReportTools(report) {
     if (!this.reportTools) return;
+    this.combinedShareController?.abort();
     this.reportTools.replaceChildren();
     const platform = checkupSourceType(report?.sourceLabel);
     const account = report && normalizeAccount(platform, report.playerName);
@@ -1286,7 +1281,7 @@ export class IntuitionCheckup {
         if (this.busy || !this.allowed()) return;
         this.source = account.platform;
         this.usernameInput.value = account.username;
-        this.prepareBatch({ onlyNew: true });
+        this.prepareBatch({ onlyNew: true, fitMethod: report.fitMethod || 'standard' });
       }, 'btn-primary');
       update.disabled = this.busy;
       this.reportTools.append(update);
@@ -1294,8 +1289,13 @@ export class IntuitionCheckup {
     if (report) {
       this.reportTools.append(this.reportButton(t('checkupShareReport'), () => {
         const rolling = Boolean(report.rolling && this.reportScope === 'rolling');
-        this.share.open(diagnosticCardData(this.displayedReport(report), rolling, checkupTrapTopics));
+        this.share.open(diagnosticCardData(this.displayedReport(report), rolling, checkupTrapTopics, value => this.speedLabel(value)));
       }));
+    }
+    if (checkupReportMatchesAccount(report, account)) {
+      const share = this.reportButton(t('checkupShareCombined'), () => this.openCombinedShare(report, account, share));
+      share.disabled = this.busy;
+      this.reportTools.append(share);
     }
     if (report?.rolling) {
       const view = document.createElement('select');
@@ -1310,6 +1310,44 @@ export class IntuitionCheckup {
         this.reportTools.querySelector('select')?.focus();
       };
       this.reportTools.append(view);
+    }
+  }
+
+  async openCombinedShare(report, account, button) {
+    const profileId = this.app.mistakeBank?.activeProfile?.id;
+    if (this.busy || !this.dialog.open || !this.allowed() || !profileId || profileId !== report.profileId) return;
+    const key = JSON.stringify([profileId, accountKey(account)]);
+    const rolling = Boolean(report.rolling && this.reportScope === 'rolling');
+    const display = this.displayedReport(report);
+    const controller = new AbortController();
+    this.combinedShareController?.abort();
+    this.combinedShareController = controller;
+    const current = () => !controller.signal.aborted && !this.busy && button.isConnected &&
+      this.dialog.open && this.view === 'report' && this.allowed() && this.app.mistakeBank?.activeProfile?.id === profileId;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = t('checkupShareCombinedLoading');
+    try {
+      let games = this.overviewCache.get(key)?.games;
+      if (!games) {
+        games = await this.fetchOverviewGames(account, profileId, controller.signal);
+        if (!current()) return;
+        const speeds = [...new Set(games.map(game => game.meta.timeClass).filter(Boolean))];
+        this.saveOverviewCache(key, { games, account, speeds, state: { speed: '', side: 'w', expanded: new Set() } });
+      }
+      if (!current()) return;
+      if (!games.length) {
+        this.setStatus(t('checkupShareCombinedEmpty'));
+        return;
+      }
+      this.share.open(combinedCardData(display, rolling, checkupTrapTopics, value => this.speedLabel(value), games, account));
+    } catch (error) {
+      if (current() && error?.name !== 'AbortError') this.setStatus(t('checkupFetchFailed', { error: error.message }));
+    } finally {
+      if (this.combinedShareController === controller) this.combinedShareController = null;
+      button.removeAttribute('aria-busy');
+      button.disabled = this.busy;
+      button.textContent = t('checkupShareCombined');
     }
   }
 
@@ -1372,7 +1410,7 @@ export class IntuitionCheckup {
         return;
       }
       for (const [metric, label] of [['elo', 'checkupTrendElo'], ['density', 'checkupTrendDensity']]) {
-        charts.append(this.renderTrendChart(points, metric, t(label)));
+        charts.append(this.renderTrendChart(points, metric, t(label), report.fitMethod));
       }
     };
     mode.onchange = update;
@@ -1381,7 +1419,8 @@ export class IntuitionCheckup {
     this.reportBox.append(section);
   }
 
-  renderTrendChart(points, metric, title) {
+  renderTrendChart(points, metric, title, fitMethod) {
+    const bands = checkupFitBands(fitMethod);
     const figure = document.createElement('figure');
     const caption = document.createElement('figcaption');
     caption.textContent = title;
@@ -1397,8 +1436,8 @@ export class IntuitionCheckup {
     const format = value => metric === 'density' ? value.toFixed(1) : String(value);
     chart.setAttribute('aria-label', `${title} · ${valid.map(point => `${format(point[metric])} (${t('checkupWindowCoverage', { count: point.count })})`).join(' / ')}`);
     const elo = metric === 'elo';
-    const lo = elo ? CHECKUP_ELOS[0] : 0;
-    const hi = elo ? CHECKUP_ELOS.at(-1) : Math.max(1, Math.ceil(Math.max(...valid.map(point => point.density))));
+    const lo = elo ? bands[0] : 0;
+    const hi = elo ? bands.at(-1) : Math.max(1, Math.ceil(Math.max(...valid.map(point => point.density))));
     const yFor = value => 75 - 48 * (value - lo) / (hi - lo);
     const svg = (name, attrs, content = '') => {
       const node = document.createElementNS(chart.namespaceURI, name);
@@ -1406,7 +1445,7 @@ export class IntuitionCheckup {
       node.textContent = content;
       return node;
     };
-    for (const tick of elo ? CHECKUP_ELOS : [0, hi / 2, hi]) {
+    for (const tick of elo ? bands : [0, hi / 2, hi]) {
       const y = yFor(tick);
       chart.append(svg('line', { x1: 31, x2: 294, y1: y, y2: y, class: 'checkup-chart-guide' }),
         svg('text', { x: 25, y, 'text-anchor': 'end', 'dominant-baseline': 'middle' }, String(tick)));
