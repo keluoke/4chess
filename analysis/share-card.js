@@ -353,7 +353,7 @@ const legendRowHeight = 34;
 const legendGap = 9;
 
 function drawShareLegend(ctx, spec, theme, x, y, width) {
-  const roles = { stockfish: 'Stockfish', maia: 'Maia', played: t('snapshotPlayed') };
+  const roles = { stockfish: 'Stockfish', maia: 'Maia', played: t('snapshotPlayed', {}, spec.lang) };
   ctx.font = '600 22px system-ui, sans-serif';
   ctx.textBaseline = 'middle';
   let left = x;

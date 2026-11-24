@@ -7,9 +7,11 @@ const copy = {
   zh: {
     studio: '分析工作台', round: '轮次', moves: '实战着法', engines: '双引擎对比', rating: '段位',
     first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享棋王战瞬间',
+    flip: '翻转棋盘', reviewGame: '在工作台复盘本局', reviewPosition: '在工作台分析此局面',
     sourceLead: '转播数据', delay: '着法和时钟以转播为准，可能晚于现场。',
     analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎', analysisIdle: '启用后，在本机分析已播出的着法。',
     engineBusy: '正在分析实战着法…', engineFailed: '双引擎暂不可用。', partial: 'Maia-3 暂不可用。',
+    branchBusy: '正在分析试走局面…',
     branch: '试走变化', history: '正在回看', live: '转播中', finished: '本局已结束', cancelled: '本局取消',
     scheduled: '尚未开赛', waiting: '等待官方着法', loading: '正在连接 Lichess 转播',
     stale: '转播更新暂缓 · 显示最近收到的棋谱', unavailable: '暂时无法连接转播，将自动重试',
@@ -21,9 +23,11 @@ const copy = {
   en: {
     studio: 'Analysis studio', round: 'Game', moves: 'Moves played', engines: 'Compare engines', rating: 'Rating',
     first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share this moment',
+    flip: 'Flip board', reviewGame: 'Review this game in the studio', reviewPosition: 'Analyze this position in the studio',
     sourceLead: 'Broadcast by', delay: 'Moves and clock readings may be delayed.',
     analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines', analysisIdle: 'Analyze moves already broadcast on this device.',
     engineBusy: 'Analyzing the move played…', engineFailed: 'Engine analysis is unavailable.', partial: 'Maia-3 is unavailable.',
+    branchBusy: 'Analyzing the variation…',
     branch: 'Variation', history: 'Reviewing', live: 'On air', finished: 'Game finished', cancelled: 'Cancelled',
     scheduled: 'Scheduled', waiting: 'Waiting for official moves', loading: 'Connecting to Lichess Broadcast',
     stale: 'Feed delayed · showing the last received moves', unavailable: 'Broadcast unavailable. Retrying automatically.',
@@ -38,7 +42,7 @@ const params = new URLSearchParams(location.search);
 const eventId = params.get('event') || 'wcc2026';
 let lang = params.get('lang') === 'en' ? 'en' : params.get('lang') === 'zh' ? 'zh'
   : navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
-const t = key => copy[lang][key];
+const t = (key, locale = lang) => copy[locale][key];
 const foreground = () => !document.hidden;
 const analysisAllowed = () => window.top === window && !FairPlayGuard.isLiveGameInProgress();
 
@@ -46,25 +50,29 @@ const state = {
   event: null, round: params.get('round'), snapshot: null, cursor: 0, follow: !params.has('ply'),
   initialPly: /^\d+$/.test(params.get('ply') || '') ? Number(params.get('ply')) : null,
   branch: null, unseen: false, stale: false, busy: false, roundKey: 0,
-  engines: null, engineEnabled: false, analysisKey: '', requestedKey: '', analysis: null, analyzing: false
+  engines: null, engineEnabled: false, analysisKey: '', requestedKey: '', analysis: null, analyzing: false, requestVersion: 0
 };
 const board = new BoardUI($('event-board'), {
+  brilliantArrows: true,
   onMove(move, fen) {
     state.boardFen = fen;
     state.boardMove = move.uci;
-    if (!state.snapshot?.initialFen) {
+    if (!state.snapshot || !analysisAllowed()) {
       paintBoard();
       return;
     }
-    state.branch = { fen, move };
+    const history = state.branch ? [...state.branch.history, state.branch.fen]
+      : [state.snapshot.initialFen || ChessBoard.INITIAL_FEN, ...state.snapshot.moves.slice(0, state.cursor).map(item => item.fen)];
+    state.branch = { fen, move, history: history.slice(-7) };
     state.follow = false;
     cancelAnalysis();
     paintControls();
+    void analyzeMove();
   }
 });
 
-function playerName(player) {
-  return player?.[lang === 'en' ? 'nameEn' : 'name'] || '';
+function playerName(player, locale = lang) {
+  return player?.[locale === 'en' ? 'nameEn' : 'name'] || '';
 }
 
 function clock(seconds) {
@@ -123,7 +131,8 @@ function paintBoard() {
   }
   const recent = moves.slice(0, state.cursor);
   for (const [side, turn] of [['white', 'w'], ['black', 'b']]) {
-    $(side + '-name').textContent = playerName(state.snapshot?.[side]) || t(side);
+    const player = state.snapshot?.[side];
+    $(side + '-name').textContent = (playerName(player) || t(side)) + (player?.rating ? ' · ' + player.rating : '');
     const lastClock = recent.findLast(move => move.turn === turn && Number.isFinite(move.clk));
     $(side + '-clock').textContent = clock(lastClock?.clk);
     $(side + '-seat').dataset.toMove = String(state.snapshot?.status === 'live' && !state.branch && !state.stale &&
@@ -174,7 +183,23 @@ function paintControls() {
   $('first').disabled = $('previous').disabled;
   $('next').disabled = state.cursor === length && !state.branch;
   $('latest').disabled = state.follow && !state.branch;
+  paintWorkbenchLink();
   paintAnalysis();
+}
+
+function paintWorkbenchLink() {
+  const link = $('workbench-game');
+  const snapshot = state.snapshot;
+  const pgn = snapshot?.status === 'finished' && FairPlayGuard.verifyConcludedGame(snapshot.pgn).ok ? snapshot.pgn : null;
+  const canReviewPosition = snapshot?.moves.length || state.branch;
+  const input = pgn ? { pgn } : canReviewPosition ? { fen: state.boardFen } : null;
+  link.hidden = !input || !analysisAllowed();
+  if (link.hidden) {
+    link.removeAttribute('href');
+    return;
+  }
+  link.href = '/analysis/#' + new URLSearchParams({ ...input, orientation: board.orientation, lang });
+  link.textContent = t(pgn ? 'reviewGame' : 'reviewPosition');
 }
 
 function paint() {
@@ -185,6 +210,7 @@ function paint() {
 }
 
 function cancelAnalysis() {
+  state.requestVersion++;
   state.requestedKey = '';
   state.analysisKey = '';
   state.analysis = null;
@@ -194,33 +220,35 @@ function cancelAnalysis() {
 function paintAnalysis() {
   const result = state.analysis;
   $('engine-lines').hidden = !result;
-  $('moment').hidden = !result;
+  $('moment').hidden = !result?.moment;
   $('analyze').disabled = !analysisAllowed();
   $('analyze').textContent = t(state.engineEnabled ? (result || state.analyzing || !state.requestedKey ? 'pause' : 'retry') : 'analyze');
-  const kind = result && intuitionKind(result.moment);
+  const kind = result?.moment && intuitionKind(result.moment);
   $('intuition-tag').hidden = !kind;
   $('intuition-tag').textContent = kind ? t(kind) : '';
-  $('engine-note').textContent = !state.engineEnabled ? t('analysisIdle') : state.branch ? t('branch')
-    : state.analyzing ? t('engineBusy') : result ? (result.maiaReady ? '' : t('partial'))
+  $('engine-note').textContent = !state.engineEnabled ? t('analysisIdle')
+    : state.analyzing ? t(state.branch ? 'branchBusy' : 'engineBusy') : result ? (result.maiaReady ? '' : t('partial'))
       : state.requestedKey ? t('engineFailed') : t('waitingMove');
   if (result) {
-    const { moment } = result;
-    $('sf-line').textContent = [moment.bestSan, result.score].filter(Boolean).join(' · ') || '—';
-    const probability = Number.isFinite(moment.humanRawProbability) ? (100 * moment.humanRawProbability).toFixed(1) + '%' : '';
-    $('maia-line').textContent = [moment.maiaTopSan, probability && moment.san + ' ' + probability].filter(Boolean).join(' · ') || '—';
+    const moment = result.moment;
+    $('sf-line').textContent = [moment?.bestSan ?? result.bestSan, result.score].filter(Boolean).join(' · ') || '—';
+    const probability = Number.isFinite(moment?.humanRawProbability) ? (100 * moment.humanRawProbability).toFixed(1) + '%' : '';
+    $('maia-line').textContent = [moment?.maiaTopSan ?? result.maiaTopSan, probability && moment.san + ' ' + probability].filter(Boolean).join(' · ') || '—';
   }
 }
 
 async function analyzeMove() {
   const moves = state.snapshot?.moves || [];
-  const move = moves[state.cursor - 1];
-  if (!move || state.branch || !state.engineEnabled || !analysisAllowed() || !foreground()) return;
+  const branch = state.branch;
+  const move = branch ? null : moves[state.cursor - 1];
+  if ((!move && !branch) || !state.engineEnabled || !analysisAllowed() || !foreground()) return;
   const elo = Number($('event-elo').value);
-  const fenBefore = moves[state.cursor - 2]?.fen || state.snapshot.initialFen;
-  const history = [state.snapshot.initialFen, ...moves.slice(0, state.cursor - 1).map(move => move.fen)]
+  const fenBefore = branch?.fen ?? moves[state.cursor - 2]?.fen ?? state.snapshot.initialFen;
+  const history = branch?.history ?? [state.snapshot.initialFen, ...moves.slice(0, state.cursor - 1).map(move => move.fen)]
     .slice(Math.max(0, state.cursor - 8), state.cursor - 1);
-  const key = JSON.stringify([state.round, state.cursor, fenBefore, move.uci, elo, history]);
+  const key = JSON.stringify([state.round, state.cursor, fenBefore, move?.uci, elo, history]);
   if (state.requestedKey === key) return;
+  const version = ++state.requestVersion;
   state.requestedKey = key;
   state.analysisKey = '';
   state.analysis = null;
@@ -230,10 +258,10 @@ async function analyzeMove() {
   }
   state.analyzing = true;
   paintAnalysis();
-  const obsolete = () => state.requestedKey !== key || !foreground() || !analysisAllowed();
+  const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261124');
+      const { LiveEngines } = await import('./engines.js?v=20261124-board');
       if (obsolete()) return;
       state.engines = new LiveEngines();
     }
@@ -246,7 +274,7 @@ async function analyzeMove() {
     console.debug('Broadcast analysis unavailable', error);
   } finally {
     state.analyzing = false;
-    if (state.requestedKey && state.requestedKey !== key) {
+    if (state.requestedKey && state.requestVersion !== version) {
       state.requestedKey = '';
       void analyzeMove();
     }
@@ -339,6 +367,11 @@ async function pollRound() {
     if (key !== state.roundKey || next.roundId !== state.round) return;
     state.roundTag = response.headers.get('ETag');
     const old = state.snapshot;
+    const mainlineChanged = old && (old.moves.length !== next.moves.length ||
+      next.moves.some((move, i) => old.moves[i]?.uci !== move.uci));
+    if (state.follow && mainlineChanged && (board.gesture || board.selectedSq || board.promotionPicker)) {
+      state.follow = false;
+    }
     state.snapshot = next;
     if (state.initialPly !== null) {
       state.cursor = Math.min(state.initialPly, next.moves.length);
@@ -346,8 +379,7 @@ async function pollRound() {
       state.follow = false;
     } else if (state.follow) {
       state.cursor = next.moves.length;
-    } else if (old && (old.moves.length !== next.moves.length ||
-      next.moves.some((move, i) => old.moves[i]?.uci !== move.uci))) {
+    } else if (mainlineChanged) {
       state.unseen = true;
       if (!state.branch) state.cursor = Math.min(state.cursor, next.moves.length);
     }
@@ -382,6 +414,13 @@ $('first').onclick = () => jump(0);
 $('previous').onclick = () => jump(state.branch ? state.cursor : state.cursor - 1);
 $('next').onclick = () => jump(state.branch ? state.cursor : state.cursor + 1);
 $('latest').onclick = $('new-move').onclick = () => jump(state.snapshot?.moves.length || 0, true);
+$('flip-board').onclick = () => {
+  board.flip();
+  const blackAtBottom = board.orientation === 'black';
+  board.container.before($(blackAtBottom ? 'white-seat' : 'black-seat'));
+  board.container.after($(blackAtBottom ? 'black-seat' : 'white-seat'));
+  paintWorkbenchLink();
+};
 $('language').onclick = () => {
   lang = lang === 'zh' ? 'en' : 'zh';
   paintLanguage();
@@ -396,22 +435,24 @@ $('analyze').onclick = () => {
   void analyzeMove();
 };
 $('moment').onclick = async () => {
-  if (!state.analysis || !analysisAllowed()) return;
+  if (!state.analysis?.moment || !analysisAllowed()) return;
   const key = state.analysisKey;
   const result = state.analysis;
+  const cardLang = lang;
+  const orientation = board.orientation;
   const { round, snapshot } = state;
   try {
     const [{ buildShareCardSpec, renderShareCardCanvas }, { canvasPng, downloadPng }] = await Promise.all([
-      import('../analysis/share-card.js?v=20261124-live'), import('../analysis/share-export.js')
+      import('../analysis/share-card.js?v=20261124-intuition-labels'), import('../analysis/share-export.js?v=20261124-divergence-cards')
     ]);
     const spec = buildShareCardSpec(result.moment, {
-      lang, elo: Number($('event-elo').value),
-      white: playerName(snapshot.white), black: playerName(snapshot.black)
+      lang: cardLang, orientation, elo: Number($('event-elo').value),
+      white: playerName(snapshot.white, cardLang), black: playerName(snapshot.black, cardLang)
     });
-    spec.badge = [t('card'), snapshot.roundName, spec.kind ? t(spec.kind) : ''].filter(Boolean).join(' · ');
+    spec.badge = [t('card', cardLang), snapshot.roundName, spec.kind ? t(spec.kind, cardLang) : ''].filter(Boolean).join(' · ');
     spec.watermark = '4chess.cc/live · Lichess Broadcast';
-    spec.targetUrl = 'https://4chess.cc/live/?' + new URLSearchParams({ event: eventId, round, ply: result.moment.ply, lang });
-    spec.scanLabel = t('scan');
+    spec.targetUrl = 'https://4chess.cc/live/?' + new URLSearchParams({ event: eventId, round, ply: result.moment.ply, lang: cardLang });
+    spec.scanLabel = t('scan', cardLang);
     const canvas = await renderShareCardCanvas(spec, document.createElement('canvas'), {
       isCurrent: () => state.analysisKey === key && analysisAllowed()
     });
@@ -429,7 +470,7 @@ document.addEventListener('visibilitychange', () => {
   if (foreground()) {
     void pollEvent();
     void pollRound();
-    if (state.follow) void analyzeMove();
+    if (state.engineEnabled) void analyzeMove();
   } else if (state.analyzing) {
     cancelAnalysis();
   }

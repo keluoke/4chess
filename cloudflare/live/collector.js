@@ -1,5 +1,5 @@
 import { LIVE_EVENTS } from './events.js';
-import { activeRound, eventView, fallbackRounds, normalizeRounds, parseRoundPgn, roundStatus } from './model.js';
+import { activeRound, completeSnapshot, eventView, fallbackRounds, normalizeRounds, parseFinishedRounds, parseRoundPgn, roundStatus } from './model.js';
 
 const META_INTERVAL = 60_000;
 const ROUND_INTERVAL = 12_000;
@@ -11,6 +11,8 @@ export class LiveCollector {
     this.storage = ctx.storage;
     this.snapshots = new Map();
     this.meta = new Map();
+    this.backfillAfter = new Map();
+    this.roundRetryAfter = new Map();
     this.retryUntil = 0;
     this.upstream = env.LICHESS_TEST_ORIGIN || 'https://lichess.org';
     this.pending = Promise.resolve();
@@ -43,6 +45,7 @@ export class LiveCollector {
         throw new Error('Broadcast source HTTP ' + response.status);
       }
 
+      if (!response.body) return '';
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let size = 0, body = '';
@@ -73,25 +76,38 @@ export class LiveCollector {
     const now = Date.now();
     const status = roundStatus(round, old, now);
     if (status === 'scheduled' && round.startsAt - now > 30_000) return false;
-    const interval = status === 'finished' && old?.games.every(game => game.result !== '*') ? CLOSED_INTERVAL : ROUND_INTERVAL;
+    if (now < (this.roundRetryAfter.get(key) ?? 0)) throw new Error('Round PGN cooling down');
+    const interval = status === 'finished' && completeSnapshot(old) ? CLOSED_INTERVAL : ROUND_INTERVAL;
     if (old && now - old.checkedAt < interval) return false;
 
     const pgn = await this.readSource('/api/broadcast/round/' + round.id + '.pgn?clocks=true&comments=true', 'application/x-chess-pgn');
     let games;
     try {
       games = parseRoundPgn(pgn, event);
-      if (old?.games.some(game => game.moves.length) && games.every(game => !game.moves.length && game.result === '*')) {
+      if ((completeSnapshot(old) || old?.games.some(game => game.moves.length)) && games.every(game => !game.moves.length && game.result === '*')) {
         throw new Error('Broadcast dropped its published moves');
       }
     } catch (error) {
-      this.retryUntil = Math.max(this.retryUntil, Date.now() + ROUND_INTERVAL);
+      this.roundRetryAfter.set(key, Date.now() + ROUND_INTERVAL);
       throw error;
     }
+    await this.saveRound(key, games.length ? games : old?.games ?? []);
+  }
+
+  async saveRound(key, games) {
+    const old = this.snapshots.get(key);
     const changed = old?.games.map(game => game.pgn).join('\n\n') !== games.map(game => game.pgn).join('\n\n');
-    const record = { games, updatedAt: changed ? Date.now() : old.updatedAt, checkedAt: Date.now() };
+    const record = { games, updatedAt: games.length && changed ? Date.now() : old?.updatedAt ?? null, checkedAt: Date.now() };
     await this.storage.put('round:' + key, record);
     this.snapshots.set(key, record);
-    return changed;
+  }
+
+  async refreshFinishedRounds(eventId, event, rounds) {
+    this.backfillAfter.set(eventId, Date.now() + META_INTERVAL);
+    const pgn = await this.readSource('/api/broadcast/' + event.tournamentId + '.pgn?clocks=true&comments=true', 'application/x-chess-pgn');
+    for (const [id, games] of parseFinishedRounds(pgn, event, rounds)) {
+      await this.saveRound(this.roundKey(eventId, id), games);
+    }
   }
 
   forEvent(eventId, rounds) {
@@ -127,13 +143,17 @@ export class LiveCollector {
     const rounds = meta?.rounds || fallbackRounds(event);
     const snapshots = this.forEvent(eventId, rounds);
     if (wantsEvent) {
-      const pending = rounds.find(round => round.finished && !snapshots.get(round.id)?.games.every(game => game.result !== '*'));
+      const pending = rounds.filter(round => round.finished && !completeSnapshot(snapshots.get(round.id)));
       const active = activeRound(rounds, snapshots, now);
-      const toRefresh = pending || active;
+      const toRefresh = pending[0] || active;
       // On a rest day, finished rounds can still be backfilled for the match score.
       if (event.enabled && toRefresh && now < event.hideAfter) {
         try {
-          await this.refreshRound(eventId, event, toRefresh);
+          if (pending.length > 1 && now >= (this.backfillAfter.get(eventId) ?? 0) && now >= this.retryUntil) {
+            await this.refreshFinishedRounds(eventId, event, pending);
+          } else {
+            await this.refreshRound(eventId, event, toRefresh);
+          }
         } catch {
           stale = true;
         }
@@ -154,8 +174,8 @@ export class LiveCollector {
     const status = roundStatus(round, snapshot, now);
     if (!snapshot && stale && status !== 'scheduled') return this.response({ stale }, 503);
     if (url.searchParams.get('format') === 'pgn') {
-      if (!snapshot) return this.response({ stale, status }, 503);
-      return this.response({ stale, status, pgn: snapshot.games.map(game => game.pgn).join('\n\n') });
+      if (!snapshot && stale) return this.response({ stale, status }, 503);
+      return this.response({ stale, status, pgn: snapshot?.games.map(game => game.pgn).join('\n\n') ?? '' });
     }
     const game = snapshot?.games.findLast(game => game.moves.length || game.result !== '*') || snapshot?.games[0];
     return this.response({

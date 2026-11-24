@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124">
+  <link rel="stylesheet" href="./live.css?v=20261124-board">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -36,7 +36,9 @@
           <button id="previous" type="button" aria-label="上一步" data-label="previous">‹</button>
           <button id="next" type="button" aria-label="下一步" data-label="next">›</button>
           <button id="latest" type="button" data-copy="latest">回到最新</button>
+          <button id="flip-board" type="button" data-copy="flip">翻转棋盘</button>
         </div>
+        <a id="workbench-game" class="workbench-game" target="_blank" rel="noopener" hidden></a>
       </section>
       <section class="event-panel" aria-label="着法和双引擎">
         <button type="button" id="new-move" class="update-button" hidden></button>
@@ -74,6 +76,6 @@
       <span data-copy="delay">着法和时钟以转播为准，可能晚于现场。</span>
     </footer>
   </main>
-  <script type="module" src="./live.js?v=20261124"></script>
+  <script type="module" src="./live.js?v=20261124-board"></script>
 </body>
 </html>

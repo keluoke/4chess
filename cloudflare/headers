@@ -21,6 +21,8 @@
 # Mutable app shell and modules must revalidate together after releases.
 /analysis/*
   Cache-Control: no-cache, no-store, must-revalidate
+/live/*
+  Cache-Control: no-cache, no-store, must-revalidate
 /engine/*
   Cache-Control: no-cache, no-store, must-revalidate
 /ui/*

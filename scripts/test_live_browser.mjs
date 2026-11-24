@@ -25,6 +25,7 @@ const rounds = fallbackRounds(event);
 const current = rounds[0];
 const pgn = line => '[Event "Game 1"]\n[White "Sindarov"]\n[WhiteFideId "14205483"]\n[Black "Gukesh"]\n[BlackFideId "46616543"]\n[Result "*"]\n\n' + line + ' *';
 let line = '1. e4 { [%clk 1:59:32] } e5 { [%clk 1:58:52] } 2. Nf3';
+let finished = false;
 const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chromium', headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 980 } });
@@ -37,14 +38,31 @@ try {
   });
   await page.route('**/api/live/round?*', route => {
     const roundId = new URL(route.request().url()).searchParams.get('id');
-    const game = parseRoundPgn(pgn(roundId === current.id ? line : ''), event)[0];
+    const isCurrent = roundId === current.id;
+    const raw = pgn(isCurrent ? line : '');
+    const game = parseRoundPgn(isCurrent && finished ? raw.replace('[Result "*"]', '[Result "1/2-1/2"]').replace(/\*$/, '1/2-1/2') : raw, event)[0];
     return route.fulfill({ json: {
-      ...game, roundId, roundName: 'Game 1', status: roundId === current.id ? 'live' : 'scheduled'
+      ...game, roundId, roundName: 'Game 1', status: isCurrent ? (finished ? 'finished' : 'live') : 'scheduled'
     } });
   });
   await page.route('**/live/engines.js?*', route => route.fulfill({
     contentType: 'application/javascript',
-    body: 'export class LiveEngines { cancel() {} async inspect({ move, fenBefore }) { return { score: "+0.35", maiaReady: true, moment: { ...move, fenBefore, bestUci: move.uci, bestSan: move.san, maiaTopUci: "f1c4", maiaTopSan: "Bc4", humanRawProbability: .11, lossCp: 0, severity: "good", divergenceStatus: "confirmed", divergenceType: "beyond_intuition" } }; } }'
+    body: `export class LiveEngines {
+      cancel() {}
+      async inspect({ move, fenBefore }) {
+        if (!move) return { score: '+0.35', maiaReady: true, bestSan: 'Nc6', maiaTopSan: 'Nf6' };
+        (window.assessments ||= []).push(move.ply);
+        if (window.holdAssessment) {
+          window.holdAssessment = false;
+          await new Promise(resolve => { window.finishAssessment = resolve; });
+        }
+        return { score: '+0.35', maiaReady: true, moment: {
+          ...move, fenBefore, bestUci: move.uci === 'b8c6' ? 'g8f6' : move.uci,
+          bestSan: move.san === 'Nc6' ? 'Nf6' : move.san, maiaTopUci: 'f1c4', maiaTopSan: 'Bc4',
+          humanRawProbability: .11, lossCp: 0, severity: 'good', divergenceStatus: 'confirmed', divergenceType: 'beyond_intuition'
+        } };
+      }
+    }`
   }));
 
   await page.goto('http://127.0.0.1:' + server.address().port + '/live/?lang=zh');
@@ -53,9 +71,27 @@ try {
   assert.equal(await page.locator('#white-clock').innerText(), '1:59:32');
   assert.equal(await page.locator('#black-clock').innerText(), '1:58:52');
   await page.locator('#previous').click();
-  await page.locator('#event-board [data-square="g1"]').click();
-  await page.locator('#event-board [data-square="f3"]').click();
+  const square = name => page.locator('#event-board [data-square="' + name + '"]');
+  const drag = async (from, to, button, shift = false) => {
+    const a = await square(from).boundingBox(), b = await square(to).boundingBox();
+    if (shift) await page.keyboard.down('Shift');
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down({ button });
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.up({ button });
+    if (shift) await page.keyboard.up('Shift');
+  };
+  await drag('g1', 'f3', 'right');
+  assert.equal(await page.locator('.study-annotations line').count(), 1);
+  await drag('g1', 'f3', 'right', true);
   assert.equal(await page.locator('#ply-note').innerText(), '试走变化');
+  assert.match(await page.locator('.study-annotations').textContent(), /!!/);
+  await page.locator('#flip-board').click();
+  assert.equal(await page.locator('#event-board').evaluate(element => element.previousElementSibling.id), 'white-seat');
+  assert.match(await page.locator('#workbench-game').getAttribute('href'), /^\/analysis\/#fen=/);
+  await page.locator('#analyze').click();
+  await page.locator('#sf-line').getByText('Nc6 · +0.35').waitFor();
+  assert.equal(await page.locator('#moment').isVisible(), false);
   line += ' Nc6';
   await page.clock.fastForward(11000);
   await page.locator('#new-move').waitFor();
@@ -63,12 +99,40 @@ try {
   assert.equal(await page.locator('#event-board [data-square="f3"] .maia-piece').count(), 1);
   await page.locator('#new-move').click();
   assert.equal(await page.locator('#ply-note').innerText(), '4 / 4');
-  await page.locator('#analyze').click();
   await page.locator('#intuition-tag').getByText('神之一手').waitFor();
-  assert.equal(await page.locator('#sf-line').innerText(), 'Nc6 · +0.35');
+  assert.equal(await page.locator('#sf-line').innerText(), 'Nf6 · +0.35');
+  await page.evaluate(() => {
+    window.cardText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+      window.cardText.push(String(text));
+      return fillText.call(this, text, ...args);
+    };
+  });
+  await page.locator('#language').click();
   const downloaded = page.waitForEvent('download');
   await page.locator('#moment').click();
   assert.equal((await downloaded).suggestedFilename(), 'diverge-wcc-' + current.id + '-4.png');
+  assert.ok(await page.evaluate(() => window.cardText.some(text => /^Played ·/.test(text))));
+  await page.locator('#language').click();
+  await page.evaluate(() => { window.holdAssessment = true; });
+  await page.locator('#previous').click();
+  await page.waitForFunction(() => !!window.finishAssessment);
+  await page.evaluate(() => {
+    for (const hidden of [true, false]) {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }
+    window.finishAssessment();
+  });
+  await page.locator('#sf-line').getByText('Nf3 · +0.35').waitFor();
+  assert.equal(await page.evaluate(() => window.assessments.filter(ply => ply === 3).length), 2);
+  await drag('b8', 'c6', 'left');
+  assert.equal(await page.locator('#ply-note').innerText(), '试走变化');
+  await page.locator('#event-moves button[data-ply="2"]').click();
+  await square('g1').click();
+  await square('f3').click();
+  assert.equal(await page.locator('#ply-note').innerText(), '试走变化');
   if (process.env.LIVE_SCREENSHOTS) {
     mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'desktop.png'), fullPage: true });
@@ -83,6 +147,10 @@ try {
   await page.locator('#round-select').selectOption(rounds[1].id);
   await page.locator('#event-status').getByText('尚未开赛').waitFor();
   assert.equal(await page.locator('#event-moves button').count(), 0);
+  finished = true;
+  await page.locator('#round-select').selectOption(current.id);
+  await page.locator('#workbench-game').getByText('在工作台复盘本局').waitFor();
+  assert.match(await page.locator('#workbench-game').getAttribute('href'), /^\/analysis\/#pgn=/);
   assert.deepEqual(issues, []);
 } finally {
   await browser.close();

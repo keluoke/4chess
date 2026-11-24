@@ -6,6 +6,9 @@
   --muted: #52635a;
   --green: #205c49;
   --line: #d9ded3;
+  --brand-red: #a33d3a;
+  --brand-blue: #3a6bac;
+  --dg-ink: var(--ink);
 }
 body.live-page { display: block; height: auto; overflow: auto; margin: 0; background: var(--page); color: var(--ink); font-family: system-ui, sans-serif; }
 .live-page [hidden] { display: none !important; }
@@ -21,6 +24,7 @@ body.live-page { display: block; height: auto; overflow: auto; margin: 0; backgr
 .match-score strong { color: var(--ink); font-size: 1.45rem; font-variant-numeric: tabular-nums; }
 .event-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1.35rem; }
 .board-column { min-width: 0; }
+.workbench-game { display: inline-block; margin-top: .65rem; color: var(--green); }
 .seat { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .45rem 0; font-weight: 650; }
 .seat time { padding: .35rem .65rem; background: #e6eae0; color: var(--ink); border-radius: 5px; font-variant-numeric: tabular-nums; }
 .seat[data-to-move="true"] time { background: var(--green); color: white; }

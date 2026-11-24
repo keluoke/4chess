@@ -22,9 +22,10 @@ export class LiveEngines {
     const maiaReady = this.maia.initialize().then(() => true, () => false);
     const result = await this.stockfish.evaluate(fenBefore, DEPTH, 3000, 2, 2700);
     if (obsolete()) return null;
-    const prediction = await maiaReady ? await this.maia.predict(fenBefore, elo, result, obsolete, history) : null;
+    const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fenBefore, elo, result, obsolete, history) : null;
     if (obsolete()) return null;
     const likely = prediction?.moves?.[0];
+    if (!move) return { score: result?.score, bestSan: result?.bestMove?.san, maiaTopSan: likely?.san, maiaReady: !!prediction };
     const rank = prediction?.moves?.findIndex(candidate => candidate.uci === move.uci) ?? -1;
     const probability = rank >= 0 ? chance(prediction.moves[rank]) : null;
     const moment = {

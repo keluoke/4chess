@@ -50,7 +50,9 @@ function parseGame(pgn, event) {
     const id = tag(pgn, side + 'FideId') || null;
     const configured = event.players.find(candidate => candidate.id === id);
     const name = side === 'White' ? parsed.white : parsed.black;
-    return { id, name: configured?.name || name, nameEn: configured?.nameEn || name };
+    const rating = Number(tag(pgn, side + 'Elo'));
+    return { id, name: configured?.name || name, nameEn: configured?.nameEn || name,
+      rating: Number.isSafeInteger(rating) && rating > 0 ? rating : null };
   };
   const result = finishedResults.has(parsed.result) ? parsed.result : '*';
   // Keep the played-position identity separate from timing and PGN annotations.
@@ -61,15 +63,52 @@ function parseGame(pgn, event) {
   };
 }
 
+function splitGames(pgn) {
+  return pgn.trim() ? pgn.trim().replaceAll('\r\n', '\n').split(/\n\s*\n(?=\[Event ")/) : [];
+}
+
 export function parseRoundPgn(pgn, event) {
-  const games = pgn.trim().replaceAll('\r\n', '\n').split(/\n\s*\n(?=\[Event ")/);
+  const games = splitGames(pgn).filter(game => {
+    if (game === '*') return false;
+    const unnamed = !tag(game, 'White') || !tag(game, 'Black');
+    return !unnamed || tag(game, 'Result') !== '*' || GameAnalyzer.parsePgn(game).length > 0;
+  });
   if (games.length > 20) throw new Error('Too many broadcast games');
   return games.map(game => parseGame(game, event));
 }
 
+export function parseFinishedRounds(pgn, event, rounds) {
+  const ids = new Set(rounds.map(round => round.id));
+  const byRound = new Map();
+  const prefix = 'https://lichess.org/broadcast/' + event.tournamentSlug + '/';
+  for (const game of splitGames(pgn)) {
+    const url = tag(game, 'BroadcastURL');
+    if (!url?.startsWith(prefix)) continue;
+    const [slug, id, extra] = url.slice(prefix.length).replace(/\/$/, '').split('/');
+    if (!slug || extra !== undefined || !ids.has(id)) continue;
+    if (!byRound.has(id)) byRound.set(id, []);
+    byRound.get(id).push(game);
+  }
+  const finished = new Map();
+  for (const [id, games] of byRound) {
+    try {
+      const parsed = parseRoundPgn(games.join('\n\n'), event);
+      if (completeSnapshot({ games: parsed })) finished.set(id, parsed);
+    } catch {
+      // The per-round endpoint can backfill this round on a later refresh.
+    }
+  }
+  return finished;
+}
+
+export function completeSnapshot(snapshot) {
+  return !!snapshot?.games.length && snapshot.games.every(game => finishedResults.has(game.result));
+}
+
 export function roundStatus(round, snapshot, now) {
-  if (round.finished || snapshot?.games.every(game => finishedResults.has(game.result))) return 'finished';
-  if (round.ongoing || snapshot?.games.some(game => game.moves.length)) return 'live';
+  if (round.finished || completeSnapshot(snapshot)) return 'finished';
+  if (snapshot?.games.some(game => game.moves.length)) return 'live';
+  if (round.ongoing) return 'waiting';
   return round.startsAt != null && now < round.startsAt ? 'scheduled' : 'waiting';
 }
 
@@ -109,7 +148,7 @@ export function eventView(eventId, event, rounds, snapshots, now) {
         id: round.id, name: round.name, number: round.number, startsAt: round.startsAt,
         source: round.source ?? 'https://lichess.org/broadcast/' + event.tournamentSlug + '/-/' + round.id,
         status: won && (status === 'scheduled' || status === 'waiting') ? 'cancelled' : status,
-        ongoing: status === 'live', finished: status === 'finished',
+        ongoing: status !== 'finished' && (status === 'live' || round.ongoing === true), finished: status === 'finished',
         result: snapshot?.games[0]?.result ?? '*'
       };
     })
