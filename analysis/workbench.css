@@ -517,7 +517,7 @@ button,input,select,textarea { font-family:inherit; }
 .review-count-table tr[data-quality="mistake"] { --review-count-color:light-dark(#965034,#e9aa89); }
 .review-count-table tr[data-quality="blunder"] { --review-count-color:var(--dg-red); }
 .review-count-table tr:is([data-quality="forced"],[data-quality="unknown"]) { --review-count-color:var(--dg-muted); }
-.review-count-table tr:not([data-quality="total"]) th::before { content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-inline-end:6px;vertical-align:2px;background:var(--review-count-color); }
+.review-count-table tr[data-quality]:not([data-quality="total"]) th::before { content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-inline-end:6px;vertical-align:2px;background:var(--review-count-color); }
 .review-count-table td button.review-count-positive { color:var(--review-count-color); }
 .review-count-table tr[data-quality="blunder"] .review-count-positive { background:var(--dg-red-soft);font-weight:700; }
 .review-count-table td button:hover { background:var(--dg-green-soft); }

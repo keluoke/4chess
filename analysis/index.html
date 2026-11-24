@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261124-divergence-cards">
+  <link rel="stylesheet" href="workbench.css?v=20261124-divergence-cards-r2">
   <link rel="stylesheet" href="./review-share.css?v=20261124-checkup-cards-r2">
 </head>
 <body class="diverge-ui">
@@ -717,7 +717,7 @@
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261124-divergence-cards').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261124-divergence-cards-r2').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });
