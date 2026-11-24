@@ -49,14 +49,17 @@ try {
     contentType: 'application/javascript',
     body: `export class LiveEngines {
       cancel() {}
-      async inspect({ move, fenBefore }) {
+      async sampleMaia(_position, elo) { return [{ uci: 'b8c6', rawProb: elo / 4000 }]; }
+      async inspect({ move, fenBefore, elo }) {
         if (!move) return { score: '+0.35', maiaReady: true, bestSan: 'Nc6', maiaTopSan: 'Nf6' };
         (window.assessments ||= []).push(move.ply);
         if (window.holdAssessment) {
           window.holdAssessment = false;
           await new Promise(resolve => { window.finishAssessment = resolve; });
         }
-        return { score: '+0.35', maiaReady: true, moment: {
+        const trend = { fen: fenBefore, elo, history: [], series: [{ uci: move.uci, label: move.san, san: move.san, role: 'played' }],
+          moves: [{ uci: move.uci, rawProb: .55 }] };
+        return { score: '+0.35', maiaReady: true, trend, moment: {
           ...move, fenBefore, bestUci: move.uci === 'b8c6' ? 'g8f6' : move.uci,
           bestSan: move.san === 'Nc6' ? 'Nf6' : move.san, maiaTopUci: 'f1c4', maiaTopSan: 'Bc4',
           humanRawProbability: .11, lossCp: 0, severity: 'good', divergenceStatus: 'confirmed', divergenceType: 'beyond_intuition'
@@ -67,6 +70,7 @@ try {
 
   await page.goto('http://127.0.0.1:' + server.address().port + '/live/?lang=zh');
   await page.locator('#event-moves button[data-ply="3"]').waitFor();
+  assert.equal(await page.locator('#event-elo').inputValue(), '2600');
   assert.equal(await page.locator('#event-board .maia-square').count(), 64);
   assert.equal(await page.locator('#white-clock').innerText(), '1:59:32');
   assert.equal(await page.locator('#black-clock').innerText(), '1:58:52');
@@ -101,6 +105,14 @@ try {
   assert.equal(await page.locator('#ply-note').innerText(), '4 / 4');
   await page.locator('#intuition-tag').getByText('神之一手').waitFor();
   assert.equal(await page.locator('#sf-line').innerText(), 'Nf6 · +0.35');
+  await page.locator('#trend-toggle').click();
+  await page.locator('#trend-status').getByText('已完成 6/6 档', { exact: false }).waitFor();
+  assert.equal(await page.locator('#trend-chart circle').count(), 6);
+  await page.locator('#trend-data-view').click();
+  assert.equal(await page.locator('#trend-data tbody tr').count(), 6);
+  assert.equal(await page.locator('#trend-data tbody tr:first-child td').innerText(), '15.0%');
+  await page.locator('#trend-chart-view').click();
+  assert.equal(await page.locator('#trend-chart').isVisible(), true);
   await page.evaluate(() => {
     window.cardText = [];
     const fillText = CanvasRenderingContext2D.prototype.fillText;
@@ -117,6 +129,7 @@ try {
   await page.locator('#language').click();
   await page.evaluate(() => { window.holdAssessment = true; });
   await page.locator('#previous').click();
+  assert.equal(await page.locator('#live-trend').isVisible(), false);
   await page.waitForFunction(() => !!window.finishAssessment);
   await page.evaluate(() => {
     for (const hidden of [true, false]) {

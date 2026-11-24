@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124-board">
+  <link rel="stylesheet" href="./live.css?v=20261124-trend">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -53,20 +53,32 @@
             <label class="elo-label">
               <span class="visually-hidden" data-copy="rating">段位</span>
               <select id="event-elo">
-                <option>1500</option><option selected>1900</option><option>2600</option>
+                <option>1500</option><option>1900</option><option selected>2600</option>
               </select> Elo
             </label>
           </header>
           <p id="engine-note" role="status"></p>
           <div class="engine-lines" id="engine-lines" hidden>
-            <div><span>Stockfish 19</span><strong id="sf-line"></strong></div>
-            <div><span>Maia-3</span><strong id="maia-line"></strong></div>
+            <div><span data-copy="sfEdition">Stockfish 19 标准版 · D22</span><strong id="sf-line"></strong></div>
+            <div><span>Maia-3 79M</span><strong id="maia-line"></strong></div>
           </div>
           <p id="intuition-tag" class="intuition-tag" hidden></p>
           <div class="engine-actions">
             <button id="analyze" type="button" data-copy="analyze">启用双引擎</button>
+            <button id="trend-toggle" type="button" data-copy="trend" aria-controls="live-trend" aria-expanded="false" hidden>Maia 分段趋势</button>
             <button id="moment" type="button" data-copy="share" hidden>分享棋王战瞬间</button>
           </div>
+          <section id="live-trend" class="live-trend" aria-labelledby="trend-toggle" hidden>
+            <div class="trend-views">
+              <button id="trend-chart-view" type="button" data-copy="chart" aria-pressed="true">曲线</button>
+              <button id="trend-data-view" type="button" data-copy="trendData" aria-pressed="false">采样数据</button>
+              <button id="trend-retry" type="button" data-copy="trendRetry" hidden>重试缺失档位</button>
+            </div>
+            <p id="trend-status" role="status"></p>
+            <ul id="trend-legend"></ul>
+            <div id="trend-chart" class="maia-trend-chart"></div>
+            <div id="trend-data" class="maia-trend-data" hidden><table></table></div>
+          </section>
         </section>
       </section>
     </div>
@@ -76,6 +88,6 @@
       <span data-copy="delay">着法和时钟以转播为准，可能晚于现场。</span>
     </footer>
   </main>
-  <script type="module" src="./live.js?v=20261124-board"></script>
+  <script type="module" src="./live.js?v=20261124-trend"></script>
 </body>
 </html>

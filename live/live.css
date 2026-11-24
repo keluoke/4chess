@@ -56,6 +56,23 @@ body.live-page { display: block; height: auto; overflow: auto; margin: 0; backgr
 .engine-lines > div + div { border-top-color: #a66e20; }
 .engine-lines span { color: var(--muted); font-size: .82rem; }
 .engine-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.live-trend { border-top: 1px solid var(--line); margin-top: .85rem; padding-top: .75rem; }
+.trend-views, #trend-legend { display: flex; flex-wrap: wrap; gap: .4rem; }
+.trend-views button[aria-pressed="true"] { background: var(--green); color: white; }
+#trend-legend { list-style: none; margin: .45rem 0; }
+#trend-legend li { border-left: 3px solid var(--trend-color); padding-left: .35rem; font-size: .86rem; }
+.live-trend .trend-sf { --trend-color: #2c629c; }
+.live-trend .trend-maia { --trend-color: #926019; }
+.live-trend .trend-played { --trend-color: #236953; }
+.live-trend svg { display: block; width: 100%; }
+.live-trend svg text { font: 11px system-ui, sans-serif; fill: var(--muted); }
+.live-trend .maia-trend-grid { stroke: var(--line); }
+.live-trend .maia-trend-current { stroke: var(--muted); stroke-dasharray: 4 4; }
+.live-trend .maia-trend-series path { fill: none; stroke: var(--trend-color); stroke-width: 1.8; }
+.live-trend .maia-trend-series circle { fill: var(--paper); stroke: var(--trend-color); stroke-width: 1.5; }
+.live-trend .maia-trend-data { overflow-x: auto; }
+.live-trend table { width: 100%; border-collapse: collapse; text-align: right; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.live-trend :is(td, th) { padding: .3rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .event-source { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1.1rem 0 0; font-size: .86rem; color: var(--muted); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 720px) {

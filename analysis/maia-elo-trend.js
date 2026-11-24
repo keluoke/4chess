@@ -1,7 +1,7 @@
 import { t } from './i18n.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
-const RATINGS = [600, 1000, 1400, 1800, 2200, 2600];
+export const RATINGS = [600, 1000, 1400, 1800, 2200, 2600];
 const CACHE_POSITIONS = 24;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const symbols = { sf: '★ ', maia: 'M ', consensus: '★ M ' };
@@ -13,7 +13,7 @@ function svgElement(name, attrs, text) {
   return el;
 }
 
-function probabilities(moves) {
+export function probabilities(moves) {
   return new Map(moves.flatMap(({ uci, rawProb, prob }) => {
     const percentage = Number.isFinite(rawProb) ? rawProb * 100 : prob;
     return uci && Number.isFinite(percentage) ? [[uci, percentage]] : [];
@@ -22,6 +22,64 @@ function probabilities(moves) {
 
 function formatProbability(probability) {
   return Number.isFinite(probability) ? `${probability.toFixed(1)}%` : '—';
+}
+
+export function renderMaiaTrendPlot(table, series, samples, elo) {
+  const x = rating => 36 + (rating - RATINGS[0]) / 2000 * 360;
+  const y = percentage => 135 - percentage * 1.16;
+  const svg = svgElement('svg', { viewBox: '0 0 420 161', 'aria-hidden': 'true' });
+  for (const percent of [0, 25, 50, 75, 100]) {
+    svg.append(
+      svgElement('line', { x1: 36, x2: 396, y1: y(percent), y2: y(percent), class: 'maia-trend-grid' }),
+      svgElement('text', { x: 31, y: y(percent) + 4, 'text-anchor': 'end' }, `${percent}%`)
+    );
+  }
+  for (const rating of RATINGS) svg.append(svgElement('text', { x: x(rating), y: 153, 'text-anchor': 'middle' }, rating));
+  svg.append(svgElement('line', { x1: x(elo), x2: x(elo), y1: y(100), y2: y(0), class: 'maia-trend-current' }));
+
+  const ratings = [...new Set([...RATINGS, elo])].sort((a, b) => a - b);
+  table.replaceChildren();
+  const head = table.createTHead().insertRow();
+  for (const { label, uci } of [{ label: 'Elo' }, ...series]) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    if (uci) th.dataset.uci = uci;
+    head.append(th);
+  }
+  const body = table.createTBody();
+  for (const rating of ratings) {
+    const row = body.insertRow();
+    const th = document.createElement('th');
+    th.scope = 'row';
+    th.textContent = rating;
+    row.append(th);
+    for (const move of series) {
+      const cell = row.insertCell();
+      cell.dataset.uci = move.uci;
+      cell.textContent = formatProbability(samples.get(rating)?.get(move.uci));
+    }
+  }
+  for (const move of series) {
+    const group = svgElement('g', { class: `maia-trend-series trend-${move.role}`, 'data-uci': move.uci });
+    let d = '', connected = false;
+    for (const rating of RATINGS) {
+      const p = samples.get(rating)?.get(move.uci);
+      if (!Number.isFinite(p)) { connected = false; continue; }
+      d += `${connected ? 'L' : 'M'}${x(rating)} ${y(p)} `;
+      connected = true;
+    }
+    group.append(svgElement('path', { d }));
+    for (const rating of ratings) {
+      const probability = samples.get(rating)?.get(move.uci);
+      if (!Number.isFinite(probability)) continue;
+      const dot = svgElement('circle', { cx: x(rating), cy: y(probability), r: rating === elo ? 4 : 2.75, 'data-elo': rating });
+      dot.append(svgElement('title', {}, `${move.san} · ${rating} Elo · ${formatProbability(probability)}`));
+      group.append(dot);
+    }
+    svg.append(group);
+  }
+  return svg;
 }
 
 export class MaiaEloTrend {
@@ -280,63 +338,9 @@ export class MaiaEloTrend {
     this.retry.textContent = t('maiaTrendRetry');
     this.retry.hidden = !incomplete;
     const series = this.series(request);
-    const x = rating => 36 + (rating - RATINGS[0]) / 2000 * 360;
-    const y = percentage => 135 - percentage * 1.16;
-    const svg = svgElement('svg', { viewBox: '0 0 420 161', 'aria-hidden': 'true' });
-    for (const percent of [0, 25, 50, 75, 100]) {
-      svg.append(
-        svgElement('line', { x1: 36, x2: 396, y1: y(percent), y2: y(percent), class: 'maia-trend-grid' }),
-        svgElement('text', { x: 31, y: y(percent) + 4, 'text-anchor': 'end' }, `${percent}%`)
-      );
-    }
-    for (const rating of RATINGS) svg.append(svgElement('text', { x: x(rating), y: 153, 'text-anchor': 'middle' }, rating));
-    svg.append(svgElement('line', { x1: x(elo), x2: x(elo), y1: y(100), y2: y(0), class: 'maia-trend-current' }));
-
     this.renderLegend(series);
-    const ratings = [...new Set([...RATINGS, elo])].sort((a, b) => a - b);
-    this.table.replaceChildren();
-    const head = this.table.createTHead().insertRow();
-    for (const { label, uci } of [{ label: 'Elo' }, ...series]) {
-      const th = document.createElement('th');
-      th.scope = 'col';
-      th.textContent = label;
-      if (uci) th.dataset.uci = uci;
-      head.append(th);
-    }
-    const body = this.table.createTBody();
-    for (const rating of ratings) {
-      const row = body.insertRow();
-      const th = document.createElement('th');
-      th.scope = 'row';
-      th.textContent = rating;
-      row.append(th);
-      for (const move of series) {
-        const cell = row.insertCell();
-        cell.dataset.uci = move.uci;
-        cell.textContent = formatProbability(samples.get(rating)?.get(move.uci));
-      }
-    }
-    for (const move of series) {
-      const group = svgElement('g', { class: `maia-trend-series trend-${move.role}`, 'data-uci': move.uci });
-      let d = '', connected = false;
-      for (const rating of RATINGS) {
-        const p = samples.get(rating)?.get(move.uci);
-        if (!Number.isFinite(p)) { connected = false; continue; }
-        d += `${connected ? 'L' : 'M'}${x(rating)} ${y(p)} `;
-        connected = true;
-      }
-      group.append(svgElement('path', { d }));
-      for (const rating of ratings) {
-        const probability = samples.get(rating)?.get(move.uci);
-        if (!Number.isFinite(probability)) continue;
-        const dot = svgElement('circle', { cx: x(rating), cy: y(probability), r: rating === elo ? 4 : 2.75, 'data-elo': rating });
-        dot.append(svgElement('title', {}, `${move.san} · ${rating} Elo · ${formatProbability(probability)}`));
-        group.append(dot);
-      }
-      svg.append(group);
-    }
+    this.chart.replaceChildren(renderMaiaTrendPlot(this.table, series, samples, elo));
     this.caption.textContent = `${t('maiaTrendProbability')} · ${t('maiaTrendCurrent', { elo })}`;
-    this.chart.replaceChildren(svg);
     this.highlight(series.some(move => move.uci === this.highlighted) ? this.highlighted : null);
     this.renderSources(snapshot, this.lines);
   }

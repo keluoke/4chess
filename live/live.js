@@ -2,12 +2,15 @@ import { BoardUI } from '../analysis/board-ui.js?v=20261124-divergence-cards';
 import { ChessBoard } from '../engine/chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { intuitionKind } from '../engine/review-policy.js';
+import { RATINGS, probabilities, renderMaiaTrendPlot } from '../analysis/maia-elo-trend.js?v=20261124-intuition-labels';
 
 const copy = {
   zh: {
     studio: '分析工作台', round: '轮次', moves: '实战着法', engines: '双引擎对比', rating: '段位',
     first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享棋王战瞬间',
     flip: '翻转棋盘', reviewGame: '在工作台复盘本局', reviewPosition: '在工作台分析此局面',
+    sfEdition: 'Stockfish 19 标准版 · 目标 D22', trend: 'Maia 分段趋势', chart: '曲线', trendData: '采样数据',
+    trendRetry: '重试缺失档位', trendProgress: 'Maia 走法选择概率 · 已完成 {count}/{total} 档',
     sourceLead: '转播数据', delay: '着法和时钟以转播为准，可能晚于现场。',
     analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎', analysisIdle: '启用后，在本机分析已播出的着法。',
     engineBusy: '正在分析实战着法…', engineFailed: '双引擎暂不可用。', partial: 'Maia-3 暂不可用。',
@@ -24,6 +27,8 @@ const copy = {
     studio: 'Analysis studio', round: 'Game', moves: 'Moves played', engines: 'Compare engines', rating: 'Rating',
     first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share this moment',
     flip: 'Flip board', reviewGame: 'Review this game in the studio', reviewPosition: 'Analyze this position in the studio',
+    sfEdition: 'Stockfish 19 Standard · Target D22', trend: 'Maia rating trends', chart: 'Chart', trendData: 'Samples',
+    trendRetry: 'Retry missing ratings', trendProgress: 'Maia move probability · {count}/{total} rating bands',
     sourceLead: 'Broadcast by', delay: 'Moves and clock readings may be delayed.',
     analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines', analysisIdle: 'Analyze moves already broadcast on this device.',
     engineBusy: 'Analyzing the move played…', engineFailed: 'Engine analysis is unavailable.', partial: 'Maia-3 is unavailable.',
@@ -210,6 +215,7 @@ function paint() {
 }
 
 function cancelAnalysis() {
+  closeTrend();
   state.requestVersion++;
   state.requestedKey = '';
   state.analysisKey = '';
@@ -217,8 +223,54 @@ function cancelAnalysis() {
   if (state.analyzing) state.engines?.cancel();
 }
 
+function closeTrend() {
+  state.trend = null;
+  $('live-trend').hidden = true;
+  $('trend-toggle').setAttribute('aria-expanded', 'false');
+}
+
+function showTrendView(table) {
+  $('trend-chart').hidden = table;
+  $('trend-data').hidden = !table;
+  $('trend-chart-view').setAttribute('aria-pressed', String(!table));
+  $('trend-data-view').setAttribute('aria-pressed', String(table));
+}
+
+function renderTrend(trend) {
+  const { position, samples } = trend;
+  const count = RATINGS.filter(elo => samples.has(elo)).length;
+  $('trend-status').textContent = t('trendProgress').replace('{count}', count).replace('{total}', RATINGS.length);
+  $('trend-retry').hidden = trend.running || count === RATINGS.length;
+  $('trend-chart').replaceChildren(renderMaiaTrendPlot($('trend-data').querySelector('table'), position.series, samples, position.elo));
+}
+
+async function sampleTrend(trend) {
+  if (trend.running) return;
+  const obsolete = () => state.trend !== trend || !analysisAllowed() || !foreground();
+  trend.running = true;
+  renderTrend(trend);
+  try {
+    for (const elo of RATINGS) {
+      if (obsolete()) return;
+      if (trend.samples.has(elo)) continue;
+      const moves = await state.engines.sampleMaia(trend.position, elo, obsolete);
+      if (obsolete()) return;
+      const sample = probabilities(moves);
+      if (sample.size) trend.samples.set(elo, sample);
+      renderTrend(trend);
+    }
+  } catch (error) {
+    if (!obsolete()) console.debug('Broadcast Maia trend unavailable', error);
+  } finally {
+    trend.running = false;
+    if (!obsolete()) renderTrend(trend);
+  }
+}
+
 function paintAnalysis() {
   const result = state.analysis;
+  $('trend-toggle').hidden = !result?.trend;
+  if (state.trend) renderTrend(state.trend);
   $('engine-lines').hidden = !result;
   $('moment').hidden = !result?.moment;
   $('analyze').disabled = !analysisAllowed();
@@ -231,7 +283,7 @@ function paintAnalysis() {
       : state.requestedKey ? t('engineFailed') : t('waitingMove');
   if (result) {
     const moment = result.moment;
-    $('sf-line').textContent = [moment?.bestSan ?? result.bestSan, result.score].filter(Boolean).join(' · ') || '—';
+    $('sf-line').textContent = [moment?.bestSan ?? result.bestSan, result.score, result.depth ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
     const probability = Number.isFinite(moment?.humanRawProbability) ? (100 * moment.humanRawProbability).toFixed(1) + '%' : '';
     $('maia-line').textContent = [moment?.maiaTopSan ?? result.maiaTopSan, probability && moment.san + ' ' + probability].filter(Boolean).join(' · ') || '—';
   }
@@ -248,6 +300,7 @@ async function analyzeMove() {
     .slice(Math.max(0, state.cursor - 8), state.cursor - 1);
   const key = JSON.stringify([state.round, state.cursor, fenBefore, move?.uci, elo, history]);
   if (state.requestedKey === key) return;
+  closeTrend();
   const version = ++state.requestVersion;
   state.requestedKey = key;
   state.analysisKey = '';
@@ -261,11 +314,15 @@ async function analyzeMove() {
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261124-board');
+      const { LiveEngines } = await import('./engines.js?v=20261124-trend');
       if (obsolete()) return;
       state.engines = new LiveEngines();
     }
-    const result = await state.engines.inspect({ move, fenBefore, history, elo }, obsolete);
+    const result = await state.engines.inspect({ move, fenBefore, history, elo }, obsolete, partial => {
+      if (obsolete()) return;
+      state.analysis = partial;
+      paintAnalysis();
+    });
     if (result && !obsolete()) {
       state.analysisKey = key;
       state.analysis = result;
@@ -426,6 +483,25 @@ $('language').onclick = () => {
   paintLanguage();
 };
 $('event-elo').onchange = () => { cancelAnalysis(); void analyzeMove(); };
+$('trend-toggle').onclick = () => {
+  if (state.trend) { closeTrend(); return; }
+  const position = state.analysis?.trend;
+  if (!position || !analysisAllowed() || !foreground()) return;
+  const trend = state.trend = { position, samples: new Map([[position.elo, probabilities(position.moves)]]) };
+  $('trend-legend').replaceChildren(...position.series.map(move => {
+    const item = document.createElement('li');
+    item.className = 'trend-' + move.role;
+    item.textContent = move.san;
+    return item;
+  }));
+  $('live-trend').hidden = false;
+  $('trend-toggle').setAttribute('aria-expanded', 'true');
+  showTrendView(false);
+  void sampleTrend(trend);
+};
+$('trend-chart-view').onclick = () => showTrendView(false);
+$('trend-data-view').onclick = () => showTrendView(true);
+$('trend-retry').onclick = () => { if (state.trend) void sampleTrend(state.trend); };
 $('analyze').onclick = () => {
   if (!analysisAllowed()) return;
   const failed = state.requestedKey && !state.analysis && !state.analyzing;
@@ -471,8 +547,9 @@ document.addEventListener('visibilitychange', () => {
     void pollEvent();
     void pollRound();
     if (state.engineEnabled) void analyzeMove();
-  } else if (state.analyzing) {
-    cancelAnalysis();
+  } else {
+    if (state.trend?.running) closeTrend();
+    if (state.analyzing) cancelAnalysis();
   }
 });
 paintLanguage();
