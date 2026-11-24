@@ -8,22 +8,23 @@
  */
 
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261124-player-copy';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261124-mobile';
 import { StockfishInBrowser } from './stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
 export { modelSourceCandidates } from './model-sources.js';
 import { modelSourceCandidates } from './model-sources.js';
-import { connectModelCache } from './model-cache-client.js?v=20261124-player-copy';
+import { connectModelCache } from './model-cache-client.js?v=20261124-mobile';
 
 export class MaiaEngine {
-  constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m' } = {}) {
+  constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m', cacheOnly = false } = {}) {
     this.variant = MAIA_VARIANTS[variant] ? variant : '5m';
     this.modelKey = MAIA_VARIANTS[this.variant].key;
     this.disposed = false;
     this.lifecycleEpoch = 0;
     this.fairPlaySuspended = false;
     this.maiaInBrowser = new MaiaInBrowserEngine();
+    this.cacheOnly = cacheOnly;
     this.stockfishInBrowser = stockfishInstance || new StockfishInBrowser();
     this.targetElo = 1900;
     this.onStatusChange = onStatusChange;
@@ -85,7 +86,7 @@ export class MaiaEngine {
       const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.getURL && window.location.protocol === 'chrome-extension:';
       const workerUrl = isExtension
         ? chrome.runtime.getURL('engine/maia-worker.js')
-        : new URL('./maia-worker.js?v=20261124-player-copy', import.meta.url).href;
+        : new URL('./maia-worker.js?v=20261124-mobile', import.meta.url).href;
 
       this.worker = new Worker(workerUrl, { type: 'module' });
       this.backendName = '浏览器端 Web Worker + Stockfish WASM';
@@ -274,7 +275,7 @@ export class MaiaEngine {
         };
 
         if (this.worker) {
-          if (this._cacheWorker !== this.worker) {
+          if (!this.cacheOnly && this._cacheWorker !== this.worker) {
             const owner = this.worker;
             const port = await connectModelCache();
             if (!current() || this.worker !== owner) { port?.close(); throw new Error('Analysis session changed'); }
@@ -287,11 +288,11 @@ export class MaiaEngine {
             this._workerLoadReject = reject;
             this.worker.postMessage({
               type: 'loadModel',
-              data: { url, expected: MAIA_VARIANTS[this.variant].expected }
+              data: { url, expected: MAIA_VARIANTS[this.variant].expected, cacheOnly: this.cacheOnly }
             });
           });
         } else {
-          await this.maiaInBrowser.loadModel(url, onProgress, MAIA_VARIANTS[this.variant].expected);
+          await this.maiaInBrowser.loadModel(url, onProgress, MAIA_VARIANTS[this.variant].expected, { cacheOnly: this.cacheOnly });
           this.modelMetadata = this.maiaInBrowser.meta;
         }
         if (!current()) throw new Error('Analysis session changed');

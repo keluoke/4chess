@@ -27,13 +27,7 @@ const pgn = line => '[Event "Game 1"]\n[White "Sindarov"]\n[WhiteFideId "1420548
 let line = '1. e4 { [%clk 1:59:32] } e5 { [%clk 1:58:52] } 2. Nf3 { [%clk 1:57:33] }';
 let updatedAt = current.startsAt + 1000;
 let finished = false;
-const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chromium', headless: true });
-try {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, permissions: ['clipboard-read', 'clipboard-write'] });
-  const page = await context.newPage();
-  const issues = [];
-  page.on('pageerror', error => issues.push(error.message));
-  await page.clock.install({ time: current.startsAt + 1000 });
+async function mockBroadcast(context) {
   await context.route('**/api/live/event?*', route => {
     const raw = finished ? pgn(line).replace('[Result "*"]', '[Result "1/2-1/2"]').replace(/\*$/, '1/2-1/2') : pgn(line);
     const snapshot = { games: parseRoundPgn(raw, event) };
@@ -48,14 +42,27 @@ try {
       ...game, roundId, updatedAt, roundName: 'Game 1', status: isCurrent ? (finished ? 'finished' : 'live') : 'scheduled'
     } });
   });
+}
+
+async function mockEngines(context) {
   await context.route('**/live/engines.js?*', route => route.fulfill({
     contentType: 'application/javascript',
     body: `import { ChessBoard } from '/engine/chess-core.js';
     export class LiveEngines {
-      constructor({ maiaVariant, stockfishVariant, depth, elo }) { window.liveEngineSettings = { maiaVariant, stockfishVariant, depth, elo }; }
+      constructor({ maiaVariant, maiaMode, stockfishVariant, depth, elo }) {
+        this.mode = maiaMode;
+        window.liveMaiaMode = maiaMode;
+        window.liveEngineSettings = { maiaVariant, stockfishVariant, depth, elo };
+      }
       cancel() {}
       dispose() {}
-      status() { return { sf: { state: 'ready', source: 'bundled' }, maia: { state: 'downloading', source: 'cdn', percent: 46 } }; }
+      status() {
+        return {
+          sf: { state: 'ready', source: 'bundled' },
+          maia: this.mode === 'off' ? null : this.mode === 'cache' ? { state: 'ready', source: 'cache' }
+            : { state: 'downloading', source: 'cdn', percent: 46 }
+        };
+      }
       async sampleMaia(position, elo) { return [{ uci: position.series[0].uci, rawProb: elo / 4000 }]; }
       async inspect(position) {
         const chess = new ChessBoard(position.fen);
@@ -70,6 +77,7 @@ try {
           window.holdAssessment = false;
           await new Promise(resolve => { window.finishAssessment = resolve; });
         }
+        if (this.mode === 'off') return { evaluation, stockfish, depth: 18 };
         return { evaluation, stockfish, maia, depth: 18, maiaReady: true, trend: { ...position, series, moves } };
       }
       async classify(move, { fen: fenBefore }) {
@@ -81,7 +89,17 @@ try {
       }
     }`
   }));
+}
 
+const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chromium', headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const page = await context.newPage();
+  const issues = [];
+  page.on('pageerror', error => issues.push(error.message));
+  await page.clock.install({ time: current.startsAt + 1000 });
+  await mockBroadcast(context);
+  await mockEngines(context);
   const origin = 'http://127.0.0.1:' + server.address().port;
   await page.goto(origin + '/live/?lang=zh');
   await page.locator('#event-moves button[data-ply="3"]').waitFor();
@@ -241,10 +259,11 @@ try {
     mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'desktop.png'), fullPage: true });
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 390, height: 710 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile page stays within the viewport');
   const board = await page.locator('#event-board').boundingBox();
   assert.equal(board.width, board.height);
+  assert.equal(board.width, 390);
   if (process.env.LIVE_SCREENSHOTS) {
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'mobile.png'), fullPage: true });
   }
@@ -256,7 +275,7 @@ try {
   assert.notEqual(await page.locator('#round-countdown').innerText(), countdown);
   assert.equal(await page.locator('#event-moves button').count(), 0);
   await page.locator('#analyze').click();
-  assert.equal(await page.locator('#engine-lines').isVisible(), false);
+  assert.equal(await page.locator('#sf-line').innerText(), '—');
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
   await page.locator('#btn-share-card-link').click();
@@ -278,8 +297,73 @@ try {
   assert.equal(synced.stockfishVariant, 'standard');
   await other.evaluate(async () => (await import('/engine/engine-preferences.js')).savePreferences({ maiaVariant: '5m' }));
   await page.waitForFunction(() => document.querySelector('#live-maia').value === '5m');
+
+  finished = false;
+  line += ' 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 11. c4 c6 12. Nc3 Bb7';
+  const mobile = await browser.newContext({ viewport: { width: 390, height: 710 }, hasTouch: true, isMobile: true });
+  await mockBroadcast(mobile);
+  await mockEngines(mobile);
+  const phone = await mobile.newPage();
+  phone.on('pageerror', error => issues.push(error.message));
+  await phone.goto(origin + '/live/?lang=en');
+  await phone.locator('#event-moves [data-ply="24"]').waitFor({ state: 'attached' });
+  await phone.locator('#load-maia:not([disabled])').waitFor();
+  await phone.waitForFunction(() => window.liveMaiaMode === 'off');
+  assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'off');
+  assert.deepEqual(await phone.evaluate(() => window.liveEngineSettings),
+    { maiaVariant: '5m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
+  assert.match(await phone.locator('#load-maia').getAttribute('aria-label'), /5M.*28 MiB/);
+  assert.match(await phone.locator('#match-score').innerText(), /SIN\s+0 – 0\s+GUK/);
+  assert.equal(await phone.locator('#event-board').evaluate(element => getComputedStyle(element).touchAction), 'none');
+  const phoneLayout = await phone.evaluate(() => Object.fromEntries([
+    'event-moves', 'event-board', 'black-clock', 'white-clock', 'engine-lines', 'round-controls'
+  ].map(id => {
+    const element = id === 'round-controls' ? document.querySelector('.round-controls') : document.getElementById(id);
+    const { x, y, width, height, bottom } = element.getBoundingClientRect();
+    return [id, { x, y, width, height, bottom }];
+  })));
+  assert.equal(phoneLayout['event-board'].x, 0);
+  assert.equal(phoneLayout['event-board'].width, 390);
+  assert.ok(phoneLayout['event-moves'].height <= 34);
+  assert.ok(Object.values(phoneLayout).every(rect => rect.y >= 0 && rect.bottom <= 710), JSON.stringify(phoneLayout));
+  assert.equal(await phone.locator('#copy-live-link').isVisible(), false);
+  assert.equal(await phone.locator('#event-moves').evaluate(element => element.scrollLeft > 0), true);
+  await phone.locator('#first').tap();
+  const touch = await mobile.newCDPSession(phone);
+  const center = async square => {
+    const box = await phone.locator('#event-board [data-square="' + square + '"]').boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [await center('d2')] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center('d3')] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center('d4')] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await phone.locator('#ply-note').getByText('Variation').waitFor();
+  assert.equal(await phone.evaluate(() => scrollY), 0);
+  await phone.locator('#moment').tap();
+  await phone.locator('#share-card-dialog[open]').waitFor();
+  assert.equal(await phone.locator('#share-card-canvas').evaluate(element => element.height), 1350);
+  await phone.locator('#btn-close-share-card').tap();
+  await phone.locator('#load-maia').tap();
+  await phone.locator('#trend-toggle').waitFor();
+  assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'download');
+
+  await phone.evaluate(async () => {
+    const { ModelCache } = await import('/engine/model-cache.js');
+    const { getModelCacheKey } = await import('/engine/model-loader.js');
+    await ModelCache.saveModel(getModelCacheKey('https://weights.4chess.cc/maia3_23m.bin'), new ArrayBuffer(8));
+    await (await import('/engine/engine-preferences.js')).savePreferences({ stockfishVariant: 'standard' });
+  });
+  await phone.reload();
+  await phone.locator('#trend-toggle').waitFor();
+  assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'cache');
+  assert.deepEqual(await phone.evaluate(() => window.liveEngineSettings),
+    { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
+  assert.equal(await phone.locator('#load-maia').isVisible(), false);
+  assert.deepEqual(issues, []);
+  console.log('390×710 mobile layout', JSON.stringify(phoneLayout));
 } finally {
   await browser.close();
   server.close();
 }
-console.log('PASS live browser: complete first screen, running clocks, shared variations, current-position engines, PGN review, settings and PNG.');
+console.log('PASS live browser: desktop and mobile first screens, touch drag, cold and cached Maia, clocks, shared variations, settings and PNG.');

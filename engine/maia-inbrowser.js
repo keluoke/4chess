@@ -4,7 +4,7 @@
  * 100% offline, zero external server, zero Python, zero configuration.
  */
 
-import { loadModelBytes } from './model-cache-client.js?v=20261124-player-copy';
+import { loadModelBytes } from './model-cache-client.js?v=20261124-mobile';
 import { ChessBoard } from './chess-core.js';
 
 export class MaiaInBrowserEngine {
@@ -26,7 +26,7 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
   }
 
-  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null) {
+  async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null, options) {
     if (this.isReady) return true;
     if (this.initPromise) return this.initPromise;
 
@@ -37,7 +37,7 @@ export class MaiaInBrowserEngine {
           arrayBuffer = urlOrBuffer;
           this.modelSource = 'memory';
         } else {
-          const loaded = await loadModelBytes(urlOrBuffer, onProgress, expected);
+          const loaded = await loadModelBytes(urlOrBuffer, onProgress, expected, options);
           arrayBuffer = loaded.buffer;
           this.modelSource = loaded.source;
           this.cachePersisted = loaded.persisted;

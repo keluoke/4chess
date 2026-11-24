@@ -65,5 +65,13 @@ try {
   saved.set('maia3_model', fixture('5m'));
   globalThis.fetch = async () => { throw new Error('Legacy cache should work offline'); };
   assert.equal((await readModelBytes(spec.url, null, spec.expected, cache)).source, 'cache');
+  const cacheOnly = { cacheOnly: true };
+  assert.equal((await readModelBytes(spec.url, null, spec.expected, cache, cacheOnly)).source, 'cache');
+  saved.clear();
+  for (const invalid of [null, fixture('79m')]) {
+    if (invalid) saved.set(key, invalid);
+    await assert.rejects(readModelBytes(spec.url, null, spec.expected, cache, cacheOnly), /No usable cached Maia model/);
+    assert.ok(!saved.has(key));
+  }
   console.log('PASS: all variants offline, legacy cache, corrupt-cache repair, CDN validation, CDN-only sources, persistence failures.');
 } finally { globalThis.fetch = originalFetch; }

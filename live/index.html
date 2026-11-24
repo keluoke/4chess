@@ -8,13 +8,13 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124-spectator">
+  <link rel="stylesheet" href="./live.css?v=20261124-mobile">
 </head>
 <body class="live-page">
   <header class="event-nav">
     <a class="event-brand" href="/">Diverge</a>
     <h1 id="title">2026 棋王战</h1>
-    <div class="match-score" id="match-score" aria-label="赛况总比分"></div>
+    <div class="match-score" id="match-score" role="group" aria-label="赛况总比分"></div>
     <button type="button" id="btn-settings" aria-label="设置" data-label="settings" aria-haspopup="dialog"><span aria-hidden="true">⚙</span> <span class="settings-label" data-copy="settings">设置</span></button>
     <button type="button" id="language" aria-label="Language">EN</button>
   </header>
@@ -34,6 +34,7 @@
             <div class="gauge-black" id="gauge-black"><span id="gauge-score-black"></span></div>
             <div class="gauge-white" id="gauge-white"><span id="gauge-score-white">—</span></div>
           </div>
+          <span id="mobile-gauge-score" aria-hidden="true">—</span>
           <div id="event-board" class="maia-board-wrapper" aria-label="国际象棋棋盘"></div>
         </div>
         <div class="seat" id="white-seat"><span id="white-name">白方</span><time id="white-clock">–:––</time></div>
@@ -41,10 +42,10 @@
           <button id="first" type="button" aria-label="第一步" data-label="first">|‹</button>
           <button id="previous" type="button" aria-label="上一步" data-label="previous">‹</button>
           <button id="next" type="button" aria-label="下一步" data-label="next">›</button>
-          <button id="latest" type="button" data-copy="latest">回到最新</button>
-          <button id="flip-board" type="button" data-copy="flip">翻转棋盘</button>
+          <button id="latest" type="button" data-label="latest"><span class="toolbar-text" data-copy="latest">回到最新</span><svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m8-12 6 6-6 6"/></svg></button>
+          <button id="flip-board" type="button" data-label="flip"><span class="toolbar-text" data-copy="flip">翻转棋盘</span><svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/></svg></button>
           <div class="board-share">
-            <button id="moment" type="button" data-copy="share" disabled>分享局面卡</button>
+            <button id="moment" type="button" data-label="share" disabled><span class="toolbar-text" data-copy="share">分享局面卡</span><svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4m1 4h3v10H4V11h3"/></svg></button>
             <button id="copy-live-link" type="button" data-copy="copyLink" disabled>复制链接</button>
           </div>
         </div>
@@ -61,18 +62,21 @@
         </header>
         <div id="event-moves" class="event-moves"></div>
         <section class="engine-pane" aria-labelledby="engine-title">
-          <header>
-            <h2 id="engine-title" data-copy="engines">双引擎对比</h2>
-            <button id="analyze" type="button" data-copy="pause" disabled>暂停双引擎</button>
-          </header>
-          <div class="engine-downloads">
-            <progress id="sf-progress" max="100" hidden></progress>
-            <progress id="maia-progress" max="100" hidden></progress>
-          </div>
-          <p id="engine-note" role="status"></p>
-          <div class="engine-lines" id="engine-lines" hidden>
-            <div><span id="sf-edition"></span><strong id="sf-line"></strong></div>
-            <div><span id="maia-edition"></span><strong id="maia-line"></strong></div>
+          <div class="engine-summary">
+            <header>
+              <h2 id="engine-title" data-copy="engines">双引擎对比</h2>
+              <span id="mobile-moment-slot"></span>
+              <button id="analyze" type="button" data-copy="pause" disabled>暂停双引擎</button>
+            </header>
+            <div class="engine-downloads">
+              <progress id="sf-progress" max="100" hidden></progress>
+              <progress id="maia-progress" max="100" hidden></progress>
+            </div>
+            <p id="engine-note" role="status"></p>
+            <div class="engine-lines" id="engine-lines" hidden>
+              <div><span id="sf-edition"></span><strong id="sf-line">—</strong></div>
+              <div><span id="maia-edition"></span><strong id="maia-line">—</strong><button id="load-maia" type="button" hidden></button></div>
+            </div>
           </div>
           <div class="engine-actions">
             <button id="trend-toggle" type="button" data-copy="trend" aria-controls="live-trend" aria-expanded="false" hidden>Maia 分段趋势</button>
@@ -103,7 +107,7 @@
       <form method="dialog"><button type="submit" data-copy="close">关闭</button></form>
     </header>
     <div class="live-engine-settings">
-      <label><span>Stockfish</span><select id="live-sf" disabled><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard</option></select></label>
+      <label><span>Stockfish</span><select id="live-sf" disabled><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard · 95 MiB</option></select></label>
       <label><span>Maia-3</span><select id="live-maia" disabled><option value="5m">5M</option><option value="23m" selected>23M</option><option value="79m">79M</option></select></label>
       <label><span data-copy="rating">段位</span><select id="event-elo" disabled>
         <option>1500</option><option>1900</option><option selected>2600</option>
@@ -133,6 +137,6 @@
     <div class="share-card-preview-wrap"><canvas id="share-card-canvas"></canvas></div>
     <p id="share-card-status" class="live-link-status" role="status"></p>
   </dialog>
-  <script type="module" src="./live.js?v=20261124-spectator"></script>
+  <script type="module" src="./live.js?v=20261124-mobile"></script>
 </body>
 </html>

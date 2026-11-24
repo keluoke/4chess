@@ -10,11 +10,12 @@ const usable = (result, depth) => Number.isFinite(result?.scoreCp)
 const chance = move => move?.rawProb ?? (Number.isFinite(move?.prob) ? move.prob / 100 : null);
 
 export class LiveEngines {
-  constructor({ stockfishVariant, maiaVariant, depth }, onStatus, stockfish = null) {
+  constructor({ stockfishVariant, maiaVariant, depth, maiaMode }, onStatus, stockfish = null) {
     this.depth = depth;
     this.stockfish = stockfish ?? new StockfishInBrowser({ variant: stockfishVariant });
     this.stockfish.onDownloadProgress = onStatus;
-    this.maia = new MaiaEngine(onStatus, this.stockfish, { variant: maiaVariant });
+    this.maia = maiaMode === 'off' ? null
+      : new MaiaEngine(onStatus, this.stockfish, { variant: maiaVariant, cacheOnly: maiaMode === 'cache' });
     this.positions = new Map();
   }
 
@@ -23,7 +24,7 @@ export class LiveEngines {
   }
 
   dispose(keepStockfish) {
-    this.maia.dispose();
+    this.maia?.dispose();
     this.stockfish.onDownloadProgress = null;
     this.stockfish.onReadyCallback = null;
     if (!keepStockfish) this.stockfish.reset();
@@ -31,18 +32,18 @@ export class LiveEngines {
 
   status() {
     const sf = this.stockfish;
-    const maia = this.maia.status.maia;
+    const maia = this.maia?.status.maia;
     return {
       sf: {
         state: sf.isReady ? 'ready' : sf.initPromise ? (sf.downloadProgress ? 'downloading' : 'starting') : sf.lastError ? 'error' : 'idle',
         percent: sf.downloadProgress?.percent, source: sf.variant === 'lite' ? 'bundled' : sf.downloadSource
       },
-      maia: { ...maia, source: maia.source?.includes('IndexedDB') ? 'cache' : maia.source?.includes('CDN') ? 'cdn' : null }
+      maia: maia && { ...maia, source: maia.source?.includes('IndexedDB') ? 'cache' : maia.source?.includes('CDN') ? 'cdn' : null }
     };
   }
 
   async sampleMaia({ fen, history }, elo, obsolete) {
-    if (obsolete()) return [];
+    if (!this.maia || obsolete()) return [];
     const prediction = await this.maia.predict(fen, elo, null, obsolete, history);
     return obsolete() ? [] : prediction?.moves ?? [];
   }
@@ -55,7 +56,7 @@ export class LiveEngines {
     const key = JSON.stringify([fen, history, elo, this.depth]);
     if (this.positions.has(key)) return this.positions.get(key);
     const terminal = !new ChessBoard(fen).getLegalMoves().length;
-    const maiaReady = !terminal && this.maia.initialize().then(() => true, () => false);
+    const maiaReady = !terminal && this.maia?.initialize().then(() => true, () => false);
     const budget = this.budget;
     const result = await this.stockfish.evaluate(fen, this.depth, budget + 1000, 2, budget);
     if (obsolete()) return null;
@@ -63,7 +64,7 @@ export class LiveEngines {
     const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fen, elo, result, obsolete, history) : null;
     if (obsolete()) return null;
     const entry = { result, prediction };
-    if (result && (prediction?.isMaiaReady || result.terminal)) {
+    if (result && (!this.maia || prediction?.isMaiaReady || result.terminal)) {
       this.positions.set(key, entry);
       if (this.positions.size > 12) this.positions.delete(this.positions.keys().next().value);
     }

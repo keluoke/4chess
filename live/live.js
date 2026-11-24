@@ -5,6 +5,8 @@ import { expectedScore, intuitionKind } from '../engine/review-policy.js';
 import { RATINGS, probabilities, renderMaiaTrendPlot } from '../analysis/maia-elo-trend.js?v=20261124-intuition-labels';
 import { engineExperienceHint, getSavedPreferences, initializePreferences, savePreferences, subscribePreferences } from '../engine/engine-preferences.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
+import { ModelCache } from '../engine/model-cache.js';
+import { modelCacheKeys } from '../engine/model-loader.js?v=20261124-mobile';
 import { copyShareLink } from '../analysis/share-export.js?v=20261124-divergence-cards';
 
 const copy = {
@@ -14,6 +16,7 @@ const copy = {
     flip: '翻转棋盘', reviewGame: '查看整盘复盘报告 →',
     trend: 'Maia 分段趋势', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
     schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛 {time}', title: '2026 棋王战',
+    mobileTitle: '棋王战', loadMaia: '加载 · {size}', loadMaiaLabel: '加载 {model}，约 {size}', loadingMaia: '加载中…',
     settings: '设置', sfArrows: 'Stockfish 箭头', maiaArrows: 'Maia 箭头', whiteEvaluation: '白方视角评估',
     estimatedClock: '根据最近一次官方时钟估算', startPosition: '开局局面',
     variationUnavailable: '此链接中的试走变化无法在当前棋谱上重现。',
@@ -25,6 +28,7 @@ const copy = {
     trendRetry: '重试缺失档位', trendProgress: 'Maia 走法选择概率 · 已完成 {count}/{total} 档',
     sourceLead: '转播数据', delay: '着法和时钟以转播为准，可能晚于现场。',
     analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎',
+    mobileAnalyze: '启用', mobileRetry: '重试', mobilePause: '暂停',
     engineBusy: '正在分析当前局面…', engineFailed: '双引擎暂不可用。', partial: 'Maia-3 暂不可用。',
     branch: '试走变化', live: '转播中', finished: '本局已结束', cancelled: '本局取消',
     scheduled: '尚未开赛', waiting: '等待官方着法', loading: '正在连接 Lichess 转播',
@@ -40,6 +44,7 @@ const copy = {
     flip: 'Flip board', reviewGame: 'View the full game review →',
     trend: 'Maia rating trends', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
     schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {time}', title: '2026 World Championship',
+    mobileTitle: 'World Championship', loadMaia: 'Load · {size}', loadMaiaLabel: 'Load {model}, about {size}', loadingMaia: 'Loading…',
     settings: 'Settings', sfArrows: 'Stockfish arrows', maiaArrows: 'Maia arrows', whiteEvaluation: 'Evaluation from White’s perspective',
     estimatedClock: 'Estimated from the latest official clock reading', startPosition: 'Starting position',
     variationUnavailable: 'The linked variation can’t be replayed from the current game score.',
@@ -51,6 +56,7 @@ const copy = {
     trendRetry: 'Retry missing ratings', trendProgress: 'Maia move probability · {count}/{total} rating bands',
     sourceLead: 'Broadcast by', delay: 'Moves and clock readings may be delayed.',
     analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines',
+    mobileAnalyze: 'Enable', mobileRetry: 'Retry', mobilePause: 'Pause',
     engineBusy: 'Analyzing the current position…', engineFailed: 'Engine analysis is unavailable.', partial: 'Maia-3 is unavailable.',
     branch: 'Variation', live: 'On air', finished: 'Game finished', cancelled: 'Cancelled',
     scheduled: 'Scheduled', waiting: 'Waiting for official moves', loading: 'Connecting to Lichess Broadcast',
@@ -71,13 +77,18 @@ const foreground = () => !document.hidden;
 const analysisAllowed = () => window.top === window && !FairPlayGuard.isLiveGameInProgress();
 const initialPly = /^\d{1,6}$/.test(params.get('ply') || '') ? Number(params.get('ply')) : null;
 const MAX_SHARED_VARIATION = 128;
+const compactLayout = matchMedia('(max-width: 720px)');
+const mobileDownloads = compactLayout.matches || matchMedia('(pointer: coarse)').matches;
+const maiaSizes = { '5m': '28 MiB', '23m': '104 MiB', '79m': '159 MiB' };
 
 const state = {
   event: null, round: params.get('round'), snapshot: null, cursor: 0, follow: initialPly === null,
   initialPly, initialVariation: params.get('line'), initialBase: params.get('base'),
   branch: null, unseen: false, stale: false, roundKey: 0,
   engines: null, engineEnabled: analysisAllowed(), requestedKey: '', analysis: null, analyzing: false, requestVersion: 0,
-  settings: { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600, sfArrows: true, maiaArrows: true }
+  cachedMaia: [],
+  settings: { maiaVariant: mobileDownloads ? '5m' : '23m', maiaMode: mobileDownloads ? 'off' : 'download',
+    stockfishVariant: 'lite', depth: 18, elo: 2600, sfArrows: true, maiaArrows: true }
 };
 const board = new BoardUI($('event-board'), {
   brilliantArrows: true,
@@ -139,6 +150,18 @@ function paintLanguage() {
   for (const element of document.querySelectorAll('[data-label]')) element.setAttribute('aria-label', t(element.dataset.label));
   $('language').textContent = lang === 'en' ? '中文' : 'EN';
   $('round-rail').setAttribute('aria-label', t('schedule'));
+  paint();
+}
+
+function arrangeMoment() {
+  const badge = $('intuition-tag');
+  if (compactLayout.matches) {
+    $('mobile-moment-slot').append(badge);
+    $('round-title').closest('.round-strip').append($('new-move'));
+  } else {
+    $('ply-note').before(badge);
+    $('event-moves').closest('.event-panel').prepend($('new-move'));
+  }
   paint();
 }
 
@@ -230,19 +253,24 @@ function paintRoundHeading() {
 }
 
 function paintEvent() {
-  $('title').textContent = t('title');
+  const shortTitle = t(compactLayout.matches ? 'mobileTitle' : 'title');
+  $('title').textContent = shortTitle;
   const event = state.event;
   if (!event) return;
   const title = lang === 'en' ? event.titleEn : event.title;
-  $('title').textContent = eventId === 'wcc2026' ? t('title') : title;
+  $('title').textContent = eventId === 'wcc2026' ? shortTitle : title;
   $('title').title = title;
   document.title = title + ' · Diverge';
   const score = $('match-score');
-  const names = event.players.map(player => Object.assign(document.createElement('span'), { textContent: playerName(player) }));
+  const names = event.players.map(player => Object.assign(document.createElement('span'), { className: 'score-full', textContent: playerName(player) }));
+  const shortNames = { '14205483': lang === 'zh' ? '辛' : 'SIN', '46616543': lang === 'zh' ? '古' : 'GUK' };
+  const short = event.players.map(player => Object.assign(document.createElement('span'), {
+    className: 'score-short', textContent: shortNames[player.id] ?? playerName(player)
+  }));
   const amounts = event.players.map(player => event.scoreIncomplete ? '—' : event.score[player.id]);
   const result = Object.assign(document.createElement('strong'), { textContent: amounts.join(' – ') });
   score.setAttribute('aria-label', [t('score'), names[0]?.textContent, result.textContent, names[1]?.textContent].filter(Boolean).join(' '));
-  if (names.length === 2) score.replaceChildren(names[0], result, names[1]);
+  if (names.length === 2) score.replaceChildren(names[0], short[0], result, names[1], short[1]);
 
   paintRoundRail(event.rounds.map(round => {
     const snapshot = round.id === state.round ? state.snapshot : null;
@@ -292,6 +320,9 @@ function paintClocks() {
 function paintMoves() {
   const stack = $('event-moves');
   const previous = stack.scrollTop;
+  const previousLeft = stack.scrollLeft;
+  stack.dataset.placeholder = t('waitingMove');
+  stack.setAttribute('aria-label', t('moves'));
   const nodes = [];
   let row, number;
   for (const move of state.snapshot?.moves || []) {
@@ -313,7 +344,16 @@ function paintMoves() {
     row.append(button);
   }
   stack.replaceChildren(...nodes);
-  stack.scrollTop = state.follow ? stack.scrollHeight : previous;
+  if (compactLayout.matches) {
+    stack.scrollLeft = state.follow ? stack.scrollWidth : previousLeft;
+    const active = stack.querySelector('[aria-current="step"]');
+    if (!state.follow && active) {
+      const button = active.getBoundingClientRect();
+      const rail = stack.getBoundingClientRect();
+      if (button.left < rail.left) stack.scrollLeft += button.left - rail.left;
+      else if (button.right > rail.right) stack.scrollLeft += button.right - rail.right;
+    }
+  } else stack.scrollTop = state.follow ? stack.scrollHeight : previous;
 }
 
 function paintControls() {
@@ -326,6 +366,7 @@ function paintControls() {
   $('source').href = state.snapshot?.source || round?.source || state.event?.source || $('source').href;
   $('ply-note').textContent = state.branch ? t('branch')
     : length ? state.cursor + t('of') + length : t('waitingMove');
+  $('ply-note').dataset.following = String(state.follow);
   $('new-move').hidden = !state.unseen;
   $('new-move').textContent = t('newMove');
   $('previous').disabled = state.cursor === 0 && !state.branch;
@@ -419,6 +460,8 @@ function paintEvaluation(result) {
   const gauge = $('evaluation-gauge');
   gauge.classList.toggle('flipped', board.orientation === 'black');
   gauge.setAttribute('aria-label', t('whiteEvaluation') + ' ' + text);
+  gauge.style.setProperty('--white-share', share + '%');
+  $('mobile-gauge-score').textContent = text;
   $('gauge-white').style.height = share + '%';
   $('gauge-black').style.height = 100 - share + '%';
   $('gauge-score-white').textContent = !evaluation || evaluation.cp >= 0 ? text : '';
@@ -440,20 +483,33 @@ function paintAnalysis() {
   const result = allowed && state.engineEnabled ? state.analysis : null;
   $('trend-toggle').hidden = !result?.trend;
   if (state.trend) renderTrend(state.trend);
-  $('engine-lines').hidden = !result;
+  $('engine-lines').hidden = !result && !compactLayout.matches;
   $('analyze').disabled = !state.preferencesReady || !allowed;
-  $('analyze').textContent = t(state.engineEnabled ? (result || state.analyzing || !state.requestedKey ? 'pause' : 'retry') : 'analyze');
+  const control = state.engineEnabled ? (result || state.analyzing || !state.requestedKey ? 'pause' : 'retry') : 'analyze';
+  $('analyze').textContent = t(compactLayout.matches ? 'mobile' + control[0].toUpperCase() + control.slice(1) : control);
+  $('analyze').setAttribute('aria-label', t(control));
   const kind = result && state.moment && intuitionKind(state.moment);
   $('intuition-tag').hidden = !kind;
-  $('intuition-tag').textContent = kind ? state.moment.san + ' · ' + t(kind) : '';
+  const momentText = kind ? state.moment.san + ' · ' + t(kind) : '';
+  $('intuition-tag').textContent = kind && compactLayout.matches ? t(kind) : momentText;
+  $('intuition-tag').title = momentText;
   $('engine-note').textContent = !state.engineEnabled || !allowed ? ''
-    : result?.maiaReady || result?.terminal ? '' : state.analyzing ? t('engineBusy') : result ? t('partial')
+    : result?.maiaReady || result?.terminal ? '' : state.analyzing ? t('engineBusy') : result ? (state.settings.maiaMode === 'off' ? '' : t('partial'))
       : state.requestedKey ? t('engineFailed') : '';
-  if (result) {
-    $('sf-line').textContent = [result.stockfish?.san, result.evaluation?.text, result.depth ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
-    const probability = result.maia && probabilities([result.maia]).get(result.maia.uci);
-    $('maia-line').textContent = [result.maia?.san, Number.isFinite(probability) ? probability.toFixed(1) + '%' : ''].filter(Boolean).join(' · ') || '—';
-  }
+  const compact = compactLayout.matches;
+  $('sf-line').textContent = [result?.stockfish?.san, result?.evaluation?.text, result?.depth && !compact ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
+  const probability = result?.maia && probabilities([result.maia]).get(result.maia.uci);
+  $('maia-line').textContent = [result?.maia?.san, Number.isFinite(probability) ? probability.toFixed(1) + '%' : ''].filter(Boolean).join(' · ') || '—';
+  const loadMaia = $('load-maia');
+  const mode = state.settings.maiaMode;
+  const awaitingModel = mobileDownloads && allowed && state.engineEnabled && !result?.maiaReady && !result?.terminal;
+  const offerDownload = mode === 'off' || (state.requestedKey && !state.analyzing);
+  loadMaia.hidden = !awaitingModel || !state.preferencesReady;
+  loadMaia.disabled = !offerDownload || !state.snapshot;
+  const size = maiaSizes[state.settings.maiaVariant];
+  if (awaitingModel) loadMaia.textContent = offerDownload ? t('loadMaia').replace('{size}', size) : t('loadingMaia');
+  loadMaia.setAttribute('aria-label', t('loadMaiaLabel').replace('{model}', MAIA_VARIANTS[state.settings.maiaVariant].name).replace('{size}', size));
+  $('maia-line').hidden = !loadMaia.hidden;
   paintEvaluation(result);
   paintEngineStatus();
 }
@@ -462,8 +518,8 @@ function paintEngineStatus() {
   const { stockfishVariant, maiaVariant, depth } = state.settings;
   const sfName = stockfishVariant === 'standard' ? (lang === 'zh' ? 'Stockfish 19 标准版' : 'Stockfish 19 Standard') : 'Stockfish 19 Lite';
   const maiaName = MAIA_VARIANTS[maiaVariant].name;
-  $('sf-edition').textContent = `${sfName} · ${t('targetDepth')} D${depth}`;
-  $('maia-edition').textContent = maiaName;
+  $('sf-edition').textContent = compactLayout.matches ? 'SF19' : `${sfName} · ${t('targetDepth')} D${depth}`;
+  $('maia-edition').textContent = compactLayout.matches ? 'Maia-3' : maiaName;
   $('engine-hint').textContent = engineExperienceHint(state.settings, lang);
   const status = state.engines?.status?.();
   for (const [slot, name] of [['sf', sfName], ['maia', maiaName]]) {
@@ -489,9 +545,14 @@ function paintEngineStatus() {
 
 function applyPreferences() {
   const saved = getSavedPreferences();
-  const stockfishVariant = saved.stockfishVariant || 'lite';
+  const stockfishVariant = (mobileDownloads ? state.mobileStockfish : saved.stockfishVariant) || 'lite';
+  const preferredMaia = state.mobileMaia || saved.maiaVariant || (mobileDownloads ? '5m' : '23m');
+  const cached = [preferredMaia, ...Object.keys(MAIA_VARIANTS)].find(variant => state.cachedMaia.includes(variant));
+  const maiaVariant = mobileDownloads ? state.mobileMaia || cached || preferredMaia : preferredMaia;
+  const maiaMode = !mobileDownloads || state.maiaDownloadVariant === maiaVariant ? 'download'
+    : state.cachedMaia.includes(maiaVariant) ? 'cache' : 'off';
   const settings = {
-    maiaVariant: saved.maiaVariant || '23m', stockfishVariant,
+    maiaVariant, maiaMode, stockfishVariant,
     depth: stockfishVariant === 'standard' ? saved.studio_max_depth ?? 22 : 18,
     elo: saved.defaultElo ?? 2600, sfArrows: saved.showStockfishArrows ?? true, maiaArrows: saved.showArrows ?? true
   };
@@ -506,9 +567,10 @@ function applyPreferences() {
   const elo = $('event-elo');
   if (!Array.from(elo.options).some(option => Number(option.value) === settings.elo)) elo.add(new Option(String(settings.elo)));
   elo.value = String(settings.elo);
-  if (['maiaVariant', 'stockfishVariant', 'depth', 'elo'].some(key => settings[key] !== previous[key])) {
+  if (['maiaVariant', 'maiaMode', 'stockfishVariant', 'depth', 'elo'].some(key => settings[key] !== previous[key])) {
     cancelAnalysis();
-    if (state.engines && (settings.stockfishVariant !== previous.stockfishVariant || settings.maiaVariant !== previous.maiaVariant)) {
+    if (state.engines && (settings.stockfishVariant !== previous.stockfishVariant
+      || settings.maiaVariant !== previous.maiaVariant || settings.maiaMode !== previous.maiaMode)) {
       const keepStockfish = settings.stockfishVariant === previous.stockfishVariant;
       state.reusableStockfish = keepStockfish ? state.engines.stockfish : null;
       state.engines.dispose?.(keepStockfish);
@@ -548,7 +610,7 @@ async function analyzeMove() {
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261124-spectator');
+      const { LiveEngines } = await import('./engines.js?v=20261124-mobile');
       if (obsolete()) return;
       const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
@@ -562,7 +624,7 @@ async function analyzeMove() {
     if (!result || obsolete()) return;
     state.analysis = result;
     paintAnalysis();
-    if (move && (result.maiaReady || result.terminal)) {
+    if (move && (result.maiaReady || (result.terminal && state.settings.maiaMode !== 'off'))) {
       state.momentTask = state.engines.classify(move, before, position, obsolete);
       const moment = await state.momentTask;
       if (!obsolete()) state.moment = moment;
@@ -731,6 +793,7 @@ $('latest').onclick = $('new-move').onclick = () => jump(state.snapshot?.moves.l
 $('flip-board').onclick = () => {
   board.flip();
   const blackAtBottom = board.orientation === 'black';
+  $('board-frame').closest('.board-column').dataset.orientation = board.orientation;
   $('board-frame').before($(blackAtBottom ? 'white-seat' : 'black-seat'));
   $('board-frame').after($(blackAtBottom ? 'black-seat' : 'white-seat'));
   paintEvaluation(state.analysis);
@@ -741,8 +804,22 @@ $('language').onclick = () => {
   paintLanguage();
 };
 $('event-elo').onchange = () => void savePreferences({ defaultElo: Number($('event-elo').value) });
-$('live-sf').onchange = () => void savePreferences({ stockfishVariant: $('live-sf').value });
-$('live-maia').onchange = () => void savePreferences({ maiaVariant: $('live-maia').value });
+$('live-sf').onchange = () => {
+  const stockfishVariant = $('live-sf').value;
+  if (mobileDownloads) state.mobileStockfish = stockfishVariant;
+  void savePreferences({ stockfishVariant });
+};
+$('live-maia').onchange = () => {
+  const maiaVariant = $('live-maia').value;
+  if (mobileDownloads) state.mobileMaia = maiaVariant;
+  void savePreferences({ maiaVariant });
+};
+$('load-maia').onclick = () => {
+  if (!state.snapshot || !analysisAllowed()) return;
+  state.mobileMaia = state.maiaDownloadVariant = state.settings.maiaVariant;
+  cancelAnalysis();
+  applyPreferences();
+};
 $('setting-sf-arrows').onchange = () => void savePreferences({ showStockfishArrows: $('setting-sf-arrows').checked });
 $('setting-maia-arrows').onchange = () => void savePreferences({ showArrows: $('setting-maia-arrows').checked });
 $('btn-settings').onclick = () => $('live-settings').showModal();
@@ -858,7 +935,16 @@ document.addEventListener('visibilitychange', () => {
 });
 subscribePreferences(applyPreferences);
 void initializePreferences().then(applyPreferences, applyPreferences);
+if (mobileDownloads && analysisAllowed()) {
+  const variants = Object.entries(MAIA_VARIANTS).map(([variant, { url }]) => [variant, modelCacheKeys(url)]);
+  void ModelCache.findModelKeys(variants.flatMap(([, keys]) => keys)).then(keys => {
+    state.cachedMaia = variants.filter(([, candidates]) => candidates.some(key => keys.includes(key))).map(([variant]) => variant);
+    if (state.preferencesReady) applyPreferences();
+  });
+}
+compactLayout.addEventListener('change', arrangeMoment);
 paintLanguage();
+arrangeMoment();
 setInterval(() => {
   if (!foreground()) return;
   paintCountdown();

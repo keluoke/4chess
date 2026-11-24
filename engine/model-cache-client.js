@@ -1,4 +1,4 @@
-import { readModelBytes } from './model-loader.js?v=20261124-player-copy';
+import { readModelBytes } from './model-loader.js?v=20261124-mobile';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
 let frameReady;
@@ -88,7 +88,8 @@ function request(port, url, onProgress, expected) {
   });
 }
 
-export async function loadModelBytes(url, onProgress, expected) {
+export async function loadModelBytes(url, onProgress, expected, { cacheOnly = false } = {}) {
+  if (cacheOnly) return readModelBytes(url, onProgress, expected, undefined, { cacheOnly });
   const port = typeof window === 'undefined' ? workerPort : await (defaultPort ||= connectModelCache().catch(error => { defaultPort = null; throw error; }));
   // An installed-extension connection failure is surfaced, never hidden by a host-origin download.
   return port ? request(port, url, onProgress, expected) : readModelBytes(url, onProgress, expected);

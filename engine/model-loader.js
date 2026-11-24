@@ -12,6 +12,11 @@ export function getModelCacheKey(url) {
   return `maia3_v1_${baseName}_${Math.abs(hash).toString(36)}`;
 }
 
+export function modelCacheKeys(url) {
+  const key = getModelCacheKey(url);
+  return url === 'https://weights.4chess.cc/maia3_model.bin' ? [key, 'maia3_model', 'maia3-5m'] : [key];
+}
+
 export function validateModelBytes(buffer, expected = null) {
   const view = new DataView(buffer);
   if (buffer.byteLength < 8 || view.getUint32(0) !== 0x4d334346) throw new Error('Invalid Maia-3 binary magic header');
@@ -29,11 +34,10 @@ export function validateModelBytes(buffer, expected = null) {
 }
 
 // Called within an extension-origin Web Lock by the broker, or directly by a standalone website.
-export async function readModelBytes(url, onProgress, expected, cache = ModelCache) {
+export async function readModelBytes(url, onProgress, expected, cache = ModelCache, { cacheOnly = false } = {}) {
   const parsed = new URL(url);
   if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('Maia weights require an external HTTP(S) CDN');
-  const cacheKey = getModelCacheKey(url);
-  const keys = url === 'https://weights.4chess.cc/maia3_model.bin' ? [cacheKey, 'maia3_model', 'maia3-5m'] : [cacheKey];
+  const keys = modelCacheKeys(url);
   for (const key of keys) {
     const cached = await cache.getModel(key);
     if (!cached) continue;
@@ -43,6 +47,7 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
       return { buffer: cached, source: 'cache', persisted: true };
     } catch { await cache.clearCache(key); }
   }
+  if (cacheOnly) throw new Error('No usable cached Maia model');
   let arrayBuffer;
   const fetchUrl = url;
   console.log(`[Maia-3] 🌐 从网络/CDN 下载模型: ${fetchUrl}`);
@@ -118,7 +123,7 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
   const sizeMB = (arrayBuffer.byteLength / BYTES_PER_MB).toFixed(1);
   onProgress?.({ percent: 100, speedMBps: '', receivedMB: sizeMB, totalMB: sizeMB, source: 'cdn' });
   validateModelBytes(arrayBuffer, expected);
-  const persisted = await cache.saveModel(cacheKey, arrayBuffer);
+  const persisted = await cache.saveModel(keys[0], arrayBuffer);
   if (!persisted) console.warn('[ModelCache] Persistence unavailable; offline reuse is unavailable for this download');
   return { buffer: arrayBuffer, source: 'cdn', persisted };
 }

@@ -161,6 +161,26 @@ export class ModelCache {
     }
   }
 
+  static async findModelKeys(keys) {
+    try {
+      const db = await this.openDB();
+      if (!db) return [];
+      try {
+        const store = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME);
+        const present = await Promise.all(keys.map(key => new Promise(resolve => {
+          const req = store.getKey(key);
+          req.onsuccess = () => resolve(req.result === key);
+          req.onerror = () => resolve(false);
+        })));
+        return keys.filter((_, index) => present[index]);
+      } finally {
+        db.close();
+      }
+    } catch {
+      return [];
+    }
+  }
+
   static async clearAll() {
     try {
       const db = await this.openDB();
