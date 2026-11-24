@@ -49,6 +49,9 @@ const server = http.createServer(async (req, res) => {
   const response = await onRequest({request:new Request(url)});
   res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());return;
  }
+ if (url.pathname === '/analysis/index.html') {
+  res.writeHead(308, {Location:'/analysis/'});res.end();return;
+ }
  let file = path.resolve(siteRoot, '.' + url.pathname);
  if (!file.startsWith(siteRoot + path.sep)) { res.writeHead(404);res.end();return; }
  if(fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');
@@ -331,7 +334,7 @@ try {
  assert.equal(errors.length,0,errors.join('\n'));results.ui={errors,primaryActionVisible:true};await context.close();
 
  const offlineContext=await browser.newContext(),offline=await offlineContext.newPage();
- await offline.goto(origin+'/analysis/');await offline.waitForFunction(()=>!!window.__maiaStudioApp);
+ await offline.goto(origin+'/analysis/?lang=en');await offline.waitForFunction(()=>!!window.__maiaStudioApp);
  await offline.evaluate(async()=>{await navigator.serviceWorker.ready; if(!navigator.serviceWorker.controller)await new Promise(r=>navigator.serviceWorker.addEventListener('controllerchange',r,{once:true}));});
  const first=await offline.evaluate(async()=>{const r=await fetch('/api/chesscom?id=12345678');return {cache:r.headers.get('Cache-Control'),body:await r.json()};});
  finished=true;

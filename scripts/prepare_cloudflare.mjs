@@ -27,7 +27,8 @@ const assets = JSON.parse(readFileSync(swPath, 'utf8').match(/const STATIC_ASSET
 const urls = new Set();
 for (const asset of assets) {
   const url = new URL(asset, pathToFileURL(swPath));
-  const file = fileURLToPath(url);
+  const path = fileURLToPath(url);
+  const file = url.pathname.endsWith('/') ? join(path, 'index.html') : path;
   if (!file.startsWith(`${output}/`) || url.hash || urls.has(url.href)) throw new Error(`Invalid or duplicate precache URL: ${asset}`);
   if (!statSync(file).isFile()) throw new Error(`Precache URL is not a file: ${asset}`);
   urls.add(url.href);

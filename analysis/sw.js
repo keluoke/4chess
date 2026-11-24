@@ -4,11 +4,11 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261124-mobile';
+const CACHE_NAME = '4chess-review-20261124-mobile-r2';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
-  "./index.html",
+  "./",
   "./shared.html",
   "./challenge.html",
   "./shared-review.js?v=20261124-intuition-labels",
@@ -151,7 +151,7 @@ self.addEventListener('fetch', (event) => {
         }
         return freshRes;
       }).catch(() => {
-        return caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html') : null));
+        return caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match('./') : null));
       })
     );
     return;
