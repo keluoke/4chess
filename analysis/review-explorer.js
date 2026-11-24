@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261124-review-scan-polish';
+import { t } from './i18n.js?v=20261124-review-navigation';
 import { REVIEW_QUALITIES, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
@@ -58,8 +58,16 @@ export class ReviewExplorer {
     this.sideSelected = true;
     this.side = this.app.reviewOverview.side = side;
     if (category) this.app.currentDivergenceFilter = category;
-    this.app.renderBlunderCards();
-    if (category) this.focusSelection();
+    const visible = this.app.renderBlunderCards();
+    if (!category) return;
+    if (category === 'all' || category === 'moves') {
+      this.focusSelection();
+      return;
+    }
+    const current = visible.find(move => move.ply === this.app.currentPly);
+    const match = current || visible[0];
+    if (!current && match) this.app.goToPly(match.ply, { before: true, revealCandidates: true, scrollReview: false });
+    this.focusSelection(match?.ply);
   }
 
   reset(orientation) {
@@ -78,12 +86,29 @@ export class ReviewExplorer {
     byId('review-selection-label').textContent = '';
   }
 
-  focusSelection() {
+  cardFor(ply) {
+    return this.app.el.blunderList.querySelector(`.blunder-card[data-ply="${ply}"]`);
+  }
+
+  keepCardInPlace(card, top) {
+    if (!card?.isConnected) return;
+    const scroller = matchMedia('(min-width:1180px)').matches ? this.column : document.scrollingElement;
+    const delta = card.getBoundingClientRect().top - top;
+    if (Math.abs(delta) > .5) scroller.scrollTop += delta;
+  }
+
+  focusSelection(ply) {
     const list = this.app.el.blunderList;
-    const focus = list.querySelector('.review-move-jump, .review-empty') || byId('review-selection-label');
+    const card = ply === undefined ? null : this.cardFor(ply);
+    const focus = card?.querySelector('.review-move-jump') ||
+      list.querySelector('.review-move-jump, .review-empty') || byId('review-selection-label');
     const target = focus.closest('.blunder-card') || focus;
-    if (matchMedia('(min-width:1180px)').matches) this.app.scrollWithin(target, this.column);
-    else target.scrollIntoView({ block: 'nearest' });
+    if (matchMedia('(min-width:1180px)').matches) {
+      if (card) {
+        const top = this.column.getBoundingClientRect().top + this.column.clientTop + this.toolbar.offsetHeight + 8;
+        this.column.scrollTop += target.getBoundingClientRect().top - top;
+      } else this.app.scrollWithin(target, this.column);
+    } else target.scrollIntoView({ block: card ? 'start' : 'nearest' });
     if (focus.tagName !== 'BUTTON') focus.tabIndex = -1;
     focus.focus({ preventScroll: true });
   }
@@ -145,25 +170,19 @@ export class ReviewExplorer {
   }
 
   renderEngineSummary(counts, result) {
-    const accuracy = element('div', null, 'review-engine-metric');
-    const errors = element('div', null, 'review-engine-metric');
     const errorsLabel = filterLabel('mistakes');
-    accuracy.append(element('span', t('accuracyLabel'), 'review-engine-label'));
-    errors.append(element('span', errorsLabel, 'review-engine-label'));
-    const scores = element('div', null, 'review-engine-values');
-    const totals = element('div', null, 'review-engine-values');
+    const scores = [], totals = [];
     for (const [index, side] of sides.entries()) {
       const score = index ? result.accuracyBlack : result.accuracyWhite;
       const coverage = index ? result.coverageRateBlack : result.coverageRateWhite;
       const value = element('span', null, 'review-engine-value');
       value.append(element('span', t(sideKeys[side])), element('strong', Number.isFinite(score) ? score.toFixed(1) : '—'));
       if (Number.isFinite(coverage) && coverage < 100) value.title = t('coverageTooltip', { pct: coverage });
-      scores.append(value);
-      totals.append(this.countButton(side, 'mistakes', counts[side].mistake + counts[side].blunder, errorsLabel, { showSide: true }));
+      scores.push(value);
+      totals.push(this.countButton(side, 'mistakes', counts[side].mistake + counts[side].blunder, errorsLabel, { showSide: true }));
     }
-    accuracy.append(scores);
-    errors.append(totals);
-    byId('review-engine-summary').replaceChildren(accuracy, errors);
+    byId('review-engine-scores').replaceChildren(...scores);
+    byId('review-engine-errors').replaceChildren(...totals);
   }
 
   renderClassifications(counts) {

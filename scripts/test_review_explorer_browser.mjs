@@ -41,10 +41,12 @@ try {
   });
   const count = (side, quality) => page.locator(`#review-overview button[data-review-side="${side}"][data-review-category="${quality}"]`);
   const overview = page.locator('#review-summary');
+  const reportEntry = page.locator('#review-engine-summary #review-report-entry');
   assert.equal(await overview.isVisible(), false, 'Completion leaves the board visible');
-  assert.equal(await page.locator('#review-ready').isVisible(), true);
+  assert.equal(await page.locator('#review-ready').count(), 0, 'The center column has no separate completion banner');
+  assert.equal(await reportEntry.getAttribute('data-pending'), 'true');
   const boardBounds = await page.locator('#board-container').boundingBox();
-  await page.locator('#review-ready').click();
+  await reportEntry.click();
   assert.equal(await overview.evaluate(el => el.matches(':modal')), true);
   assert.equal(await page.locator('#position-score').isVisible(), true);
   assert.equal(await page.locator('#review-report-title').innerText(), 'White wins, but there was a better option on move 7');
@@ -61,6 +63,9 @@ try {
   assert.equal(await page.locator('#review-card-countdown').count(), 0);
   await page.keyboard.press('Escape');
   assert.equal(await overview.isVisible(), false);
+  assert(await reportEntry.isVisible(), 'The report remains available after it has been viewed');
+  assert.equal(await reportEntry.getAttribute('data-pending'), 'false');
+  assert(await reportEntry.evaluate(el => el === document.activeElement), 'Closing restores focus to the precision-area entry');
   assert.deepEqual(await page.locator('#board-container').boundingBox(), boardBounds);
   await page.locator('#btn-review-overview').click();
   const headline = page.locator('#review-report-title');
@@ -182,6 +187,21 @@ try {
   assert.equal(await page.locator('#review-selection-label').innerText(), 'White · Precise intuition · 1 moves');
   assert.equal(await page.locator('.review-tag-precise').innerText(), 'Precise intuition');
   assert.match(await page.locator('.review-card-reason').innerText(), /0\.28.*2\.5 percentage points/);
+  assert.deepEqual(await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    return [app.currentPly, app.evalChart.currentPly, app.isReviewingMove,
+      app.boardUI.chess.getFen() === app.positions[8].fen, app.positionAnalysis.context().fen === app.positions[8].fen];
+  }), [9, 9, true, true, true], 'A specific filter selects the first move and the board before it');
+  assert.equal(await page.locator('.blunder-card.active').getAttribute('data-ply'), '9');
+  assert(await page.locator('#move-ply-9').evaluate(el => el.classList.contains('active')));
+  assert(await page.locator('#current-insight').isHidden(), 'The active result card stands on its own');
+  await page.evaluate(() => __maiaStudioApp.goToPly(9));
+  await count('w', 'precise').click();
+  assert.equal(await page.evaluate(() => __maiaStudioApp.isReviewingMove), false, 'The result keeps the current position if it is already selected');
+  await count('w', 'trap').click();
+  assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 9, 'An empty filter preserves the board');
+  assert(await page.locator('.review-empty').isVisible());
+  assert(await page.locator('#current-insight').isVisible());
   await listMode('moves').click();
   assert.equal(await page.locator('.blunder-card').count(), 7, 'All moves preserves the selected side');
   await count('all', 'precise').click();
@@ -306,11 +326,26 @@ try {
     app.reviewExplorer.side = 'all';
     app.renderBlunderCards();
   });
-  assert.equal(await page.locator('#review-ready').isVisible(), true, 'Completion keeps the board and current workspace when the user has explored');
+  assert.equal(await page.locator('#review-report-entry').isVisible(), true, 'Completion keeps the board and current workspace when the user has explored');
   assert.equal(await page.evaluate(() => __maiaStudioApp.currentPly), 3);
   for (const width of [1360, 1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
     const desktop = width >= 1180;
+    await page.evaluate(() => {
+      const app = __maiaStudioApp;
+      app.reviewExplorer.side = 'b';
+      app.renderBlunderCards();
+      app.goToPly(3);
+    });
+    assert(await page.locator('#current-insight').isVisible());
+    const anchorCard = page.locator('#blunder-list .blunder-card[data-ply="40"]');
+    await anchorCard.evaluate(card => card.scrollIntoView({ block: 'center' }));
+    const anchorTop = (await anchorCard.boundingBox()).y;
+    await anchorCard.locator('.review-move-jump').click();
+    assert(await page.locator('#current-insight').isHidden());
+    const anchoredTop = (await anchorCard.boundingBox()).y;
+    assert(Math.abs(anchoredTop - anchorTop) <= 2, `The clicked card keeps its screen position at ${width}px (${anchorTop} → ${anchoredTop})`);
+    await page.locator('.review-side-controls [data-review-side="all"]').click();
     await page.locator('#blunder-list .blunder-card[data-ply="40"]').evaluate(card => card.scrollIntoView({ block: 'start' }));
     await page.waitForFunction(() => Number.parseFloat(document.querySelector('#insight-column').style.getPropertyValue('--review-toolbar-height')) > 0);
     const sticky = await page.evaluate(() => {
@@ -369,7 +404,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-review-scan-polish');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-review-navigation');
     setLanguage('en');
     window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {
@@ -421,7 +456,16 @@ try {
   const toggle = page.locator('#setting-review-commentary');
   const status = page.locator('#review-commentary-status');
   const download = page.locator('#review-commentary-download');
+  const explain = page.locator('.blunder-card[data-ply="4"] .review-commentary-action');
   assert.equal(await toggle.isChecked(), false);
+  assert.equal(await commentary.count(), 0, 'The selected card does not automatically expand a second explanation');
+  await explain.click();
+  assert.equal(await explain.getAttribute('aria-expanded'), 'true');
+  assert(await page.locator('.blunder-card[data-ply="4"] #review-commentary').isVisible());
+  assert(await page.locator('#current-insight').isHidden());
+  await explain.click();
+  assert.equal(await commentary.count(), 0);
+  await explain.click();
   assert.match(await commentary.innerText(), /Nxe5, taking a pawn.*13\.2 percentage points/);
   assert.equal(await page.locator('.review-commentary-action').count(), 1);
   assert.equal(await page.locator('#review-report-title').textContent(), 'Black ran out of time and White won');
@@ -452,7 +496,7 @@ try {
   await page.waitForFunction(() => aiCalls.childDestroys === 2);
   assert.equal(await page.evaluate(() => __maiaStudioApp.reviewCommentary.cache.size), 1, 'Only the recap was cached. Late move text cannot enter the cache');
 
-  await page.evaluate(() => __maiaStudioApp.goToPly(4));
+  await explain.click();
   await page.waitForFunction(() => aiCalls.prompts === 2);
   await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] cost [[cost]]. It also permitted Qh8+."}'));
   await page.waitForFunction(() => aiCalls.childDestroys === 3);
@@ -465,11 +509,13 @@ try {
   assert.equal(factsInput.cost, '13.2 percentage points of expected score');
   assert(!JSON.stringify(factsInput).includes('rnbq'));
 
-  await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
+  await page.evaluate(() => __maiaStudioApp.goToPly(2));
+  await explain.click();
   await page.waitForFunction(() => aiCalls.prompts === 3);
   await page.evaluate(() => finishCommentary('{"text":"The choice of [[played]] gave the opponent [[reply]]. Compared with [[best]], it loses [[cost]]."}'));
   await page.waitForFunction(() => document.getElementById('review-commentary').textContent.includes('Chrome local AI'));
-  await page.evaluate(() => { __maiaStudioApp.goToPly(2); __maiaStudioApp.goToPly(4); });
+  await page.evaluate(() => __maiaStudioApp.goToPly(2));
+  await explain.click();
   assert.match(await commentary.innerText(), /gave the opponent Nxe5.*Compared with Nf6/);
   assert(await page.evaluate(() => !__maiaStudioApp.reviewCommentary.request && aiCalls.prompts === 3), 'An identical fact snapshot reuses the validated output');
   await page.evaluate(() => __maiaStudioApp.startPractice(commentaryReview.allMoves[3]));
@@ -545,6 +591,7 @@ try {
   assert.equal(await page.locator('#review-studio-summary').isVisible(), false);
   assert.equal(await page.locator('#review-studio-summary p').textContent(), '');
   await page.evaluate(() => restoreCommentaryFixture());
+  await explain.click();
   await page.locator('#btn-settings').click();
   await toggle.uncheck();
   assert.match(await commentary.innerText(), /Verified chess facts/);
@@ -604,7 +651,7 @@ try {
   assert.equal(await incoming.locator('.review-observations button').count(), 1);
   assert.match(await incoming.locator('.review-observations').innerText(), /f5.*Nf6/s);
   assert.equal(await incoming.locator('#review-practice-batch').isDisabled(), true);
-  await incoming.locator('#review-ready').click();
+  await incoming.locator('#review-report-entry').click();
   assert.match(await incoming.locator('#review-report-title').innerText(), /黑方在第 2 回合后认输/);
   assert.match(await incoming.locator('#review-report-story').innerText(), /仍接近均势/);
   assert.match(await incoming.locator('#review-report-context').innerText(), /荷兰防御.*3\+2 闪电棋/);
@@ -680,19 +727,19 @@ try {
   await checkup.keyboard.press('Escape');
   await checkup.locator('#btn-reanalyze').click();
   await checkup.evaluate(() => completeAnalysis());
-  await checkup.locator('#review-ready').waitFor();
+  await checkup.locator('#review-report-entry').waitFor();
   assert.equal(await summary.isVisible(), false, 'Reanalyzing the same game does not auto-open again');
 
   await checkup.evaluate(() => beginReview({ openOverview: true }));
   await checkup.locator('#btn-settings').click();
   await checkup.locator('#btn-close-settings').click();
   await checkup.evaluate(() => completeAnalysis());
-  await checkup.locator('#review-ready').waitFor();
+  await checkup.locator('#review-report-entry').waitFor();
   assert.equal(await summary.isVisible(), false, 'Interacting while waiting keeps the workbench open');
-  assert.match(await checkup.locator('#review-ready').innerText(), /93\.0%.*94\.0%/);
+  assert.deepEqual(await checkup.locator('#review-engine-scores strong').allTextContents(), ['93.0', '94.0']);
   await checkup.evaluate(() => beginReview({ openOverview: true }));
   await checkup.evaluate(() => completeAnalysis(true));
-  await checkup.locator('#review-ready').waitFor();
+  await checkup.locator('#review-report-entry').waitFor();
   assert.equal(await summary.isVisible(), false, 'Partial results only show the manual entry');
 
   await checkup.evaluate(async () => {

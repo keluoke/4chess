@@ -566,7 +566,7 @@ try {
   await closeShare();
 
   await page.evaluate(async () => {
-    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-review-scan-polish');
+    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-review-navigation');
     const checkup = __maiaStudioApp.checkup;
     const games = [1600, 1650, 1700].map(playedRating => ({
       platform: 'lichess', timeClass: 'rapid', playedRating, fitSamples: [{ scores: [0] }]

@@ -1,7 +1,7 @@
-import { getLang, t } from './i18n.js?v=20261124-review-scan-polish';
+import { getLang, t } from './i18n.js?v=20261124-review-navigation';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { canPractice, coreTurningPoints, intuitionKind, isKeyMoment, selectReviewMoves, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { turningPointWording } from './review-commentary.js?v=20261124-review-scan-polish';
+import { turningPointWording } from './review-commentary.js?v=20261124-review-navigation';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
 const byId = id => document.getElementById(id);
@@ -46,12 +46,14 @@ export class ReviewOverview {
     this.title = byId('review-report-title');
     this.overviewButton = byId('btn-review-overview');
     this.closeButton = byId('review-card-close');
-    this.readyButton = byId('review-ready');
+    this.reportEntry = byId('review-report-entry');
     this.practiceButton = byId('review-report-practice');
     this.scoreButton = byId('review-report-workbench');
     this.turnButton = byId('review-report-turn');
     this.sidePicker = byId('review-report-side');
-    this.overviewButton.onclick = this.readyButton.onclick = () => this.show('overview');
+    this.overviewButton.onclick = this.reportEntry.onclick = event => {
+      this.show('overview', { opener: event.currentTarget });
+    };
     this.scoreButton.onclick = this.closeButton.onclick = () => this.show('workbench');
     this.summary.addEventListener('cancel', event => {
       event.preventDefault();
@@ -119,27 +121,26 @@ export class ReviewOverview {
     this.show(view);
   }
 
-  show(view) {
+  show(view, { opener } = {}) {
     this.app.reviewShare?.sync();
     const available = this.received && !!this.app.reviewResult && !this.app.scanSourceLocked;
     const overview = available && view === 'overview' && !this.app.practice?.inProgress;
     this.view = overview ? 'overview' : 'workbench';
     if (overview) this.pending = false;
     this.overviewButton.hidden = !available;
-    this.readyButton.hidden = !available || !this.pending;
-    const { isPartial, accuracyWhite, accuracyBlack } = this.app.reviewResult || {};
-    this.readyButton.textContent = isPartial ? t('reviewPartialReady')
-      : Number.isFinite(accuracyWhite) && Number.isFinite(accuracyBlack)
-        ? t('reviewReadyWithAccuracy', { white: accuracyWhite.toFixed(1), black: accuracyBlack.toFixed(1) })
-        : t('reviewReady');
+    this.reportEntry.hidden = !available;
+    this.reportEntry.dataset.pending = String(this.pending);
     if (overview) {
       if (this.summary.open) return;
+      this.opener = opener;
       this.summary.showModal();
       this.title.focus({ preventScroll: true });
     } else {
       if (this.summary.open) {
         this.summary.close();
-        if (available && document.activeElement === document.body) this.overviewButton.focus({ preventScroll: true });
+        if (available && this.opener?.getClientRects().length) this.opener.focus({ preventScroll: true });
+        else if (available && document.activeElement === document.body) this.overviewButton.focus({ preventScroll: true });
+        this.opener = null;
       }
     }
   }

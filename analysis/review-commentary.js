@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { BuiltInAi } from './built-in-ai.js?v=20261118-summary-ai';
 import { bindCommentary, COMMENTARY_SCHEMA } from './commentary-text.js?v=20261118-recap-reset';
-import { getLang, t } from './i18n.js?v=20261124-review-scan-polish';
+import { getLang, t } from './i18n.js?v=20261124-review-navigation';
 import { intuitionKind, isKeyMoment } from '../engine/review-policy.js?v=20261120-review';
 
 const PREFERENCE = 'diverge_review_commentary';
@@ -58,6 +58,7 @@ function wording(facts) {
 
 export class ReviewCommentary {
   cache = new Map();
+  expandedCardPly = null;
 
   constructor(app) {
     this.app = app;
@@ -119,7 +120,7 @@ export class ReviewCommentary {
   }
 
   reset() {
-    this.clearContext();
+    this.closeCard();
     this.clearOverview();
     this.reportStory.textContent = '';
   }
@@ -166,16 +167,39 @@ export class ReviewCommentary {
     button.type = 'button';
     button.className = 'btn-header review-commentary-action';
     button.textContent = t('commentaryExplain');
+    button.setAttribute('aria-expanded', 'false');
     button.onclick = () => {
-      this.app.goToPly(move.ply, { before: true, revealCandidates: true });
-      const output = document.getElementById('review-commentary');
-      output?.scrollIntoView({ block: 'nearest' });
-      output?.focus({ preventScroll: true });
+      if (button.getAttribute('aria-expanded') === 'true') {
+        this.closeCard();
+        return;
+      }
+      this.expandedCardPly = move.ply;
+      this.app.goToPly(move.ply, { before: true, revealCandidates: true, fromCard: true });
     };
     card.append(button);
   }
 
-  render(panel, move, review) {
+  closeCard() {
+    this.expandedCardPly = null;
+    this.clearContext();
+  }
+
+  renderCard(card, move, review) {
+    if (this.app.practice?.inProgress) {
+      this.clearContext();
+      return;
+    }
+    if (this.expandedCardPly !== move.ply) {
+      this.closeCard();
+      return;
+    }
+    if (this.context?.section.parentElement === card && this.context.review === review && this.context.lang === getLang()) return;
+    const action = card.querySelector('.review-commentary-action');
+    if (action) this.render(card, move, review, action);
+    else this.closeCard();
+  }
+
+  render(panel, move, review, action) {
     this.clearContext();
     if (this.app.isBranching || this.app.practice?.inProgress || !this.finishedReview(review)) return;
     const facts = this.eligible(move, review) ? intuitionTrapFacts(move, review) : null;
@@ -191,11 +215,16 @@ export class ReviewCommentary {
     const body = document.createElement('p');
     const source = document.createElement('small');
     section.append(heading, body, source);
-    panel.append(section);
+    if (action) {
+      action.after(section);
+      action.setAttribute('aria-expanded', 'true');
+      action.setAttribute('aria-controls', section.id);
+    } else panel.append(section);
 
+    const context = { move, review, section, body, source, action, lang: getLang() };
     if (template) {
-      this.context = { section, done: true };
-      this.display({ body, source }, template, false);
+      this.context = { ...context, done: true };
+      this.display(this.context, template, false);
       return;
     }
     const { fallback, playedAction, replyAction } = wording(facts);
@@ -213,7 +242,7 @@ export class ReviewCommentary {
       task: 'Explain the played move and its drawback. Use [[played]] and [[cost]]. If there is a verified reply, prefer [[reply]]. You may refer to the engine alternative [[best]], its continuation [[line]], or the Maia preference [[maia]] when supplied.',
       turn: facts.turn, facts: bindings
     };
-    this.context = { key, move, bindings, input, review, epoch: this.app.gameEpoch, section, body, source, done: !!cached };
+    this.context = { ...context, key, bindings, input, epoch: this.app.gameEpoch, done: !!cached };
     this.display(this.context, cached ?? fallback, !!cached);
     this.syncModel();
   }
@@ -273,6 +302,8 @@ export class ReviewCommentary {
     clearTimeout(this.timer);
     this.request?.abort();
     this.request = null;
+    this.context?.action?.setAttribute('aria-expanded', 'false');
+    this.context?.action?.removeAttribute('aria-controls');
     this.context?.section.remove();
     this.context = null;
   }

@@ -1,6 +1,6 @@
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
-import { EvalChart } from './eval-chart.js?v=20261124-review-scan-polish';
-import { t, initI18n, getLang } from './i18n.js?v=20261124-review-scan-polish';
+import { EvalChart } from './eval-chart.js?v=20261124-review-navigation';
+import { t, initI18n, getLang } from './i18n.js?v=20261124-review-navigation';
 import { decodeReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';

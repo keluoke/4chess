@@ -1,7 +1,7 @@
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { t } from './i18n.js?v=20261124-review-scan-polish';
+import { t } from './i18n.js?v=20261124-review-navigation';
 
 const phaseLabels = { intuition: 'intuitionCount', verifying: 'intuitionVerifying' };
 
@@ -15,6 +15,7 @@ export class IntuitionReview {
     this.state = 'idle';
     this.controls = document.getElementById('review-intuition-scan');
     this.button = document.getElementById('intuition-toggle');
+    this.meter = document.getElementById('intuition-scan-meter');
     this.button.onclick = () => this.state === 'running' ? this.pause() : this.start();
     this.render();
   }
@@ -31,6 +32,12 @@ export class IntuitionReview {
       : t('intuitionLoading', { percent: progress.percent });
     else if (this.state === 'running' && this.progress) text = t(phaseLabels[this.progress.phase], this.progress);
     if (status.textContent !== text) status.textContent = text;
+    if (this.state !== 'paused') {
+      const fraction = downloading ? progress.percent / 100
+        : this.state === 'running' && this.progress?.total > 0 ? this.progress.current / this.progress.total : NaN;
+      this.meter.hidden = (downloading && progress.percent == null) || !Number.isFinite(fraction);
+      if (!this.meter.hidden) this.meter.value = Math.max(0, Math.min(1, fraction));
+    }
     const action = { running: 'intuitionPause', paused: 'intuitionResume', error: 'intuitionRetry', partial: 'intuitionRetry' };
     this.button.textContent = t(action[this.state] || 'intuitionStart');
     this.button.disabled = !this.app.coreReview || !!this.app.scanSourceLocked;

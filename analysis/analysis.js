@@ -1,21 +1,21 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-review-scan-polish';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-review-navigation';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261124-review-scan-polish';
-import { ReviewExplorer } from './review-explorer.js?v=20261124-review-scan-polish';
-import { ReviewOverview } from './review-overview.js?v=20261124-review-scan-polish';
-import { ReviewCommentary } from './review-commentary.js?v=20261124-review-scan-polish';
-import { ConsequencePlayer } from './consequence-player.js?v=20261124-review-scan-polish';
-import { MistakeBank } from './mistake-bank.js?v=20261124-review-scan-polish';
+import { IntuitionReview } from './intuition-review.js?v=20261124-review-navigation';
+import { ReviewExplorer } from './review-explorer.js?v=20261124-review-navigation';
+import { ReviewOverview } from './review-overview.js?v=20261124-review-navigation';
+import { ReviewCommentary } from './review-commentary.js?v=20261124-review-navigation';
+import { ConsequencePlayer } from './consequence-player.js?v=20261124-review-navigation';
+import { MistakeBank } from './mistake-bank.js?v=20261124-review-navigation';
 import { resolvePerspective } from './study-store.js?v=20261124-checkup-cards-r2';
-import { IntuitionCheckup } from './checkup-runner.js?v=20261124-review-scan-polish';
+import { IntuitionCheckup } from './checkup-runner.js?v=20261124-review-navigation';
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261124-review-scan-polish';
-import { CheckupReminders } from './checkup-reminders.js?v=20261124-review-scan-polish';
-import { ReviewShare } from './review-share.js?v=20261124-review-scan-polish';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261124-review-navigation';
+import { CheckupReminders } from './checkup-reminders.js?v=20261124-review-navigation';
+import { ReviewShare } from './review-share.js?v=20261124-review-navigation';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-review-scan-polish';
+import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-review-navigation';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261124-review-scan-polish';
+import { ReviewPractice } from './review-practice.js?v=20261124-review-navigation';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -27,12 +27,12 @@ import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-checkup-cards-r2';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
-import { EvalChart } from './eval-chart.js?v=20261124-review-scan-polish';
+import { EvalChart } from './eval-chart.js?v=20261124-review-navigation';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261124-review-scan-polish';
+import { PositionAnalysis } from './position-analysis.js?v=20261124-review-navigation';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261124-review-scan-polish';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261124-review-navigation';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261124-checkup-cards-r2';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
@@ -595,7 +595,7 @@ class AnalysisStudioApp {
     }
     if (this.shareCard?.dialog?.open) this.shareCard.renderPreview();
     if (this.reviewShare?.dialog?.open) void this.reviewShare.prepare();
-    this.renderCurrentInsight();
+    if (!this.reviewResult) this.renderCurrentInsight();
     if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
     this.updatePreferenceNotes();
@@ -1726,8 +1726,6 @@ class AnalysisStudioApp {
     this.evalChart.setData(result.allMoves, result.positionEvaluations);
     this.evalChart.setCursor(this.currentPly);
     this.syncBranchChart();
-    this.renderCurrentInsight();
-
     this.renderBlunderCards();
     this.reviewOverview.update(result);
 
@@ -1873,7 +1871,9 @@ class AnalysisStudioApp {
     if (!filtered.length && !observations.length) {
       const empty = document.createElement('p'); empty.className = 'review-empty';
       empty.textContent = t(this.reviewResult?.engineOnly && INTUITION_KINDS.includes(this.currentDivergenceFilter) ? 'reviewIntuitionPending' : 'reviewNoSelection');
-      this.el.blunderList.append(empty); return;
+      this.el.blunderList.append(empty);
+      this.renderCurrentInsight();
+      return filtered;
     }
     const turningPoints = coreTurningPoints(this.reviewExplorer.available(moves));
     for (const item of filtered) {
@@ -1883,7 +1883,8 @@ class AnalysisStudioApp {
       const jump = document.createElement('button'); jump.type = 'button'; jump.className = 'review-move-jump';
       jump.textContent = `${item.moveNumber}${item.turn === 'w' ? '. ' : '… '}${item.san}`;
       jump.setAttribute('aria-label', `${t(item.turn === 'w' ? 'whitePlayer' : 'blackPlayer')} ${jump.textContent}`);
-      jump.onclick = () => this.goToPly(item.ply, { before: true, revealCandidates: true }); heading.append(jump);
+      const openCard = () => this.goToPly(item.ply, { before: true, revealCandidates: true, fromCard: true });
+      jump.onclick = openCard; heading.append(jump);
       const tags = document.createElement('div'); tags.className = 'blunder-tags-group';
       for (const tag of [quality, ...(kind ? [kind] : []), ...(item.isBookMove ? ['book'] : [])]) {
         const badge = document.createElement('span'); badge.className = `blunder-type-tag review-tag-${tag}`;
@@ -1893,7 +1894,9 @@ class AnalysisStudioApp {
         className: 'review-turning-point', textContent: t('reviewTurningPoint')
       }));
       heading.append(tags); card.append(heading);
-      card.addEventListener('click', event => { if (!event.target.closest('button')) this.goToPly(item.ply, { before: true, revealCandidates: true }); });
+      card.addEventListener('click', event => {
+        if (!event.target.closest('button, #review-commentary')) openCard();
+      });
       const loss = document.createElement('p'); loss.className = 'review-card-loss';
       loss.textContent = quality === 'unknown' ? t('reviewEvaluationPending') : quality === 'forced' ? t('reviewForcedHelp') : t('reviewLoss', { pawns: (Math.max(0, item.lossCp) / 100).toFixed(2) }); card.append(loss);
       const probability = Number.isFinite(item.humanRawProbability) ? item.humanRawProbability * 100 : item.humanProbability;
@@ -1959,6 +1962,8 @@ class AnalysisStudioApp {
       }
       this.el.blunderList.append(section);
     }
+    this.renderCurrentInsight();
+    return filtered;
   }
 
   renderMoveList() {
@@ -2129,6 +2134,8 @@ class AnalysisStudioApp {
   }
 
   goToPly(ply, options = {}) {
+    const anchor = options.fromCard ? this.reviewExplorer.cardFor(ply) : null;
+    const anchorTop = anchor?.getBoundingClientRect().top;
     this.consequencePlayer?.stop();
     if (!options.practice) {
       this.practice?.stop();
@@ -2180,7 +2187,7 @@ class AnalysisStudioApp {
         const newlySelected = !c.classList.contains('active');
         c.classList.add('active');
         if (newlySelected) animateStudy(c, [{ boxShadow: '0 0 0 3px var(--dg-green-soft)' }, { boxShadow: '0 0 0 0 transparent' }], 480);
-        this.scrollWithin(c, document.querySelector('.insight-column'));
+        if (!options.fromCard && options.scrollReview !== false) this.scrollWithin(c, this.reviewExplorer.column);
       } else {
         cancelMotion(c);
         c.classList.remove('active');
@@ -2188,6 +2195,7 @@ class AnalysisStudioApp {
     });
 
     if (options.revealCandidates) this.revealPositionCandidates();
+    if (anchor) this.reviewExplorer.keepCardInPlace(anchor, anchorTop);
     if (!options.silent) this.scheduleReviewResume();
   }
 
@@ -2356,24 +2364,31 @@ class AnalysisStudioApp {
 
   renderCurrentInsight() {
     const panel = document.getElementById('current-insight');
+    const move = this.reviewResult?.allMoves?.find(move => move.ply === this.currentPly);
+    const card = !this.isBranching && move && this.reviewExplorer.cardFor(move.ply);
+    if (card) {
+      panel.hidden = true;
+      panel.replaceChildren();
+      this.reviewCommentary?.renderCard(card, move, this.reviewResult);
+      return;
+    }
+    this.reviewCommentary?.closeCard();
+    if (!this.isBranching && !move) {
+      panel.hidden = true;
+      panel.replaceChildren();
+      return;
+    }
     const contextKey = `${this.isBranching}:${this.currentPly}:${this.activeBranch?.cursor ?? ''}`;
     if (panel.dataset.context !== contextKey) {
       animateStudy(panel, [{ opacity: .55, transform: 'translateY(5px)' }, { opacity: 1, transform: 'none' }], 180);
       panel.dataset.context = contextKey;
     }
     panel.replaceChildren();
-    const move = this.reviewResult?.allMoves?.find(move => move.ply === this.currentPly);
-    if (!this.isBranching && !move) {
-      this.reviewCommentary?.clearContext();
-      panel.hidden = true;
-      return;
-    }
     panel.hidden = false;
     const heading = document.createElement('div'); heading.className = 'insight-context-heading';
     heading.textContent = this.isBranching ? t('branchComparison') : `${move.moveNumber}${move.turn === 'w' ? '. ' : '… '}${move.san}`;
     panel.append(heading);
     if (this.isBranching) {
-      this.reviewCommentary.clearContext();
       const note = document.createElement('p'); note.textContent = t('branchScoreNote'); panel.append(note);
       const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-header'; button.textContent = t('btnExitBranch');
       button.onclick = () => this.goToPly(this.currentPly); panel.append(button);

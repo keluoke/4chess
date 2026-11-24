@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261124-review-scan-polish';
+import { t, onLanguageChange } from './i18n.js?v=20261124-review-navigation';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

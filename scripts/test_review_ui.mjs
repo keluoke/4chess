@@ -106,7 +106,7 @@ try {
   await page.locator('#btn-submit-pgn').click();
   await page.waitForFunction(() => window.__maiaStudioApp.reviewResult, null, { timeout: 60000 });
   assert.equal(await page.locator('#review-summary').isVisible(), false);
-  await page.locator('#review-ready').click();
+  await page.locator('#review-report-entry').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.maiaEngine.isReady), false, 'Scores render before delayed Maia initializes');
   fs.mkdirSync(path.join(root, 'artifacts'), { recursive: true });
   await page.locator('#review-summary').screenshot({ path: path.join(root, 'artifacts/review-card.png') });
@@ -120,11 +120,27 @@ try {
     return move && getComputedStyle(move).fontSize === '15px';
   });
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'running');
-  assert.match(await page.locator('#intuition-progress').innerText(), /准备直觉模型|模型加载|预测/);
+  assert.match(await page.locator('#intuition-progress').innerText(), /准备直觉模型|模型加载|比对人类直觉/);
   assert(await page.locator('#review-intuition-grid').isHidden());
+  const meter = page.locator('#intuition-scan-meter');
+  await page.evaluate(() => {
+    const scan = __maiaStudioApp.intuitionReview;
+    scan.progress = { phase: 'intuition', current: 23, total: 65 };
+    scan.render();
+  });
+  assert.equal(await page.locator('#intuition-progress').innerText(), '比对人类直觉 · 23/65 步');
+  assert.equal(await meter.evaluate(el => el.value), 23 / 65);
+  assert.equal(await meter.evaluate(el => getComputedStyle(el).height), '2px');
+  await page.evaluate(() => {
+    const scan = __maiaStudioApp.intuitionReview;
+    scan.progress = { phase: 'verifying', current: 3, total: 5 };
+    scan.render();
+  });
+  assert.equal(await page.locator('#intuition-progress').innerText(), '复核关键分歧 · 3/5');
   await page.locator('#intuition-toggle').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'paused');
   assert.equal(await page.locator('#intuition-toggle').innerText(), '继续');
+  assert.equal(await meter.evaluate(el => el.value), 3 / 5, 'Pause preserves the displayed progress');
   assert.equal(await page.locator('#val-accuracy-white').textContent(), coreAccuracy);
   await page.evaluate(() => window.releaseTestMaia());
   await page.locator('#intuition-toggle').click();
@@ -184,7 +200,7 @@ try {
   const reportBeforeBranch = await page.evaluate(() => JSON.stringify(window.__maiaStudioApp.reviewResult));
   await page.evaluate(async () => {
     const app = window.__maiaStudioApp;
-    const { legalVariation } = await import('./position-analysis.js?v=20261124-review-scan-polish');
+    const { legalVariation } = await import('./position-analysis.js?v=20261124-review-navigation');
     const initialize = app.maiaEngine.initialize;
     const waiting = new Promise(resolve => { window.releaseBranchMaia = () => { app.maiaEngine.initialize = initialize; resolve(); }; });
     app.maiaEngine.initialize = () => waiting;
