@@ -1,6 +1,7 @@
 import { ChessBoard } from '../engine/chess-core.js';
 import { MaiaEngine } from '../engine/maia-engine.js';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
+import { whiteEvaluation } from '../engine/position-lines.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';
 
 const VERIFIED_MIN_DEPTH = 18;
@@ -14,6 +15,7 @@ export class LiveEngines {
     this.stockfish = stockfish ?? new StockfishInBrowser({ variant: stockfishVariant });
     this.stockfish.onDownloadProgress = onStatus;
     this.maia = new MaiaEngine(onStatus, this.stockfish, { variant: maiaVariant });
+    this.positions = new Map();
   }
 
   cancel() {
@@ -45,25 +47,55 @@ export class LiveEngines {
     return obsolete() ? [] : prediction?.moves ?? [];
   }
 
-  async inspect({ move, fenBefore, history, elo }, obsolete, onStockfish) {
-    const maiaReady = this.maia.initialize().then(() => true, () => false);
-    const budget = this.depth === 22 ? 7000 : this.depth === 20 ? 4000 : 3200;
-    const result = await this.stockfish.evaluate(fenBefore, this.depth, budget + 1000, 2, budget);
+  get budget() {
+    return this.depth === 22 ? 7000 : this.depth === 20 ? 4000 : 3200;
+  }
+
+  async evaluate({ fen, history, elo }, obsolete, onStockfish) {
+    const key = JSON.stringify([fen, history, elo, this.depth]);
+    if (this.positions.has(key)) return this.positions.get(key);
+    const terminal = !new ChessBoard(fen).getLegalMoves().length;
+    const maiaReady = !terminal && this.maia.initialize().then(() => true, () => false);
+    const budget = this.budget;
+    const result = await this.stockfish.evaluate(fen, this.depth, budget + 1000, 2, budget);
     if (obsolete()) return null;
-    if (result) onStockfish?.({ score: result.score, depth: result.depth, bestSan: result.bestMove?.san });
-    const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fenBefore, elo, result, obsolete, history) : null;
+    if (result) onStockfish?.(result);
+    const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fen, elo, result, obsolete, history) : null;
     if (obsolete()) return null;
-    const likely = prediction?.moves?.[0];
+    const entry = { result, prediction };
+    if (result && (prediction?.isMaiaReady || result.terminal)) {
+      this.positions.set(key, entry);
+      if (this.positions.size > 12) this.positions.delete(this.positions.keys().next().value);
+    }
+    return entry;
+  }
+
+  async inspect(position, obsolete, onStockfish) {
+    const displayStockfish = result => ({
+      evaluation: whiteEvaluation(result, position.fen), depth: result?.depth,
+      stockfish: result?.bestMove, terminal: result?.terminal
+    });
+    const entry = await this.evaluate(position, obsolete, result => onStockfish?.(displayStockfish(result)));
+    if (!entry || obsolete()) return null;
+    const { result, prediction } = entry;
+    if (!result && !prediction?.isMaiaReady) return null;
+    const likely = prediction?.isMaiaReady ? prediction.moves?.[0] : null;
     const series = new Map();
-    for (const [candidate, role] of [[result?.bestMove, 'sf'], [likely, 'maia'], [move, 'played']]) {
+    for (const [candidate, role] of [[result?.bestMove, 'sf'], [likely, 'maia']]) {
       if (candidate?.uci && !series.has(candidate.uci)) {
         series.set(candidate.uci, { uci: candidate.uci, label: candidate.san, san: candidate.san, role });
       }
     }
-    const trend = likely ? { fen: fenBefore, history, elo, series: [...series.values()], moves: prediction.moves } : null;
-    const display = { score: result?.score, depth: result?.depth, bestSan: result?.bestMove?.san,
-      maiaTopSan: likely?.san, maiaReady: !!prediction?.isMaiaReady, trend };
-    if (!move) return display;
+    const trend = likely ? { ...position, series: [...series.values()], moves: prediction.moves } : null;
+    return { ...displayStockfish(result), maia: likely, maiaReady: !!prediction?.isMaiaReady, trend };
+  }
+
+  async classify(move, before, after, obsolete) {
+    const entry = await this.evaluate(before, obsolete);
+    if (!entry || obsolete()) return null;
+    const { fen: fenBefore } = before;
+    const { result, prediction } = entry;
+    const likely = prediction?.isMaiaReady ? prediction.moves?.[0] : null;
     const rank = prediction?.moves?.findIndex(candidate => candidate.uci === move.uci) ?? -1;
     const probability = rank >= 0 ? chance(prediction.moves[rank]) : null;
     const moment = {
@@ -74,11 +106,11 @@ export class LiveEngines {
       maiaTopUci: likely?.uci, maiaTopSan: likely?.san,
       maiaTopRawProb: chance(likely)
     };
-    display.moment = moment;
-    if (!usable(result, VERIFIED_MIN_DEPTH) || !likely || !Number.isFinite(probability)) return display;
-    if (new ChessBoard(fenBefore).getLegalMoves().length <= 1 || obsolete()) return display;
+    if (!result?.bestMove || !usable(result, VERIFIED_MIN_DEPTH) || !likely || !Number.isFinite(probability)) return moment;
+    if (new ChessBoard(fenBefore).getLegalMoves().length <= 1 || obsolete()) return moment;
 
     const depth = Math.min(this.depth, result.depth);
+    const budget = this.budget;
     const scores = new Map((result.lines || [])
       .filter(line => usable(line, depth))
       .map(line => [line.uci, line.scoreCp]));
@@ -86,11 +118,13 @@ export class LiveEngines {
     const scoreFor = async (uci, nextFen) => {
       if (scores.has(uci)) return scores.get(uci);
       if (obsolete()) return null;
-      const score = await this.stockfish.evaluate(nextFen, depth - 1, budget, 1, budget - 500);
+      const cached = uci === move.uci && after.fen === nextFen
+        ? this.positions.get(JSON.stringify([after.fen, after.history, after.elo, this.depth]))?.result : null;
+      const score = usable(cached, depth - 1) ? cached : await this.stockfish.evaluate(nextFen, depth - 1, budget, 1, budget - 500);
       return usable(score, depth - 1) ? -score.scoreCp : null;
     };
     const played = await scoreFor(move.uci, move.fen);
-    if (!Number.isFinite(played) || obsolete()) return display;
+    if (!Number.isFinite(played) || obsolete()) return moment;
     const lossCp = Math.max(0, result.scoreCp - played);
     const scoreLoss = (expectedScore(result.scoreCp) - expectedScore(played)) * 100;
     const stableBest = result.bestMove.uci === move.uci;
@@ -115,6 +149,6 @@ export class LiveEngines {
       lossCp, verifiedLossCp: lossCp, severity: errorSeverity(lossCp),
       divergenceType: classification, divergenceStatus: classification ? 'confirmed' : 'unconfirmed'
     });
-    return display;
+    return moment;
   }
 }

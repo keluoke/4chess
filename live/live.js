@@ -1,7 +1,7 @@
 import { BoardUI } from '../analysis/board-ui.js?v=20261124-divergence-cards';
 import { ChessBoard } from '../engine/chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { intuitionKind } from '../engine/review-policy.js';
+import { expectedScore, intuitionKind } from '../engine/review-policy.js';
 import { RATINGS, probabilities, renderMaiaTrendPlot } from '../analysis/maia-elo-trend.js?v=20261124-intuition-labels';
 import { engineExperienceHint, getSavedPreferences, initializePreferences, savePreferences, subscribePreferences } from '../engine/engine-preferences.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
@@ -9,21 +9,24 @@ import { copyShareLink } from '../analysis/share-export.js?v=20261124-divergence
 
 const copy = {
   zh: {
-    studio: '分析工作台', round: '轮次', moves: '实战着法', engines: '双引擎对比', rating: '段位',
-    first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享棋王战瞬间',
-    flip: '翻转棋盘', reviewGame: '在工作台复盘本局', reviewPosition: '在工作台分析此局面',
+    moves: '实战着法', engines: '双引擎对比', rating: '段位',
+    first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享局面卡',
+    flip: '翻转棋盘', reviewGame: '查看整盘复盘报告 →',
     trend: 'Maia 分段趋势', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
-    schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛还有 {h} 小时 {m} 分', minutes: '距开赛还有 {m} 分',
+    schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛 {time}', title: '2026 棋王战',
+    settings: '设置', sfArrows: 'Stockfish 箭头', maiaArrows: 'Maia 箭头', whiteEvaluation: '白方视角评估',
+    estimatedClock: '根据最近一次官方时钟估算', startPosition: '开局局面',
+    variationUnavailable: '此链接中的试走变化无法在当前棋谱上重现。',
+    variationTooLong: '试走变化超过 128 步，可缩短变化后再分享。',
     engineIdle: '未启动', engineStarting: '正在启动', engineCache: '正在检查缓存', engineReady: '已就绪', engineError: '加载失败',
     engineDownloading: '下载中', enginePreparing: '正在装载模型', engineCacheSource: 'IndexedDB 缓存', engineBundled: '站内资源',
-    copyGame: '复制本局链接', copyMove: '复制本步链接', copyLink: '复制链接', copyImage: '复制图片',
+    copyLink: '复制链接', copyImage: '复制图片',
     linkCopied: '已复制直达链接', shareLink: '分享链接', close: '关闭', landscape: '16:9 横版', portrait: '3:4 竖版', download: '下载 PNG',
     trendRetry: '重试缺失档位', trendProgress: 'Maia 走法选择概率 · 已完成 {count}/{total} 档',
     sourceLead: '转播数据', delay: '着法和时钟以转播为准，可能晚于现场。',
-    analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎', analysisIdle: '启用后，在本机分析已播出的着法。',
-    engineBusy: '正在分析实战着法…', engineFailed: '双引擎暂不可用。', partial: 'Maia-3 暂不可用。',
-    branchBusy: '正在分析试走局面…',
-    branch: '试走变化', history: '正在回看', live: '转播中', finished: '本局已结束', cancelled: '本局取消',
+    analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎',
+    engineBusy: '正在分析当前局面…', engineFailed: '双引擎暂不可用。', partial: 'Maia-3 暂不可用。',
+    branch: '试走变化', live: '转播中', finished: '本局已结束', cancelled: '本局取消',
     scheduled: '尚未开赛', waiting: '等待官方着法', loading: '正在连接 Lichess 转播',
     stale: '转播更新暂缓 · 显示最近收到的棋谱', unavailable: '暂时无法连接转播，将自动重试',
     newMove: '新着法已更新 · 回到最新', waitingMove: '等待第一步', white: '白方', black: '黑方',
@@ -32,21 +35,24 @@ const copy = {
     shareFailed: '暂时无法生成战报卡。'
   },
   en: {
-    studio: 'Analysis studio', round: 'Game', moves: 'Moves played', engines: 'Compare engines', rating: 'Rating',
-    first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share this moment',
-    flip: 'Flip board', reviewGame: 'Review this game in the studio', reviewPosition: 'Analyze this position in the studio',
+    moves: 'Moves played', engines: 'Compare engines', rating: 'Rating',
+    first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share position card',
+    flip: 'Flip board', reviewGame: 'View the full game review →',
     trend: 'Maia rating trends', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
-    schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {h} h {m} min', minutes: 'Starts in {m} min',
+    schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {time}', title: '2026 World Championship',
+    settings: 'Settings', sfArrows: 'Stockfish arrows', maiaArrows: 'Maia arrows', whiteEvaluation: 'Evaluation from White’s perspective',
+    estimatedClock: 'Estimated from the latest official clock reading', startPosition: 'Starting position',
+    variationUnavailable: 'The linked variation can’t be replayed from the current game score.',
+    variationTooLong: 'This variation exceeds 128 plies. Shorten it to share.',
     engineIdle: 'Not started', engineStarting: 'Starting', engineCache: 'Checking cache', engineReady: 'Ready', engineError: 'Could not load',
     engineDownloading: 'Downloading', enginePreparing: 'Loading model', engineCacheSource: 'IndexedDB cache', engineBundled: 'Site assets',
-    copyGame: 'Copy game link', copyMove: 'Copy move link', copyLink: 'Copy link', copyImage: 'Copy image',
+    copyLink: 'Copy link', copyImage: 'Copy image',
     linkCopied: 'Direct link copied', shareLink: 'Share link', close: 'Close', landscape: '16:9 Landscape', portrait: '3:4 Portrait', download: 'Download PNG',
     trendRetry: 'Retry missing ratings', trendProgress: 'Maia move probability · {count}/{total} rating bands',
     sourceLead: 'Broadcast by', delay: 'Moves and clock readings may be delayed.',
-    analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines', analysisIdle: 'Analyze moves already broadcast on this device.',
-    engineBusy: 'Analyzing the move played…', engineFailed: 'Engine analysis is unavailable.', partial: 'Maia-3 is unavailable.',
-    branchBusy: 'Analyzing the variation…',
-    branch: 'Variation', history: 'Reviewing', live: 'On air', finished: 'Game finished', cancelled: 'Cancelled',
+    analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines',
+    engineBusy: 'Analyzing the current position…', engineFailed: 'Engine analysis is unavailable.', partial: 'Maia-3 is unavailable.',
+    branch: 'Variation', live: 'On air', finished: 'Game finished', cancelled: 'Cancelled',
     scheduled: 'Scheduled', waiting: 'Waiting for official moves', loading: 'Connecting to Lichess Broadcast',
     stale: 'Feed delayed · showing the last received moves', unavailable: 'Broadcast unavailable. Retrying automatically.',
     newMove: 'New moves available · go to latest', waitingMove: 'Waiting for the first move', white: 'White', black: 'Black',
@@ -63,13 +69,15 @@ let lang = params.get('lang') === 'en' ? 'en' : params.get('lang') === 'zh' ? 'z
 const t = (key, locale = lang) => copy[locale][key];
 const foreground = () => !document.hidden;
 const analysisAllowed = () => window.top === window && !FairPlayGuard.isLiveGameInProgress();
+const initialPly = /^\d{1,6}$/.test(params.get('ply') || '') ? Number(params.get('ply')) : null;
+const MAX_SHARED_VARIATION = 128;
 
 const state = {
-  event: null, round: params.get('round'), snapshot: null, cursor: 0, follow: !params.has('ply'),
-  initialPly: /^\d+$/.test(params.get('ply') || '') ? Number(params.get('ply')) : null,
-  branch: null, unseen: false, stale: false, busy: false, roundKey: 0,
-  engines: null, engineEnabled: false, analysisKey: '', requestedKey: '', analysis: null, analyzing: false, requestVersion: 0,
-  settings: { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600 }
+  event: null, round: params.get('round'), snapshot: null, cursor: 0, follow: initialPly === null,
+  initialPly, initialVariation: params.get('line'), initialBase: params.get('base'),
+  branch: null, unseen: false, stale: false, roundKey: 0,
+  engines: null, engineEnabled: analysisAllowed(), requestedKey: '', analysis: null, analyzing: false, requestVersion: 0,
+  settings: { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600, sfArrows: true, maiaArrows: true }
 };
 const board = new BoardUI($('event-board'), {
   brilliantArrows: true,
@@ -80,15 +88,38 @@ const board = new BoardUI($('event-board'), {
       paintBoard();
       return;
     }
-    const history = state.branch ? [...state.branch.history, state.branch.fen]
-      : [state.snapshot.initialFen || ChessBoard.INITIAL_FEN, ...state.snapshot.moves.slice(0, state.cursor).map(item => item.fen)];
-    state.branch = { fen, move, history: history.slice(-7) };
+    state.branch = extendBranch(state.branch, move, fen);
     state.follow = false;
     cancelAnalysis();
+    paintClocks();
     paintControls();
     void analyzeMove();
   }
 });
+
+const fenAt = ply => state.snapshot?.moves[ply - 1]?.fen || state.snapshot?.initialFen || ChessBoard.INITIAL_FEN;
+const historyAt = ply => Array.from({ length: Math.min(7, ply) }, (_, index) => fenAt(Math.max(0, ply - 7) + index));
+
+function extendBranch(branch, move, fen) {
+  const baseFen = branch?.baseFen ?? fenAt(state.cursor);
+  const history = branch ? [...branch.history, branch.fen].slice(-7) : [...historyAt(state.cursor), baseFen].slice(-7);
+  return { baseFen, fen, move, history, line: [...(branch?.line || []), move.uci] };
+}
+
+function restoreVariation(line, base, ply) {
+  const moves = line.split('.');
+  const startingFen = fenAt(ply);
+  if (!analysisAllowed() || base !== startingFen || moves.length > MAX_SHARED_VARIATION) return null;
+  const trial = new ChessBoard(startingFen);
+  let branch = null;
+  for (const uci of moves) {
+    const move = trial.getLegalMoves().find(candidate => candidate.uci === uci);
+    if (!move) return null;
+    trial.makeMove(move);
+    branch = extendBranch(branch, move, trial.getFen());
+  }
+  return branch;
+}
 
 function playerName(player, locale = lang) {
   return player?.[locale === 'en' ? 'nameEn' : 'name'] || '';
@@ -113,7 +144,11 @@ function paintLanguage() {
 
 const RESULTS = { '1-0': '1–0', '0-1': '0–1', '1/2-1/2': '½–½' };
 const currentRound = () => state.event?.rounds.find(round => round.id === state.round);
-const selectRound = id => { state.initialPly = null; chooseRound(id); };
+const selectRound = id => {
+  state.initialPly = null;
+  state.initialVariation = null;
+  chooseRound(id);
+};
 const roundName = round => round.number ? t('game').replace('{n}', round.number) : round.name;
 
 function roundTime(timestamp) {
@@ -169,43 +204,45 @@ function paintCountdown() {
   const status = state.snapshot?.status ?? round?.status;
   let notice = '';
   if (status === 'scheduled' && round?.startsAt) {
-    const remaining = Math.ceil((round.startsAt - Date.now()) / 60000);
-    notice = remaining > 0 ? t(remaining >= 60 ? 'countdown' : 'minutes')
-      .replace('{h}', Math.floor(remaining / 60)).replace('{m}', remaining % 60) : t('waiting');
-  } else if (status === 'waiting' || status === 'live') notice = t(status);
-  if ($('round-countdown').textContent !== notice) $('round-countdown').textContent = notice;
+    const remaining = Math.ceil((round.startsAt - Date.now()) / 1000);
+    const time = [Math.floor(remaining / 3600), Math.floor(remaining / 60) % 60, remaining % 60]
+      .map(part => String(part).padStart(2, '0')).join(':');
+    notice = remaining > 0 ? t('countdown').replace('{time}', time) : t('waiting');
+  }
+  const countdown = $('round-countdown');
+  countdown.hidden = !notice;
+  if (countdown.textContent !== notice) countdown.textContent = notice;
 }
 
 function paintRoundHeading() {
   const round = currentRound();
-  $('round-heading').hidden = !round;
-  if (!round) return;
-  const result = RESULTS[state.snapshot?.result] || RESULTS[round.result];
-  const status = state.snapshot?.status || round.status;
-  $('round-title').textContent = roundName(round) + (result ? ' · ' + result : status === 'finished' || status === 'cancelled' ? ' · ' + t(status) : '');
-  const [white, black] = roundPlayers(round).map(player => playerName(player));
-  $('round-players').textContent = white && black ? `${white} (${t('white')}) vs ${black} (${t('black')})` : '';
+  $('round-title').hidden = !round;
+  const result = RESULTS[state.snapshot?.result] || RESULTS[round?.result];
+  const status = state.snapshot?.status || round?.status;
+  if (round) $('round-title').textContent = roundName(round) + (result ? ' · ' + result : '');
   const time = $('round-time');
-  time.textContent = roundTime(round.startsAt);
-  if (round.startsAt) time.dateTime = new Date(round.startsAt).toISOString();
-  else time.removeAttribute('datetime');
+  time.hidden = status !== 'scheduled' || !round?.startsAt;
+  if (!time.hidden) {
+    time.textContent = roundTime(round.startsAt);
+    time.dateTime = new Date(round.startsAt).toISOString();
+  }
   paintCountdown();
 }
 
 function paintEvent() {
+  $('title').textContent = t('title');
   const event = state.event;
   if (!event) return;
-  $('title').textContent = lang === 'en' ? event.titleEn : event.title;
-  document.title = $('title').textContent + ' · Diverge';
+  const title = lang === 'en' ? event.titleEn : event.title;
+  $('title').textContent = eventId === 'wcc2026' ? t('title') : title;
+  $('title').title = title;
+  document.title = title + ' · Diverge';
   const score = $('match-score');
-  score.setAttribute('aria-label', t('score'));
-  score.replaceChildren();
-  for (const [index, player] of event.players.entries()) {
-    if (index) score.append('–');
-    const amount = document.createElement('strong');
-    amount.textContent = event.scoreIncomplete ? '—' : event.score[player.id];
-    score.append(playerName(player), amount);
-  }
+  const names = event.players.map(player => Object.assign(document.createElement('span'), { textContent: playerName(player) }));
+  const amounts = event.players.map(player => event.scoreIncomplete ? '—' : event.score[player.id]);
+  const result = Object.assign(document.createElement('strong'), { textContent: amounts.join(' – ') });
+  score.setAttribute('aria-label', [t('score'), names[0]?.textContent, result.textContent, names[1]?.textContent].filter(Boolean).join(' '));
+  if (names.length === 2) score.replaceChildren(names[0], result, names[1]);
 
   paintRoundRail(event.rounds.map(round => {
     const snapshot = round.id === state.round ? state.snapshot : null;
@@ -218,20 +255,37 @@ function paintBoard() {
   const moves = state.snapshot?.moves || [];
   const played = moves[state.cursor - 1];
   const hint = state.branch?.move || played;
-  const fen = state.branch?.fen || played?.fen || state.snapshot?.initialFen || ChessBoard.INITIAL_FEN;
+  const fen = state.branch?.fen || fenAt(state.cursor);
   if (state.boardFen !== fen || state.boardMove !== hint?.uci) {
     state.boardFen = fen;
     state.boardMove = hint?.uci;
     board.setPosition(fen, hint ? { from: hint.uci.slice(0, 2), to: hint.uci.slice(2, 4) } : null);
   }
-  const recent = moves.slice(0, state.cursor);
   const [white, black] = roundPlayers(currentRound());
-  for (const [side, turn, player] of [['white', 'w', white], ['black', 'b', black]]) {
+  for (const [side, player] of [['white', white], ['black', black]]) {
     $(side + '-name').textContent = (playerName(player) || t(side)) + (player?.rating ? ' · ' + player.rating : '');
-    const lastClock = recent.findLast(move => move.turn === turn && Number.isFinite(move.clk));
-    $(side + '-clock').textContent = clock(lastClock?.clk);
-    $(side + '-seat').dataset.toMove = String(state.snapshot?.status === 'live' && !state.branch && !state.stale &&
-      state.cursor === moves.length && state.snapshot.fen?.split(' ')[1] === turn);
+  }
+  paintClocks();
+}
+
+function paintClocks() {
+  const snapshot = state.snapshot;
+  const recent = snapshot?.moves.slice(0, state.cursor) || [];
+  const turnToMove = snapshot?.status === 'live' && state.follow && !state.branch && !state.stale
+    && state.cursor === snapshot.moves.length ? state.boardFen?.split(' ')[1] : null;
+  for (const [side, turn] of [['white', 'w'], ['black', 'b']]) {
+    const lastMove = recent.findLast(move => move.turn === turn);
+    const lastClock = Number.isFinite(lastMove?.clk) ? lastMove : recent.findLast(move => move.turn === turn && Number.isFinite(move.clk));
+    const active = turnToMove === turn;
+    const estimated = active && lastClock && lastClock === lastMove && Number.isFinite(snapshot.updatedAt);
+    const elapsed = estimated ? Math.max(0, (Date.now() - snapshot.updatedAt) / 1000) : 0;
+    const remaining = lastClock ? Math.max(0, lastClock.clk - elapsed) : null;
+    const time = $(side + '-clock');
+    const text = clock(remaining);
+    if (time.textContent !== text) time.textContent = text;
+    time.title = estimated ? t('estimatedClock') : '';
+    time.dataset.low = String(remaining !== null && remaining < 300);
+    $(side + '-seat').dataset.toMove = String(active);
   }
 }
 
@@ -264,7 +318,7 @@ function paintMoves() {
 
 function paintControls() {
   const length = state.snapshot?.moves.length || 0;
-  const round = state.event?.rounds.find(item => item.id === state.round);
+  const round = currentRound();
   const status = $('event-status');
   status.dataset.state = state.stale ? 'stale' : '';
   status.textContent = t(state.stale ? (state.snapshot || state.event ? 'stale' : 'unavailable')
@@ -278,8 +332,7 @@ function paintControls() {
   $('first').disabled = $('previous').disabled;
   $('next').disabled = state.cursor === length && !state.branch;
   $('latest').disabled = state.follow && !state.branch;
-  $('copy-live-link').disabled = !round;
-  $('copy-live-link').textContent = t(state.cursor ? 'copyMove' : 'copyGame');
+  $('copy-live-link').disabled = $('moment').disabled = !round || !analysisAllowed();
   paintRoundHeading();
   paintWorkbenchLink();
   paintAnalysis();
@@ -289,15 +342,13 @@ function paintWorkbenchLink() {
   const link = $('workbench-game');
   const snapshot = state.snapshot;
   const pgn = snapshot?.status === 'finished' && FairPlayGuard.verifyConcludedGame(snapshot.pgn).ok ? snapshot.pgn : null;
-  const canReviewPosition = snapshot?.moves.length || state.branch;
-  const input = pgn ? { pgn } : canReviewPosition ? { fen: state.boardFen } : null;
-  link.hidden = !input || !analysisAllowed();
+  link.hidden = !pgn || !analysisAllowed();
   if (link.hidden) {
     link.removeAttribute('href');
     return;
   }
-  link.href = '/analysis/#' + new URLSearchParams({ ...input, orientation: board.orientation, lang });
-  link.textContent = t(pgn ? 'reviewGame' : 'reviewPosition');
+  link.href = '/analysis/#' + new URLSearchParams({ pgn, orientation: board.orientation, lang });
+  link.textContent = t('reviewGame');
 }
 
 function paint() {
@@ -311,8 +362,8 @@ function cancelAnalysis() {
   closeTrend();
   state.requestVersion++;
   state.requestedKey = '';
-  state.analysisKey = '';
   state.analysis = null;
+  state.moment = null;
   if (state.analyzing) state.engines?.cancel();
 }
 
@@ -343,6 +394,7 @@ async function sampleTrend(trend) {
   trend.running = true;
   renderTrend(trend);
   try {
+    await state.momentTask;
     for (const elo of [...RATINGS].sort((a, b) => Math.abs(a - trend.position.elo) - Math.abs(b - trend.position.elo))) {
       if (obsolete()) return;
       if (trend.samples.has(elo)) continue;
@@ -360,26 +412,49 @@ async function sampleTrend(trend) {
   }
 }
 
+function paintEvaluation(result) {
+  const evaluation = result?.evaluation;
+  const share = (expectedScore(evaluation?.cp) ?? .5) * 100;
+  const text = evaluation?.text ?? '—';
+  const gauge = $('evaluation-gauge');
+  gauge.classList.toggle('flipped', board.orientation === 'black');
+  gauge.setAttribute('aria-label', t('whiteEvaluation') + ' ' + text);
+  $('gauge-white').style.height = share + '%';
+  $('gauge-black').style.height = 100 - share + '%';
+  $('gauge-score-white').textContent = !evaluation || evaluation.cp >= 0 ? text : '';
+  $('gauge-score-black').textContent = evaluation?.cp < 0 ? text : '';
+  const sf = state.settings.sfArrows && result?.stockfish?.uci;
+  const maia = state.settings.maiaArrows && result?.maia?.uci;
+  const arrowKey = JSON.stringify([sf, maia]);
+  if (state.arrowKey === arrowKey) return;
+  state.arrowKey = arrowKey;
+  const arrows = [];
+  const add = (uci, color, role) => arrows.push({ from: uci.slice(0, 2), to: uci.slice(2, 4), color, role });
+  if (sf) add(sf, 'green', sf === maia ? 'consensus' : 'sf');
+  if (maia && maia !== sf) add(maia, 'gold', 'maia');
+  board.setArrows(arrows);
+}
+
 function paintAnalysis() {
-  const result = state.analysis;
+  const allowed = analysisAllowed();
+  const result = allowed && state.engineEnabled ? state.analysis : null;
   $('trend-toggle').hidden = !result?.trend;
   if (state.trend) renderTrend(state.trend);
   $('engine-lines').hidden = !result;
-  $('moment').hidden = !state.snapshot?.moves[state.cursor - 1] || !!state.branch || !analysisAllowed();
-  $('analyze').disabled = !state.preferencesReady || !analysisAllowed();
+  $('analyze').disabled = !state.preferencesReady || !allowed;
   $('analyze').textContent = t(state.engineEnabled ? (result || state.analyzing || !state.requestedKey ? 'pause' : 'retry') : 'analyze');
-  const kind = result?.moment && intuitionKind(result.moment);
+  const kind = result && state.moment && intuitionKind(state.moment);
   $('intuition-tag').hidden = !kind;
-  $('intuition-tag').textContent = kind ? t(kind) : '';
-  $('engine-note').textContent = !state.engineEnabled ? t('analysisIdle')
-    : state.analyzing ? t(state.branch ? 'branchBusy' : 'engineBusy') : result ? (result.maiaReady ? '' : t('partial'))
-      : state.requestedKey ? t('engineFailed') : t('waitingMove');
+  $('intuition-tag').textContent = kind ? state.moment.san + ' · ' + t(kind) : '';
+  $('engine-note').textContent = !state.engineEnabled || !allowed ? ''
+    : result?.maiaReady || result?.terminal ? '' : state.analyzing ? t('engineBusy') : result ? t('partial')
+      : state.requestedKey ? t('engineFailed') : '';
   if (result) {
-    const moment = result.moment;
-    $('sf-line').textContent = [moment?.bestSan ?? result.bestSan, result.score, result.depth ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
-    const probability = Number.isFinite(moment?.humanRawProbability) ? (100 * moment.humanRawProbability).toFixed(1) + '%' : '';
-    $('maia-line').textContent = [moment?.maiaTopSan ?? result.maiaTopSan, probability && moment.san + ' ' + probability].filter(Boolean).join(' · ') || '—';
+    $('sf-line').textContent = [result.stockfish?.san, result.evaluation?.text, result.depth ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
+    const probability = result.maia && probabilities([result.maia]).get(result.maia.uci);
+    $('maia-line').textContent = [result.maia?.san, Number.isFinite(probability) ? probability.toFixed(1) + '%' : ''].filter(Boolean).join(' · ') || '—';
   }
+  paintEvaluation(result);
   paintEngineStatus();
 }
 
@@ -404,8 +479,9 @@ function paintEngineStatus() {
     const text = [name, [t(label), detail].filter(Boolean).join(' '), phase !== 'idle' ? source : ''].filter(Boolean).join(' · ');
     if ($(slot + '-status').textContent !== text) $(slot + '-status').textContent = text;
     const progress = $(slot + '-progress');
-    progress.hidden = phase !== 'downloading';
+    progress.hidden = phase !== 'downloading' || !state.engineEnabled;
     progress.setAttribute('aria-label', name);
+    progress.title = text;
     if (percent === null) progress.removeAttribute('value');
     else progress.value = percent;
   }
@@ -417,7 +493,7 @@ function applyPreferences() {
   const settings = {
     maiaVariant: saved.maiaVariant || '23m', stockfishVariant,
     depth: stockfishVariant === 'standard' ? saved.studio_max_depth ?? 22 : 18,
-    elo: saved.defaultElo ?? 2600
+    elo: saved.defaultElo ?? 2600, sfArrows: saved.showStockfishArrows ?? true, maiaArrows: saved.showArrows ?? true
   };
   const previous = state.settings;
   state.settings = settings;
@@ -425,10 +501,12 @@ function applyPreferences() {
   $('live-sf').disabled = $('live-maia').disabled = $('event-elo').disabled = false;
   $('live-sf').value = settings.stockfishVariant;
   $('live-maia').value = settings.maiaVariant;
+  $('setting-sf-arrows').checked = settings.sfArrows;
+  $('setting-maia-arrows').checked = settings.maiaArrows;
   const elo = $('event-elo');
   if (!Array.from(elo.options).some(option => Number(option.value) === settings.elo)) elo.add(new Option(String(settings.elo)));
   elo.value = String(settings.elo);
-  if (Object.keys(settings).some(key => settings[key] !== previous[key])) {
+  if (['maiaVariant', 'stockfishVariant', 'depth', 'elo'].some(key => settings[key] !== previous[key])) {
     cancelAnalysis();
     if (state.engines && (settings.stockfishVariant !== previous.stockfishVariant || settings.maiaVariant !== previous.maiaVariant)) {
       const keepStockfish = settings.stockfishVariant === previous.stockfishVariant;
@@ -441,29 +519,28 @@ function applyPreferences() {
       state.reusableStockfish = null;
     }
     if (state.engines) state.engines.depth = settings.depth;
-    void analyzeMove();
   }
+  void analyzeMove();
   paintAnalysis();
 }
 
 async function analyzeMove() {
-  const moves = state.snapshot?.moves || [];
-  const branch = state.branch;
-  const move = branch ? null : moves[state.cursor - 1];
-  if ((!move && !branch) || !state.engineEnabled || !analysisAllowed() || !foreground()) return;
+  if (!state.snapshot || !state.preferencesReady || !state.engineEnabled || !analysisAllowed() || !foreground()) return;
+  const { cursor, branch } = state;
+  const move = branch ? null : state.snapshot.moves[cursor - 1];
   const elo = state.settings.elo;
-  const fenBefore = branch?.fen ?? moves[state.cursor - 2]?.fen ?? state.snapshot.initialFen;
-  const history = branch?.history ?? [state.snapshot.initialFen, ...moves.slice(0, state.cursor - 1).map(move => move.fen)]
-    .slice(Math.max(0, state.cursor - 8), state.cursor - 1);
-  const key = JSON.stringify([state.round, state.cursor, fenBefore, move?.uci, elo, history]);
+  const position = { fen: branch?.fen ?? fenAt(cursor), history: branch?.history ?? historyAt(cursor), elo };
+  const before = move ? { fen: fenAt(cursor - 1), history: historyAt(cursor - 1), elo } : null;
+  const key = JSON.stringify([state.round, cursor, position, move?.uci]);
   if (state.requestedKey === key) return;
   closeTrend();
   const version = ++state.requestVersion;
   state.requestedKey = key;
-  state.analysisKey = '';
   state.analysis = null;
+  state.moment = null;
   if (state.analyzing) {
     state.engines?.cancel();
+    paintAnalysis();
     return;
   }
   state.analyzing = true;
@@ -471,24 +548,29 @@ async function analyzeMove() {
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261124-match');
+      const { LiveEngines } = await import('./engines.js?v=20261124-spectator');
       if (obsolete()) return;
       const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
       state.reusableStockfish = null;
     }
-    const result = await state.engines.inspect({ move, fenBefore, history, elo }, obsolete, partial => {
+    const result = await state.engines.inspect(position, obsolete, partial => {
       if (obsolete()) return;
       state.analysis = partial;
       paintAnalysis();
     });
-    if (result && !obsolete()) {
-      state.analysisKey = key;
-      state.analysis = result;
+    if (!result || obsolete()) return;
+    state.analysis = result;
+    paintAnalysis();
+    if (move && (result.maiaReady || result.terminal)) {
+      state.momentTask = state.engines.classify(move, before, position, obsolete);
+      const moment = await state.momentTask;
+      if (!obsolete()) state.moment = moment;
     }
   } catch (error) {
     console.debug('Broadcast analysis unavailable', error);
   } finally {
+    state.momentTask = null;
     state.analyzing = false;
     if (state.requestedKey && state.requestVersion !== version) {
       state.requestedKey = '';
@@ -544,6 +626,10 @@ async function pollEvent() {
       state.eventTag = response.headers.get('ETag');
       const rounds = state.event.rounds;
       if (!rounds.some(round => round.id === state.round)) {
+        if (state.round) {
+          state.initialPly = null;
+          state.initialVariation = null;
+        }
         chooseRound(state.event.activeRoundId || rounds.find(round => round.status === 'scheduled')?.id || rounds.at(-1)?.id);
       } else if (!state.snapshot && state.roundBusy !== state.roundKey) {
         void pollRound();
@@ -591,6 +677,11 @@ async function pollRound() {
     state.snapshot = next;
     if (state.initialPly !== null) {
       state.cursor = Math.min(state.initialPly, next.moves.length);
+      if (state.initialVariation !== null) {
+        state.branch = state.cursor === state.initialPly ? restoreVariation(state.initialVariation, state.initialBase, state.cursor) : null;
+        if (!state.branch) $('live-link-status').textContent = t('variationUnavailable');
+        state.initialVariation = null;
+      }
       state.initialPly = null;
       state.follow = false;
     } else if (state.follow) {
@@ -601,7 +692,7 @@ async function pollRound() {
     }
     // A correction can replace the occupied mainline position. Keep a trial branch separate.
     paint();
-    if (state.follow && !state.branch) void analyzeMove();
+    void analyzeMove();
   } catch {
     if (key === state.roundKey) state.stale = true;
   } finally {
@@ -640,8 +731,9 @@ $('latest').onclick = $('new-move').onclick = () => jump(state.snapshot?.moves.l
 $('flip-board').onclick = () => {
   board.flip();
   const blackAtBottom = board.orientation === 'black';
-  board.container.before($(blackAtBottom ? 'white-seat' : 'black-seat'));
-  board.container.after($(blackAtBottom ? 'black-seat' : 'white-seat'));
+  $('board-frame').before($(blackAtBottom ? 'white-seat' : 'black-seat'));
+  $('board-frame').after($(blackAtBottom ? 'black-seat' : 'white-seat'));
+  paintEvaluation(state.analysis);
   paintWorkbenchLink();
 };
 $('language').onclick = () => {
@@ -651,6 +743,9 @@ $('language').onclick = () => {
 $('event-elo').onchange = () => void savePreferences({ defaultElo: Number($('event-elo').value) });
 $('live-sf').onchange = () => void savePreferences({ stockfishVariant: $('live-sf').value });
 $('live-maia').onchange = () => void savePreferences({ maiaVariant: $('live-maia').value });
+$('setting-sf-arrows').onchange = () => void savePreferences({ showStockfishArrows: $('setting-sf-arrows').checked });
+$('setting-maia-arrows').onchange = () => void savePreferences({ showArrows: $('setting-maia-arrows').checked });
+$('btn-settings').onclick = () => $('live-settings').showModal();
 $('trend-toggle').onclick = () => {
   if (state.trend) { closeTrend(); return; }
   const position = state.analysis?.trend;
@@ -678,51 +773,72 @@ $('analyze').onclick = () => {
   paintAnalysis();
   void analyzeMove();
 };
-function liveLink(round = state.round, ply = state.cursor, locale = lang) {
-  const query = new URLSearchParams({ event: eventId, round, lang: locale });
-  if (ply) query.set('ply', String(ply));
+function liveLink() {
+  const query = new URLSearchParams({ event: eventId, round: state.round, lang, ply: String(state.cursor) });
+  if (state.branch) {
+    if (state.branch.line.length > MAX_SHARED_VARIATION) return null;
+    query.set('line', state.branch.line.join('.'));
+    query.set('base', state.branch.baseFen);
+  }
   return 'https://4chess.cc/live/?' + query;
 }
 
 $('copy-live-link').onclick = async () => {
   if (!currentRound()) return;
-  const copied = await copyShareLink(liveLink(), $('live-link-field'));
+  const link = liveLink();
+  if (!link) {
+    $('live-link-status').textContent = t('variationTooLong');
+    return;
+  }
+  const copied = await copyShareLink(link, $('live-link-field'));
   $('live-link-status').textContent = copied ? t('linkCopied') : '';
 };
 
 let shareModal;
 $('moment').onclick = async () => {
   const snapshot = state.snapshot;
-  const played = snapshot?.moves[state.cursor - 1];
-  if (!played || state.branch || !analysisAllowed()) return;
-  const round = state.round;
+  const round = currentRound();
+  if (!round || !analysisAllowed()) return;
+  const link = liveLink();
+  if (!link) {
+    $('live-link-status').textContent = t('variationTooLong');
+    return;
+  }
   const cardLang = lang;
   const orientation = board.orientation;
   const elo = state.settings.elo;
-  const analysis = state.analysis?.moment;
-  const evaluated = analysis?.ply === played.ply ? analysis : null;
-  const move = evaluated ?? { ...played, fenBefore: snapshot.moves[played.ply - 2]?.fen || snapshot.initialFen };
-  const link = liveLink(round, played.ply, cardLang);
-  const [white, black] = roundPlayers(currentRound()).map(player => playerName(player, cardLang));
+  const played = snapshot?.moves[state.cursor - 1];
+  const branch = state.branch;
+  const ply = state.cursor;
+  const analysis = state.analysis;
+  const kind = !branch && state.moment && intuitionKind(state.moment);
+  const move = {
+    fen: state.boardFen,
+    bestUci: analysis?.stockfish?.uci, bestSan: analysis?.stockfish?.san,
+    maiaTopUci: analysis?.maia?.uci, maiaTopSan: analysis?.maia?.san,
+    maiaTopProb: analysis?.maia && probabilities([analysis.maia]).get(analysis.maia.uci)
+  };
+  const label = branch ? t('branch', cardLang) + ' · ' + branch.move.san
+    : played ? played.moveNumber + (played.turn === 'w' ? '. ' : '… ') + played.san : t('startPosition', cardLang);
+  const roundLabel = roundName(round);
+  const [white, black] = roundPlayers(round).map(player => playerName(player, cardLang));
   try {
     const { ShareCardModal } = await import('../analysis/share-card.js?v=20261124-intuition-labels');
     shareModal ||= new ShareCardModal(null, { format: 'portrait', allowed: analysisAllowed });
     await shareModal.open(move, {
       lang: cardLang, elo, orientation, white, black, link, linkCopied: t('linkCopied', cardLang),
-      filename: format => 'diverge-wcc-' + round + '-' + played.ply + '-' + format + '.png',
+      filename: format => 'diverge-wcc-' + round.id + '-' + ply + (branch ? '-variation-' : '-') + format + '.png',
       decorate(spec) {
-        spec.badge = [t('card', cardLang), snapshot.roundName, spec.kind ? t(spec.kind, cardLang) : ''].filter(Boolean).join(' · ');
-        if (!evaluated) {
-          spec.headline = (move.moveNumber + (move.turn === 'w' ? '. ' : '… ')) + move.san;
-          spec.subline = [white, black].filter(Boolean).join(' vs ');
-        }
+        spec.badge = [t('card', cardLang), roundLabel, kind && t(kind, cardLang)].filter(Boolean).join(' · ');
+        spec.subline = [move.bestSan && label, [white, black].filter(Boolean).join(' vs ')].filter(Boolean).join(' · ');
+        if (!move.bestSan) spec.headline = label;
         spec.watermark = '4chess.cc/live · Lichess Broadcast';
         spec.targetUrl = link;
         spec.scanLabel = t('scan', cardLang);
       }
     });
   } catch {
-    $('engine-note').textContent = t('shareFailed');
+    $('live-link-status').textContent = t('shareFailed');
   }
 };
 
@@ -730,6 +846,8 @@ document.addEventListener('visibilitychange', () => {
   clearTimeout(state.eventTimer);
   clearTimeout(state.roundTimer);
   if (foreground()) {
+    paintClocks();
+    paintCountdown();
     void pollEvent();
     void pollRound();
     if (state.engineEnabled) void analyzeMove();
@@ -741,5 +859,9 @@ document.addEventListener('visibilitychange', () => {
 subscribePreferences(applyPreferences);
 void initializePreferences().then(applyPreferences, applyPreferences);
 paintLanguage();
-setInterval(() => { if (foreground()) paintCountdown(); }, 1000);
+setInterval(() => {
+  if (!foreground()) return;
+  paintCountdown();
+  paintClocks();
+}, 1000);
 void pollEvent();
