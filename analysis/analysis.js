@@ -24,7 +24,7 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-player-copy';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';

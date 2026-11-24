@@ -14,13 +14,13 @@ const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
 const releaseModules = new Map([
  ...[
-  '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
+  '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
   '/analysis/review-explorer.js', '/analysis/review-share.js', '/analysis/share-card.js',
   '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
   '/analysis/challenge.js'
  ].map(path => [path, '20261124-intuition-labels']),
- ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js', '/engine/model-cache-client.js',
-  '/engine/model-loader.js'].map(path => [path, '20261124-player-copy']),
+ ...['/analysis/analysis.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
+  '/engine/model-cache-client.js', '/engine/model-loader.js'].map(path => [path, '20261124-mobile']),
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']
   .map(path => [path, '20261124-divergence-cards']),
  ...[

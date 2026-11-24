@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261124-intuition-labels-r2';
+const CACHE_NAME = '4chess-review-20261124-mobile';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -27,7 +27,7 @@ const STATIC_ASSETS = [
   "../ui/fonts/InterVariable.woff2?v=4.1",
   "./workbench.css?v=20261124-intuition-labels-r2",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261124-intuition-labels",
+  "./analysis.js?v=20261124-mobile",
   "./commentary-text.js?v=20261118-recap-reset",
   "./built-in-ai.js?v=20261118-summary-ai",
   "./review-commentary.js?v=20261124-intuition-labels",
@@ -75,12 +75,12 @@ const STATIC_ASSETS = [
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
   "../engine/game-analyzer.js?v=20261124-checkup-cards-r2",
-  "../engine/maia-engine.js?v=20261124-player-copy",
-  "../engine/maia-inbrowser.js?v=20261124-player-copy",
-  "../engine/maia-worker.js?v=20261124-player-copy",
+  "../engine/maia-engine.js?v=20261124-mobile",
+  "../engine/maia-inbrowser.js?v=20261124-mobile",
+  "../engine/maia-worker.js?v=20261124-mobile",
   "../engine/model-cache.js",
-  "../engine/model-cache-client.js?v=20261124-player-copy",
-  "../engine/model-loader.js?v=20261124-player-copy",
+  "../engine/model-cache-client.js?v=20261124-mobile",
+  "../engine/model-loader.js?v=20261124-mobile",
   "../engine/model-sources.js",
   "../engine/opening-book.js",
   "../engine/position-lines.js",
