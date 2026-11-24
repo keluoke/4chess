@@ -320,12 +320,14 @@ button,input,select,textarea { font-family:inherit; }
 .insight-fact + .insight-fact { border-top:1px solid var(--dg-line); }
 .insight-fact span { color:var(--text-muted); }
 .insight-fact strong { font-weight:500; }
-.insight-heading strong { font-size:16px;font-weight:600; }
-#intuition-progress { margin:10px 0;font-size:12px; }
 .review-filter-toolbar { position:sticky;top:0;z-index:2;background:var(--dg-paper);border-bottom:1px solid var(--dg-line);padding:5px 0 8px;margin-bottom:12px; }
-.review-filter-toolbar .divergence-filters { margin-top:0;margin-bottom:8px; }
-.review-filter-toolbar .review-selection { margin:0; }
-.review-filter-toolbar .review-selection p { min-width:0;overflow-wrap:anywhere; }
+.review-list-controls { display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap; }
+.review-list-modes { display:flex;flex-wrap:wrap;gap:3px;background:var(--dg-surface);border-radius:9px;padding:3px; }
+.review-list-modes button { border:0;background:transparent;color:var(--dg-muted);font:inherit;font-size:11px;font-weight:600;padding:5px 8px;border-radius:6px;cursor:pointer; }
+.review-list-modes button:hover { background:var(--dg-raised); }
+.review-list-modes button[aria-pressed="true"] { background:var(--dg-green-soft);color:var(--dg-green); }
+#review-clear-filter { font-size:11px;padding-inline:7px; }
+#review-selection-label { font-size:11px;color:var(--dg-muted);margin:5px 0 0;overflow-wrap:anywhere; }
 .insight-column .blunder-card { scroll-margin-top:calc(var(--review-toolbar-height,0px) + 8px); }
 @media(min-width:1180px) {
   .insight-column { scroll-padding-top:calc(var(--review-toolbar-height,0px) + 8px); }
@@ -470,9 +472,35 @@ button,input,select,textarea { font-family:inherit; }
 }
 
 /* Review explorer: quality is exclusive; opening and intuition are extra tags. */
-.review-overview { background:var(--dg-surface);padding:16px;border-radius:18px;margin-bottom:18px;box-shadow:var(--dg-shadow); }
-.review-overview h2 { font-size:15px;font-weight:650;margin:0 0 12px; }
-.review-side-controls { display:flex;gap:4px;padding:3px;background:var(--dg-paper);border-radius:10px;margin-bottom:12px; }
+.review-overview { background:var(--dg-surface);padding:12px;border-radius:16px;margin-bottom:12px;box-shadow:var(--dg-shadow); }
+.review-overview h2 { font-size:15px;font-weight:650;margin:0 0 8px; }
+.review-intuition-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px; }
+.review-intuition-card { --kind-ink:var(--dg-green);--kind-surface:var(--dg-green-soft);min-width:0;border-radius:10px;background:var(--kind-surface);border:1px solid transparent;padding:4px 3px 3px;display:flex;flex-direction:column; }
+.review-intuition-card[data-kind="trap"] { --kind-ink:var(--dg-gold);--kind-surface:var(--dg-gold-soft); }
+.review-intuition-card[data-kind="beyond"] { --kind-ink:var(--dg-blue);--kind-surface:var(--dg-blue-soft); }
+.review-intuition-card[data-selected="true"] { border-color:var(--kind-ink); }
+.review-intuition-card button,.review-engine-summary button { border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer; }
+.review-intuition-card button:hover:enabled,.review-engine-summary button:hover { background:var(--dg-surface); }
+.review-intuition-card button:disabled { cursor:default; }
+.review-intuition-card .review-intuition-kind { flex:1;width:100%;min-height:25px;padding:2px;color:var(--kind-ink);font-size:11px;font-weight:690;line-height:1.15;overflow-wrap:anywhere; }
+.review-intuition-values,.review-engine-values { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px; }
+.review-intuition-values button,.review-engine-value,.review-engine-values button { display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:0 3px;padding:3px 1px;color:var(--dg-muted);font-size:10px;font-variant-numeric:tabular-nums;line-height:1.45; }
+.review-intuition-values strong,.review-engine-values strong { font-weight:690;color:var(--dg-ink);font-size:14px; }
+.review-intuition-values button:disabled strong { color:inherit; }
+.review-intuition-card button[aria-pressed="true"],.review-engine-summary button[aria-pressed="true"] { background:var(--dg-surface);box-shadow:inset 0 0 0 1px currentColor;color:var(--kind-ink,var(--dg-green)); }
+.review-intuition-scan { display:flex;align-items:center;justify-content:space-between;gap:4px 8px;flex-wrap:wrap;margin-top:7px; }
+.review-intuition-scan[hidden] { display:none; }
+#intuition-progress { color:var(--dg-muted);font-size:11px;line-height:1.4;margin:0; }
+#intuition-toggle { background:var(--dg-green-soft);color:var(--dg-green);font-size:11px;padding:4px 7px; }
+.review-engine-summary { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;padding:5px 0;border-block:1px solid var(--dg-line); }
+.review-engine-metric { display:grid;grid-template-columns:minmax(0,auto) minmax(58px,1fr);align-items:center;gap:3px;min-width:0; }
+.review-engine-metric + .review-engine-metric { border-inline-start:1px solid var(--dg-line);padding-inline-start:7px; }
+.review-engine-label { color:var(--dg-muted);font-size:10px;font-weight:600;line-height:1.2; }
+.review-engine-values strong { font-size:12px; }
+.review-engine-values button.review-count-positive strong { color:var(--dg-red); }
+.review-classifications summary { margin-top:6px;color:var(--dg-muted);font-size:11px;cursor:pointer; }
+.review-classifications[open] summary { margin-bottom:10px; }
+.review-side-controls { display:flex;gap:4px;padding:3px;background:var(--dg-paper);border-radius:10px;margin-bottom:8px; }
 .review-side-controls button { flex:1;padding:7px 6px;border:0;background:transparent;border-radius:8px;color:var(--text-muted);font:inherit;font-size:12px;cursor:pointer; }
 .review-side-controls button[aria-pressed="true"] { background:var(--dg-green);color:var(--dg-on-green); }
 .review-count-table { width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;font-variant-numeric:tabular-nums; }
@@ -481,24 +509,22 @@ button,input,select,textarea { font-family:inherit; }
 .review-count-table thead th:first-child { width:42%; }
 .review-count-table td { text-align:center; }
 .review-count-table td button { width:100%;min-height:28px;font:inherit;border:0;border-radius:6px;background:transparent;color:var(--dg-muted);cursor:pointer; }
+.review-count-table .review-metric-value { font-weight:inherit; }
 .review-count-table tr { --review-count-color:var(--text-main); }
-.review-count-table tr:is([data-quality="best"],[data-quality="beyond"],[data-quality="precise"]) { --review-count-color:var(--dg-green); }
+.review-count-table tr[data-quality="best"] { --review-count-color:var(--dg-green); }
 .review-count-table tr[data-quality="book"] { --review-count-color:var(--dg-blue); }
-.review-count-table tr:is([data-quality="inaccuracy"],[data-quality="trap"]) { --review-count-color:var(--dg-gold); }
+.review-count-table tr[data-quality="inaccuracy"] { --review-count-color:var(--dg-gold); }
 .review-count-table tr[data-quality="mistake"] { --review-count-color:light-dark(#965034,#e9aa89); }
 .review-count-table tr[data-quality="blunder"] { --review-count-color:var(--dg-red); }
 .review-count-table tr:is([data-quality="forced"],[data-quality="unknown"]) { --review-count-color:var(--dg-muted); }
-.review-count-table tr[data-quality] th::before { content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-inline-end:6px;vertical-align:2px;background:var(--review-count-color); }
+.review-count-table tr:not([data-quality="total"]) th::before { content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-inline-end:6px;vertical-align:2px;background:var(--review-count-color); }
 .review-count-table td button.review-count-positive { color:var(--review-count-color); }
 .review-count-table tr[data-quality="blunder"] .review-count-positive { background:var(--dg-red-soft);font-weight:700; }
 .review-count-table td button:hover { background:var(--dg-green-soft); }
 .review-count-table td button[aria-pressed="true"]:enabled { background:var(--dg-green);color:var(--dg-on-green); }
 .review-count-table td button:disabled { color:var(--dg-muted);cursor:default; }
-.review-aux-start th,.review-aux-start td { border-top:1px solid var(--border-color);padding-top:8px; }
+.review-count-table tr[data-quality="book"] :is(th,td) { border-top:1px solid var(--border-color);padding-top:5px; }
 .review-count-note { font-size:11px;color:var(--text-muted);line-height:1.65;margin:9px 0 0; }
-.review-selection { display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0; }
-.review-selection p { font-size:12px;color:var(--text-muted);margin:0; }
-.review-selection button { flex-shrink:0;font-size:11px; }
 .review-practice-batch { width:100%;margin:0 0 14px;background:var(--dg-green-soft);color:var(--brand-green); }
 .review-empty { padding:24px 8px;font-size:13px;color:var(--text-muted); }
 .review-move-jump { padding:2px 0;background:none;border:0;color:var(--text-main);font:inherit;font-size:16px;font-weight:650;cursor:pointer; }

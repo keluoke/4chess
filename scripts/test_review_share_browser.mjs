@@ -44,11 +44,24 @@ try {
     });
     app.applyReviewResult(result);
     app.reviewOverview.show('overview');
+    app.boardUI.container.style.setProperty('--board-light', '#d4e5d3');
+    const canvas = document.getElementById('review-share-preview');
+    const ctx = canvas.getContext('2d');
+    const fillText = ctx.fillText.bind(ctx);
+    window.reportCoordinates = [];
+    ctx.fillText = (text, x, y, maxWidth) => {
+      if (x === 82 && /^[1-8]$/.test(text)) window.reportCoordinates.push(text);
+      fillText(text, x, y, maxWidth);
+    };
     return { accuracy: [result.accuracyWhite, result.accuracyBlack], path: app.evalChart.linePath.getAttribute('d') };
   });
   await page.locator('#review-share-open').click();
   await page.locator('#review-share-png:not([disabled])').waitFor();
   assert.equal(await page.locator('#review-share-preview').evaluate(canvas => canvas.width), 1080);
+  const pixel = (canvas, x, y) => canvas.evaluate((element, [left, top]) =>
+    Array.from(element.getContext('2d').getImageData(left, top, 1, 1).data), [x, y]);
+  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 89, 789), [212, 229, 211, 255], 'Whole-game diagram uses the board theme');
+  assert.deepEqual(await page.evaluate(() => reportCoordinates.slice(0, 8)), ['1', '2', '3', '4', '5', '6', '7', '8'], 'The black move is drawn from Black’s side');
   const download = page.waitForEvent('download');
   await page.locator('#review-share-png').click();
   const png = await download;
@@ -112,6 +125,29 @@ try {
   await view.goto(origin + shared.pathname + '#review=invalid');
   await view.waitForFunction(() => !document.getElementById('snapshot-status').hidden && /invalid|损坏/.test(document.getElementById('snapshot-status').textContent));
   assert(await view.locator('#snapshot-report').isHidden());
+
+  await page.locator('#review-share-close').click();
+  await page.locator('#review-report-workbench').click();
+  await page.evaluate(() => __maiaStudioApp.boardUI.setOrientation('black'));
+  await page.locator('#review-clear-filter').click();
+  await page.locator('.review-list-modes [data-filter="moves"]').click();
+  await page.locator('#blunder-list .blunder-card[data-ply="4"]').getByRole('button', { name: 'Share card' }).click();
+  const moveCard = page.locator('#share-card-canvas');
+  assert.deepEqual(await pixel(moveCard, 55, 219), [212, 229, 211, 255], 'Single move matches the board’s light square');
+  assert.deepEqual(await pixel(moveCard, 30, 30), [238, 243, 237, 255], 'Single move uses the diagnosis paper background');
+  for (const [format, width, height] of [['landscape', 1200, 675], ['portrait', 1080, 1350]]) {
+    await page.locator(`#share-card-dialog [data-share-format="${format}"]`).click();
+    await page.locator('#btn-share-card-download:enabled').waitFor();
+    const exported = page.waitForEvent('download');
+    await page.locator('#btn-share-card-download').click();
+    const image = await exported;
+    const data = fs.readFileSync(await image.path());
+    assert.deepEqual([data.readUInt32BE(16), data.readUInt32BE(20)], [width, height]);
+    assert.match(image.suggestedFilename(), new RegExp(`-${format}\\.png$`));
+    if (process.env.TEST_SHARE_SCREENSHOT) await image.saveAs(process.env.TEST_SHARE_SCREENSHOT.replace(/\.png$/, `-move-${format}.png`));
+  }
+  await page.locator('#btn-share-card-copy').click();
+  await page.locator('#share-card-status').getByText('Copied PNG image to clipboard.', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
 
   const version = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'))).version;

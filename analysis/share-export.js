@@ -1,6 +1,9 @@
 import qrcode from '../lib/review-qr.js?v=20261124-checkup-cards-r2';
 
 export const CHECKUP_URL = 'https://4chess.cc/analysis/?tab=checkup';
+export const SHARE_PAPER = {
+  ink: '#192e23', muted: '#4d6355', green: '#146b49', line: '#d6e2d8', paper: '#eef3ed'
+};
 
 export function canvasPng(canvas) {
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));

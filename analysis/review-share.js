@@ -1,8 +1,8 @@
-import { t, getLang } from './i18n.js?v=20261124-checkup-cards-r2';
+import { t, getLang } from './i18n.js?v=20261124-divergence-cards';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards } from './share-card.js?v=20261124-checkup-cards-r2';
+import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-divergence-cards';
 import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
-import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-checkup-cards-r2';
+import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-divergence-cards';
 
 const VIEWER = 'https://4chess.cc/analysis/shared.html';
 const byId = id => document.getElementById(id);
@@ -45,7 +45,7 @@ function drawChart(ctx, report, x, y, width, height) {
   });
 }
 
-async function drawReport(canvas, report, url, isCurrent) {
+async function drawReport(canvas, report, url, theme, isCurrent) {
   const pieces = await prepareShareBoards();
   if (!isCurrent()) return false;
   const comparisons = report.plies.filter(move => move.kind && move.best.length &&
@@ -104,19 +104,28 @@ async function drawReport(canvas, report, url, isCurrent) {
     const probability = isTrap ? move.playedProb : move.maiaProb;
     const best = move.best[0];
     const amount = isTrap ? move.playedLoss : move.maiaLoss;
-    const arrows = [{ ...parseUciSquares(best.uci), color: '#285fb9' }, { ...parseUciSquares(human.uci), color: '#dd9b26' }];
+    const role = isTrap ? 'played' : 'maia';
+    const arrows = [{ ...parseUciSquares(best.uci), role: 'stockfish' }, { ...parseUciSquares(human.uci), role }];
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(60, y, 960, 282);
-    drawShareBoard(ctx, { board: parseFenBoard(move.fenBefore), orientation: 'white', arrows }, pieces, 78, y + 18, 246);
+    const board = parseFenBoard(move.fenBefore);
+    drawShareBoard(ctx, { board, orientation: board.turn === 'b' ? 'black' : 'white', arrows, theme }, pieces, 78, y + 18, 246);
     ctx.fillStyle = '#16382f';
     ctx.font = '650 30px system-ui';
     fit(ctx, move.number + (move.turn === 'w' ? '. ' : '… ') + move.san + ' · ' + t('snapshotKind_' + move.kind), 360, y + 30, 630);
     ctx.font = '550 29px system-ui';
-    ctx.fillStyle = '#285fb9';
-    fit(ctx, 'Stockfish · ' + best.san, 360, y + 94, 630);
-    ctx.fillStyle = '#865015';
-    fit(ctx, (isTrap ? t('snapshotPlayed') : 'Maia') + ' · ' + human.san +
-      (probability !== null ? ' · ' + probability.toFixed(1) + '%' : ''), 360, y + 145, 630);
+    const choices = [
+      ['stockfish', 'Stockfish · ' + best.san],
+      [role, (isTrap ? t('snapshotPlayed') : 'Maia') + ' · ' + human.san +
+        (probability !== null ? ' · ' + probability.toFixed(1) + '%' : '')]
+    ];
+    for (const [index, [arrowRole, label]] of choices.entries()) {
+      const top = y + 94 + index * 51;
+      ctx.fillStyle = theme[arrowRole];
+      ctx.fillRect(360, top + 8, 14, 14);
+      ctx.fillStyle = '#16382f';
+      fit(ctx, label, 388, top, 602);
+    }
     ctx.font = '500 25px system-ui';
     ctx.fillStyle = '#365248';
     const lossText = amount === null ? '' : t(isTrap ? 'snapshotPlayedLoss' : 'snapshotMaiaLoss', { loss: (amount / 100).toFixed(2) });
@@ -195,7 +204,8 @@ export class ReviewShare {
       let url = null;
       try { url = VIEWER + '#' + new URLSearchParams({ review: await encodeReviewSnapshot(snapshot), lang: getLang() }).toString(); }
       catch { /* PNG export also works without browser compression support. */ }
-      if (!(await drawReport(this.canvas, report, url, current)) || !current()) return;
+      const theme = readStudioShareBoard(byId('board-container'));
+      if (!(await drawReport(this.canvas, report, url, theme, current)) || !current()) return;
       const blob = await canvasPng(this.canvas);
       if (!current()) return;
       this.blob = blob;

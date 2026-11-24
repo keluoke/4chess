@@ -61,7 +61,7 @@ try {
   await page.keyboard.press('End');
   assert.deepEqual(await page.locator('#board-container').boundingBox(), rect);
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3 && document.querySelectorAll('#maia-candidate-lines .candidate-line').length === 3, null, { timeout: 60000 });
-  if ((process.env.STUDIO_LANG || 'zh') === 'en') assert(!/全部|妙手|俗手/.test(await page.locator('.divergence-filters').innerText()));
+  if ((process.env.STUDIO_LANG || 'zh') === 'en') assert(!/全部|妙手|俗手|突破直觉|直觉陷阱/.test(await page.locator('.review-list-modes, .review-intuition-grid').allTextContents()));
   if (process.env.STUDIO_SCREENSHOT) await page.screenshot({ path: process.env.STUDIO_SCREENSHOT });
   const count = downloads.length;
   await page.reload();

@@ -118,13 +118,41 @@ try {
   await page.locator('#btn-review-overview').click();
   await page.locator('#review-report-side [data-practice-side="b"]').click();
   await page.locator('#review-report-workbench').click();
+  const classifications = page.locator('#review-classifications');
+  assert.equal(await classifications.getAttribute('open'), null, 'Traditional classifications start collapsed');
   assert.equal(await page.locator('.review-side-controls button[aria-pressed="true"]').getAttribute('data-review-side'), 'b', 'Initial selection follows the entry view');
-  assert.equal(await count('b', 'trap').innerText(), '—', 'An unrun intuition scan cannot claim zero traps');
-  assert.equal(await count('w', 'precise').innerText(), '—');
-  const preciseFilter = page.getByRole('button', { name: /^Precise intuition\s*\(/ });
-  assert.match(await preciseFilter.innerText(), /—/);
-  await page.evaluate(() => { syntheticReview.engineOnly = false; __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false }); });
-  assert.equal(await count('b', 'trap').innerText(), '1'); assert.equal(await count('b', 'beyond').innerText(), '1');
+  const metric = (side, quality) => count(side, quality).locator('.review-metric-value');
+  const listMode = mode => page.locator(`.review-list-modes [data-filter="${mode}"]`);
+  assert.equal(await metric('b', 'trap').innerText(), '—', 'An unrun intuition scan cannot claim zero traps');
+  assert.equal(await metric('w', 'precise').innerText(), '—');
+  assert.equal(await count('all', 'precise').isDisabled(), true);
+  assert(await page.locator('#review-overview #intuition-toggle').isVisible());
+  assert.deepEqual(await page.locator('.review-intuition-card').evaluateAll(cards => cards.map(card => card.dataset.kind)), ['trap', 'beyond', 'precise']);
+  assert.deepEqual(await page.locator('.review-engine-value strong').allTextContents(), ['86.3', '80.1']);
+  assert.equal(await page.locator('.review-list-modes [data-filter]').count(), 2);
+  await classifications.locator('summary').click();
+  await page.evaluate(() => {
+    __maiaStudioApp.intuitionReview.state = 'partial';
+    __maiaStudioApp.applyReviewResult({
+      ...syntheticReview, engineOnly: false, allMoves: syntheticReview.allMoves.map((move, index) => ({
+        ...move, _predMoves: index === 3 ? [{ uci: move.uci }] : [],
+        ...(index === 3 ? {} : { divergenceStatus: 'unconfirmed' })
+      }))
+    }, { refreshPosition: false });
+  });
+  assert.equal(await page.locator('#review-intuition-coverage').innerText(), 'Maia scanned 1/14 moves');
+  assert.equal(await page.locator('#intuition-toggle').innerText(), 'Retry scan');
+  assert.equal(await metric('b', 'trap').innerText(), '1');
+  assert.equal(await metric('w', 'trap').innerText(), '—', 'An incomplete scan only shows confirmed counts');
+  assert.notEqual(await classifications.getAttribute('open'), null, 'Enrichment preserves disclosure state');
+  await page.evaluate(() => {
+    syntheticReview.engineOnly = false;
+    __maiaStudioApp.intuitionReview.state = 'done';
+    __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false });
+  });
+  assert.equal(await metric('b', 'trap').innerText(), '1'); assert.equal(await metric('b', 'beyond').innerText(), '1');
+  assert.equal(await metric('w', 'trap').innerText(), '0');
+  assert.equal(await page.locator('#review-overview #intuition-toggle').isHidden(), true);
   assert.equal(await count('b', 'quality:unknown').innerText(), '1'); assert.equal(await count('w', 'quality:forced').innerText(), '1');
   const appearance = button => button.evaluate(el => {
     const style = getComputedStyle(el);
@@ -137,19 +165,22 @@ try {
   assert.notEqual(mistakeStyle[0], blunderStyle[0]);
   assert.notEqual(mistakeStyle[1], blunderStyle[1]);
   assert.equal(blunderStyle[2], '700');
-  assert.equal(await count('w', 'precise').innerText(), '1');
+  assert.equal(await metric('w', 'precise').innerText(), '1');
   await count('w', 'precise').click();
-  assert.equal(await preciseFilter.getAttribute('aria-pressed'), 'true');
-  assert.equal(await preciseFilter.locator('#filter-count-precise').innerText(), '1');
+  assert.equal(await count('w', 'precise').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#review-selection-label').innerText(), 'White · Precise intuition · 1 moves');
   assert.equal(await page.locator('.review-tag-precise').innerText(), 'Precise intuition');
   assert.match(await page.locator('.review-card-reason').innerText(), /0\.28.*2\.5 percentage points/);
-  await page.locator('.filter-pill[data-filter="moves"]').click();
-  await preciseFilter.click();
+  await listMode('moves').click();
+  assert.equal(await page.locator('.blunder-card').count(), 7, 'All moves preserves the selected side');
+  await count('all', 'precise').click();
   assert.equal(await page.locator('.blunder-card').count(), 1);
-  assert.equal(await count('w', 'precise').getAttribute('aria-pressed'), 'true');
+  assert.equal(await count('all', 'precise').getAttribute('aria-pressed'), 'true');
   await page.locator('#review-clear-filter').click();
   assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [4, 5, 8, 13]);
   assert.equal(await page.locator('.review-turning-point').count(), 3);
+  await count('b', 'mistakes').click();
+  assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [4, 12]);
   await count('b', 'quality:blunder').click();
   assert.equal(await page.locator('.blunder-card').getAttribute('data-ply'), '12', 'The quality filter retains a non-key blunder');
   assert.equal(await count('b', 'quality:blunder').getAttribute('aria-pressed'), 'true');
@@ -211,6 +242,7 @@ try {
   assert.deepEqual(await page.evaluate(() => readPracticeOrigin()), branchBefore, 'Leaving practice restores the exact personal branch');
   assert.equal(await page.evaluate(() => __maiaStudioApp.isBranching), true);
   await page.locator('#review-clear-filter').click();
+  await classifications.locator('summary').click();
   await page.evaluate(() => { __maiaStudioApp.el.blunderList.closest('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-en.png'), fullPage: true });
   await page.locator('#btn-settings').click();
@@ -221,6 +253,7 @@ try {
   assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /对比 Stockfish/);
   await page.evaluate(() => { document.querySelector('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-zh.png'), fullPage: true });
+  await classifications.locator('summary').click();
   await count('b', 'quality:mistake').click();
   await page.locator('.blunder-card').screenshot({ path: path.join(output, 'quality-trap-card-zh.png') });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -280,8 +313,8 @@ try {
     assert(sticky.overviewBottom < sticky.barTop, 'The large overview scrolls above the sticky filters');
     assert(sticky.cardTop >= sticky.barBottom, 'Jumped card heading stays below the wrapped toolbar');
     assert(Math.abs(sticky.barHeight - sticky.recordedHeight) < 1, 'Wrapped filter height updates the navigation offset');
-    await page.locator('.filter-pill[data-filter="mistakes"]').click();
-    assert.equal(await page.locator('.filter-pill[data-filter="mistakes"]').getAttribute('aria-pressed'), 'true');
+    await listMode('moves').click();
+    assert.equal(await listMode('moves').getAttribute('aria-pressed'), 'true');
     const selected = await page.locator('.blunder-card').first().boundingBox();
     const toolbar = await page.locator('.review-filter-toolbar').boundingBox();
     assert(selected.y >= toolbar.y + toolbar.height - 1, 'Changing filters exposes the first card below the toolbar');
@@ -325,7 +358,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-checkup-cards-r2');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-divergence-cards');
     setLanguage('en');
     window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {

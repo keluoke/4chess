@@ -12,14 +12,19 @@ const output = path.join(root, 'artifacts/delivery-2026-10-25');
 fs.mkdirSync(output, { recursive: true });
 const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
-const releaseVersion = '20261124-checkup-cards-r2';
-const releaseModules = new Set([
- '/ui/theme.js', '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
- '/analysis/checkup-runner.js', '/analysis/checkup-archives.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/checkup-overview.js', '/analysis/study-store.js',
- '/analysis/checkup-fit.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js', '/analysis/share-export.js', '/analysis/challenge-link.js', '/analysis/challenge.js',
- '/engine/game-analyzer.js', '/engine/stockfish-inbrowser.js', '/engine/engine-preferences.js',
- '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
- '/engine/model-cache-client.js', '/engine/model-loader.js'
+const releaseModules = new Map([
+ ...[
+  '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
+  '/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/review-explorer.js', '/analysis/review-share.js', '/analysis/share-card.js',
+  '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
+  '/analysis/share-export.js', '/analysis/challenge.js'
+ ].map(path => [path, '20261124-divergence-cards']),
+ ...[
+  '/ui/theme.js', '/analysis/checkup-archives.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/study-store.js',
+  '/analysis/checkup-fit.js', '/analysis/challenge-link.js', '/engine/game-analyzer.js', '/engine/stockfish-inbrowser.js',
+  '/engine/engine-preferences.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
+  '/engine/model-cache-client.js', '/engine/model-loader.js'
+ ].map(path => [path, '20261124-checkup-cards-r2'])
 ]);
 const staleModuleRequests = [];
 globalThis.fetch = async (url, options) => {
@@ -31,7 +36,7 @@ globalThis.fetch = async (url, options) => {
 };
 const server = http.createServer(async (req, res) => {
  const url = new URL(req.url, 'http://localhost');
- if (releaseModules.has(url.pathname) && url.searchParams.get('v') !== releaseVersion) {
+ if (releaseModules.has(url.pathname) && url.searchParams.get('v') !== releaseModules.get(url.pathname)) {
   staleModuleRequests.push(url.pathname + url.search);
   res.writeHead(200, {'Content-Type':'application/javascript','Cache-Control':'public, max-age=31536000, immutable'});
   res.end('throw new Error("Cached workbench module from the previous release")');
@@ -179,7 +184,8 @@ try {
  const progress=trend.locator('.maia-trend-status');
  const extras=()=>trendPage.evaluate(()=>trendCalls.filter(call=>call.rating!==1800));
  await openTrend.waitFor();
- assert.equal(await trendPage.locator('main details').count(),0,'The workbench has no scattered help disclosures');
+ assert.equal(await trendPage.locator('main details:not(#review-classifications)').count(),0,'The workbench has no scattered help disclosures');
+ assert.equal(await trendPage.locator('#review-classifications').getAttribute('open'),null);
  assert.equal(await trendPage.locator('#review-summary details.review-score-details').count(),1);
  assert.equal(await trend.getAttribute('open'),null);
  assert.equal(await trend.locator('svg').count(),0);
@@ -359,15 +365,15 @@ try {
   }));
  });
  assert(offlineAssets.every(Boolean), 'Each local engine asset has one cached URL and is retrievable offline');
- const cachedReleaseModules = await offline.evaluate(async ({ paths, version }) => {
+ const cachedReleaseModules = await offline.evaluate(async entries => {
   const cacheVersion = new URL(navigator.serviceWorker.controller.scriptURL).searchParams.get('v');
   const cache = await caches.open('4chess-review-' + cacheVersion);
   const urls = (await cache.keys()).map(request => new URL(request.url));
-  return paths.every(path => {
+  return entries.every(([path, version]) => {
    const matches = urls.filter(url => url.pathname === path);
    return matches.length === 1 && matches[0].searchParams.get('v') === version;
   });
- }, { paths: [...releaseModules], version: releaseVersion });
+ }, [...releaseModules]);
  assert(cachedReleaseModules, 'Offline prefetch uses the same release URLs as the workbench module graph');
  assert.deepEqual(staleModuleRequests, [], 'A warm HTTP cache must not supply a module from the previous release');
  await offline.locator('#btn-mistake-bank').click();

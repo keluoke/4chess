@@ -5,7 +5,7 @@ import { animateStudy, cancelMotion, motionEnabled } from './workbench-motion.js
  * Supports drag-and-drop, click-to-move, legal move hints, flip, and vector SVG arrow overlay.
  */
 
-import { boardColors, arrowMarkers, drawBoardArrow, drawMoveBadge } from '../ui/board-visuals.js?v=20261117-ui';
+import { boardColors, arrowMarkers, drawBoardArrow, drawMoveBadge } from '../ui/board-visuals.js?v=20261124-divergence-cards';
 import { ChessBoard } from '../engine/chess-core.js';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 

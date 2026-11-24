@@ -1,8 +1,10 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { intuitionKind } from '../engine/review-policy.js?v=20261117-review-policy';
+import { BOARD_ARROW } from '../ui/board-visuals.js?v=20261124-divergence-cards';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { getLang, t } from './i18n.js?v=20261124-checkup-cards-r2';
+import { getLang, t } from './i18n.js?v=20261124-divergence-cards';
+import { canvasPng, drawShareQr, shareQr, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 export const SHARE_CARD_FORMATS = {
   landscape: { width: 1200, height: 675 },
@@ -53,7 +55,8 @@ export function buildShareCardSpec(move = {}, {
   orientation = 'white',
   white = '',
   black = '',
-  format = 'landscape'
+  format = 'landscape',
+  theme
 } = {}) {
   const fmt = SHARE_CARD_FORMATS[format] ? format : 'landscape';
   const dimensions = SHARE_CARD_FORMATS[fmt];
@@ -70,10 +73,11 @@ export function buildShareCardSpec(move = {}, {
   const maiaTopSan = move?.maiaTopSan || '';
   const playedMatchesBest = !!(bestUci && playedUci ? playedUci === bestUci : bestSan && playedSan && playedSan === bestSan);
   const useMaiaDivergence = playedMatchesBest && !!((maiaTopUci && maiaTopUci !== bestUci) || (maiaTopSan && maiaTopSan !== bestSan));
+  const usesMaia = useMaiaDivergence || !(playedUci || playedSan);
 
-  const humanSan = useMaiaDivergence ? maiaTopSan : (playedSan || maiaTopSan);
-  const humanUci = useMaiaDivergence ? maiaTopUci : (playedUci || maiaTopUci);
-  const rawProb = useMaiaDivergence
+  const humanSan = usesMaia ? maiaTopSan : playedSan;
+  const humanUci = usesMaia ? maiaTopUci : playedUci;
+  const rawProb = usesMaia
     ? (Number.isFinite(move?.maiaTopRawProb) ? move.maiaTopRawProb * 100 : (Number.isFinite(move?.maiaTopProb) ? move.maiaTopProb : null))
     : (Number.isFinite(move?.humanRawProbability) ? move.humanRawProbability * 100 : (Number.isFinite(move?.humanProbability) ? move.humanProbability : null));
   const probStr = Number.isFinite(rawProb) ? `${rawProb.toFixed(1)}%` : null;
@@ -93,7 +97,7 @@ export function buildShareCardSpec(move = {}, {
     if (probStr && humanSan && bestSan && humanSan !== bestSan) {
       headline = `${elo} Elo：${probStr} 会走 ${humanSan} — Stockfish 推荐 ${bestSan}`;
     } else if (bestSan && humanSan && humanSan !== bestSan) {
-      headline = `${moveNum}Stockfish 推荐 ${bestSan}（${useMaiaDivergence ? 'Maia 首选' : '实战'} ${humanSan}）`;
+      headline = `${moveNum}Stockfish 推荐 ${bestSan}（${usesMaia ? 'Maia 首选' : '实战'} ${humanSan}）`;
     } else if (bestSan) {
       headline = `${moveNum}引擎首选 ${bestSan}`;
     } else {
@@ -124,11 +128,11 @@ export function buildShareCardSpec(move = {}, {
   const arrows = [];
   const bestSq = parseUciSquares(bestUci);
   if (bestSq) {
-    arrows.push({ role: 'engine', color: '#3b82f6', ...bestSq, label: bestSan });
+    arrows.push({ role: 'stockfish', ...bestSq, label: bestSan });
   }
   const humanSq = parseUciSquares(humanUci);
   if (humanSq && (!bestSq || humanSq.from !== bestSq.from || humanSq.to !== bestSq.to)) {
-    arrows.push({ role: 'human', color: '#f59e0b', ...humanSq, label: humanSan });
+    arrows.push({ role: usesMaia ? 'maia' : 'played', ...humanSq, label: humanSan });
   }
 
   return {
@@ -136,6 +140,7 @@ export function buildShareCardSpec(move = {}, {
     dimensions,
     fen,
     board,
+    theme,
     orientation: orientation === 'black' ? 'black' : 'white',
     elo,
     lang,
@@ -188,67 +193,57 @@ function squareCoords(square, orientation, boardX, boardY, sqSize) {
   };
 }
 
-function drawCanvasArrow(ctx, fromPt, toPt, color, sqSize, studio) {
+function drawCanvasArrow(ctx, fromPt, toPt, color, sqSize) {
   const dx = toPt.x - fromPt.x;
   const dy = toPt.y - fromPt.y;
   const len = Math.hypot(dx, dy);
-  if (len < 4) return;
+  if (!len) return;
   const ux = dx / len;
   const uy = dy / len;
-  const headLen = sqSize * (studio ? 0.36 : 0.34);
-  const headWidth = sqSize * (studio ? 0.44 : 0.28);
-  const startOffset = sqSize * (studio ? 0.12 : 0.14);
-  const endOffset = studio ? headLen : headLen * 0.72;
-
-  const sx = fromPt.x + ux * startOffset;
-  const sy = fromPt.y + uy * startOffset;
-  const ex = toPt.x - ux * endOffset;
-  const ey = toPt.y - uy * endOffset;
+  const scale = sqSize / 100;
+  const { length, width, stroke } = BOARD_ARROW.primary;
+  const sx = fromPt.x + ux * BOARD_ARROW.start * scale;
+  const sy = fromPt.y + uy * BOARD_ARROW.start * scale;
+  const ex = toPt.x - ux * length * scale;
+  const ey = toPt.y - uy * length * scale;
+  const perpX = -uy * width * scale / 2;
+  const perpY = ux * width * scale / 2;
 
   ctx.save();
-  ctx.globalAlpha = studio ? 0.84 : 0.88;
-  ctx.strokeStyle = color;
+  ctx.globalAlpha = BOARD_ARROW.opacity;
   ctx.fillStyle = color;
-  ctx.lineWidth = studio ? sqSize * 0.14 : Math.max(6, sqSize * 0.13);
-  ctx.lineCap = studio ? 'butt' : 'round';
+  // Fill the shaft and head together so their shared edge has the same opacity.
+  const halfShaft = stroke * scale / 2;
+  const shaftX = -uy * halfShaft, shaftY = ux * halfShaft;
   ctx.beginPath();
-  ctx.moveTo(sx, sy);
-  ctx.lineTo(ex, ey);
-  ctx.stroke();
-
-  const inset = studio ? 0 : sqSize * 0.08;
-  const tipX = toPt.x - ux * inset;
-  const tipY = toPt.y - uy * inset;
-  const baseX = tipX - ux * headLen;
-  const baseY = tipY - uy * headLen;
-  const perpX = -uy * (headWidth / 2);
-  const perpY = ux * (headWidth / 2);
-
-  ctx.beginPath();
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(baseX + perpX, baseY + perpY);
-  ctx.lineTo(baseX - perpX, baseY - perpY);
+  ctx.moveTo(sx + shaftX, sy + shaftY);
+  ctx.lineTo(ex + shaftX, ey + shaftY);
+  ctx.lineTo(ex + perpX, ey + perpY);
+  ctx.lineTo(toPt.x, toPt.y);
+  ctx.lineTo(ex - perpX, ey - perpY);
+  ctx.lineTo(ex - shaftX, ey - shaftY);
+  ctx.lineTo(sx - shaftX, sy - shaftY);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
 }
 
 function wrapTextLines(ctx, text, maxWidth) {
-  const words = String(text || '').split(/(\s+)/);
   const lines = [];
   let current = '';
-  for (const token of words) {
-    const test = current + token;
-    if (ctx.measureText(test).width <= maxWidth) {
-      current = test;
-    } else if (!current) {
-      for (const ch of token) {
-        if (ctx.measureText(current + ch).width <= maxWidth) current += ch;
-        else { if (current) lines.push(current.trimEnd()); current = ch; }
+  for (const token of String(text || '').trim().split(/(\s+)/)) {
+    if (ctx.measureText(current + token).width <= maxWidth) {
+      current += token;
+      continue;
+    }
+    if (current.trim()) lines.push(current.trimEnd());
+    current = '';
+    for (const ch of token.trimStart()) {
+      if (ctx.measureText(current + ch).width > maxWidth && current) {
+        lines.push(current);
+        current = '';
       }
-    } else {
-      lines.push(current.trimEnd());
-      current = token.trimStart();
+      current += ch;
     }
   }
   if (current.trim()) lines.push(current.trimEnd());
@@ -257,8 +252,13 @@ function wrapTextLines(ctx, text, maxWidth) {
 
 export async function prepareShareBoards() { return getPieceImages(); }
 
+const defaultBoardTheme = {
+  light: '#e8eee7', dark: '#9caf9f', frame: '#ffffff', coordinate: '#284634',
+  stockfish: '#2e6086', maia: '#966033', played: '#b94950'
+};
+
 export function readStudioShareBoard(host) {
-  if (!host) return null;
+  if (!host?.isConnected) return defaultBoardTheme;
   const probe = host.ownerDocument.createElement('span');
   probe.hidden = true;
   host.append(probe);
@@ -284,39 +284,33 @@ export function drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize
   ctx.save();
   const sqSize = boardSize / 8;
 
-  const theme = spec.theme;
-  if (theme) {
-    ctx.fillStyle = theme.frame;
-    ctx.beginPath();
-    ctx.roundRect(boardX - 5, boardY - 5, boardSize + 10, boardSize + 10, boardSize * .024 + 4);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.roundRect(boardX, boardY, boardSize, boardSize, boardSize * .024);
-    ctx.clip();
-  } else {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.fillRect(boardX - 6, boardY - 6, boardSize + 12, boardSize + 12);
-  }
+  const theme = spec.theme || defaultBoardTheme;
+  ctx.fillStyle = theme.frame;
+  ctx.beginPath();
+  ctx.roundRect(boardX - 5, boardY - 5, boardSize + 10, boardSize + 10, boardSize * .024 + 4);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(boardX, boardY, boardSize, boardSize, boardSize * .024);
+  ctx.clip();
 
   // Squares
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
       const isLight = (row + col) % 2 === 0;
-      ctx.fillStyle = isLight ? (theme?.light || '#f0d9b5') : (theme?.dark || '#b58863');
+      ctx.fillStyle = isLight ? theme.light : theme.dark;
       ctx.fillRect(boardX + col * sqSize, boardY + row * sqSize, sqSize, sqSize);
     }
   }
 
   // Coordinates
   ctx.font = `600 ${Math.round(sqSize * 0.18)}px system-ui, -apple-system, sans-serif`;
+  ctx.fillStyle = theme.coordinate;
   for (let i = 0; i < 8; i++) {
     const rankLabel = spec.orientation === 'black' ? String(i + 1) : String(8 - i);
     const fileLabel = spec.orientation === 'black' ? String.fromCharCode(104 - i) : String.fromCharCode(97 + i);
-    ctx.fillStyle = theme?.coordinate || (i % 2 === 0 ? '#926745' : '#ebd1a7');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(rankLabel, boardX + 4, boardY + i * sqSize + 3);
-    ctx.fillStyle = theme?.coordinate || (i % 2 === 0 ? '#ebd1a7' : '#926745');
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
     ctx.fillText(fileLabel, boardX + (i + 1) * sqSize - 4, boardY + boardSize - 3);
@@ -327,7 +321,7 @@ export function drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize
     const pos = squareCoords(item.square, spec.orientation, boardX, boardY, sqSize);
     const img = pieceImages[item.piece];
     if (img) {
-      const pad = sqSize * (theme ? 0.05 : 0.04);
+      const pad = sqSize * 0.05;
       ctx.drawImage(img, pos.x + pad, pos.y + pad, sqSize - pad * 2, sqSize - pad * 2);
     } else {
       ctx.fillStyle = item.piece === item.piece.toUpperCase() ? '#ffffff' : '#111827';
@@ -342,117 +336,112 @@ export function drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize
   for (const arrow of spec.arrows) {
     const fromPos = squareCoords(arrow.from, spec.orientation, boardX, boardY, sqSize);
     const toPos = squareCoords(arrow.to, spec.orientation, boardX, boardY, sqSize);
-    drawCanvasArrow(ctx, { x: fromPos.cx, y: fromPos.cy }, { x: toPos.cx, y: toPos.cy }, arrow.color, sqSize, Boolean(theme));
+    drawCanvasArrow(ctx, { x: fromPos.cx, y: fromPos.cy }, { x: toPos.cx, y: toPos.cy }, theme[arrow.role], sqSize);
   }
   ctx.restore();
 }
 
+function moveShareUrl(spec) {
+  if (!new ChessBoard(spec.fen).isValid) return null;
+  const params = new URLSearchParams({
+    fen: spec.fen, orientation: spec.orientation, lang: spec.lang, elo: spec.elo
+  });
+  return 'https://4chess.cc/analysis/#' + params.toString().replaceAll('%2F', '/');
+}
+
+function drawShareLegend(ctx, spec, theme, x, y, width) {
+  const roles = { stockfish: 'Stockfish', maia: 'Maia', played: t('snapshotPlayed') };
+  ctx.font = '600 22px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  let left = x;
+  for (const { role, label } of spec.arrows) {
+    if (!label) continue;
+    const text = roles[role] + ' · ' + label;
+    const itemWidth = Math.min(width, ctx.measureText(text).width + 43);
+    if (left > x && left + itemWidth > x + width) {
+      left = x;
+      y += 43;
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(left, y, itemWidth, 34, 8);
+    ctx.fill();
+    ctx.fillStyle = theme[role];
+    ctx.beginPath();
+    ctx.arc(left + 16, y + 17, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = SHARE_PAPER.ink;
+    ctx.fillText(text, left + 28, y + 17, itemWidth - 35);
+    left += itemWidth + 9;
+  }
+}
+
 export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => true } = {}) {
-  if (!canvas) return canvas;
-  const pieceImages = await getPieceImages();
+  if (!canvas) return null;
+  const pieceImages = await prepareShareBoards();
   if (!isCurrent()) return null;
   const { width, height } = spec.dimensions;
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return canvas;
+  if (!ctx) return null;
 
-  const isPortrait = spec.format === 'portrait';
-
-  // Background gradient
-  const grad = ctx.createLinearGradient(0, 0, width, height);
-  grad.addColorStop(0, '#0f172a');
-  grad.addColorStop(1, '#1e293b');
-  ctx.fillStyle = grad;
+  const { paper, line, green, ink, muted } = SHARE_PAPER;
+  ctx.fillStyle = paper;
   ctx.fillRect(0, 0, width, height);
-
-  // Subtle border frame
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+  ctx.strokeStyle = line;
   ctx.lineWidth = 2;
-  ctx.strokeRect(16, 16, width - 32, height - 32);
-
-  // Board geometry
-  const boardSize = isPortrait ? 860 : 576;
-  const boardX = isPortrait ? Math.round((width - boardSize) / 2) : 48;
-  const boardY = isPortrait ? 310 : Math.round((height - boardSize) / 2);
-  drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize);
-
-  // Text panel
-  const textX = isPortrait ? boardX : boardX + boardSize + 44;
-  const textY = isPortrait ? 64 : boardY + 12;
-  const textWidth = isPortrait ? boardSize : width - textX - 48;
-
-  // Badge pill
-  ctx.font = '700 20px system-ui, -apple-system, sans-serif';
-  const badgeW = ctx.measureText(spec.badge).width + 32;
-  ctx.fillStyle = 'rgba(59, 130, 246, 0.22)';
-  ctx.strokeStyle = 'rgba(96, 165, 250, 0.6)';
-  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.roundRect(textX, textY, badgeW, 38, 19);
-  ctx.fill();
+  ctx.roundRect(18, 18, width - 36, height - 36, 22);
   ctx.stroke();
-  ctx.fillStyle = '#93c5fd';
+
+  const portrait = spec.format === 'portrait';
+  const theme = spec.theme || defaultBoardTheme;
+  const boardSize = portrait ? 770 : 568;
+  const boardX = portrait ? (width - boardSize) / 2 : 48;
+  const boardY = portrait ? 318 : Math.round((height - boardSize) / 2);
+  drawShareBoard(ctx, { ...spec, theme }, pieceImages, boardX, boardY, boardSize);
+  const textX = portrait ? boardX : boardX + boardSize + 40;
+  const top = portrait ? 46 : 64;
+  const textWidth = portrait ? boardSize : width - textX - 48;
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(spec.badge, textX + 16, textY + 19);
-
-  // Headline
-  const headlineY = textY + 62;
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = `700 ${isPortrait ? 38 : 34}px system-ui, -apple-system, sans-serif`;
   ctx.textBaseline = 'top';
+  ctx.fillStyle = green;
+  ctx.font = '700 22px system-ui, sans-serif';
+  ctx.fillText(spec.badge, textX, top, textWidth);
+
+  const headlineY = top + 44;
+  const lineHeight = portrait ? 52 : 45;
+  ctx.fillStyle = ink;
+  ctx.font = `700 ${portrait ? 43 : 37}px system-ui, sans-serif`;
   const lines = wrapTextLines(ctx, spec.headline, textWidth).slice(0, 3);
-  const lineH = isPortrait ? 50 : 46;
-  lines.forEach((line, idx) => ctx.fillText(line, textX, headlineY + idx * lineH));
+  lines.forEach((text, index) => ctx.fillText(text, textX, headlineY + index * lineHeight));
 
-  // Subline
   if (spec.subline) {
-    const subY = headlineY + lines.length * lineH + 16;
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 22px system-ui, -apple-system, sans-serif';
-    const subLines = wrapTextLines(ctx, spec.subline, textWidth).slice(0, 2);
-    subLines.forEach((line, idx) => ctx.fillText(line, textX, subY + idx * 30));
+    const subtitleY = headlineY + lines.length * lineHeight + 9;
+    ctx.fillStyle = muted;
+    ctx.font = '500 22px system-ui, sans-serif';
+    const sublines = wrapTextLines(ctx, spec.subline, textWidth).slice(0, 2);
+    sublines.forEach((text, index) => ctx.fillText(text, textX, subtitleY + index * 28));
   }
 
-  // Legend pills
-  const legendY = isPortrait ? boardY + boardSize + 38 : height - 138;
-  let legendX = textX;
-  const humanLegendLabel = spec.useMaiaDivergence
-    ? (spec.lang === 'en' ? 'Maia' : 'Maia 首选')
-    : (spec.lang === 'en' ? 'Human / Played' : '人类 / 实战');
-  const legendItems = [
-    spec.bestSan ? { color: '#3b82f6', text: `Stockfish: ${spec.bestSan}` } : null,
-    spec.humanSan ? { color: '#f59e0b', text: `${humanLegendLabel}: ${spec.humanSan}` } : null
-  ].filter(Boolean);
+  const url = moveShareUrl(spec);
+  // Larger modules survive the downscaling used by chat apps.
+  const qrSize = 230;
+  const qrRight = textX + textWidth;
+  const footerY = portrait ? height - 94 : height - 124;
+  const legendY = portrait ? boardY + boardSize + 21 : 360;
+  drawShareLegend(ctx, spec, theme, textX, legendY, textWidth - (portrait && url ? qrSize + 25 : 0));
 
-  ctx.font = '600 20px system-ui, -apple-system, sans-serif';
-  for (const item of legendItems) {
-    const pillW = ctx.measureText(item.text).width + 44;
-    if (legendX + pillW > textX + textWidth && legendX > textX) {
-      break;
-    }
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-    ctx.beginPath();
-    ctx.roundRect(legendX, legendY, pillW, 40, 10);
-    ctx.fill();
-    ctx.fillStyle = item.color;
-    ctx.beginPath();
-    ctx.arc(legendX + 18, legendY + 20, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#e2e8f0';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(item.text, legendX + 34, legendY + 20);
-    legendX += pillW + 14;
-  }
-
-  // Watermark
-  ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
-  ctx.font = '600 20px system-ui, -apple-system, sans-serif';
-  ctx.textAlign = isPortrait ? 'center' : 'left';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(spec.watermark, isPortrait ? width / 2 : textX, height - 38);
-
+  const footerWidth = textWidth - (url ? qrSize + 20 : 0);
+  if (url) drawShareQr(ctx, shareQr(url), qrRight, portrait ? height - 252 : height - 265, qrSize);
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = green;
+  ctx.font = '650 22px system-ui, sans-serif';
+  if (url) ctx.fillText(t('shareCardScanPosition'), textX, footerY, footerWidth);
+  ctx.fillStyle = muted;
+  ctx.font = '550 19px system-ui, sans-serif';
+  ctx.fillText(spec.watermark, textX, footerY + 32, footerWidth);
   return canvas;
 }
 
@@ -539,23 +528,29 @@ export class ShareCardModal {
       btn.setAttribute('aria-pressed', String(btn.dataset.shareFormat === this.format));
     }
     if (!this.currentMove || !this.canvas) return;
+    this.exportGeneration++;
+    this.btnCopy.disabled = this.btnDownload.disabled = true;
+    const orientation = this.app.boardUI?.orientation || (parseFenBoard(this.currentMove.fenBefore || this.currentMove.fen).turn === 'b' ? 'black' : 'white');
     const spec = buildShareCardSpec(this.currentMove, {
       elo: this.currentContext.elo || this.app.currentElo || 1900,
       lang: getLang(),
-      orientation: this.app.boardUI?.orientation || 'white',
+      orientation,
       white: this.currentContext.white || this.app.el?.metaWhite?.textContent || '',
       black: this.currentContext.black || this.app.el?.metaBlack?.textContent || '',
-      format: this.format
+      format: this.format,
+      theme: readStudioShareBoard(document.getElementById('board-container'))
     });
-    await renderShareCardCanvas(spec, this.canvas, { isCurrent: () => renderGen === this.renderGeneration && this.allowed() });
+    const isCurrent = () => renderGen === this.renderGeneration && this.allowed();
+    const rendered = await renderShareCardCanvas(spec, this.canvas, { isCurrent });
+    if (isCurrent()) this.btnCopy.disabled = this.btnDownload.disabled = !rendered;
   }
 
   async downloadPng() {
-    if (!this.allowed() || !this.canvas || !this.dialog?.open) return;
+    if (!this.allowed() || !this.canvas || !this.dialog?.open || this.btnDownload.disabled) return;
     const gen = this.exportGeneration;
     const format = this.format;
     const moveNum = this.currentMove?.moveNumber || 'pos';
-    const blob = await new Promise(resolve => this.canvas.toBlob(resolve, 'image/png'));
+    const blob = await canvasPng(this.canvas);
     if (!blob || !this.allowed() || gen !== this.exportGeneration || !this.dialog?.open) return;
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -567,10 +562,10 @@ export class ShareCardModal {
   }
 
   async copyImage() {
-    if (!this.allowed() || !this.canvas || !this.dialog?.open) return;
+    if (!this.allowed() || !this.canvas || !this.dialog?.open || this.btnCopy.disabled) return;
     const gen = this.exportGeneration;
     try {
-      const blob = await new Promise(resolve => this.canvas.toBlob(resolve, 'image/png'));
+      const blob = await canvasPng(this.canvas);
       if (!blob || !this.allowed() || gen !== this.exportGeneration || !this.dialog?.open) return;
       if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
         if (this.statusEl) this.statusEl.textContent = t('shareCardCopyUnsupported');

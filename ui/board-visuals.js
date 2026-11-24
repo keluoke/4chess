@@ -1,5 +1,11 @@
 // Both host overlays and the review board use an 800-unit canvas: one cell = 100.
 const NS = 'http://www.w3.org/2000/svg';
+export const BOARD_ARROW = {
+  start: 12, opacity: .84,
+  primary: { length: 36, width: 44, stroke: 14 },
+  secondary: { length: 26, width: 30, stroke: 8 }
+};
+
 export function boardColors() {
   const root = document.querySelector('#maia3-intuition-panel, .diverge-ui');
   const style = root && getComputedStyle(root);
@@ -9,19 +15,19 @@ export function boardColors() {
 
 export function arrowMarkers(prefix, colors) {
   return `<defs>${Object.entries(colors).map(([key, color]) => {
-    const length = key.endsWith('-secondary') ? 26 : 36;
-    const width = key.endsWith('-secondary') ? 30 : 44;
+    const { length, width } = BOARD_ARROW[key.endsWith('-secondary') ? 'secondary' : 'primary'];
     return `<marker id="${prefix}-${key}" viewBox="0 0 ${length} ${width}" refX="0" refY="${width / 2}" markerWidth="${length}" markerHeight="${width}" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 ${length} ${width / 2} 0 ${width}Z" fill="${color}"/></marker>`;
   }).join('')}</defs>`;
 }
 
-export function drawBoardArrow(group, { from, to, color, marker, role, secondary = false, strokeWidth = secondary ? 8 : 14, opacity = .84, dashed = false }) {
+export function drawBoardArrow(group, { from, to, color, marker, role, secondary = false, strokeWidth, opacity = BOARD_ARROW.opacity, dashed = false }) {
   const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy);
   if (!length || ![from.x, from.y, to.x, to.y].every(Number.isFinite)) return;
   const line = document.createElementNS(NS, 'line');
-  const headLength = secondary ? 26 : 36;
-  const values = { x1: from.x + dx / length * 12, y1: from.y + dy / length * 12, x2: to.x - dx / length * headLength, y2: to.y - dy / length * headLength,
-    stroke: color, 'stroke-width': strokeWidth, 'stroke-linecap': 'butt', 'marker-end': `url(#${marker})`, opacity, 'data-role': role };
+  const shape = BOARD_ARROW[secondary ? 'secondary' : 'primary'];
+  const values = { x1: from.x + dx / length * BOARD_ARROW.start, y1: from.y + dy / length * BOARD_ARROW.start,
+    x2: to.x - dx / length * shape.length, y2: to.y - dy / length * shape.length,
+    stroke: color, 'stroke-width': strokeWidth ?? shape.stroke, 'stroke-linecap': 'butt', 'marker-end': `url(#${marker})`, opacity, 'data-role': role };
   for (const [name, value] of Object.entries(values)) line.setAttribute(name, value);
   if (dashed) line.setAttribute('stroke-dasharray', '14 10');
   group.append(line);

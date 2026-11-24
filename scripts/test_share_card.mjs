@@ -44,8 +44,8 @@ assert.equal(enSpec.orientation, 'black');
 assert(enSpec.headline.includes('1900 Elo: 33.1% play Nxd1'));
 assert(enSpec.headline.includes('Stockfish plays Be6'));
 assert.equal(enSpec.arrows.length, 2);
-assert.equal(enSpec.arrows[0].role, 'engine');
-assert.equal(enSpec.arrows[1].role, 'human');
+assert.equal(enSpec.arrows[0].role, 'stockfish');
+assert.equal(enSpec.arrows[1].role, 'played');
 assert.equal(enSpec.watermark, '4chess.cc · Diverge');
 
 // 4. Portrait 3:4 spec in Chinese without probability
@@ -87,6 +87,7 @@ assert.equal(qb3Spec.useMaiaDivergence, true);
 assert.equal(qb3Spec.arrows.length, 2, 'Must include both Stockfish Qb3 and Maia Bg5 arrows');
 assert.equal(qb3Spec.arrows[0].from, 'd1');
 assert.equal(qb3Spec.arrows[1].from, 'c1');
+assert.equal(qb3Spec.arrows[1].role, 'maia');
 assert.equal(qb3Spec.arrows[1].label, 'Bg5');
 assert(qb3Spec.headline.includes('Bg5') && qb3Spec.headline.includes('Qb3'));
 assert.equal(qb3Spec.humanSan, 'Bg5');

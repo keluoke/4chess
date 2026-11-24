@@ -363,55 +363,6 @@ body {
 
 
 /* Blunder & Divergence Moments */
-.divergence-filters {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.filter-pill {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-color);
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 4px 11px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.filter-pill:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-main);
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-.filter-pill.active {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #fff;
-}
-
-.filter-pill.pill-beyond.active {
-  background: rgba(0, 210, 255, 0.15);
-  border-color: var(--brand-blue);
-  color: var(--brand-blue);
-}
-
-.filter-pill.pill-trap.active {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: var(--brand-gold);
-  color: var(--brand-gold);
-}
-
-
 .blunder-list {
   display: flex;
   flex-direction: column;
@@ -808,7 +759,6 @@ body{font-size:14px;user-select:auto}
 .divergence-content{padding:15px;background:var(--dg-gold-soft);border-radius:8px;font-size:12px;line-height:1.9;overflow-wrap:anywhere}
 .engine-status-pill{padding:4px 0;background:transparent;border:0;border-radius:0;font-size:10px}
 .review-metrics-card{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:18px;border-radius:9px;box-shadow:none;background:var(--dg-surface)}.metric-player-row{flex-direction:column;align-items:flex-start;gap:11px}.metric-divider{display:none}.metric-group{display:flex;flex-direction:column;gap:7px}.metric-value{font:27px var(--dg-mono);color:var(--text-main)}.side-badge.side-white,.side-badge.side-black{background:var(--dg-paper);border:1px solid var(--border-color);color:var(--text-main);font-size:10px;padding:3px 6px}
-.divergence-filters{gap:5px;flex-wrap:wrap;overflow:visible}.filter-pill{font-size:10px;padding:5px 8px;border-radius:5px;background:transparent}.filter-pill.active{background:var(--brand-green);color:var(--dg-on-green);border-color:var(--brand-green)}.filter-pill.pill-beyond.active{background:var(--dg-blue-soft);color:var(--brand-blue);border-color:var(--brand-blue)}.filter-pill.pill-trap.active{background:var(--dg-gold-soft);color:var(--brand-gold);border-color:var(--brand-gold)}
 .blunder-card{background:var(--dg-raised);padding:12px;border-color:var(--border-color)}.blunder-card:hover{border-color:var(--brand-green)}.blunder-card-top{flex-wrap:wrap;gap:6px}.tag-blunder{background:var(--dg-red-soft);color:var(--brand-red);border-color:var(--brand-red)}.notation-row:hover,.notation-move:hover{background:var(--dg-green-soft)}.notation-move.active{background:var(--brand-green);color:var(--dg-on-green)}.notation-move{font:12px var(--dg-mono)}
 .modal-card{padding:27px;max-width:560px;gap:14px;box-shadow:var(--dg-shadow);max-height:calc(100dvh - 40px);overflow:auto}.modal-title{font:26px Georgia,"Songti SC",serif}.modal-description{font-size:12px;color:var(--text-muted);line-height:1.8}.pgn-textarea{background:var(--dg-paper);padding:14px;border-radius:8px;line-height:1.8}.modal-card .studio-eyebrow{margin-bottom:0}.drag-drop-card{background:var(--dg-surface);box-shadow:var(--dg-shadow)}.studio-toast{background:var(--dg-ink);color:var(--dg-surface);border:0;box-shadow:var(--dg-shadow);max-width:90vw;font-size:12px}
 @media(max-width:1180px){.studio-navbar{flex-wrap:wrap;padding:16px 24px;gap:12px}.studio-header-center{order:3;flex-basis:100%;justify-content:center}.studio-layout{grid-template-columns:minmax(320px,1.15fr) minmax(285px,1fr);gap:25px;padding:24px}.blunder-list{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.review-metrics-card .metric-player-row{flex-direction:row;align-items:center}}
@@ -944,9 +894,6 @@ body{font-size:14px;user-select:auto}
 /* Three independent areas: board, position research, full-game intuition. */
 .studio-layout { max-width:1800px; grid-template-columns:minmax(330px,1.2fr) minmax(280px,.95fr) minmax(260px,.8fr); gap:24px; padding:24px; }
 .insight-column { min-width:0; height:100%; overflow-y:auto; scrollbar-gutter:stable; overscroll-behavior-y:contain; padding-right:5px; }
-.insight-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.insight-heading strong { font-size:15px; }
-#intuition-progress { color:var(--text-muted); font-size:12px; margin:12px 0; min-height:18px; }
 .position-analysis .candidate-heading { margin:8px 0; }
 .candidate-lines { gap:5px; }
 .candidate-line { padding:5px 0; }
@@ -956,7 +903,6 @@ body{font-size:14px;user-select:auto}
 .insight-column .blunder-list { display:flex; flex-direction:column; }
 .insight-column .blunder-card { padding:12px; }
 .insight-column .blunder-card-top { flex-wrap:wrap; gap:7px; }
-.insight-column .divergence-filters { flex-wrap:wrap; }
 .practice-active .insight-column { visibility:hidden; pointer-events:none; }
 .empty-study .insight-column,.position-only .insight-column { display:none; }
 .position-only .studio-layout { grid-template-columns:minmax(0,1.18fr) minmax(0,1fr); max-width:1340px; }

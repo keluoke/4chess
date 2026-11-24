@@ -1,21 +1,21 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-checkup-cards-r2';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-divergence-cards';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261124-checkup-cards-r2';
-import { ReviewExplorer } from './review-explorer.js?v=20261124-checkup-cards-r2';
-import { ReviewOverview } from './review-overview.js?v=20261124-checkup-cards-r2';
-import { ReviewCommentary } from './review-commentary.js?v=20261124-checkup-cards-r2';
-import { ConsequencePlayer } from './consequence-player.js?v=20261124-checkup-cards-r2';
-import { MistakeBank } from './mistake-bank.js?v=20261124-checkup-cards-r2';
+import { IntuitionReview } from './intuition-review.js?v=20261124-divergence-cards';
+import { ReviewExplorer } from './review-explorer.js?v=20261124-divergence-cards';
+import { ReviewOverview } from './review-overview.js?v=20261124-divergence-cards';
+import { ReviewCommentary } from './review-commentary.js?v=20261124-divergence-cards';
+import { ConsequencePlayer } from './consequence-player.js?v=20261124-divergence-cards';
+import { MistakeBank } from './mistake-bank.js?v=20261124-divergence-cards';
 import { resolvePerspective } from './study-store.js?v=20261124-checkup-cards-r2';
-import { IntuitionCheckup } from './checkup-runner.js?v=20261124-checkup-cards-r2';
+import { IntuitionCheckup } from './checkup-runner.js?v=20261124-divergence-cards';
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261124-checkup-cards-r2';
-import { CheckupReminders } from './checkup-reminders.js?v=20261124-checkup-cards-r2';
-import { ReviewShare } from './review-share.js?v=20261124-checkup-cards-r2';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261124-divergence-cards';
+import { CheckupReminders } from './checkup-reminders.js?v=20261124-divergence-cards';
+import { ReviewShare } from './review-share.js?v=20261124-divergence-cards';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-checkup-cards-r2';
+import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-divergence-cards';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261124-checkup-cards-r2';
+import { ReviewPractice } from './review-practice.js?v=20261124-divergence-cards';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -26,13 +26,13 @@ import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-checkup-cards-r2';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
-import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261124-checkup-cards-r2';
+import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
+import { EvalChart } from './eval-chart.js?v=20261124-divergence-cards';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261124-checkup-cards-r2';
+import { PositionAnalysis } from './position-analysis.js?v=20261124-divergence-cards';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261124-checkup-cards-r2';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261124-divergence-cards';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261124-checkup-cards-r2';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
@@ -175,7 +175,6 @@ class AnalysisStudioApp {
       progressBar: document.getElementById('analysis-progress-bar'),
       evalChartContainer: document.getElementById('eval-chart-container'),
       divergenceContent: document.getElementById('divergence-content'),
-      blunderCountBadge: document.getElementById('blunder-count-badge'),
       moveCountBadge: document.getElementById('move-count-badge'),
       blunderList: document.getElementById('blunder-list'),
       moveNotationTable: document.getElementById('move-notation-table'),
@@ -415,19 +414,6 @@ class AnalysisStudioApp {
       this.positionAnalysis.render();
     });
 
-    // Divergence Category Filter Pills
-    const filterPills = document.querySelectorAll('.divergence-filters .filter-pill');
-    filterPills.forEach(pill => {
-      pill.addEventListener('click', () => {
-        filterPills.forEach(p => p.classList.remove('active'));
-        pill.classList.add('active');
-        this.currentDivergenceFilter = pill.dataset.filter || 'all';
-        this.renderBlunderCards();
-        this.reviewExplorer.focusSelection();
-      });
-    });
-
-
     // PGN Import Modal
     this.el.btnImportPgn.addEventListener('click', () => {
       this.openPgnModal();
@@ -613,10 +599,6 @@ class AnalysisStudioApp {
     if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
     this.updatePreferenceNotes();
-    for (const [id, key] of [['lbl-filter-all', 'filterAllLabel'], ['lbl-filter-beyond', 'filterBeyondLabel'], ['lbl-filter-trap', 'filterTrapLabel']]) {
-      const label = document.getElementById(id);
-      if (label) label.textContent = t(key, { count: '' }).replace(/\(\s*\)/, '').trim();
-    }
     this.renderStudyBranches();
 
     // 1. Meta player names if default
@@ -637,18 +619,8 @@ class AnalysisStudioApp {
     }
 
     // 2. Tab labels
-    const lblBlunders = document.getElementById('lbl-tab-blunders');
-    if (lblBlunders) lblBlunders.textContent = t('tabKeyMoments', { count: '' }).replace(/\(\s*\)/, '').trim();
     const lblMoves = document.getElementById('lbl-tab-moves');
     if (lblMoves) lblMoves.textContent = t('tabNotation', { count: '' }).replace(/\(\s*\)/, '').trim();
-
-    // 3. Filter pills
-    const lblFilterAll = document.getElementById('lbl-filter-all');
-    if (lblFilterAll) lblFilterAll.textContent = t('filterAllLabel', { count: '' }).replace(/\(\s*\)/, '').trim();
-    const lblFilterBeyond = document.getElementById('lbl-filter-beyond');
-    if (lblFilterBeyond) lblFilterBeyond.textContent = t('filterBeyondLabel');
-    const lblFilterTrap = document.getElementById('lbl-filter-trap');
-    if (lblFilterTrap) lblFilterTrap.textContent = t('filterTrapLabel');
 
     // 4. Board status text & comparison panel
     if (this.currentPly === 0) {
@@ -1239,7 +1211,6 @@ class AnalysisStudioApp {
     // 2. Reset UI state immediately
     this.evalChart.setData([]);
     this.evalChart.setBranch(null);
-    this.el.blunderCountBadge.textContent = '0';
     this.el.blunderList.replaceChildren();
     this.el.divergenceContent.textContent = '—';
     this.el.progressCard.style.display = 'none';
@@ -1429,7 +1400,6 @@ class AnalysisStudioApp {
     this.reviewOverview.show(this.reviewOverview.view);
     this.el.progressCard.style.display = 'none';
     this.el.blunderList.replaceChildren();
-    this.el.blunderCountBadge.textContent = '0';
     this.el.divergenceContent.hidden = true;
     this.renderMoveList();
     if (retainedCore) {
@@ -1897,8 +1867,6 @@ class AnalysisStudioApp {
     const moves = this.reviewResult?.allMoves || moments || [];
     const filtered = this.reviewExplorer.render(moves);
     this.reviewOverview?.renderPractice(this.reviewExplorer.available(moves));
-    this.el.blunderCountBadge.textContent = String(filtered.length);
-    document.getElementById('lbl-tab-blunders').textContent = t(this.currentDivergenceFilter === 'all' ? 'reviewKeyMoves' : this.currentDivergenceFilter === 'moves' ? 'reviewAllMoves' : 'reviewSelectedMoves');
     this.el.blunderList.replaceChildren();
     const observations = this.currentDivergenceFilter === 'all' && this.reviewResult && !this.reviewResult.isPartial
       ? selectReviewObservations(this.reviewExplorer.available(moves), this.reviewExplorer.side, this.reviewResult.positionEvaluations) : [];

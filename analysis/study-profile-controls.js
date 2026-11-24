@@ -1,5 +1,5 @@
 import { accountKey, normalizeAccount } from './study-store.js?v=20261124-checkup-cards-r2';
-import { t } from './i18n.js?v=20261124-checkup-cards-r2';
+import { t } from './i18n.js?v=20261124-divergence-cards';
 
 export class StudyProfileControls {
   busy = false;

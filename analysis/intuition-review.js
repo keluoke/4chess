@@ -1,7 +1,7 @@
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { t } from './i18n.js?v=20261124-checkup-cards-r2';
+import { t } from './i18n.js?v=20261124-divergence-cards';
 
 // Full-game intuition has its own search worker. It never cancels the board's
 // foreground search; the large Maia model remains shared and is loaded once.
@@ -11,17 +11,21 @@ export class IntuitionReview {
     this.generation = 0;
     this.predictions = new Map();
     this.state = 'idle';
+    this.controls = document.getElementById('review-intuition-scan');
     this.button = document.getElementById('intuition-toggle');
     this.button.onclick = () => this.state === 'running' ? this.pause() : this.start();
     this.render();
   }
   render() {
     const status = document.getElementById('intuition-progress');
+    const result = this.app.reviewResult;
+    this.controls.hidden = !result || this.state === 'done' || (this.state === 'idle' && !result.engineOnly);
     const key = { idle:'intuitionIdle', running:'intuitionScanning', paused:'intuitionPaused', done:'intuitionDone', error:'intuitionFailed', partial:'intuitionPartial' }[this.state];
     status.textContent = this.state === 'running' && this.progress ? this.progress : t(key);
     const progress = this.app.maiaEngine?.status?.maia;
     if (this.state === 'running' && this.app.maiaEngine?.isLoading && progress?.state === 'downloading') status.textContent = t('intuitionLoading', { percent: progress.percent || 0 });
-    this.button.textContent = t(this.state === 'running' ? 'intuitionPause' : this.state === 'paused' ? 'intuitionResume' : 'intuitionStart');
+    const action = { running: 'intuitionPause', paused: 'intuitionResume', error: 'intuitionRetry', partial: 'intuitionRetry' };
+    this.button.textContent = t(action[this.state] || 'intuitionStart');
     this.button.disabled = !this.app.coreReview || !!this.app.scanSourceLocked;
   }
   pause() {

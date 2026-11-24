@@ -1,13 +1,13 @@
-import { t, getLang } from './i18n.js?v=20261124-checkup-cards-r2';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-checkup-cards-r2';
+import { t, getLang } from './i18n.js?v=20261124-divergence-cards';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-divergence-cards';
 import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitBandLabel, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
-} from './checkup-fit-view.js?v=20261124-checkup-cards-r2';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-checkup-cards-r2';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-checkup-cards-r2';
+} from './checkup-fit-view.js?v=20261124-divergence-cards';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-divergence-cards';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];
@@ -85,7 +85,7 @@ export function summarizeCheckupCard(data, anonymous) {
   return [headline + name, facts.join(' · '), CHECKUP_URL].join('\n');
 }
 
-const ink = '#192e23', muted = '#4d6355', green = '#146b49', line = '#d6e2d8', paper = '#eef3ed';
+const { ink, muted, green, line, paper } = SHARE_PAPER;
 const font = 'Inter, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
 
 function type(ctx, value, x, y, width, { size = 22, weight = 500, tone = ink, minimum = size } = {}) {
@@ -248,7 +248,7 @@ function drawChallenge(ctx, data, { width, height, pad, portrait, pieces, theme,
   const board = parseFenBoard(data.position.fen);
   const arrows = spoiler ? [data.position.best, data.position.played].flatMap((uci, index) => {
     const squares = parseUciSquares(uci);
-    return squares ? [{ ...squares, color: index ? theme?.played || '#966033' : theme?.stockfish || '#2e6086' }] : [];
+    return squares ? [{ ...squares, role: index ? 'played' : 'stockfish' }] : [];
   }) : [];
   drawShareBoard(ctx, { board, orientation: board.turn === 'b' ? 'black' : 'white', arrows, theme },
     pieces, pad, boardY, size);

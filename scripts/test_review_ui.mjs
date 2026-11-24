@@ -175,7 +175,7 @@ try {
   const reportBeforeBranch = await page.evaluate(() => JSON.stringify(window.__maiaStudioApp.reviewResult));
   await page.evaluate(async () => {
     const app = window.__maiaStudioApp;
-    const { legalVariation } = await import('./position-analysis.js?v=20261124-checkup-cards-r2');
+    const { legalVariation } = await import('./position-analysis.js?v=20261124-divergence-cards');
     const initialize = app.maiaEngine.initialize;
     const waiting = new Promise(resolve => { window.releaseBranchMaia = () => { app.maiaEngine.initialize = initialize; resolve(); }; });
     app.maiaEngine.initialize = () => waiting;
@@ -356,10 +356,9 @@ try {
     }));
     app.applyReviewResult({ ...app.reviewResult, engineOnly: false, allMoves });
   });
-  await page.locator('.review-side-controls [data-review-side="all"]').click();
-  await page.locator('[data-filter="beyond"]').click();
+  await page.locator('[data-review-side="all"][data-review-category="beyond"]').click();
   assert.equal(await page.locator('.blunder-card').count(), 1);
-  await page.locator('[data-filter="trap"]').click();
+  await page.locator('[data-review-side="all"][data-review-category="trap"]').click();
   assert.equal(await page.locator('.blunder-card').count(), 1);
   await page.locator('.blunder-card').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.isReviewingMove), true);
