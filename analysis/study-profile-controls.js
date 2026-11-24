@@ -1,5 +1,5 @@
-import { accountKey, normalizeAccount } from './study-store.js?v=20261124-study-entry';
-import { t } from './i18n.js?v=20261124-study-entry';
+import { accountKey, normalizeAccount } from './study-store.js?v=20261124-checkup-cards';
+import { t } from './i18n.js?v=20261124-checkup-cards';
 
 export class StudyProfileControls {
   busy = false;

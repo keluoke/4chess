@@ -15,9 +15,9 @@ import { GameAnalyzer } from '../engine/game-analyzer.js';
 import { challengeChoices, checkupChallengeUrl, decodeChallenge } from '../analysis/challenge-link.js';
 import { ChessBoard } from '../engine/chess-core.js';
 import { overviewSummary, clockErrorTone } from '../analysis/checkup-overview.js';
-import { checkupCardData, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
+import { checkupCardData, checkupChallengeCard, overviewCardData, summarizeCheckupCard } from '../analysis/checkup-share.js';
 import { checkupFitBands, summarizeCheckupFit } from '../analysis/checkup-fit.js';
-import { checkupFitBandLabel, checkupFitHeadline, pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
+import { checkupFitBandLabel, checkupScoreSummary, pgnRatingGroups, withCheckupFit } from '../analysis/checkup-fit-view.js';
 import {
   buildCheckupFitWindow, buildCheckupWindow, checkupClockSample, checkupFitForSpeed, checkupReportStability,
   checkupTrend, prepareCheckupOverview, rankCheckupOpenings, summarizeCheckupOverview
@@ -176,8 +176,13 @@ assert(!JSON.stringify(challenge).includes('KidPlayer'), 'A challenge carries no
 assert.equal(checkupChallengeUrl({ ...report.topTraps[0], bestUci: 'a8a1' }, 'en'), null);
 assert.equal(checkupChallengeUrl({ ...report.topTraps[0], divergenceStatus: 'unconfirmed' }, 'en'), null);
 assert.equal(decodeChallenge('a'.repeat(321)), null);
-const card = checkupCardData({ report, topicsFor: trap => trap.topics || [] });
-assert.equal(card.position.firstSan, 'c3');
+const challengeCard = checkupChallengeCard(report.topTraps[0]);
+assert.equal(challengeCard.position.bestSan, 'c3');
+assert.match(challengeCard.url, /challenge.html#/);
+assert(!summarizeCheckupCard(challengeCard, false).includes('KidPlayer'));
+const card = checkupCardData({ report, challenge: challengeCard });
+assert.equal(card.challenge, challengeCard);
+assert(!card.position);
 assert(!summarizeCheckupCard(card, true).includes('KidPlayer'));
 assert.match(summarizeCheckupCard(card, false), /KidPlayer/);
 assert.equal(summarizeCheckupCard(card, true).split('\n').length, 3);
@@ -620,7 +625,6 @@ assert(exemplars.fit.examples[1].leaderProbability < exemplars.fit.examples[1].r
 const broadStable = { closestElo: 1900, fit: {
   status: 'stable', ranges: [{ low: 1500, high: 2200 }], logLead: Math.log(2), weights: [.05, .24, .484, .226], runner: 1500
 } };
-assert.match(checkupFitHeadline(broadStable), /Maia 1900/);
 assert.equal(checkupFitBandLabel(broadStable), '1900');
 const uncertain = summarizeCheckupFit(fineGames.map(game => ({ ...game,
   fitSamples: game.fitSamples.map(sample => ({ ...sample, scores: [-2, -4, -4, -4, -4, -2] })) })), 'fine');
@@ -676,15 +680,16 @@ assert.deepEqual(checkupReportStability({
   'lichess:game-1': { w: { errors: { 3: true, 5: false } }, b: { errors: { 7: true } } }
 }), { hits: 2, screened: 25, density: 8, missingCoverage: false, observed: 4, low: 3, reviewed: 2, errors: 1 });
 
-const combined = checkupCardData({
-  report: { ...report, ...fineFit, gameCount: 4, playerName: 'KidPlayer' }, rolling: true,
-  overview: overviewCardData(mixed, { username: 'KidPlayer' }, '', 'All speeds')
+const summary = checkupScoreSummary({
+  gameCount: 4, games: [
+    { orientation: 'black', result: '0-1' }, { orientation: 'white', result: '1/2-1/2' },
+    { orientation: 'white', result: '0-1' }, { orientation: 'white', result: '*' }
+  ], stability: { density: 2, reviewed: 4, errors: 1 }, phaseTraps: { opening: 1, middlegame: 3, endgame: 0 }
 });
-assert.equal(combined.bands.length, 6);
-assert.equal(combined.overview.count, 7);
-assert.equal(combined.position.firstSan, card.position.firstSan);
-assert(!summarizeCheckupCard(combined, true).includes('KidPlayer'));
-assert(summarizeCheckupCard(combined, false).includes('KidPlayer'));
+assert.equal(summary.metrics[0].value, '50%', 'Wins count as one point and draws as half; exclude unfinished records');
+assert.equal(summary.metrics[1].value, '1.0');
+assert.equal(summary.metrics[2].detail, '3/4');
+assert.equal(summary.clock, null, 'Keep low-clock rates out of the summary until enough moves were reviewed');
 
 const ties = summarizeCheckupFit([makeEvidence('tie', 0, [-2.4, -2.4, -2.4, -2.32])], 'standard');
 assert.deepEqual(ties.fit.ranges, [{ low: 1100, high: 2200 }], 'An exact tie at the support boundary must not favor the lowest band');

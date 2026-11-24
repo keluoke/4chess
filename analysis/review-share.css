@@ -54,7 +54,7 @@
   .snapshot-board-panel { position: static; }
 }
 .checkup-share-options { display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px; }
-.checkup-share-options[hidden],.review-share-actions [hidden] { display:none; }
+.checkup-share-options [hidden],.checkup-share-modes[hidden],.review-share-actions [hidden] { display:none; }
 .checkup-share-dialog .review-share-actions { justify-content:flex-start; }
 .challenge-page .snapshot-wrap { width:min(560px,100%); }
 .challenge-panel {
@@ -86,3 +86,6 @@
 .challenge-answer-actions .btn-header { min-height:40px; }
 .challenge-answer-actions a { text-decoration:none; }
 .challenge-answer-actions .btn-primary { min-height:44px; }
+
+.checkup-share-modes { margin:0 0 10px; }
+.checkup-share-options { margin-bottom:10px; }

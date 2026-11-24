@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261124-study-entry';
+import { t, onLanguageChange } from './i18n.js?v=20261124-checkup-cards';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

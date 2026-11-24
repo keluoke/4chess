@@ -1,7 +1,7 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-study-entry';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-study-entry';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
-import { t } from './i18n.js?v=20261124-study-entry';
+import { t } from './i18n.js?v=20261124-checkup-cards';
 
 // Full-game intuition has its own search worker. It never cancels the board's
 // foreground search; the large Maia model remains shared and is loaded once.

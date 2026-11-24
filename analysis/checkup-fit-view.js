@@ -1,10 +1,12 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-study-entry';
+import { CHESS_PIECES_SVG } from './chess-pieces.js';
+import { parseFenBoard } from './share-card.js?v=20261124-checkup-cards';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261124-study-entry';
-import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-study-entry';
+import { getLang, t } from './i18n.js?v=20261124-checkup-cards';
+import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards';
 import {
   CHECKUP_CLOSE_LOG_GAP, CHECKUP_EXAMPLE_POLICY, checkupFitBands, isCheckupFitExample, summarizeCheckupFit
-} from './checkup-fit.js?v=20261124-study-entry';
+} from './checkup-fit.js?v=20261124-checkup-cards';
 
 export function withCheckupFit(report) {
   if (report.fit?.examplePolicy === CHECKUP_EXAMPLE_POLICY || !report.games?.some(game => game.fitSamples?.length)) return report;
@@ -58,16 +60,6 @@ export function checkupFitBandLabel(report) {
   return String(report.closestElo);
 }
 
-export function checkupFitHeadline(report) {
-  if (report.closestElo == null) return t('checkupNoEloFit');
-  if (hasCloseFit(report.fit)) {
-    const max = Math.max(...report.fit.weights);
-    if (report.fit.weights.filter(weight => weight * 1.25 >= max).length > 2) return t('checkupFitCloseSeveral');
-    return t('checkupFitClose', { leader: report.closestElo, runner: report.fit.runner });
-  }
-  return t(report.fit?.status === 'limited' ? 'checkupFitProvisional' : 'checkupClosestElo', { elo: report.closestElo });
-}
-
 function replaySample(game, sample) {
   if (!game?.pgn) return null;
   if (sample.san && sample.fenBefore && sample.uci) return sample;
@@ -85,30 +77,114 @@ export function checkupFitScope(report, speedLabel) {
     speed: speedLabel(report.speed) });
 }
 
-export function renderCheckupFit(report, { openMove, speedLabel, changeSpeed, viewCount }) {
+export function checkupScoreSummary(report) {
+  let played = 0, points = 0;
+  for (const game of report.games || []) {
+    if (!['white', 'black'].includes(game.orientation) || !['1-0', '0-1', '1/2-1/2'].includes(game.result)) continue;
+    played++;
+    points += game.result === '1/2-1/2' ? 0.5 : Number(game.result === (game.orientation === 'white' ? '1-0' : '0-1'));
+  }
+  const phases = ['opening', 'middlegame', 'endgame'].map(phase => [phase, report.phaseTraps?.[phase] || 0]);
+  const hits = phases.reduce((sum, [, count]) => sum + count, 0);
+  const peak = Math.max(...phases.map(([, count]) => count));
+  const phaseLabels = phases.filter(([, count]) => count > 0 && count === peak).map(([phase]) => t(`bankPhase_${phase}`));
+  const metrics = [];
+  if (played) metrics.push({ label: t('checkupSummaryScore'), value: Math.round(points * 100 / played) + '%',
+    detail: t(played === 1 ? 'checkupShareOneGame' : 'checkupSummaryScoredGames', { count: played }) });
+  if (report.stability?.density != null && report.gameCount) {
+    metrics.push({ label: t('checkupSummaryAverage'), value: (hits / report.gameCount).toFixed(1) });
+  }
+  if (phaseLabels.length) metrics.push({ label: t('checkupSummaryPhase'), type: 'phase', value: phaseLabels.join(' / '), detail: phaseLabels.length === 1 ? `${peak}/${hits}` : undefined });
+  return {
+    metrics,
+    story: !peak ? (report.stability?.density != null ? t('checkupStabilityNoTraps') : '')
+      : phaseLabels.length === 1 ? t('checkupSummaryStory', { count: peak, total: hits, phase: phaseLabels[0].toLocaleLowerCase(getLang()) })
+      : t('checkupSummaryTie', { phase: phaseLabels.join(' / ') }),
+    clock: lowClockRate(report.stability)
+  };
+}
+
+export function checkupRatingLine(report, speedLabel) {
+  return pgnRatingGroups(report.games).map(({ elo, speed }) => t(speed ? 'checkupFitRatedSpeed' : 'checkupFitRatedUnknown', {
+    elo, speed: speed && speedLabel(speed)
+  })).join(' · ');
+}
+
+export function checkupPositionView(move, trap, screenElo) {
+  if (!move?.fenBefore) return null;
+  const probability = trap ? move.humanProb : move.evidence?.probability;
+  const elo = trap ? move.elo : screenElo;
+  const san = trap ? move.playedSan : move.san;
+  const hasProbability = Number.isFinite(probability) && probability >= 0 && probability <= 1;
+  return {
+    fen: move.fenBefore, played: move.playedUci || move.uci, best: move.bestUci || move.verifiedBestUci,
+    san, trap,
+    title: t(trap ? 'checkupKeyTrap' : 'checkupKeyHighlight'),
+    story: hasProbability && Number.isFinite(elo) ? t(trap ? 'checkupKeyTrapProbability' : 'checkupKeyHighlightProbability', {
+      san, probability: Math.round(probability * 100), elo
+    }) : t(trap ? 'checkupKeyTrapMove' : 'checkupKeyHighlightMove', { san })
+  };
+}
+
+export function renderCheckupMiniBoard(fen) {
+  const board = node('div', '', 'checkup-key-board');
+  board.setAttribute('aria-hidden', 'true');
+  const { pieces, turn } = parseFenBoard(fen);
+  const squares = new Map(pieces.map(({ square, piece }) => [square, piece]));
+  const files = [...(turn === 'b' ? 'hgfedcba' : 'abcdefgh')];
+  for (let row = 0; row < 8; row++) {
+    for (const [column, file] of files.entries()) {
+      const square = node('span', '', (row + column) % 2 ? 'dark' : '');
+      const piece = squares.get(file + (turn === 'b' ? row + 1 : 8 - row));
+      if (piece) square.innerHTML = CHESS_PIECES_SVG[piece];
+      board.append(square);
+    }
+  }
+  return board;
+}
+
+export function renderCheckupFitSummary(report, speedLabel) {
   const section = node('section', '', 'checkup-fit-section');
+  const band = checkupFitBandLabel(report);
+  const title = node('h3', band ? t('checkupSummaryIntuition') : t('checkupNoEloFit'), 'checkup-fit-title');
+  section.append(title);
+  if (!band) return section;
+  const value = node('strong', band, /^\d+$/.test(band) ? 'checkup-fit-number' : 'checkup-fit-number checkup-fit-range');
+  const mark = node('sup', '*');
+  mark.setAttribute('aria-hidden', 'true');
+  value.append(mark);
+  value.setAttribute('aria-describedby', 'checkup-fit-footnote');
+  section.append(value);
+  const ratings = checkupRatingLine(report, speedLabel);
+  if (ratings) section.append(node('p', ratings, 'checkup-fit-rating'));
+  const fit = report.fit;
+  if (fit?.bands?.length) {
+    const bar = node('div', '', 'checkup-match-strip');
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', t('checkupFitWeights') + ' · ' +
+      fit.bands.map((elo, i) => `${elo} ${percent(fit.weights[i])}`).join(', '));
+    fit.weights.forEach((weight, i) => {
+      const segment = node('span', '', fit.bands[i] === report.closestElo && !hasCloseFit(fit) ? 'leading' : '');
+      segment.style.width = `${weight * 100}%`;
+      bar.append(segment);
+    });
+    section.append(bar);
+  }
+  if (fit?.status === 'limited') section.append(node('p', checkupFitStatusLabel(fit), 'checkup-elo-note'));
+  const note = node('p', t('checkupFitFootnote'), 'checkup-fit-footnote');
+  note.id = 'checkup-fit-footnote';
+  section.append(note);
+  return section;
+}
+
+export function renderCheckupFit(report, { openMove, viewCount }) {
+  const section = node('section', '', 'checkup-fit-breakdown');
   const fit = report.fit;
   const heading = node('div', '', 'checkup-fit-context');
-  heading.append(node('h3', checkupFitHeadline(report), 'checkup-fit-title'));
+  heading.append(node('h3', t('checkupFitWeights'), 'checkup-fit-title'));
   if (fit?.status) heading.append(node('span', checkupFitStatusLabel(fit), `checkup-fit-status ${fit.status}`));
-  if (report.speeds?.length > 1) {
-    const mode = node('select', '', 'btn-header checkup-fit-speed');
-    mode.setAttribute('aria-label', t('checkupFitSpeed'));
-    for (const value of report.speeds) mode.add(new Option(speedLabel(value), value));
-    mode.value = report.speed;
-    mode.onchange = () => changeSpeed(mode.value);
-    heading.append(mode);
-  }
   section.append(heading);
   const context = node('div', '', 'checkup-fit-metadata');
-  const ratings = pgnRatingGroups(report.games);
-  if (ratings.length) {
-    const line = node('p', ratings.map(({ elo, speed }) => speed
-      ? t('checkupFitRatedSpeed', { elo, speed: speedLabel(speed) })
-      : t('checkupFitRatedUnknown', { elo })).join(' · '), 'checkup-fit-rating');
-    line.title = ratings.map(({ elo, speed, count }) => t('checkupFitRatingValue', { elo, count, speed: speedLabel(speed) })).join(' · ');
-    context.append(line);
-  }
   const ranges = checkupFitRangeLabel(fit);
   if (ranges && ranges !== String(report.closestElo)) {
     context.append(node('p', t('checkupFitSupportRange', { ranges }), 'checkup-elo-note'));
@@ -129,7 +205,7 @@ export function renderCheckupFit(report, { openMove, speedLabel, changeSpeed, vi
       const fill = node('i');
       fill.style.width = `${weight * 100}%`;
       meter.append(fill);
-      row.append(node('span', `Maia ${band}`), meter, node('strong', percent(weight)));
+      row.append(node('span', String(band)), meter, node('strong', percent(weight)));
       grid.append(row);
     });
     section.append(grid);
@@ -194,8 +270,8 @@ export function renderCheckupFit(report, { openMove, speedLabel, changeSpeed, vi
     if (evidence.children.length > 1) section.append(evidence);
   }
   if (fit) {
-    const details = node('details', '', 'checkup-fit-details');
-    details.append(node('summary', t('checkupFitMethodology')), node('p', t('checkupFitExplanation')),
+    const details = node('div', '', 'checkup-fit-details');
+    details.append(node('h4', t('checkupFitMethodology')), node('p', t('checkupFitExplanation')),
       node('p', t('checkupFitRangeExplanation')), raw());
     if (report.isFitWindow) details.append(node('p', t('checkupFitWindowWeight')));
     section.append(details);
@@ -206,17 +282,13 @@ export function renderCheckupFit(report, { openMove, speedLabel, changeSpeed, vi
 export const densityText = density => density.toFixed(1);
 export const lowClockRate = stability => stability?.reviewed >= 5 ? Math.round(stability.errors * 100 / stability.reviewed) + '%' : null;
 
-export function renderCheckupStability(report, rerun) {
+export function renderCheckupStability(report) {
   const { stability, gameCount: count, phaseTraps, screenElo, screenEloSource } = report;
   const section = node('section', '', 'checkup-stability-section');
   section.append(node('h3', t('checkupStabilityTitle'), 'checkup-fit-title'));
   if (stability.density == null) {
     const empty = node('div', '', 'checkup-stability-empty');
     empty.append(node('p', t(stability.missingCoverage ? 'checkupStabilityLegacy' : 'checkupStabilityNotScreened'), 'checkup-elo-note'));
-    const button = node('button', t(rerun.label), 'btn-header btn-primary');
-    button.type = 'button';
-    button.onclick = rerun.run;
-    empty.append(button);
     section.append(empty);
   } else if (!stability.hits) {
     section.append(node('p', t('checkupStabilityNoTraps'), 'checkup-stability-label'),

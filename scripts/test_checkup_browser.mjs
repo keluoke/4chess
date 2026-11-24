@@ -61,6 +61,14 @@ try {
   const dialog = page.locator('#checkup-dialog');
   const settings = () => page.locator('#checkup-tab-settings').click();
   const reportBox = page.locator('#checkup-report-box');
+  const statistics = reportBox.locator('.checkup-statistics');
+  const more = page.locator('.checkup-report-more');
+  const allTraps = reportBox.locator('.checkup-all-traps');
+  const openDetails = async details => {
+    if (await details.getAttribute('open') === null) await details.locator('summary').first().click();
+  };
+  const shareDiagnosis = () => page.getByRole('button', { name: 'Share diagnosis' }).click();
+
   const share = page.locator('#checkup-share-dialog');
   const preview = page.locator('#checkup-share-canvas');
   const readyToShare = () => share.getByRole('button', { name: 'Download PNG', exact: true }).and(page.locator(':enabled')).waitFor();
@@ -124,10 +132,16 @@ try {
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.id), initialReport);
   assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
   assert.equal(await page.locator(':focus').getAttribute('id'), 'checkup-report-box');
+  assert(await statistics.locator('.checkup-stability-clock').isHidden());
+  assert.match(await reportBox.locator('.checkup-summary-story').innerText(), /40%/);
+  await openDetails(statistics);
   const clockText = await reportBox.locator('.checkup-stability-clock').innerText();
   assert(clockText.includes('40%') && clockText.includes('5 of 7 low-clock decisions reviewed'));
 
-  const findNew = () => page.locator('#checkup-report-tools').getByRole('button', { name: /check for new games/i }).click();
+  const findNew = async () => {
+    await openDetails(more);
+    await more.getByRole('button', { name: /check for new games/i }).click();
+  };
   await findNew();
   await page.getByText('No new games to analyze.').waitFor();
   assert.equal(await page.evaluate(() => window.checkupStarts), 1, 'An unchanged batch does not start the engines');
@@ -142,16 +156,20 @@ try {
   assert.equal(await reportBox.locator('.checkup-charts svg').count(), 2);
   assert.equal(await reportBox.locator('.checkup-chart-endpoint').count(), 4);
   assert.equal(await reportBox.locator('.checkup-chart-guide').count(), 7);
+  await openDetails(statistics);
+  await openDetails(more);
   const fitSpeed = page.getByRole('combobox', { name: 'Time control for intuition fit' });
   assert.equal(await fitSpeed.inputValue(), 'rapid');
-  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /fit samples across 2 games/);
-  assert.doesNotMatch(await reportBox.locator('.checkup-report-context').innerText(), /30 games/);
+  assert.match(await reportBox.locator('.checkup-fit-breakdown').innerText(), /fit samples across 2 games/);
+  assert.match(await reportBox.locator('.checkup-report-context').innerText(), /Long-term fit · Rapid · 2\/30 games/);
   assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /3\/10 covered/);
   assert.equal(await reportBox.locator('.checkup-stability-phase').count(), 3);
   await fitSpeed.selectOption('blitz');
-  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /fit samples from 1 game/);
+  await openDetails(statistics);
+  assert.match(await reportBox.locator('.checkup-fit-breakdown').innerText(), /fit samples from 1 game/);
   assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /3\/10 covered/);
   assert.equal(await reportBox.locator('.checkup-stability-phase').count(), 3);
+  await openDetails(more);
   await fitSpeed.selectOption('rapid');
   const cached = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport.fitWindow.games.length);
   assert.equal(cached, 3);
@@ -171,8 +189,8 @@ try {
   });
   const beforeOverview = archiveLookups;
   await page.locator('#checkup-tab-overview').click();
-  await page.getByText('3 completed games', { exact: true }).waitFor();
   const overview = page.locator('#checkup-overview-body');
+  await overview.getByText('3 completed games', { exact: true }).waitFor();
   assert.match(await overview.locator('.checkup-result-total').innerText(), /67%[\s\S]*2 W[\s\S]*0 D[\s\S]*1 L/);
   assert.match(await overview.locator('.checkup-hero-summary').innerText(), /Black scores 50 percentage points higher.*100% of losses were on time/);
   const moreOpenings = overview.locator('[data-detail="more-w"]');
@@ -229,19 +247,19 @@ try {
   await page.locator('#checkup-tab-report').click();
   assert.equal(await reportBox.locator('.checkup-fit-bar').count(), 4);
   assert.match(await reportBox.locator('.checkup-fit-rating').innerText(), /2180/);
-  await page.getByText('Method and raw values', { exact: true }).click();
+  await openDetails(statistics);
   assert(await reportBox.locator('.checkup-fit-raw').isVisible());
-  await page.getByRole('button', { name: 'Share playing profile' }).click();
+  await shareDiagnosis();
   await readyToShare();
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const combinedSummary = await page.evaluate(() => navigator.clipboard.readText());
-  assert.match(combinedSummary, /3 games · 67% score.*All speeds/);
+  assert.match(combinedSummary, /3 games · Recent score 67%/);
   assert(combinedSummary.includes('Long-term fit · Rapid · 2/30 games'));
-  assert(combinedSummary.includes('Last 10 games'));
-  assert.equal(await page.locator('#checkup-report-tools').getByRole('button', { name: 'Share playing profile' }).count(), 1);
+  assert(combinedSummary.includes('3 games'));
+  assert.equal(await page.locator('#checkup-report-tools').getByRole('button', { name: 'Share diagnosis' }).count(), 1);
   assert.doesNotMatch(combinedSummary, /Clarkyan/);
-  assert.equal(archiveLookups, overviewFetches, 'Report share reuses the same account’s overview cache');
+  assert.equal(archiveLookups, overviewFetches, 'Report share uses only the displayed report');
   if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-combined.png' });
   await closeShare();
 
@@ -383,19 +401,15 @@ try {
   });
   await alt.getByRole('button', { name: 'View report' }).click();
   failArchive = true;
-  await page.getByRole('button', { name: 'Share playing profile' }).click();
-  await readyToShare();
-  await share.getByText('Recent results couldn’t be loaded. You can still share this diagnosis.').waitFor();
-  await closeShare();
-  failArchive = false;
   const missingOverviewFetches = archiveLookups;
-  await page.getByRole('button', { name: 'Share playing profile' }).click();
+  await shareDiagnosis();
   await readyToShare();
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const splitCardSummary = await page.evaluate(() => navigator.clipboard.readText());
-  assert.match(splitCardSummary, /2 games · 100% score/);
-  assert.equal(archiveLookups, missingOverviewFetches + 1, 'Loads the report account’s archive when it has no cached overview');
+  assert.match(splitCardSummary, /2 games · Recent score 100%/);
+  assert.equal(archiveLookups, missingOverviewFetches, 'Sharing uses the report even if the archive is unavailable');
   await closeShare();
+  failArchive = false;
   await settings();
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await alt.evaluate(row => row.querySelector('.checkup-account-identity').offsetWidth >= row.clientWidth - 18),
@@ -455,19 +469,48 @@ try {
   await page.locator('#btn-checkup-start').click();
   await page.waitForFunction(() => window.__maiaStudioApp.checkup.latestReport?.traps?.length > 5 &&
     !window.__maiaStudioApp.checkup.busy);
-  assert.match(await reportBox.innerText(), /moves in the fit/);
+  assert(await statistics.locator('.checkup-fit-breakdown').isHidden());
+  assert.equal(await reportBox.locator('.checkup-key-board > span').count(), 64);
+  assert(await reportBox.getByRole('button', { name: 'Practice top 3 now' }).isVisible());
+  assert.match(await reportBox.locator('.checkup-summary-metrics').innerText(), /Recent score\s*50%/);
+  if (process.env.TEST_CHECKUP_CARDS) {
+    await reportBox.locator('.checkup-summary-card').screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-mobile-layout.png' });
+  }
+  await openDetails(statistics);
+  assert.match(await statistics.innerText(), /moves in the fit/);
   assert.equal(await reportBox.locator('.checkup-fit-bar').count(), 6);
   assert.equal(await reportBox.locator('.checkup-fit-evidence-row').count(), 2);
   assert.match(await reportBox.locator('.checkup-fit-evidence').innerText(), /predicted 60\.0%/);
-  assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), 5);
-  await reportBox.getByText(/Show .* more traps/).click();
-  const sixthJump = reportBox.locator('.checkup-trap-row').getByRole('button', { name: /Review this move/ }).nth(5);
+  assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), 3);
+  await openDetails(allTraps);
+  const sixthJump = allTraps.locator('.checkup-trap-row').getByRole('button', { name: /Review this move/ }).nth(5);
   await sixthJump.waitFor();
   const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
-  await page.getByRole('button', { name: 'Share playing profile' }).click();
+  await shareDiagnosis();
   await readyToShare();
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
+  await share.getByRole('checkbox', { name: 'Hide player names' }).uncheck();
+  await readyToShare();
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
+  if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-portrait.png' });
+  await share.getByRole('button', { name: 'Find the move' }).click();
+  await readyToShare();
+  const spoiler = share.getByRole('checkbox', { name: 'Show the answer' });
+  assert.equal(await spoiler.isChecked(), false);
+  const boardOnly = await preview.evaluate(canvas => canvas.toDataURL());
+  await spoiler.check();
+  await readyToShare();
+  assert.notEqual(await preview.evaluate(canvas => canvas.toDataURL()), boardOnly);
+  await spoiler.uncheck();
+  await readyToShare();
+  if (process.env.TEST_CHECKUP_CARDS) {
+    const png = await preview.evaluate(canvas => canvas.toDataURL().split(',')[1]);
+    fs.writeFileSync(process.env.TEST_CHECKUP_CARDS + '-challenge.png', Buffer.from(png, 'base64'));
+  }
   const palette = () => preview.evaluate(canvas => {
     const ctx = canvas.getContext('2d');
     const expected = ['light', 'dark'].map(name => {
@@ -477,7 +520,7 @@ try {
     const counts = [0, 0];
     const zoom = canvas.width / 960;
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    for (let y = 342; y < 784; y += 7) {
+    for (let y = 242; y < 828; y += 7) {
       for (let x = 85; x < 523; x += 7) {
         const offset = 4 * (Math.round(y * zoom) * canvas.width + Math.round(x * zoom));
         const index = expected.indexOf([...pixels.slice(offset, offset + 3)].join(','));
@@ -488,23 +531,20 @@ try {
   });
   const lightBoard = await palette();
   assert(lightBoard.counts.every(count => count > 300), 'Shared board uses the workbench’s computed colors');
-  if (process.env.TEST_CHECKUP_CARDS) await preview.screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-portrait.png' });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForFunction(() => {
     const elem = document.querySelector('#board-container .maia-square.light:not(.last-move-from):not(.last-move-to)');
     return getComputedStyle(elem).backgroundColor === 'rgb(191, 205, 190)';
   });
-  await share.getByRole('button', { name: 'Copy text summary' }).click();
-  assert.doesNotMatch(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
-  await share.getByRole('checkbox', { name: 'Hide player names' }).uncheck();
+  await spoiler.check();
+  await spoiler.uncheck();
   await readyToShare();
   const darkBoard = await palette();
   assert.notDeepEqual(darkBoard.expected, lightBoard.expected);
-  assert(darkBoard.counts.every(count => count > 300), 'Shared board follows dark mode');
+  assert(darkBoard.counts.every(count => count > 300), 'Challenge board follows dark mode');
   await page.emulateMedia({ colorScheme: 'light' });
-
-  await share.getByRole('button', { name: 'Copy text summary' }).click();
-  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /Trainee/);
+  await share.getByRole('button', { name: 'Playing profile', exact: true }).click();
+  await readyToShare();
   await share.getByRole('button', { name: '16:9' }).click();
   await readyToShare();
   const download = page.waitForEvent('download');
@@ -556,7 +596,7 @@ try {
   assert.equal(await puzzle.locator('input').count(), 0);
   assert.equal(await options.count(), 2);
   const parsed = await puzzle.evaluate(async () => {
-    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261124-study-entry');
+    const { decodeChallenge } = await import('/analysis/challenge-link.js?v=20261124-checkup-cards');
     return decodeChallenge(new URLSearchParams(location.hash.slice(1)).get('p'));
   });
   const labelOrder = await options.allTextContents();
@@ -579,7 +619,7 @@ try {
   assert.equal(await previewArrow.count(), 0, 'Moving the pointer away clears the preview');
   await puzzle.locator('#challenge-choices').getByText(parsed.playedSan, { exact: true }).click();
   assert.match(await puzzle.locator('#challenge-status').innerText(), /tempting move/);
-  assert.match(await puzzle.locator('#challenge-probability').innerText(), /Maia 2200 assigned 60% probability/);
+  assert.match(await puzzle.locator('#challenge-probability').innerText(), /2200 band.*60% chance/);
   assert(await puzzle.locator('#maia-svg-arrows-group > *').count() >= 2);
   assert.equal(await previewArrow.count(), 0);
   assert(await puzzle.locator('#challenge-choices').isHidden());
@@ -639,6 +679,8 @@ try {
   });
   assert.deepEqual(focused, { ply: sixth.ply, before: true, fen: sixth.fenBefore });
   await page.locator('#btn-checkup-replay-back').click();
+  await dialog.waitFor();
+  await openDetails(statistics);
   await reportBox.locator('.checkup-fit-evidence-row').first().getByRole('button').click();
   await dialog.waitFor({ state: 'hidden' });
   assert.deepEqual(await page.evaluate(() => {
@@ -646,8 +688,10 @@ try {
     return [app.currentPly, app.boardUI.chess.getFen()];
   }), [replay.fit.examples[0].ply, replay.fit.examples[0].fenBefore]);
   await page.locator('#btn-checkup-replay-back').click();
-  await reportBox.getByText(/Game details/).click();
+  await dialog.waitFor();
+  await openDetails(reportBox.locator('.checkup-games-trends'));
   assert.match(await reportBox.innerText(), /Trainee – Rival/);
+  await openDetails(allTraps);
   await reportBox.getByRole('button', { name: /Practice high-temptation moves/ }).click();
   await page.waitForFunction(() => !!window.reportPractice);
   const practiced = await page.evaluate(async () => {
@@ -660,6 +704,7 @@ try {
   await page.locator('#btn-intuition-checkup').click();
   await page.locator('#checkup-tab-report').click();
   const stability = reportBox.locator('.checkup-stability-section');
+  const summaryCard = reportBox.locator('.checkup-summary-card');
   await page.evaluate(() => {
     const checkup = window.__maiaStudioApp.checkup;
     const legacy = { ...checkup.latestReport, id: 'legacy-local-saved',
@@ -669,8 +714,8 @@ try {
     checkup.renderReport(legacy);
   });
   assert.equal(await stability.locator('.checkup-stability-value').count(), 0);
-  assert.match(await stability.innerText(), /older report is missing screening data/);
-  await stability.getByRole('button', { name: 'Recheck these games' }).click();
+  assert.match(await summaryCard.innerText(), /older report is missing screening data/);
+  await summaryCard.getByRole('button', { name: 'Recheck these games' }).click();
   await page.waitForFunction(() => {
     const { latestReport, busy } = window.__maiaStudioApp.checkup;
     return !busy && latestReport.id !== 'legacy-local-saved' && latestReport.screenedMoves > 0;
@@ -684,9 +729,9 @@ try {
     checkup.latestReport = legacy;
     checkup.renderReport(legacy);
   });
-  assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves were closest to Maia 2200');
+  assert.equal(await reportBox.locator('.checkup-fit-number').textContent(), '2200*');
   const choosingPgn = page.waitForEvent('filechooser');
-  await stability.getByRole('button', { name: 'Import PGN to recheck' }).click();
+  await summaryCard.getByRole('button', { name: 'Import PGN to recheck' }).click();
   const fileChooser = await choosingPgn;
   assert.equal(await page.locator('#checkup-tab-report').getAttribute('aria-selected'), 'true');
   await fileChooser.setFiles({ name: 'saved.pgn', mimeType: 'application/x-chess-pgn', buffer: Buffer.from(replayPgn) });
@@ -710,7 +755,7 @@ try {
     checkup.renderReport(legacy);
   });
   assert.equal(await page.locator('#checkup-report-tools').getByRole('button', { name: 'Check for new games' }).count(), 0);
-  await stability.getByRole('button', { name: 'Reanalyze the last 10 games' }).click();
+  await summaryCard.getByRole('button', { name: 'Reanalyze the last 10 games' }).click();
   await page.waitForFunction(() => {
     const { latestReport, busy } = window.__maiaStudioApp.checkup;
     return !busy && latestReport.id !== 'legacy-online' && latestReport.screenedMoves > 0;
@@ -742,19 +787,26 @@ try {
     checkup.scopedHistory = [report, { ...report, id: 'old-summary', createdAt: report.createdAt - 180000 }];
     checkup.renderReport(report);
   });
-  assert.equal(await reportBox.locator('.checkup-fit-section .checkup-fit-title').textContent(), 'Your moves were closest to Maia 1900');
-  assert.match(await reportBox.locator('.checkup-fit-metadata').innerText(), /Rapid rating median 1409[\s\S]*1500–2200/);
+  assert.equal(await reportBox.locator('.checkup-fit-number').textContent(), '1900*');
+  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /Rapid rating median 1409/);
+  assert(await statistics.locator('.checkup-fit-status').isHidden());
+  await openDetails(statistics);
+  assert.match(await reportBox.locator('.checkup-fit-metadata').innerText(), /1500–2200/);
   assert.match(await reportBox.locator('.checkup-fit-status.stable').innerText(), /Consistent leader/);
-  assert.match(await reportBox.locator('.checkup-fit-bar.best').innerText(), /Maia 1900[\s\S]*48.4%/);
+  assert.match(await reportBox.locator('.checkup-fit-bar.best').innerText(), /1900[\s\S]*48.4%/);
   const evidenceBox = reportBox.locator('.checkup-fit-evidence');
-  assert.match(await evidenceBox.innerText(), /distinguish Maia 1900 and 2200/);
-  assert.deepEqual(await evidenceBox.locator('.checkup-fit-direction').allTextContents(), ['Closer to Maia 1900', 'Closer to Maia 2200']);
+  assert.match(await evidenceBox.innerText(), /distinguish 1900 and 2200/);
+  assert.deepEqual(await evidenceBox.locator('.checkup-fit-direction').allTextContents(), ['Closer to 1900', 'Closer to 2200']);
   assert.doesNotMatch(await evidenceBox.innerText(), /1.7%/);
   assert.match(await stability.innerText(), /5.6[\s\S]*About 1.1 traps per game/);
+  assert.match(await summaryCard.innerText(), /10 of 11 traps came in the middlegame/);
   assert.deepEqual(await stability.locator('.checkup-stability-phase strong').allTextContents(), ['1', '10', '0']);
   assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /Altplayer · Chess.com Rapid · Last 10 games \(197 decisions\)/);
   assert.match(await reportBox.locator('.checkup-report-context-detail').innerText(), /Nov 19/);
-  const historyOptions = await reportBox.locator('.checkup-history-select option').allTextContents();
+  await openDetails(more);
+  const historyOptions = await more.locator('.checkup-history-select option').allTextContents();
+  assert(historyOptions.length > 1);
+  await more.locator('summary').click();
   assert(historyOptions.every(option => option.startsWith('Last 10 games · ') && !/Altplayer|Chess.com/.test(option)));
   const evidenceButton = evidenceBox.getByRole('button', { name: 'Review this move' }).first();
   assert(await evidenceButton.evaluate(button => button.classList.contains('checkup-review-move') &&
