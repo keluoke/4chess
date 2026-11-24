@@ -1,9 +1,9 @@
-import { t } from './i18n.js?v=20261124-player-copy';
+import { t } from './i18n.js?v=20261124-intuition-labels';
 import { REVIEW_QUALITIES, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
 const sideKeys = { all: 'reviewBoth', w: 'reviewWhite', b: 'reviewBlack' };
-const intuitionOrder = ['trap', 'beyond', 'precise'];
+const intuitionOrder = ['trap', 'precise', 'beyond'];
 const sides = ['w', 'b'];
 
 function element(tag, text, className) {

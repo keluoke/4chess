@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261124-player-copy';
+import { t, onLanguageChange } from './i18n.js?v=20261124-intuition-labels';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

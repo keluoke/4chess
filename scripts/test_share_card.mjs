@@ -5,6 +5,7 @@ import {
   parseFenBoard,
   parseUciSquares
 } from '../analysis/share-card.js';
+import { buildTrapRecord } from '../analysis/study-store.js';
 
 // 1. FEN board parsing
 const fischerFen = 'r4rk1/1bq1bppp/p2ppn2/1p6/3NPP2/1BN1BQ2/PPP3PP/R4RK1 w - - 0 17';
@@ -27,6 +28,8 @@ const move = {
   bestSan: 'Be6',
   maiaTopSan: 'Nxd1',
   humanRawProbability: 0.331,
+  severity: 'mistake',
+  lossCp: 165,
   verifiedLossCp: 165,
   divergenceType: 'intuition_trap',
   divergenceStatus: 'confirmed'
@@ -41,6 +44,7 @@ const enSpec = buildShareCardSpec(move, {
 });
 assert.deepEqual(enSpec.dimensions, SHARE_CARD_FORMATS.landscape);
 assert.equal(enSpec.orientation, 'black');
+assert.equal(enSpec.badge, 'Intuition trap');
 assert(enSpec.headline.includes('1900 Elo: 33.1% play Nxd1'));
 assert(enSpec.headline.includes('Stockfish plays Be6'));
 assert.equal(enSpec.arrows.length, 2);
@@ -65,6 +69,19 @@ const zhSpec = buildShareCardSpec({
 assert.deepEqual(zhSpec.dimensions, SHARE_CARD_FORMATS.portrait);
 assert(zhSpec.headline.includes('e5'));
 assert.equal(zhSpec.arrows.length, 1, 'Identical best and played moves produce a single engine arrow');
+assert.equal(zhSpec.badge, '人机分歧');
+
+for (const [divergenceType, zh, en] of [
+  ['intuition_trap', '直觉陷阱', 'Intuition trap'],
+  ['precise_intuition', '精准突破', 'Precise intuition'],
+  ['beyond_intuition', '神之一手', 'Beyond intuition']
+]) {
+  const confirmed = { ...move, divergenceType };
+  assert.equal(buildShareCardSpec(confirmed, { lang: 'zh' }).badge, zh);
+  assert.equal(buildShareCardSpec(confirmed, { lang: 'en' }).badge, en);
+}
+const savedTrap = buildTrapRecord({ ...move, verifiedExpectedScoreLoss: 12 }, { elo: 1900 });
+assert.equal(buildShareCardSpec(savedTrap, { lang: 'zh' }).badge, '直觉陷阱');
 
 // 5. P1 regression: played === Stockfish best, Maia diverges (e.g. 7.Qb3 vs Maia Bg5)
 const qb3Spec = buildShareCardSpec({

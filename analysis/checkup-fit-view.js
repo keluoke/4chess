@@ -1,8 +1,8 @@
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { parseFenBoard, parseUciSquares } from './share-card.js?v=20261124-player-copy';
+import { parseFenBoard, parseUciSquares } from './share-card.js?v=20261124-intuition-labels';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261124-player-copy';
+import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
 import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import {
   CHECKUP_CLOSE_LOG_GAP, CHECKUP_EXAMPLE_POLICY, checkupFitBands, isCheckupFitExample, summarizeCheckupFit

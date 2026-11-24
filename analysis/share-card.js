@@ -3,7 +3,7 @@ import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { intuitionKind } from '../engine/review-policy.js?v=20261117-review-policy';
 import { BOARD_ARROW } from '../ui/board-visuals.js?v=20261124-divergence-cards';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { getLang, t } from './i18n.js?v=20261124-player-copy';
+import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
 import { canvasPng, drawShareQr, shareQr, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 export const SHARE_CARD_FORMATS = {
@@ -105,14 +105,11 @@ export function buildShareCardSpec(move = {}, {
     }
   }
 
-  const kind = intuitionKind(move);
-  const badgeMap = {
-    beyond: lang === 'en' ? 'Beyond Intuition' : '突破直觉',
-    precise: lang === 'en' ? 'Precise Intuition' : '精准直觉',
-    trap: lang === 'en' ? 'Intuition Trap' : '直觉陷阱',
-    divergence: lang === 'en' ? 'Engine vs Maia' : '人机分歧'
-  };
-  const badge = badgeMap[kind] || badgeMap.divergence;
+  // Stored traps carry confirmed evidence without the review's move-quality fields.
+  const savedTrap = move?.divergenceType === 'intuition_trap' && move.divergenceStatus === 'confirmed' &&
+    Number.isFinite(move.eslLoss);
+  const kind = intuitionKind(move) || (savedTrap ? 'trap' : null);
+  const badge = t(kind ? `reviewQuality_${kind}` : 'shareCardBadge', {}, lang);
 
   const lossPawns = Number.isFinite(move?.verifiedLossCp)
     ? (move.verifiedLossCp / 100).toFixed(2)
@@ -144,6 +141,7 @@ export function buildShareCardSpec(move = {}, {
     orientation: orientation === 'black' ? 'black' : 'white',
     elo,
     lang,
+    kind,
     badge,
     headline,
     subline,
@@ -410,9 +408,13 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
   const textWidth = portrait ? boardSize : width - textX - 48;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = green;
+  ctx.fillStyle = { trap: theme.played, beyond: theme.stockfish }[spec.kind] || green;
   ctx.font = '700 22px system-ui, sans-serif';
   ctx.fillText(spec.badge, textX, top, textWidth);
+  if (spec.kind === 'beyond') {
+    ctx.fillStyle = theme.maia;
+    ctx.fillRect(textX, top + 29, 26, 2);
+  }
 
   const headlineY = top + 44;
   const lineHeight = portrait ? 52 : 45;

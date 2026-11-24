@@ -142,7 +142,7 @@ try {
   assert.deepEqual(await pixel(moveCard, 30, 30), [238, 243, 237, 255], 'Single move uses the diagnosis paper background');
   const legendRows = await page.evaluate(async () => {
     const { buildShareCardSpec, readStudioShareBoard, renderShareCardCanvas } =
-      await import('/analysis/share-card.js?v=20261124-player-copy');
+      await import('/analysis/share-card.js?v=20261124-intuition-labels');
     const host = document.getElementById('board-container');
     const theme = readStudioShareBoard(host);
     const move = __maiaStudioApp.reviewResult.allMoves[3];
@@ -151,14 +151,24 @@ try {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const rows = [];
+    const badges = [];
     const roundRect = ctx.roundRect.bind(ctx);
     ctx.roundRect = (x, y, w, h, radius) => {
       if (h === 34) rows.push({ y, bottom: y + h });
       return roundRect(x, y, w, h, radius);
     };
+    const fillText = ctx.fillText.bind(ctx);
+    ctx.fillText = (text, x, y, width) => {
+      if (y === 64 || y === 46) badges.push([text, ctx.fillStyle]);
+      fillText(text, x, y, width);
+    };
     await renderShareCardCanvas(spec, canvas);
-    return { rows, theme };
+    const legendRows = rows.slice();
+    const highlight = { ...move, divergenceType: 'beyond_intuition', severity: 'good', lossCp: 0 };
+    await renderShareCardCanvas(buildShareCardSpec(highlight, { lang: 'zh', theme, format: 'portrait' }), canvas);
+    return { rows: legendRows, theme, badges };
   });
+  assert.deepEqual(legendRows.badges, [['Intuition trap', '#b94950'], ['神之一手', '#2e6086']]);
   assert.equal(legendRows.rows.length, 2);
   assert(legendRows.rows[1].y > legendRows.rows[0].bottom, 'Long labels use two separate rows');
   assert(legendRows.rows[1].bottom < 410, 'The second legend row ends above the QR quiet zone');

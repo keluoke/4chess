@@ -168,7 +168,8 @@ try {
   assert.equal(await metric('b', 'trap').innerText(), '1'); assert.equal(await metric('b', 'beyond').innerText(), '1');
   assert.equal(await metric('w', 'trap').innerText(), '0');
   assert.equal(await page.locator('#review-overview #intuition-toggle').isHidden(), true);
-  assert.deepEqual(await page.locator('.review-intuition-card').evaluateAll(cards => cards.map(card => card.dataset.kind)), ['trap', 'beyond', 'precise']);
+  const intuitionTitles = page.locator('.review-intuition-kind');
+  assert.deepEqual(await intuitionTitles.allTextContents(), ['Intuition trap', 'Precise intuition', 'Beyond intuition']);
   assert.equal(await count('b', 'quality:unknown').innerText(), '1'); assert.equal(await count('w', 'quality:forced').innerText(), '1');
   const appearance = button => button.evaluate(el => {
     const style = getComputedStyle(el);
@@ -280,6 +281,7 @@ try {
   await page.locator('#review-settings #btn-lang-toggle').click();
   await page.keyboard.press('Escape');
   assert.match(await page.locator('#review-overview h2').innerText(), /双方复盘总览/);
+  assert.deepEqual(await intuitionTitles.allTextContents(), ['直觉陷阱', '精准突破', '神之一手']);
   assert.equal(await page.title(), '歧路 Diverge · 局面分析与棋局复盘');
   assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /对比 Stockfish/);
   await page.evaluate(() => { document.querySelector('.insight-column').scrollTop = 0; });
@@ -300,6 +302,13 @@ try {
   assert.equal(await overview.isVisible(), false);
   await page.locator('#review-overview').scrollIntoViewIfNeeded();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No page-wide overflow on mobile');
+  assert(await intuitionTitles.evaluateAll(titles => titles.length === 3 && titles.every(title => {
+    const range = document.createRange();
+    range.selectNodeContents(title);
+    const [text, ...wraps] = range.getClientRects();
+    const button = title.getBoundingClientRect();
+    return text && !wraps.length && text.left >= button.left && text.right <= button.right;
+  })), 'All three Chinese labels fit on one line on a 390px screen');
   await page.screenshot({ path: path.join(output, 'mobile-zh.png'), fullPage: true });
   // End remains available while an engine request is pending; the late result is ignored.
   await page.evaluate(() => {
@@ -404,7 +413,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-player-copy');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-intuition-labels');
     setLanguage('en');
     window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {
