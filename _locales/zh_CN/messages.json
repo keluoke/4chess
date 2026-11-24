@@ -25,7 +25,7 @@
     "description": "弹窗副标题"
   },
   "statusReady": {
-    "message": "🟢 JS Float32 + SF19 就绪",
+    "message": "🟢 双引擎已就绪",
     "description": "引擎就绪状态"
   },
   "floatingPanelTitle": {
@@ -79,7 +79,7 @@
     "description": "2200 等级分"
   },
   "dualEngineArchLabel": {
-    "message": "双引擎架构",
+    "message": "分析引擎",
     "description": "双引擎架构标签"
   },
   "modelSpecLabel": {
@@ -95,15 +95,15 @@
     "description": "核心特性分组标题"
   },
   "featureChessformer": {
-    "message": "64 方格独立注意力变换器",
+    "message": "查看同段位棋手可能会选的着法",
     "description": "Chessformer 特性"
   },
   "featureSliced": {
-    "message": "计算分段执行，保持棋盘交互响应",
+    "message": "分析时仍可操作棋盘",
     "description": "切片计算特性"
   },
   "featureLru": {
-    "message": "回看时复用可用的分析缓存",
+    "message": "回看时复用已有分析",
     "description": "LRU 缓存特性"
   },
   "reviewOnly": {
@@ -116,16 +116,16 @@
     "message": "扫描网页棋图，或复盘完赛棋局，探索两种选择的分歧。"
   },
   "eloHelp": {
-    "message": "用于 Maia 候选着法预测"
+    "message": "看这个等级分段的棋手可能会怎么走"
   },
   "modelStandard": {
-    "message": "标准 · 28 MB"
+    "message": "标准 · 29 MB"
   },
   "modelLarge": {
-    "message": "大规格 · 104 MB"
+    "message": "大规格 · 109 MB"
   },
   "modelCacheHelp": {
-    "message": "首次使用下载模型，完成后缓存在浏览器中。"
+    "message": "下载后的模型可在此浏览器中复用。"
   },
   "fairPlayNote": {
     "message": "对局进行中自动锁定，结束后立即解锁复盘。"

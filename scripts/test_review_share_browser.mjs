@@ -125,8 +125,8 @@ try {
   }, anonymous.hash);
   assert.deepEqual([data.white, data.black, data.source], ['', '', null]);
   assert.equal(anonymous.hash.includes('secret'), false);
-  await view.goto(origin + shared.pathname + '#review=invalid');
-  await view.waitForFunction(() => !document.getElementById('snapshot-status').hidden && /invalid|损坏/.test(document.getElementById('snapshot-status').textContent));
+  await view.goto(origin + shared.pathname + '?lang=zh#review=invalid');
+  await view.getByText('无法打开这份复盘，请让分享者重新复制链接。', { exact: true }).waitFor();
   assert(await view.locator('#snapshot-report').isHidden());
 
   await page.locator('#review-share-close').click();
@@ -142,7 +142,7 @@ try {
   assert.deepEqual(await pixel(moveCard, 30, 30), [238, 243, 237, 255], 'Single move uses the diagnosis paper background');
   const legendRows = await page.evaluate(async () => {
     const { buildShareCardSpec, readStudioShareBoard, renderShareCardCanvas } =
-      await import('/analysis/share-card.js?v=20261124-checkup-results');
+      await import('/analysis/share-card.js?v=20261124-player-copy');
     const host = document.getElementById('board-container');
     const theme = readStudioShareBoard(host);
     const move = __maiaStudioApp.reviewResult.allMoves[3];

@@ -25,7 +25,7 @@
     "description": "Popup subtitle below Diverge"
   },
   "statusReady": {
-    "message": "🟢 JS Float32 + SF19 Ready",
+    "message": "🟢 Both engines ready",
     "description": "Engine ready status pill"
   },
   "floatingPanelTitle": {
@@ -79,7 +79,7 @@
     "description": "Elo 2200 label"
   },
   "dualEngineArchLabel": {
-    "message": "Dual-Engine Architecture",
+    "message": "Analysis engines",
     "description": "Dual engine label"
   },
   "modelSpecLabel": {
@@ -95,15 +95,15 @@
     "description": "Core features section title"
   },
   "featureChessformer": {
-    "message": "64-square independent attention transformer",
+    "message": "See what players at your rating might play",
     "description": "Chessformer feature"
   },
   "featureSliced": {
-    "message": "Computation is split into tasks to keep the board responsive",
+    "message": "Keep using the board during analysis",
     "description": "Sliced computing feature"
   },
   "featureLru": {
-    "message": "Reuse available cached analysis results",
+    "message": "Reuse available analysis when revisiting a position",
     "description": "LRU cache feature"
   },
   "reviewOnly": {
@@ -116,16 +116,16 @@
     "message": "Scan a webpage diagram or revisit a finished game. Compare both perspectives."
   },
   "eloHelp": {
-    "message": "For Maia move predictions"
+    "message": "See what players at this rating might play"
   },
   "modelStandard": {
-    "message": "Standard · 28 MB"
+    "message": "Standard · 29 MB"
   },
   "modelLarge": {
-    "message": "Large · 104 MB"
+    "message": "Large · 109 MB"
   },
   "modelCacheHelp": {
-    "message": "Downloaded on first use, then cached in your browser."
+    "message": "Reuse downloaded models in this browser."
   },
   "fairPlayNote": {
     "message": "Locked during live games. Review unlocks when the game ends."

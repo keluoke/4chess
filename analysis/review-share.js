@@ -1,6 +1,6 @@
-import { t, getLang } from './i18n.js?v=20261124-checkup-results';
+import { t, getLang } from './i18n.js?v=20261124-player-copy';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-checkup-results';
+import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-player-copy';
 import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
 import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-divergence-cards';
 
@@ -71,7 +71,7 @@ async function drawReport(canvas, report, url, theme, isCurrent) {
   fit(ctx, report.opening || t('accuracyLabel'), 60, 164);
   if (report.maiaCoverage && report.maiaCoverage < report.plies.length) {
     ctx.font = '500 18px system-ui';
-    fit(ctx, 'Maia · ' + t('accuracySamples', { valid: report.maiaCoverage, total: report.plies.length }), 60, 199);
+    fit(ctx, t('reviewMaiaSamples', { valid: report.maiaCoverage, total: report.plies.length }), 60, 199);
   }
   for (const [i, side] of ['reviewWhite', 'reviewBlack'].entries()) {
     const x = i ? 550 : 60;

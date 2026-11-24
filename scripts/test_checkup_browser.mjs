@@ -192,7 +192,7 @@ try {
   const overview = page.locator('#checkup-overview-body');
   await overview.getByText('3 completed games', { exact: true }).waitFor();
   assert.match(await overview.locator('.checkup-result-total').innerText(), /67%[\s\S]*2 W[\s\S]*0 D[\s\S]*1 L/);
-  assert.match(await overview.locator('.checkup-hero-summary').innerText(), /Black scores 50 percentage points higher.*100% of losses were on time/);
+  assert.match(await overview.locator('.checkup-hero-summary').innerText(), /Better results with Black.*100% of losses were on time/);
   const moreOpenings = overview.locator('[data-detail="more-w"]');
   assert(await moreOpenings.locator('[data-detail="w:C65"]').isHidden());
   await moreOpenings.getByText('See more common openings').click();
@@ -576,7 +576,7 @@ try {
   await closeShare();
 
   await page.evaluate(async () => {
-    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-checkup-results');
+    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-player-copy');
     const checkup = __maiaStudioApp.checkup;
     const games = [1600, 1650, 1700].map(playedRating => ({
       platform: 'lichess', timeClass: 'rapid', playedRating, fitSamples: [{ scores: [0] }]

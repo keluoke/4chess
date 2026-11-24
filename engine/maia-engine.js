@@ -8,13 +8,13 @@
  */
 
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261124-checkup-cards-r2';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261124-player-copy';
 import { StockfishInBrowser } from './stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { MAIA_VARIANTS } from './engine-variants.js';
 
 export { modelSourceCandidates } from './model-sources.js';
 import { modelSourceCandidates } from './model-sources.js';
-import { connectModelCache } from './model-cache-client.js?v=20261124-checkup-cards-r2';
+import { connectModelCache } from './model-cache-client.js?v=20261124-player-copy';
 
 export class MaiaEngine {
   constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m' } = {}) {
@@ -52,7 +52,7 @@ export class MaiaEngine {
         percent: 0,
         speed: '',
         loadedMB: '0',
-        totalMB: '28.0',
+        totalMB: '--',
         source: '未启动',
         error: null
       },
@@ -85,7 +85,7 @@ export class MaiaEngine {
       const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.getURL && window.location.protocol === 'chrome-extension:';
       const workerUrl = isExtension
         ? chrome.runtime.getURL('engine/maia-worker.js')
-        : new URL('./maia-worker.js?v=20261124-checkup-cards-r2', import.meta.url).href;
+        : new URL('./maia-worker.js?v=20261124-player-copy', import.meta.url).href;
 
       this.worker = new Worker(workerUrl, { type: 'module' });
       this.backendName = '浏览器端 Web Worker + Stockfish WASM';

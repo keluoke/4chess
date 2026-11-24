@@ -17,15 +17,15 @@ const releaseModules = new Map([
   '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
   '/analysis/review-explorer.js', '/analysis/review-share.js', '/analysis/share-card.js',
   '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
-  '/analysis/challenge.js'
- ].map(path => [path, '20261124-checkup-results']),
+  '/analysis/challenge.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
+  '/engine/model-cache-client.js', '/engine/model-loader.js'
+ ].map(path => [path, '20261124-player-copy']),
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']
   .map(path => [path, '20261124-divergence-cards']),
  ...[
   '/ui/theme.js', '/analysis/checkup-archives.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/study-store.js',
   '/analysis/checkup-fit.js', '/analysis/challenge-link.js', '/engine/game-analyzer.js', '/engine/stockfish-inbrowser.js',
-  '/engine/engine-preferences.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
-  '/engine/model-cache-client.js', '/engine/model-loader.js'
+  '/engine/engine-preferences.js'
  ].map(path => [path, '20261124-checkup-cards-r2'])
 ]);
 const staleModuleRequests = [];

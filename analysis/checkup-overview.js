@@ -1,5 +1,5 @@
 import { rankCheckupOpenings, summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards-r2';
-import { t } from './i18n.js?v=20261124-checkup-results';
+import { t } from './i18n.js?v=20261124-player-copy';
 
 const outcomes = ['win', 'draw', 'loss'];
 const color = side => t(side === 'w' ? 'checkupColorWhite' : 'checkupColorBlack');
@@ -11,7 +11,7 @@ export function overviewSummary(result) {
   const summary = [];
   if (w.count && b.count) {
     const gap = Math.round((ratio(w.points, w.count) - ratio(b.points, b.count)) * 100);
-    summary.push(gap ? t('checkupSummaryLead', { side: color(gap > 0 ? 'w' : 'b'), gap: Math.abs(gap) }) : t('checkupSummaryEven'));
+    summary.push(gap ? t('checkupSummaryLead', { side: color(gap > 0 ? 'w' : 'b') }) : t('checkupSummaryEven'));
   }
   if (result.total.loss) {
     summary.push(t('checkupSummaryTimeLoss', { rate: checkupPercent(result.pressure.timeoutLosses, result.total.loss) }));

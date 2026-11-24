@@ -1,5 +1,7 @@
 import { ModelCache } from './model-cache.js';
 
+const BYTES_PER_MB = 1_000_000;
+
 export function getModelCacheKey(url) {
   let hash = 0;
   for (let i = 0; i < url.length; i++) {
@@ -37,7 +39,7 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
     if (!cached) continue;
     try {
       validateModelBytes(cached, expected);
-      onProgress?.({ percent: 100, speedMBps: '∞', receivedMB: (cached.byteLength / 1048576).toFixed(1), totalMB: (cached.byteLength / 1048576).toFixed(1), source: 'cache' });
+      onProgress?.({ percent: 100, speedMBps: '∞', receivedMB: (cached.byteLength / BYTES_PER_MB).toFixed(1), totalMB: (cached.byteLength / BYTES_PER_MB).toFixed(1), source: 'cache' });
       return { buffer: cached, source: 'cache', persisted: true };
     } catch { await cache.clearCache(key); }
   }
@@ -73,15 +75,15 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
         receivedLength += value.length;
 
         const elapsedSec = (performance.now() - startTime) / 1000;
-        const speedMBps = elapsedSec > 0.1 ? ((receivedLength / (1024 * 1024)) / elapsedSec).toFixed(1) : '...';
+        const speedMBps = elapsedSec > 0.1 ? ((receivedLength / BYTES_PER_MB) / elapsedSec).toFixed(1) : '...';
         const percent = contentLength ? Math.min(99, Math.floor(receivedLength / contentLength * 100)) : null;
 
         if (onProgress) {
           onProgress({
             percent,
             speedMBps,
-            receivedMB: (receivedLength / (1024 * 1024)).toFixed(1),
-            totalMB: contentLength ? (contentLength / 1048576).toFixed(1) : '--',
+            receivedMB: (receivedLength / BYTES_PER_MB).toFixed(1),
+            totalMB: contentLength ? (contentLength / BYTES_PER_MB).toFixed(1) : '--',
             source: 'cdn'
           });
         }
@@ -113,7 +115,7 @@ export async function readModelBytes(url, onProgress, expected, cache = ModelCac
     arrayBuffer = await res.arrayBuffer();
   }
 
-  const sizeMB = (arrayBuffer.byteLength / 1048576).toFixed(1);
+  const sizeMB = (arrayBuffer.byteLength / BYTES_PER_MB).toFixed(1);
   onProgress?.({ percent: 100, speedMBps: '', receivedMB: sizeMB, totalMB: sizeMB, source: 'cdn' });
   validateModelBytes(arrayBuffer, expected);
   const persisted = await cache.saveModel(cacheKey, arrayBuffer);

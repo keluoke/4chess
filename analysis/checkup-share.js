@@ -1,12 +1,12 @@
-import { t, getLang } from './i18n.js?v=20261124-checkup-results';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-checkup-results';
+import { t, getLang } from './i18n.js?v=20261124-player-copy';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-player-copy';
 import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitBandLabel, checkupFitComparison, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
-} from './checkup-fit-view.js?v=20261124-checkup-results';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-checkup-results';
+} from './checkup-fit-view.js?v=20261124-player-copy';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-player-copy';
 import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 const outcomes = ['win', 'draw', 'loss'];

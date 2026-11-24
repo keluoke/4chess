@@ -200,7 +200,7 @@ try {
   const reportBeforeBranch = await page.evaluate(() => JSON.stringify(window.__maiaStudioApp.reviewResult));
   await page.evaluate(async () => {
     const app = window.__maiaStudioApp;
-    const { legalVariation } = await import('./position-analysis.js?v=20261124-checkup-results');
+    const { legalVariation } = await import('./position-analysis.js?v=20261124-player-copy');
     const initialize = app.maiaEngine.initialize;
     const waiting = new Promise(resolve => { window.releaseBranchMaia = () => { app.maiaEngine.initialize = initialize; resolve(); }; });
     app.maiaEngine.initialize = () => waiting;

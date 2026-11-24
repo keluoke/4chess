@@ -1,6 +1,6 @@
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
-import { EvalChart } from './eval-chart.js?v=20261124-checkup-results';
-import { t, initI18n, getLang } from './i18n.js?v=20261124-checkup-results';
+import { EvalChart } from './eval-chart.js?v=20261124-player-copy';
+import { t, initI18n, getLang } from './i18n.js?v=20261124-player-copy';
 import { decodeReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
@@ -32,7 +32,7 @@ function renderSnapshot(report) {
   byId('snapshot-source').textContent = [t('snapshotProvenance'), engine,
     report.maxDepth && ('D' + report.minDepth + (report.maxDepth > report.minDepth ? '–' + report.maxDepth : '')),
     report.maiaCoverage && [model, report.elo && ('Elo ' + report.elo),
-      report.maiaCoverage < report.plies.length && t('accuracySamples', { valid: report.maiaCoverage, total: report.plies.length })].filter(Boolean).join(' · '),
+      report.maiaCoverage < report.plies.length && t('reviewMaiaSamples', { valid: report.maiaCoverage, total: report.plies.length })].filter(Boolean).join(' · '),
     report.verified > 0 && t('accuracyVerifiedDepth', { count: report.verified, depth: report.verifiedDepth })].filter(Boolean).join(' · ');
 
   const boardEl = byId('snapshot-board');

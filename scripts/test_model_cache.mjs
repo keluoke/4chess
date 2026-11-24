@@ -32,6 +32,17 @@ try {
   assert.equal(downloads, 3);
   const spec = MAIA_VARIANTS['5m'];
   const key = getModelCacheKey(spec.url);
+  const model = new Uint8Array(2_000_000);
+  model.set(new Uint8Array(fixture('5m')));
+  saved.delete(key);
+  const progress = [];
+  globalThis.fetch = async () => new Response(model);
+  await readModelBytes(spec.url, update => progress.push(update), spec.expected, cache);
+  assert.ok(progress.some(update => update.percent === null && update.receivedMB === '2.0'),
+    'A download without a content length reports decimal megabytes');
+  assert.equal(progress.at(-1).totalMB, '2.0');
+  await readModelBytes(spec.url, update => progress.push(update), spec.expected, cache);
+  assert.equal(progress.at(-1).receivedMB, '2.0', 'The cache uses the same size unit as the download');
   // A corrupt persisted value and a wrong-variant value must be discarded and repaired.
   for (const invalid of [new ArrayBuffer(2), fixture('79m')]) {
     saved.set(key, invalid);

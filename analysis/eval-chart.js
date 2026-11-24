@@ -1,6 +1,6 @@
 import { animateStudy, cancelMotion } from './workbench-motion.js?v=20261103-jade';
 /** Evaluation timeline. Original game and study branches never share mutable scores. */
-import { t, onLanguageChange } from './i18n.js?v=20261124-checkup-results';
+import { t, onLanguageChange } from './i18n.js?v=20261124-player-copy';
 const NS = 'http://www.w3.org/2000/svg';
 
 export class EvalChart {
