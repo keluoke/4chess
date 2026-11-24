@@ -100,6 +100,22 @@ try {
   await website.goto('https://4chess.cc/analysis/');
   assert.deepEqual(await studioLoad(website), { ready: true, source: 'IndexedDB 缓存', worker: true });
   assert.equal(downloads, 1, 'Packaged and installed-extension website workers reuse the same bytes');
+  const live = await run.context.newPage();
+  await live.goto('https://4chess.cc/live/');
+  assert.deepEqual(await studioLoad(live), { ready: true, source: 'IndexedDB 缓存', worker: true });
+  assert.equal(downloads, 1, 'The broadcast page reuses the installed extension cache');
+  await run.sw.evaluate(() => chrome.storage.local.set({ maiaVariant: '23m', stockfishVariant: 'standard' }));
+  const livePrefs = await live.evaluate(async () => (await import('/engine/engine-preferences.js')).initializePreferences());
+  assert.equal(livePrefs.maiaVariant, '23m');
+  assert.equal(livePrefs.stockfishVariant, 'standard');
+  await live.evaluate(async () => (await import('/engine/engine-preferences.js')).savePreferences({ maiaVariant: '5m', stockfishVariant: 'lite' }));
+  await live.waitForFunction(async () => (await import('/engine/engine-preferences.js')).getSavedPreferences().maiaVariant === '5m');
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const prefs = await run.sw.evaluate(() => chrome.storage.local.get(['maiaVariant', 'stockfishVariant']));
+    if (prefs.maiaVariant === '5m') { assert.equal(prefs.stockfishVariant, 'lite'); break; }
+    if (attempt === 19) assert.fail('Broadcast settings were not sent to the extension');
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
   await run.sw.evaluate(() => chrome.storage.local.set({ cloudflareCdnUrl: 'https://cdn.example/custom.bin' }));
   const custom = await website.evaluate(async () => {
     const { MaiaEngine } = await import('/engine/maia-engine.js');

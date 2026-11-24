@@ -7,6 +7,7 @@ export async function loadStandardWorker(engine, epoch) {
   const spec = STOCKFISH_VARIANTS.standard;
   let buffer = await ModelCache.getModel(spec.key);
   if (epoch !== engine.lifecycleEpoch) return;
+  engine.downloadSource = buffer?.byteLength === spec.bytes ? 'cache' : 'cdn';
   if (!buffer || buffer.byteLength !== spec.bytes) {
     engine.downloadController = new AbortController();
     engine.downloadProgress = { percent: 0 }; engine.onDownloadProgress?.();

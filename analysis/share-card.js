@@ -4,7 +4,7 @@ import { intuitionKind } from '../engine/review-policy.js?v=20261117-review-poli
 import { BOARD_ARROW } from '../ui/board-visuals.js?v=20261124-divergence-cards';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
-import { canvasPng, drawShareQr, shareQr, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
+import { canvasPng, copyShareLink, drawShareQr, shareQr, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 export const SHARE_CARD_FORMATS = {
   landscape: { width: 1200, height: 675 },
@@ -461,20 +461,24 @@ export class ShareCardModal {
   currentMove = null;
   currentContext = {};
 
-  constructor(app) {
+  constructor(app, { allowed, format = 'landscape' } = {}) {
     this.app = app;
+    this.isAllowed = allowed;
+    this.format = format;
     this.dialog = document.getElementById('share-card-dialog');
     this.closeBtn = document.getElementById('btn-close-share-card');
     this.canvas = document.getElementById('share-card-canvas');
     this.formatButtons = [...document.querySelectorAll('#share-card-dialog [data-share-format]')];
     this.btnCopy = document.getElementById('btn-share-card-copy');
     this.btnDownload = document.getElementById('btn-share-card-download');
+    this.btnLink = document.getElementById('btn-share-card-link');
+    this.linkField = document.getElementById('share-card-link-field');
     this.statusEl = document.getElementById('share-card-status');
     this.bindEvents();
   }
 
   allowed() {
-    return !this.app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress();
+    return !this.app?.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress() && (this.isAllowed?.() ?? true);
   }
 
   bindEvents() {
@@ -507,6 +511,12 @@ export class ShareCardModal {
     }
     if (this.btnCopy) this.btnCopy.onclick = () => this.copyImage();
     if (this.btnDownload) this.btnDownload.onclick = () => this.downloadPng();
+    if (this.btnLink) this.btnLink.onclick = async () => {
+      if (!this.allowed() || !this.dialog.open || !this.currentContext.link) return;
+      const gen = this.openGeneration;
+      const copied = await copyShareLink(this.currentContext.link, this.linkField);
+      if (this.statusEl && gen === this.openGeneration) this.statusEl.textContent = copied ? this.currentContext.linkCopied : '';
+    };
   }
 
   async open(move, context = {}) {
@@ -516,6 +526,8 @@ export class ShareCardModal {
     this.exportGeneration++;
     this.currentMove = move;
     this.currentContext = context;
+    if (this.btnLink) this.btnLink.hidden = !context.link;
+    if (this.linkField) this.linkField.hidden = true;
     if (this.statusEl) this.statusEl.textContent = '';
     await this.renderPreview();
     if (!this.allowed() || gen !== this.openGeneration) return;
@@ -538,16 +550,17 @@ export class ShareCardModal {
     if (!this.currentMove || !this.canvas) return;
     this.exportGeneration++;
     this.btnCopy.disabled = this.btnDownload.disabled = true;
-    const orientation = this.app.boardUI?.orientation || (parseFenBoard(this.currentMove.fenBefore || this.currentMove.fen).turn === 'b' ? 'black' : 'white');
+    const orientation = this.currentContext.orientation || this.app?.boardUI?.orientation || (parseFenBoard(this.currentMove.fenBefore || this.currentMove.fen).turn === 'b' ? 'black' : 'white');
     const spec = buildShareCardSpec(this.currentMove, {
-      elo: this.currentContext.elo || this.app.currentElo || 1900,
-      lang: getLang(),
+      elo: this.currentContext.elo || this.app?.currentElo || 1900,
+      lang: this.currentContext.lang || getLang(),
       orientation,
-      white: this.currentContext.white || this.app.el?.metaWhite?.textContent || '',
-      black: this.currentContext.black || this.app.el?.metaBlack?.textContent || '',
+      white: this.currentContext.white || this.app?.el?.metaWhite?.textContent || '',
+      black: this.currentContext.black || this.app?.el?.metaBlack?.textContent || '',
       format: this.format,
       theme: readStudioShareBoard(document.getElementById('board-container'))
     });
+    this.currentContext.decorate?.(spec);
     const isCurrent = () => renderGen === this.renderGeneration && this.allowed();
     const rendered = await renderShareCardCanvas(spec, this.canvas, { isCurrent });
     if (isCurrent()) this.btnCopy.disabled = this.btnDownload.disabled = !rendered;
@@ -563,10 +576,10 @@ export class ShareCardModal {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `diverge-move-${moveNum}-${format}.png`;
+    link.download = this.currentContext.filename?.(format) || `diverge-move-${moveNum}-${format}.png`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    if (this.statusEl) this.statusEl.textContent = t('shareCardDownloaded');
+    if (this.statusEl) this.statusEl.textContent = t('shareCardDownloaded', {}, this.currentContext.lang);
   }
 
   async copyImage() {
@@ -576,13 +589,13 @@ export class ShareCardModal {
       const blob = await canvasPng(this.canvas);
       if (!blob || !this.allowed() || gen !== this.exportGeneration || !this.dialog?.open) return;
       if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
-        if (this.statusEl) this.statusEl.textContent = t('shareCardCopyUnsupported');
+        if (this.statusEl) this.statusEl.textContent = t('shareCardCopyUnsupported', {}, this.currentContext.lang);
         return;
       }
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      if (this.statusEl) this.statusEl.textContent = t('shareCardCopied');
+      if (this.statusEl) this.statusEl.textContent = t('shareCardCopied', {}, this.currentContext.lang);
     } catch {
-      if (this.statusEl) this.statusEl.textContent = t('shareCardCopyUnsupported');
+      if (this.statusEl) this.statusEl.textContent = t('shareCardCopyUnsupported', {}, this.currentContext.lang);
     }
   }
 }

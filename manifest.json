@@ -76,6 +76,11 @@
         "content/checkup-reminders-bridge.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://4chess.cc/live", "https://4chess.cc/live/*"],
+      "js": ["content/preferences-bridge.js", "content/model-cache-bridge.js"],
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

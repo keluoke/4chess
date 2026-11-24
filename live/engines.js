@@ -3,20 +3,40 @@ import { MaiaEngine } from '../engine/maia-engine.js';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';
 
-const DEPTH = 22;
 const VERIFIED_MIN_DEPTH = 18;
 const usable = (result, depth) => Number.isFinite(result?.scoreCp)
   && !result.isBound && (result.terminal || result.depth >= depth);
 const chance = move => move?.rawProb ?? (Number.isFinite(move?.prob) ? move.prob / 100 : null);
 
 export class LiveEngines {
-  constructor() {
-    this.stockfish = new StockfishInBrowser({ variant: 'standard' });
-    this.maia = new MaiaEngine(null, this.stockfish, { variant: '79m' });
+  constructor({ stockfishVariant, maiaVariant, depth }, onStatus, stockfish = null) {
+    this.depth = depth;
+    this.stockfish = stockfish ?? new StockfishInBrowser({ variant: stockfishVariant });
+    this.stockfish.onDownloadProgress = onStatus;
+    this.maia = new MaiaEngine(onStatus, this.stockfish, { variant: maiaVariant });
   }
 
   cancel() {
     this.stockfish.stop();
+  }
+
+  dispose(keepStockfish) {
+    this.maia.dispose();
+    this.stockfish.onDownloadProgress = null;
+    this.stockfish.onReadyCallback = null;
+    if (!keepStockfish) this.stockfish.reset();
+  }
+
+  status() {
+    const sf = this.stockfish;
+    const maia = this.maia.status.maia;
+    return {
+      sf: {
+        state: sf.isReady ? 'ready' : sf.initPromise ? (sf.downloadProgress ? 'downloading' : 'starting') : sf.lastError ? 'error' : 'idle',
+        percent: sf.downloadProgress?.percent, source: sf.variant === 'lite' ? 'bundled' : sf.downloadSource
+      },
+      maia: { ...maia, source: maia.source?.includes('IndexedDB') ? 'cache' : maia.source?.includes('CDN') ? 'cdn' : null }
+    };
   }
 
   async sampleMaia({ fen, history }, elo, obsolete) {
@@ -27,7 +47,8 @@ export class LiveEngines {
 
   async inspect({ move, fenBefore, history, elo }, obsolete, onStockfish) {
     const maiaReady = this.maia.initialize().then(() => true, () => false);
-    const result = await this.stockfish.evaluate(fenBefore, DEPTH, 8000, 2, 7000);
+    const budget = this.depth === 22 ? 7000 : this.depth === 20 ? 4000 : 3200;
+    const result = await this.stockfish.evaluate(fenBefore, this.depth, budget + 1000, 2, budget);
     if (obsolete()) return null;
     if (result) onStockfish?.({ score: result.score, depth: result.depth, bestSan: result.bestMove?.san });
     const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fenBefore, elo, result, obsolete, history) : null;
@@ -57,7 +78,7 @@ export class LiveEngines {
     if (!usable(result, VERIFIED_MIN_DEPTH) || !likely || !Number.isFinite(probability)) return display;
     if (new ChessBoard(fenBefore).getLegalMoves().length <= 1 || obsolete()) return display;
 
-    const depth = Math.min(DEPTH, result.depth);
+    const depth = Math.min(this.depth, result.depth);
     const scores = new Map((result.lines || [])
       .filter(line => usable(line, depth))
       .map(line => [line.uci, line.scoreCp]));
@@ -65,7 +86,7 @@ export class LiveEngines {
     const scoreFor = async (uci, nextFen) => {
       if (scores.has(uci)) return scores.get(uci);
       if (obsolete()) return null;
-      const score = await this.stockfish.evaluate(nextFen, depth - 1, 5000, 1, 4000);
+      const score = await this.stockfish.evaluate(nextFen, depth - 1, budget, 1, budget - 500);
       return usable(score, depth - 1) ? -score.scoreCp : null;
     };
     const played = await scoreFor(move.uci, move.fen);

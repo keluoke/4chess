@@ -57,35 +57,49 @@ export function preferencePatch(raw = {}) {
   else if (patch.maia3_target_elo !== undefined) patch.defaultElo = patch.maia3_target_elo;
   return patch;
 }
+
+export function storedPreferencePatch(raw = {}) {
+  const patch = preferencePatch(raw);
+  const legacyModel = Object.entries(MAIA_VARIANTS).find(([, spec]) => spec.url === raw?.cloudflareCdnUrl)?.[0];
+  if (!patch.maiaVariant && legacyModel) patch.maiaVariant = legacyModel;
+  return patch;
+}
 const listeners = new Set();
 let snapshot = null, linked = false, initialized = false;
+let pendingBridgePatch = {};
 const requestId = Math.random().toString(36).slice(2);
 const hasExtensionStorage = () => !!globalThis.chrome?.storage?.local;
 function localSnapshot() {
   let raw = {};
   try {
     const versions = JSON.parse(localStorage.getItem('diverge_engine_versions') || '{}');
-    raw = { maiaVariant: versions.model, stockfishVariant: versions.engine, maia3_lang: localStorage.getItem('maia3_lang'), defaultElo: Number(localStorage.getItem('maia3_target_elo')) || 1900, diverge_ui_theme: localStorage.getItem('diverge_ui_theme'), diverge_sound_enabled: localStorage.getItem('diverge_sound_enabled') !== 'false', ...JSON.parse(localStorage.getItem('diverge_preferences') || '{}') };
+    raw = { maiaVariant: versions.model, stockfishVariant: versions.engine, maia3_lang: localStorage.getItem('maia3_lang'), defaultElo: Number(localStorage.getItem('maia3_target_elo')), diverge_ui_theme: localStorage.getItem('diverge_ui_theme'), diverge_sound_enabled: localStorage.getItem('diverge_sound_enabled') !== 'false', ...JSON.parse(localStorage.getItem('diverge_preferences') || '{}') };
   } catch {}
   return raw;
 }
 export function getPreferences() {
-  const saved = preferencePatch(snapshot || localSnapshot());
+  const saved = getSavedPreferences();
   return { maiaVariant: '5m', stockfishVariant: 'lite', maia3_lang: (globalThis.navigator?.language || 'zh').startsWith('zh') ? 'zh' : 'en', defaultElo: 1900, showHeatmap: false, showArrows: true, showStockfishArrows: true, showProbability: true, studio_max_depth: 20, studio_review_mode: 'quick', studio_orientation: 'white', diverge_sound_enabled: true, ...saved };
 }
+export const getSavedPreferences = () => ({ ...(snapshot ?? storedPreferencePatch(localSnapshot())) });
+
+function notifyPreferences() {
+  for (const listener of listeners) listener(getPreferences(), linked || hasExtensionStorage());
+}
+
 function receive(patch) {
-  snapshot = { ...getPreferences(), ...preferencePatch(patch) };
+  snapshot = { ...getSavedPreferences(), ...storedPreferencePatch(patch) };
   if (!hasExtensionStorage()) {
     try {
       localStorage.setItem('diverge_preferences', JSON.stringify(snapshot));
       localStorage.setItem('diverge_engine_versions', JSON.stringify({ engine: snapshot.stockfishVariant, model: snapshot.maiaVariant }));
-      localStorage.setItem('maia3_lang', snapshot.maia3_lang);
-      localStorage.setItem('maia3_target_elo', String(snapshot.defaultElo));
+      if (snapshot.maia3_lang) localStorage.setItem('maia3_lang', snapshot.maia3_lang);
+      if (snapshot.defaultElo) localStorage.setItem('maia3_target_elo', String(snapshot.defaultElo));
       if (snapshot.diverge_ui_theme) localStorage.setItem('diverge_ui_theme', snapshot.diverge_ui_theme);
       localStorage.setItem('diverge_sound_enabled', String(snapshot.diverge_sound_enabled));
     } catch {}
   }
-  for (const listener of listeners) listener(getPreferences(), linked || hasExtensionStorage());
+  notifyPreferences();
 }
 export function subscribePreferences(listener) { listeners.add(listener); return () => listeners.delete(listener); }
 export async function savePreferences(raw) {
@@ -99,6 +113,7 @@ export async function savePreferences(raw) {
   } else {
     receive(patch);
     if (linked) window.postMessage({ type: 'DIVERGE_PREFS_WRITE', requestId, patch }, location.origin);
+    else if (initialized) Object.assign(pendingBridgePatch, patch);
   }
 }
 export async function initializePreferences() {
@@ -106,21 +121,33 @@ export async function initializePreferences() {
   initialized = true;
   if (hasExtensionStorage()) {
     const raw = await chrome.storage.local.get([...SHARED_PREFERENCE_KEYS, 'cloudflareCdnUrl']);
-    snapshot = { ...preferencePatch(raw), ...preferencePatch(normalizeEnginePreferences(raw)) };
+    snapshot = storedPreferencePatch(raw);
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       const patch = Object.fromEntries(Object.entries(changes).map(([key, change]) => [key, change.newValue]));
-      if (Object.keys(preferencePatch(patch)).length) receive(patch);
+      if (Object.keys(storedPreferencePatch(patch)).length) receive(patch);
     });
     return getPreferences();
   }
-  snapshot = { ...getPreferences() };
-  window.addEventListener('storage', event => { if (event.key === 'diverge_preferences') { try { receive(JSON.parse(event.newValue || '{}')); } catch {} } });
+  snapshot = storedPreferencePatch(localSnapshot());
+  window.addEventListener('storage', event => {
+    if (event.key !== 'diverge_preferences' && event.key !== null) return;
+    try {
+      snapshot = storedPreferencePatch(event.newValue ? JSON.parse(event.newValue) : localSnapshot());
+      notifyPreferences();
+    } catch {}
+  });
   return new Promise(resolve => {
     const timer = setTimeout(() => resolve(getPreferences()), 500);
     window.addEventListener('message', event => {
       if (event.source !== window || event.origin !== location.origin || event.data?.type !== 'DIVERGE_PREFS_SNAPSHOT' || event.data.requestId !== requestId) return;
-      linked = true; clearTimeout(timer); receive(event.data.preferences); resolve(getPreferences());
+      linked = true;
+      clearTimeout(timer);
+      const pending = pendingBridgePatch;
+      pendingBridgePatch = {};
+      receive({ ...storedPreferencePatch(event.data.preferences), ...pending });
+      if (Object.keys(pending).length) window.postMessage({ type: 'DIVERGE_PREFS_WRITE', requestId, patch: pending }, location.origin);
+      resolve(getPreferences());
     });
     window.postMessage({ type: 'DIVERGE_PREFS_READ', requestId }, location.origin);
   });

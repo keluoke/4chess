@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124-trend">
+  <link rel="stylesheet" href="./live.css?v=20261124-match">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -24,20 +24,26 @@
       </div>
       <div class="match-score" id="match-score" aria-label="赛况总比分"></div>
     </section>
+    <nav id="round-rail" class="round-rail" aria-label="赛程与比分"></nav>
     <div class="event-layout">
       <section class="board-column" aria-label="转播棋盘">
+        <header class="round-heading" id="round-heading" hidden>
+          <div><h2 id="round-title"></h2><p id="round-players"></p></div>
+          <div class="round-kickoff"><time id="round-time"></time><strong id="round-countdown"></strong></div>
+        </header>
         <div class="seat" id="black-seat"><span id="black-name">黑方</span><time id="black-clock">–:––</time></div>
         <div id="event-board" aria-label="国际象棋棋盘"></div>
         <div class="seat" id="white-seat"><span id="white-name">白方</span><time id="white-clock">–:––</time></div>
         <div class="round-controls">
-          <label for="round-select" data-copy="round">轮次</label>
-          <select id="round-select" disabled></select>
           <button id="first" type="button" aria-label="第一步" data-label="first">|‹</button>
           <button id="previous" type="button" aria-label="上一步" data-label="previous">‹</button>
           <button id="next" type="button" aria-label="下一步" data-label="next">›</button>
           <button id="latest" type="button" data-copy="latest">回到最新</button>
           <button id="flip-board" type="button" data-copy="flip">翻转棋盘</button>
+          <button id="copy-live-link" type="button" data-copy="copyGame" disabled>复制本局链接</button>
         </div>
+        <input id="live-link-field" class="live-link-field" type="url" readonly aria-label="分享链接" data-label="shareLink" hidden>
+        <p id="live-link-status" class="live-link-status" role="status"></p>
         <a id="workbench-game" class="workbench-game" target="_blank" rel="noopener" hidden></a>
       </section>
       <section class="event-panel" aria-label="着法和双引擎">
@@ -57,10 +63,19 @@
               </select> Elo
             </label>
           </header>
+          <div class="live-engine-settings">
+            <label><span>Stockfish</span><select id="live-sf" disabled><option value="lite">SF19 Lite</option><option value="standard">SF19 Standard</option></select></label>
+            <label><span>Maia-3</span><select id="live-maia" disabled><option value="5m">5M</option><option value="23m" selected>23M</option><option value="79m">79M</option></select></label>
+          </div>
+          <p id="engine-hint" class="engine-hint"></p>
+          <div class="engine-health" aria-live="polite">
+            <div><span id="sf-status"></span><progress id="sf-progress" max="100" hidden></progress></div>
+            <div><span id="maia-status"></span><progress id="maia-progress" max="100" hidden></progress></div>
+          </div>
           <p id="engine-note" role="status"></p>
           <div class="engine-lines" id="engine-lines" hidden>
-            <div><span data-copy="sfEdition">Stockfish 19 标准版 · D22</span><strong id="sf-line"></strong></div>
-            <div><span>Maia-3 79M</span><strong id="maia-line"></strong></div>
+            <div><span id="sf-edition"></span><strong id="sf-line"></strong></div>
+            <div><span id="maia-edition"></span><strong id="maia-line"></strong></div>
           </div>
           <p id="intuition-tag" class="intuition-tag" hidden></p>
           <div class="engine-actions">
@@ -88,6 +103,23 @@
       <span data-copy="delay">着法和时钟以转播为准，可能晚于现场。</span>
     </footer>
   </main>
-  <script type="module" src="./live.js?v=20261124-trend"></script>
+  <dialog class="share-card-dialog" id="share-card-dialog" aria-labelledby="share-card-title">
+    <header class="live-share-heading"><h2 id="share-card-title" data-copy="share">分享棋王战瞬间</h2><button id="btn-close-share-card" type="button" data-copy="close">关闭</button></header>
+    <div class="share-card-toolbar">
+      <div class="share-card-formats" role="group">
+        <button type="button" data-share-format="landscape" data-copy="landscape" aria-pressed="false">16:9 横版</button>
+        <button type="button" data-share-format="portrait" data-copy="portrait" aria-pressed="true">3:4 竖版</button>
+      </div>
+      <div class="share-card-actions">
+        <button id="btn-share-card-copy" type="button" data-copy="copyImage">复制图片</button>
+        <button id="btn-share-card-link" type="button" data-copy="copyLink">复制链接</button>
+        <button id="btn-share-card-download" type="button" data-copy="download">下载 PNG</button>
+      </div>
+    </div>
+    <input id="share-card-link-field" class="live-link-field" type="url" readonly aria-label="分享链接" data-label="shareLink" hidden>
+    <div class="share-card-preview-wrap"><canvas id="share-card-canvas"></canvas></div>
+    <p id="share-card-status" class="live-link-status" role="status"></p>
+  </dialog>
+  <script type="module" src="./live.js?v=20261124-match"></script>
 </body>
 </html>

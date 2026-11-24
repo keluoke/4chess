@@ -29,6 +29,17 @@ export function showCopyField(field, value) {
   field.select();
 }
 
+export async function copyShareLink(url, field) {
+  try {
+    await navigator.clipboard.writeText(url);
+    if (field) field.hidden = true;
+    return true;
+  } catch {
+    if (field) showCopyField(field, url);
+    return false;
+  }
+}
+
 export function shareQr(target) {
   const qr = qrcode(0, 'M');
   qr.addData(target, 'Byte');

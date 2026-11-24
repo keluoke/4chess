@@ -10,7 +10,7 @@ export function setModelCachePort(port) { workerPort = port; }
 
 function discoverFrameUrl() {
   if (globalThis.chrome?.runtime?.getURL) return Promise.resolve(chrome.runtime.getURL('engine/model-cache-frame.html'));
-  if (location.origin !== 'https://4chess.cc' || !/^\/analysis(?:\/|$)/.test(location.pathname)) return Promise.resolve(null);
+  if (location.origin !== 'https://4chess.cc' || !/^\/(?:analysis|live)(?:\/|$)/.test(location.pathname)) return Promise.resolve(null);
   return new Promise(resolve => {
     const id = crypto.randomUUID();
     const finish = url => { clearTimeout(timer); window.removeEventListener('message', receive); resolve(url); };
