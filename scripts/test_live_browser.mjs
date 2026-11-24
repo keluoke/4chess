@@ -7,7 +7,7 @@ import { LIVE_EVENTS } from '../cloudflare/live/events.js';
 import { eventView, fallbackRounds, parseRoundPgn } from '../cloudflare/live/model.js';
 
 const root = path.resolve(import.meta.dirname, '..');
-const mime = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html' };
+const mime = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.svg': 'image/svg+xml' };
 const server = http.createServer((req, res) => {
   let file = path.resolve(root, '.' + new URL(req.url, 'http://localhost').pathname);
   if (existsSync(file) && statSync(file).isDirectory()) file = path.join(file, 'index.html');
@@ -70,6 +70,9 @@ async function mockEngines(context) {
         const stockfish = legal.find(move => move.uci === (chess.turn === 'w' ? 'f1b5' : 'b8c6')) || legal[0];
         const maia = { ...legal.find(move => move.uci !== stockfish.uci), rawProb: .55 };
         const evaluation = chess.turn === 'w' ? { cp: 35, text: '+0.35' } : { cp: -35, text: '-0.35' };
+        const stockfishLines = [stockfish, ...legal.filter(move => move.uci !== stockfish.uci).slice(0, 2)]
+          .map(move => ({ evaluation, variation: [{ san: move.san, label: move.san }] }));
+        const maiaLines = [maia, ...legal.filter(move => move.uci !== maia.uci).slice(0, 2).map(move => ({ ...move, rawProb: .12 }))];
         const series = [{ uci: stockfish.uci, san: stockfish.san, label: stockfish.san, role: 'sf' }];
         const moves = [{ uci: stockfish.uci, rawProb: .16 }, maia];
         (window.positionRequests ||= []).push(position.fen);
@@ -77,8 +80,8 @@ async function mockEngines(context) {
           window.holdAssessment = false;
           await new Promise(resolve => { window.finishAssessment = resolve; });
         }
-        if (this.mode === 'off') return { evaluation, stockfish, depth: 18 };
-        return { evaluation, stockfish, maia, depth: 18, maiaReady: true, trend: { ...position, series, moves } };
+        if (this.mode === 'off') return { evaluation, stockfish, stockfishLines, depth: 18 };
+        return { evaluation, stockfish, stockfishLines, maia, maiaLines, depth: 18, maiaReady: true, trend: { ...position, series, moves } };
       }
       async classify(move, { fen: fenBefore }) {
         return {
@@ -112,6 +115,11 @@ try {
   assert.ok(Number.parseFloat(await page.locator('#gauge-white').evaluate(el => el.style.height)) < 50);
   assert.equal(await page.locator('#event-board [data-role="sf"]').count(), 1);
   assert.equal(await page.locator('#event-board [data-role="maia"]').count(), 1);
+  assert.equal(await page.locator('#sf-candidates li:visible').count(), 2);
+  assert.equal(await page.locator('#maia-candidates li:visible').count(), 2);
+  assert.equal(await page.locator('#btn-settings use').getAttribute('href'), '../ui/studio-controls.svg#settings');
+  await page.waitForFunction(() => document.querySelector('#btn-settings use').getBBox().width > 0);
+  assert.ok(await page.locator('#flip-board use').evaluate(icon => icon.getBBox().width > 0));
   assert.equal(await page.locator('#workbench-game').isVisible(), false);
   for (const id of ['#event-board', '#evaluation-gauge', '#white-clock', '#black-clock']) {
     const rect = await page.locator(id).boundingBox();
@@ -119,7 +127,38 @@ try {
   }
   const layout = await page.locator('#round-rail button:first-child').evaluate(button => Array.from(button.children, child => child.getBoundingClientRect().y));
   assert.ok(Math.abs(layout[0] - layout[1]) < 4, 'Round number and result occupy one line');
+  await page.evaluate(async () => {
+    const { soundEffects } = await import('/analysis/sound-effects.js?v=20261025-v115');
+    window.moveSounds = [];
+    soundEffects.playSoundForMove = san => { if (soundEffects.enabled) window.moveSounds.push(san); };
+  });
+  await page.keyboard.press('Home');
+  assert.equal(await page.locator('#ply-note').innerText(), '0 / 3');
+  await page.keyboard.press('k');
+  assert.equal(await page.locator('#ply-note').innerText(), '1 / 3');
+  assert.deepEqual(await page.evaluate(() => window.moveSounds), ['e4']);
+  await page.keyboard.press('m');
+  assert.equal(await page.locator('#sound').getAttribute('aria-pressed'), 'false');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#ply-note').innerText(), '2 / 3');
+  assert.deepEqual(await page.evaluate(() => window.moveSounds), ['e4']);
+  await page.keyboard.press('M');
+  assert.equal(await page.locator('#sound').getAttribute('aria-pressed'), 'true');
+  await page.keyboard.press('F');
+  assert.equal(await page.locator('#board-frame').evaluate(frame => frame.previousElementSibling.id), 'white-seat');
+  await page.keyboard.press('F');
+  await page.keyboard.press('j');
+  assert.equal(await page.locator('#ply-note').innerText(), '1 / 3');
+  await page.keyboard.press('Space');
+  assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'true');
+  await page.clock.fastForward(1200);
+  assert.equal(await page.locator('#ply-note').innerText(), '2 / 3');
+  await page.keyboard.press('End');
+  assert.equal(await page.locator('#ply-note').innerText(), '3 / 3');
+  assert.equal(await page.locator('#play').getAttribute('aria-pressed'), 'false');
   await page.locator('#btn-settings').click();
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await page.locator('#ply-note').innerText(), '3 / 3');
   assert.equal(await page.locator('#event-elo').inputValue(), '2600');
   assert.equal(await page.locator('#live-maia').inputValue(), '23m');
   assert.equal(await page.locator('#live-sf').inputValue(), 'lite');
@@ -264,6 +303,11 @@ try {
   const board = await page.locator('#event-board').boundingBox();
   assert.equal(board.width, board.height);
   assert.equal(board.width, 390);
+  assert.equal(await page.locator('#sf-candidates li:visible').count(), 0);
+  await page.locator('#show-lines').click();
+  assert.equal(await page.locator('#sf-candidates li:visible').count(), 2);
+  assert.equal(await page.locator('#maia-candidates li:visible').count(), 2);
+  await page.locator('#show-lines').click();
   if (process.env.LIVE_SCREENSHOTS) {
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'mobile.png'), fullPage: true });
   }
@@ -338,13 +382,14 @@ try {
   await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center('d3')] });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center('d4')] });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await touch.detach();
   await phone.locator('#ply-note').getByText('Variation').waitFor();
   assert.equal(await phone.evaluate(() => scrollY), 0);
-  await phone.locator('#moment').tap();
+  await phone.locator('#moment').click();
   await phone.locator('#share-card-dialog[open]').waitFor();
   assert.equal(await phone.locator('#share-card-canvas').evaluate(element => element.height), 1350);
-  await phone.locator('#btn-close-share-card').tap();
-  await phone.locator('#load-maia').tap();
+  await phone.locator('#btn-close-share-card').click();
+  await phone.locator('#load-maia').click();
   await phone.locator('#trend-toggle').waitFor();
   assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'download');
 

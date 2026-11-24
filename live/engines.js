@@ -1,7 +1,7 @@
 import { ChessBoard } from '../engine/chess-core.js';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
-import { whiteEvaluation } from '../engine/position-lines.js';
+import { engineLines, whiteEvaluation } from '../engine/position-lines.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';
 
 const VERIFIED_MIN_DEPTH = 18;
@@ -58,7 +58,7 @@ export class LiveEngines {
     const terminal = !new ChessBoard(fen).getLegalMoves().length;
     const maiaReady = !terminal && this.maia?.initialize().then(() => true, () => false);
     const budget = this.budget;
-    const result = await this.stockfish.evaluate(fen, this.depth, budget + 1000, 2, budget);
+    const result = await this.stockfish.evaluate(fen, this.depth, budget + 1000, 3, budget);
     if (obsolete()) return null;
     if (result) onStockfish?.(result);
     const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fen, elo, result, obsolete, history) : null;
@@ -74,13 +74,16 @@ export class LiveEngines {
   async inspect(position, obsolete, onStockfish) {
     const displayStockfish = result => ({
       evaluation: whiteEvaluation(result, position.fen), depth: result?.depth,
-      stockfish: result?.bestMove, terminal: result?.terminal
+      stockfish: result?.bestMove, terminal: result?.terminal, stockfishLines: engineLines(result, position.fen)
     });
     const entry = await this.evaluate(position, obsolete, result => onStockfish?.(displayStockfish(result)));
     if (!entry || obsolete()) return null;
     const { result, prediction } = entry;
     if (!result && !prediction?.isMaiaReady) return null;
-    const likely = prediction?.isMaiaReady ? prediction.moves?.[0] : null;
+    const legal = new Map(new ChessBoard(position.fen).getLegalMoves().map(move => [move.uci, move.san]));
+    const maiaLines = prediction?.isMaiaReady ? (prediction.moves || [])
+      .filter(move => legal.has(move.uci)).slice(0, 3).map(move => ({ ...move, san: legal.get(move.uci) })) : [];
+    const likely = maiaLines[0];
     const series = new Map();
     for (const [candidate, role] of [[result?.bestMove, 'sf'], [likely, 'maia']]) {
       if (candidate?.uci && !series.has(candidate.uci)) {
@@ -88,7 +91,7 @@ export class LiveEngines {
       }
     }
     const trend = likely ? { ...position, series: [...series.values()], moves: prediction.moves } : null;
-    return { ...displayStockfish(result), maia: likely, maiaReady: !!prediction?.isMaiaReady, trend };
+    return { ...displayStockfish(result), maia: likely, maiaLines, maiaReady: !!prediction?.isMaiaReady, trend };
   }
 
   async classify(move, before, after, obsolete) {

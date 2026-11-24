@@ -35,6 +35,11 @@ export class SoundEffects {
     return this.enabled;
   }
 
+  unlock() {
+    if (!this.enabled) return;
+    try { this._initContext(); } catch { /* Audio is optional in restricted browsers. */ }
+  }
+
   _initContext() {
     if (!this.audioCtx && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;

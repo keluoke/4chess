@@ -19,7 +19,8 @@ const releaseModules = new Map([
   '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
   '/analysis/challenge.js'
  ].map(path => [path, '20261124-intuition-labels']),
- ...['/analysis/analysis.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
+ ...['/analysis/analysis.js', '/analysis/board-controls.js'].map(path => [path, '20261124-controls']),
+ ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
   '/engine/model-cache-client.js', '/engine/model-loader.js'].map(path => [path, '20261124-mobile']),
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']
   .map(path => [path, '20261124-divergence-cards']),

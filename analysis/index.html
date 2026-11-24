@@ -81,7 +81,7 @@
       </button>
       <a id="studio-review-guide" class="btn-header btn-review-guide" href="../guide/index.html#review-method" target="_blank" rel="noopener" data-i18n="reviewGuide">复盘说明</a>
       <button type="button" class="btn-header btn-settings" id="btn-settings" data-i18n-title="reviewSettings" data-i18n-aria="reviewSettings" aria-label="分析设置" title="分析设置" aria-haspopup="dialog">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 3h5l.7 3 2.6 1.5 2.9-.9 2.5 4.3-2.2 2.1v3l2.2 2.1-2.5 4.3-2.9-.9-2.6 1.5-.7 3h-5l-.7-3-2.6-1.5-2.9.9-2.5-4.3L3 16v-3L.8 10.9 3.3 6.6l2.9.9L8.8 6z" transform="translate(2 0) scale(.83)"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="../ui/studio-controls.svg#settings"/></svg>
       </button>
     </div>
   </header>
@@ -170,21 +170,16 @@
           <button type="button" class="btn-nav" id="btn-last" data-i18n-title="btnLast" title="终局末步 (End)">▶|</button>
           <button type="button" class="btn-nav" id="btn-flip" data-i18n-title="btnFlip" title="翻转黑白视角 (快捷键: F)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
-              <path d="M7 20V4m0 0L3 8m4-4 4 4"/>
-              <path d="M17 4v16m0 0 4-4m-4 4-4-4"/>
+              <use href="../ui/studio-controls.svg#flip"/>
             </svg>
           </button>
-          <button type="button" class="btn-nav" id="btn-clear-thought-arrows" data-i18n-title="clearThoughtArrows" aria-label="清除思考箭头"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 3h4M6 7l1 14h10l1-14M10 10v7m4-7v7"/></svg></button>
+          <button type="button" class="btn-nav" id="btn-clear-thought-arrows" data-i18n-title="clearThoughtArrows" aria-label="清除思考箭头"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="../ui/studio-controls.svg#clear"/></svg></button>
           <button type="button" class="btn-nav" id="btn-sound" data-i18n-title="btnSound" title="行棋音效开关 (快捷键: M)" aria-label="行棋音效开关">
             <svg id="icon-sound-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              <use href="../ui/studio-controls.svg#sound-on"/>
             </svg>
             <svg id="icon-sound-off" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; display: none;">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-              <line x1="23" y1="9" x2="17" y2="15"/>
-              <line x1="17" y1="9" x2="23" y2="15"/>
+              <use href="../ui/studio-controls.svg#sound-off"/>
             </svg>
           </button>
         </div>
@@ -736,11 +731,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261124-mobile"></script>
+  <script type="module" src="analysis.js?v=20261124-controls"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261124-mobile-r2').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261124-controls').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

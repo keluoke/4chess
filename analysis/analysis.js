@@ -32,6 +32,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { PositionAnalysis } from './position-analysis.js?v=20261124-intuition-labels';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
+import { boardShortcut, playNavigationSound } from './board-controls.js?v=20261124-controls';
 import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261124-intuition-labels';
 import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261124-checkup-cards-r2';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
@@ -552,26 +553,27 @@ class AnalysisStudioApp {
         return;
       }
 
-      if (e.key === 'ArrowLeft' || e.key === 'j') {
+      const shortcut = boardShortcut(e);
+      if (shortcut === 'previous') {
         e.preventDefault();
         this.navigateStudy(-1);
-      } else if (e.key === 'ArrowRight' || e.key === 'k') {
+      } else if (shortcut === 'next') {
         e.preventDefault();
         this.navigateStudy(1);
-      } else if (e.key === 'Home') {
+      } else if (shortcut === 'first') {
         e.preventDefault();
         if (this.isBranching) this.showBranchPosition(0); else this.goToPly(0);
-      } else if (e.key === 'End') {
+      } else if (shortcut === 'latest') {
         e.preventDefault();
         if (this.isBranching) this.showBranchPosition(this.activeBranch.moves.length); else this.goToPly(this.positions.length - 1);
-      } else if ((e.key === ' ' || e.code === 'Space') && !document.activeElement?.closest('button, a, summary')) {
+      } else if (shortcut === 'play') {
         e.preventDefault();
         this.toggleAutoPlay();
         this.updateActivePositionAnalysis();
-      } else if (e.key === 'f' || e.key === 'F') {
+      } else if (shortcut === 'flip') {
         e.preventDefault();
         this.flipBoard();
-      } else if (e.key === 'm' || e.key === 'M') {
+      } else if (shortcut === 'sound') {
         e.preventDefault();
         if (this.el.btnSound) this.el.btnSound.click();
       }
@@ -2159,17 +2161,7 @@ class AnalysisStudioApp {
     this.highlightMoveRow(clampedPly);
 
     // Audio feedback on move navigation
-    if (!options.silent && clampedPly !== prevPly) {
-      if (clampedPly > 0 && currentPos) {
-        if (clampedPly > prevPly) {
-          soundEffects.playSoundForMove(currentPos.san);
-        } else {
-          soundEffects.playMove(0.4);
-        }
-      } else if (clampedPly === 0 && prevPly > 0) {
-        soundEffects.playMove(0.3);
-      }
-    }
+    if (!options.silent) playNavigationSound(prevPly, clampedPly, currentPos?.san);
 
     if (clampedPly === 0) {
       this.el.boardStatusText.textContent = t('startingPosition');

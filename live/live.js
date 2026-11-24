@@ -1,4 +1,6 @@
 import { BoardUI } from '../analysis/board-ui.js?v=20261124-divergence-cards';
+import { boardShortcut, playNavigationSound } from '../analysis/board-controls.js?v=20261124-controls';
+import { soundEffects } from '../analysis/sound-effects.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { expectedScore, intuitionKind } from '../engine/review-policy.js';
@@ -14,6 +16,8 @@ const copy = {
     moves: '实战着法', engines: '双引擎对比', rating: '段位',
     first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享局面卡',
     flip: '翻转棋盘', reviewGame: '查看整盘复盘报告 →',
+    play: '自动播放', pausePlay: '暂停播放', clear: '清除思考箭头', moveSound: '行棋音效',
+    mute: '关闭行棋音效', unmute: '开启行棋音效', threeLines: '3 条候选',
     trend: 'Maia 分段趋势', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
     schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛 {time}', title: '2026 棋王战',
     mobileTitle: '棋王战', loadMaia: '加载 · {size}', loadMaiaLabel: '加载 {model}，约 {size}', loadingMaia: '加载中…',
@@ -42,6 +46,8 @@ const copy = {
     moves: 'Moves played', engines: 'Compare engines', rating: 'Rating',
     first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share position card',
     flip: 'Flip board', reviewGame: 'View the full game review →',
+    play: 'Autoplay', pausePlay: 'Pause playback', clear: 'Clear arrows', moveSound: 'Move sounds',
+    mute: 'Mute move sounds', unmute: 'Unmute move sounds', threeLines: '3 lines',
     trend: 'Maia rating trends', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
     schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {time}', title: '2026 World Championship',
     mobileTitle: 'World Championship', loadMaia: 'Load · {size}', loadMaiaLabel: 'Load {model}, about {size}', loadingMaia: 'Loading…',
@@ -101,6 +107,8 @@ const board = new BoardUI($('event-board'), {
     }
     state.branch = extendBranch(state.branch, move, fen);
     state.follow = false;
+    stopPlayback();
+    soundEffects.playSoundForMove(move.san);
     cancelAnalysis();
     paintClocks();
     paintControls();
@@ -148,6 +156,11 @@ function paintLanguage() {
   document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
   for (const element of document.querySelectorAll('[data-copy]')) element.textContent = t(element.dataset.copy);
   for (const element of document.querySelectorAll('[data-label]')) element.setAttribute('aria-label', t(element.dataset.label));
+  for (const [id, keys] of Object.entries({ first: 'Home', previous: 'ArrowLeft J', next: 'ArrowRight K', latest: 'End', 'flip-board': 'F' })) {
+    $(id).title = `${$(id).getAttribute('aria-label')} (${keys.replace('ArrowLeft J', '← / J').replace('ArrowRight K', '→ / K')})`;
+    $(id).setAttribute('aria-keyshortcuts', keys);
+  }
+  $('btn-settings').title = t('settings');
   $('language').textContent = lang === 'en' ? '中文' : 'EN';
   $('round-rail').setAttribute('aria-label', t('schedule'));
   paint();
@@ -373,10 +386,36 @@ function paintControls() {
   $('first').disabled = $('previous').disabled;
   $('next').disabled = state.cursor === length && !state.branch;
   $('latest').disabled = state.follow && !state.branch;
+  paintPlayback();
+  paintSoundToggle();
   $('copy-live-link').disabled = $('moment').disabled = !round || !analysisAllowed();
   paintRoundHeading();
   paintWorkbenchLink();
   paintAnalysis();
+}
+
+function paintPlayback() {
+  const playing = Boolean(state.replayTimer);
+  const control = $('play');
+  control.textContent = playing ? '⏸' : '▶';
+  control.title = `${t(playing ? 'pausePlay' : 'play')} (Space)`;
+  control.setAttribute('aria-label', control.title);
+  control.setAttribute('aria-keyshortcuts', 'Space');
+  control.setAttribute('aria-pressed', String(playing));
+  control.disabled = !playing && (state.branch || state.cursor >= (state.snapshot?.moves.length ?? 0));
+}
+
+function paintSoundToggle() {
+  const enabled = soundEffects.enabled;
+  $('sound-on').toggleAttribute('hidden', !enabled);
+  $('sound-off').toggleAttribute('hidden', enabled);
+  $('setting-sound').checked = enabled;
+  const button = $('sound');
+  button.title = `${t(enabled ? 'mute' : 'unmute')} (M)`;
+  button.setAttribute('aria-label', button.title);
+  button.setAttribute('aria-keyshortcuts', 'M');
+  button.setAttribute('aria-pressed', String(enabled));
+  button.classList.toggle('muted', !enabled);
 }
 
 function paintWorkbenchLink() {
@@ -500,6 +539,7 @@ function paintAnalysis() {
   $('sf-line').textContent = [result?.stockfish?.san, result?.evaluation?.text, result?.depth && !compact ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
   const probability = result?.maia && probabilities([result.maia]).get(result.maia.uci);
   $('maia-line').textContent = [result?.maia?.san, Number.isFinite(probability) ? probability.toFixed(1) + '%' : ''].filter(Boolean).join(' · ') || '—';
+  paintCandidateLines(result);
   const loadMaia = $('load-maia');
   const mode = state.settings.maiaMode;
   const awaitingModel = mobileDownloads && allowed && state.engineEnabled && !result?.maiaReady && !result?.terminal;
@@ -512,6 +552,30 @@ function paintAnalysis() {
   $('maia-line').hidden = !loadMaia.hidden;
   paintEvaluation(result);
   paintEngineStatus();
+}
+
+function paintCandidateLines(result) {
+  const stockfish = result?.stockfishLines ?? [];
+  const maia = result?.maiaLines ?? [];
+  const continuation = line => line?.variation.slice(1).map(move => move.label).join(' ') ?? '';
+  const lead = $('sf-continuation');
+  lead.textContent = lead.title = continuation(stockfish[0]);
+  lead.hidden = !lead.textContent;
+  const row = (label, followup) => {
+    const item = document.createElement('li');
+    item.append(Object.assign(document.createElement('strong'), { textContent: label }));
+    if (followup) item.append(Object.assign(document.createElement('span'), { textContent: followup, title: followup }));
+    return item;
+  };
+  $('sf-candidates').replaceChildren(...stockfish.slice(1).map(line => row(
+    [line.variation[0]?.san, line.evaluation?.text].filter(Boolean).join(' · '), continuation(line)
+  )));
+  const chances = probabilities(maia);
+  $('maia-candidates').replaceChildren(...maia.slice(1).map(move => {
+    const chance = chances.get(move.uci);
+    return row(Number.isFinite(chance) ? `${move.san} · ${chance.toFixed(1)}%` : move.san);
+  }));
+  $('show-lines').hidden = stockfish.length < 2 && maia.length < 2;
 }
 
 function paintEngineStatus() {
@@ -545,6 +609,10 @@ function paintEngineStatus() {
 
 function applyPreferences() {
   const saved = getSavedPreferences();
+  if (typeof saved.diverge_sound_enabled === 'boolean' && soundEffects.enabled !== saved.diverge_sound_enabled) {
+    soundEffects.enabled = saved.diverge_sound_enabled;
+  }
+  paintSoundToggle();
   const stockfishVariant = (mobileDownloads ? state.mobileStockfish : saved.stockfishVariant) || 'lite';
   const preferredMaia = state.mobileMaia || saved.maiaVariant || (mobileDownloads ? '5m' : '23m');
   const cached = [preferredMaia, ...Object.keys(MAIA_VARIANTS)].find(variant => state.cachedMaia.includes(variant));
@@ -610,7 +678,7 @@ async function analyzeMove() {
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261124-mobile');
+      const { LiveEngines } = await import('./engines.js?v=20261124-controls');
       if (obsolete()) return;
       const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
@@ -642,18 +710,43 @@ async function analyzeMove() {
   }
 }
 
-function jump(ply, follow = false) {
+function jump(ply, follow = false, replay = false) {
+  const previous = state.cursor;
+  const fromBranch = Boolean(state.branch);
+  if (!replay) stopPlayback();
   state.cursor = Math.max(0, Math.min(ply, state.snapshot?.moves.length || 0));
   state.follow = follow;
   state.branch = null;
   if (follow) state.unseen = false;
+  if (fromBranch && previous === state.cursor) soundEffects.playMove(0.4);
+  else playNavigationSound(previous, state.cursor, state.snapshot?.moves[state.cursor - 1]?.san);
   cancelAnalysis();
   paint();
   void analyzeMove();
 }
 
+function stopPlayback() {
+  if (!state.replayTimer) return;
+  clearInterval(state.replayTimer);
+  state.replayTimer = null;
+  paintPlayback();
+}
+
+function togglePlayback() {
+  if (state.replayTimer) return stopPlayback();
+  if (state.branch || state.cursor >= (state.snapshot?.moves.length ?? 0)) return;
+  state.replayTimer = setInterval(() => {
+    const latest = state.snapshot?.moves.length ?? 0;
+    const next = state.cursor + 1;
+    if (next <= latest) jump(next, next === latest, true);
+    if (next >= latest) stopPlayback();
+  }, 1200);
+  paintPlayback();
+}
+
 function chooseRound(round) {
   if (round === state.round && state.snapshot) return;
+  stopPlayback();
   state.roundAbort?.abort();
   state.roundKey++;
   state.round = round;
@@ -748,6 +841,10 @@ async function pollRound() {
       state.follow = false;
     } else if (state.follow) {
       state.cursor = next.moves.length;
+      if (old && state.cursor > old.moves.length && old.moves.every((move, i) => move.uci === next.moves[i]?.uci)
+        && foreground() && soundEffects.audioCtx) {
+        playNavigationSound(old.moves.length, state.cursor, next.moves.at(-1).san);
+      }
     } else if (mainlineChanged) {
       state.unseen = true;
       if (!state.branch) state.cursor = Math.min(state.cursor, next.moves.length);
@@ -776,6 +873,7 @@ $('round-rail').onclick = event => {
   if (button) selectRound(button.dataset.round);
 };
 $('round-rail').onkeydown = event => {
+  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
   const button = event.target.closest('[data-round]');
   if (!button) return;
   const target = { ArrowLeft: button.previousElementSibling, ArrowRight: button.nextElementSibling,
@@ -789,6 +887,39 @@ $('event-moves').onclick = event => {
 $('first').onclick = () => jump(0);
 $('previous').onclick = () => jump(state.branch ? state.cursor : state.cursor - 1);
 $('next').onclick = () => jump(state.branch ? state.cursor : state.cursor + 1);
+$('play').onclick = togglePlayback;
+$('clear-notes').onclick = () => board.clearAnnotations();
+function toggleSound() {
+  const enabled = soundEffects.toggle();
+  paintSoundToggle();
+  void savePreferences({ diverge_sound_enabled: enabled });
+  if (enabled) soundEffects.playMove();
+}
+$('sound').onclick = $('setting-sound').onchange = toggleSound;
+$('show-lines').onclick = () => {
+  const expanded = $('engine-lines').classList.toggle('expanded');
+  $('show-lines').setAttribute('aria-expanded', String(expanded));
+};
+window.addEventListener('keydown', event => {
+  if (document.querySelector('dialog[open]')) return;
+  if (board.promotionPicker) {
+    if (event.key === 'Escape') { event.preventDefault(); board.closePromotion(); }
+    return;
+  }
+  if (event.key === 'Escape' && state.branch) { event.preventDefault(); jump(state.cursor); return; }
+  const shortcut = boardShortcut(event);
+  if (!shortcut) return;
+  const button = $({ play: 'play', flip: 'flip-board' }[shortcut] || shortcut);
+  event.preventDefault();
+  if (!event.repeat || shortcut === 'previous' || shortcut === 'next') button?.click();
+});
+for (const type of ['pointerup', 'keydown']) {
+  window.addEventListener(type, function unlock(event) {
+    if (!event.isTrusted) return;
+    soundEffects.unlock();
+    window.removeEventListener(type, unlock, true);
+  }, { capture: true });
+}
 $('latest').onclick = $('new-move').onclick = () => jump(state.snapshot?.moves.length || 0, true);
 $('flip-board').onclick = () => {
   board.flip();
@@ -929,6 +1060,7 @@ document.addEventListener('visibilitychange', () => {
     void pollRound();
     if (state.engineEnabled) void analyzeMove();
   } else {
+    stopPlayback();
     if (state.trend?.running) closeTrend();
     if (state.analyzing) cancelAnalysis();
   }

@@ -8,14 +8,16 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124-mobile">
+  <link rel="stylesheet" href="./live.css?v=20261124-controls">
 </head>
 <body class="live-page">
   <header class="event-nav">
     <a class="event-brand" href="/">Diverge</a>
     <h1 id="title">2026 棋王战</h1>
     <div class="match-score" id="match-score" role="group" aria-label="赛况总比分"></div>
-    <button type="button" id="btn-settings" aria-label="设置" data-label="settings" aria-haspopup="dialog"><span aria-hidden="true">⚙</span> <span class="settings-label" data-copy="settings">设置</span></button>
+    <button type="button" class="btn-header btn-settings" id="btn-settings" aria-label="设置" data-label="settings" aria-haspopup="dialog">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="../ui/studio-controls.svg#settings"/></svg>
+    </button>
     <button type="button" id="language" aria-label="Language">EN</button>
   </header>
   <main class="event-main">
@@ -38,12 +40,24 @@
           <div id="event-board" class="maia-board-wrapper" aria-label="国际象棋棋盘"></div>
         </div>
         <div class="seat" id="white-seat"><span id="white-name">白方</span><time id="white-clock">–:––</time></div>
-        <div class="round-controls">
-          <button id="first" type="button" aria-label="第一步" data-label="first">|‹</button>
-          <button id="previous" type="button" aria-label="上一步" data-label="previous">‹</button>
-          <button id="next" type="button" aria-label="下一步" data-label="next">›</button>
-          <button id="latest" type="button" data-label="latest"><span class="toolbar-text" data-copy="latest">回到最新</span><svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m8-12 6 6-6 6"/></svg></button>
-          <button id="flip-board" type="button" data-label="flip"><span class="toolbar-text" data-copy="flip">翻转棋盘</span><svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/></svg></button>
+        <div class="board-controls round-controls">
+          <div class="btn-nav-group live-nav">
+            <button id="first" class="btn-nav" type="button" aria-label="第一步" data-label="first">|◀</button>
+            <button id="previous" class="btn-nav" type="button" aria-label="上一步" data-label="previous">◀</button>
+            <button id="play" class="btn-nav desktop-control" type="button" aria-label="自动播放">▶</button>
+            <button id="next" class="btn-nav" type="button" aria-label="下一步" data-label="next">▶</button>
+            <button id="latest" class="btn-nav" type="button" aria-label="回到最新" data-label="latest">▶|</button>
+            <button id="flip-board" class="btn-nav" type="button" aria-label="翻转棋盘" data-label="flip">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="../ui/studio-controls.svg#flip"/></svg>
+            </button>
+            <button id="clear-notes" class="btn-nav desktop-control" type="button" aria-label="清除思考箭头" data-label="clear">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><use href="../ui/studio-controls.svg#clear"/></svg>
+            </button>
+            <button id="sound" class="btn-nav desktop-control" type="button" aria-label="行棋音效">
+              <svg id="sound-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="../ui/studio-controls.svg#sound-on"/></svg>
+              <svg id="sound-off" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><use href="../ui/studio-controls.svg#sound-off"/></svg>
+            </button>
+          </div>
           <div class="board-share">
             <button id="moment" type="button" data-label="share" disabled><span class="toolbar-text" data-copy="share">分享局面卡</span><svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4m1 4h3v10H4V11h3"/></svg></button>
             <button id="copy-live-link" type="button" data-copy="copyLink" disabled>复制链接</button>
@@ -66,7 +80,10 @@
             <header>
               <h2 id="engine-title" data-copy="engines">双引擎对比</h2>
               <span id="mobile-moment-slot"></span>
-              <button id="analyze" type="button" data-copy="pause" disabled>暂停双引擎</button>
+              <div class="engine-controls">
+                <button id="show-lines" type="button" data-copy="threeLines" aria-expanded="false" aria-controls="engine-lines" hidden>3 条</button>
+                <button id="analyze" type="button" data-copy="pause" disabled>暂停双引擎</button>
+              </div>
             </header>
             <div class="engine-downloads">
               <progress id="sf-progress" max="100" hidden></progress>
@@ -74,8 +91,15 @@
             </div>
             <p id="engine-note" role="status"></p>
             <div class="engine-lines" id="engine-lines" hidden>
-              <div><span id="sf-edition"></span><strong id="sf-line">—</strong></div>
-              <div><span id="maia-edition"></span><strong id="maia-line">—</strong><button id="load-maia" type="button" hidden></button></div>
+              <div>
+                <div class="engine-lead"><span id="sf-edition"></span><strong id="sf-line">—</strong></div>
+                <span id="sf-continuation" class="engine-continuation" hidden></span>
+                <ol id="sf-candidates" class="engine-candidates" start="2"></ol>
+              </div>
+              <div>
+                <div class="engine-lead"><span id="maia-edition"></span><strong id="maia-line">—</strong><button id="load-maia" type="button" hidden></button></div>
+                <ol id="maia-candidates" class="engine-candidates" start="2"></ol>
+              </div>
             </div>
           </div>
           <div class="engine-actions">
@@ -116,6 +140,7 @@
     <div class="live-arrow-prefs">
       <label><input id="setting-sf-arrows" type="checkbox" checked> <span data-copy="sfArrows">Stockfish 箭头</span></label>
       <label><input id="setting-maia-arrows" type="checkbox" checked> <span data-copy="maiaArrows">Maia 箭头</span></label>
+      <label><input id="setting-sound" type="checkbox" checked> <span data-copy="moveSound">行棋音效</span></label>
     </div>
     <p id="engine-hint" class="engine-hint"></p>
     <ul class="engine-health"><li id="sf-status"></li><li id="maia-status"></li></ul>
@@ -137,6 +162,6 @@
     <div class="share-card-preview-wrap"><canvas id="share-card-canvas"></canvas></div>
     <p id="share-card-status" class="live-link-status" role="status"></p>
   </dialog>
-  <script type="module" src="./live.js?v=20261124-mobile"></script>
+  <script type="module" src="./live.js?v=20261124-controls"></script>
 </body>
 </html>
