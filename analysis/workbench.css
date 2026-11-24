@@ -479,7 +479,7 @@ button,input,select,textarea { font-family:inherit; }
 .review-intuition-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(70px,100%),1fr));gap:6px; }
 .review-intuition-grid[hidden] { display:none; }
 .review-intuition-card { --kind-ink:var(--dg-green);--kind-surface:var(--dg-green-soft);min-width:0;border-radius:10px;background:var(--kind-surface);border:1px solid transparent;padding:4px 3px 3px;display:flex;flex-direction:column; }
-.review-intuition-card[data-kind="trap"] { --kind-ink:var(--dg-red);--kind-surface:var(--dg-red-soft); }
+.review-intuition-card[data-kind="trap"] { --kind-ink:color-mix(in srgb,var(--dg-red) 90%,var(--dg-ink));--kind-surface:var(--dg-red-soft); }
 .review-intuition-card[data-kind="beyond"] { --kind-ink:var(--dg-blue);--kind-surface:var(--dg-blue-soft);box-shadow:inset 0 2px var(--dg-gold); }
 .review-intuition-card[data-selected="true"] { border-color:var(--kind-ink); }
 .review-intuition-card button,.review-engine-summary button { border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer; }
@@ -549,7 +549,8 @@ button,input,select,textarea { font-family:inherit; }
 .review-tag-beyond { background:var(--dg-blue-soft);color:var(--dg-blue);box-shadow:inset 0 2px var(--dg-gold); }
 .review-turning-point { padding:3px 6px;border-radius:5px;background:var(--dg-green-soft);color:var(--dg-green);font-size:11px;font-weight:650; }
 .review-tag-inaccuracy { background:var(--dg-gold-soft);color:var(--brand-gold); }
-.review-tag-trap,.review-tag-mistake,.review-tag-blunder { background:var(--dg-red-soft);color:var(--brand-red); }
+.review-tag-mistake,.review-tag-blunder { background:var(--dg-red-soft);color:var(--brand-red); }
+.review-tag-trap { background:var(--dg-red-soft);color:color-mix(in srgb,var(--dg-red) 90%,var(--dg-ink)); }
 .review-card-loss { font-size:12px;color:var(--text-muted);margin:10px 0 0; }
 .review-card-best { font-size:12px;line-height:1.5;color:var(--brand-blue);margin:6px 0 0; }
 .review-card-reason { font-size:12px;line-height:1.7;color:var(--text-main);margin:8px 0 0; }
