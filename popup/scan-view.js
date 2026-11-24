@@ -7,7 +7,7 @@ import { engineLines, whiteEvaluation } from "../analysis/position-analysis.js";
 import {
   getPreferences,
   subscribePreferences,
-} from "../engine/engine-preferences.js?v=20261124-checkup-cards";
+} from "../engine/engine-preferences.js?v=20261124-checkup-cards-r2";
 import { getUnitSquareToQuadHomography, isAxisAligned } from "../lib/vision/perspective.js";
 import { rotateFen, rotateSquare } from "../lib/vision/image-context.js";
 import { scanMessages } from "./scan-i18n.js";

@@ -1,30 +1,30 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261124-checkup-cards';
-import { getLang, t } from './i18n.js?v=20261124-checkup-cards';
+import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261124-checkup-cards-r2';
+import { getLang, t } from './i18n.js?v=20261124-checkup-cards-r2';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261124-checkup-cards';
-import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261124-checkup-cards';
+} from './checkup-archives.js?v=20261124-checkup-cards-r2';
+import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261124-checkup-cards-r2';
 import {
   CHECKUP_ELOS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
-} from './checkup-insights.js?v=20261124-checkup-cards';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261124-checkup-cards';
-import { CheckupShare, checkupCardData, checkupChallengeCard, overviewCardData } from './checkup-share.js?v=20261124-checkup-cards';
-import { checkupFitBands } from './checkup-fit.js?v=20261124-checkup-cards';
+} from './checkup-insights.js?v=20261124-checkup-cards-r2';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261124-checkup-cards-r2';
+import { CheckupShare, checkupCardData, checkupChallengeCard, overviewCardData } from './checkup-share.js?v=20261124-checkup-cards-r2';
+import { checkupFitBands } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitScope, checkupPositionView, checkupReportDateRange, checkupScoreSummary, renderCheckupFit,
   renderCheckupFitSummary, renderCheckupMiniBoard, renderCheckupStability, withCheckupFit
-} from './checkup-fit-view.js?v=20261124-checkup-cards';
+} from './checkup-fit-view.js?v=20261124-checkup-cards-r2';
 
 // Keep the original module entry points available to existing callers.
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261124-checkup-cards';
-export { runIntuitionCheckup } from './checkup-analysis.js?v=20261124-checkup-cards';
-export { CHECKUP_ELOS } from './checkup-insights.js?v=20261124-checkup-cards';
+} from './checkup-archives.js?v=20261124-checkup-cards-r2';
+export { runIntuitionCheckup } from './checkup-analysis.js?v=20261124-checkup-cards-r2';
+export { CHECKUP_ELOS } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 
 const TRAP_TOPICS = ['tempting', 'recapture', 'endgameAdvantage'];
 

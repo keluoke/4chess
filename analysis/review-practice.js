@@ -1,8 +1,8 @@
-import { t } from './i18n.js?v=20261124-checkup-cards';
+import { t } from './i18n.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { retryVerdict, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
-import { legalVariation } from './position-analysis.js?v=20261124-checkup-cards';
-import { buildReplaySteps } from './consequence-player.js?v=20261124-checkup-cards';
+import { legalVariation } from './position-analysis.js?v=20261124-checkup-cards-r2';
+import { buildReplaySteps } from './consequence-player.js?v=20261124-checkup-cards-r2';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
 
 export class ReviewPractice {

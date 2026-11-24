@@ -1,4 +1,4 @@
-import { checkupGameIds, markCheckupGames } from '../engine/checkup-watch.js?v=20261124-checkup-cards';
+import { checkupGameIds, markCheckupGames } from '../engine/checkup-watch.js?v=20261124-checkup-cards-r2';
 import { parseStudioElo } from '../engine/chess-notation.js?v=20261120-import';
 
 const DB_NAME = 'diverge_study_v1';

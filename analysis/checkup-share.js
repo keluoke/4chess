@@ -1,13 +1,13 @@
-import { t, getLang } from './i18n.js?v=20261124-checkup-cards';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-checkup-cards';
-import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards';
-import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards';
-import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards';
+import { t, getLang } from './i18n.js?v=20261124-checkup-cards-r2';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-checkup-cards-r2';
+import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards-r2';
+import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards-r2';
+import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitBandLabel, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
-} from './checkup-fit-view.js?v=20261124-checkup-cards';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-checkup-cards';
-import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-checkup-cards';
+} from './checkup-fit-view.js?v=20261124-checkup-cards-r2';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-checkup-cards-r2';
+import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-checkup-cards-r2';
 
 const outcomes = ['win', 'draw', 'loss'];
 const tones = ['#167b58', '#657a73', '#b95755'];
@@ -163,12 +163,21 @@ function drawOverview(ctx, data, x, y, width, landscape, standalone) {
   }
 }
 
-function drawFooter(ctx, { url, label, subtitle = '4chess.cc', width, height, pad, portrait }) {
-  const size = portrait ? 128 : 92;
+function drawCardQr(ctx, url, right, top, size) {
+  const scale = ctx.getTransform().a;
+  ctx.save();
+  ctx.resetTransform();
+  // Align modules to the exported PNG's pixel grid so the QR stays sharp.
+  drawShareQr(ctx, shareQr(url), Math.round(right * scale), Math.round(top * scale), Math.floor(size * scale));
+  ctx.restore();
+}
+
+function drawFooter(ctx, { url, label, subtitle = '4chess.cc', width, height, pad, portrait, challenge = false }) {
+  const size = portrait ? (challenge ? 170 : 128) : 92;
   const y = height - size - (portrait ? 36 : 18);
   ctx.fillStyle = line;
   ctx.fillRect(pad, y - (portrait ? 16 : 4), width - 2 * pad, 1);
-  drawShareQr(ctx, shareQr(url), width - pad, y, size);
+  drawCardQr(ctx, url, width - pad, y, size);
   const textWidth = width - size - 2 * pad - 22;
   type(ctx, label, pad, y + (portrait ? 26 : 13), textWidth, { size: portrait ? 30 : 23, weight: 670 });
   type(ctx, subtitle, pad, y + (portrait ? 70 : 47), textWidth, { size: portrait ? 22 : 17, tone: muted });
@@ -248,11 +257,11 @@ function drawChallenge(ctx, data, { width, height, pad, portrait, pieces, theme,
   const hook = spoiler && data.position.bestSan ? t('checkupChallengeAnswer', { san: data.position.bestSan }) : data.story;
   type(ctx, hook, textX, portrait ? 142 : 199, textWidth, { size: portrait ? 28 : 23, minimum: 16, tone: muted });
   if (portrait) {
-    drawFooter(ctx, { url: data.url, label: t('checkupChallengeScan'), width, height, pad, portrait });
+    drawFooter(ctx, { url: data.url, label: t('checkupChallengeScan'), width, height, pad, portrait, challenge: true });
   } else {
     type(ctx, t('checkupChallengeScan'), textX, 383, textWidth, { size: 25, weight: 630 });
     type(ctx, '4chess.cc', textX, 424, textWidth, { size: 19, tone: muted });
-    drawShareQr(ctx, shareQr(data.url), textX + 111, 474, 111);
+    drawCardQr(ctx, data.url, textX + 138, 455, 138);
   }
 }
 

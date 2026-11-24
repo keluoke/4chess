@@ -1,12 +1,12 @@
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { parseFenBoard } from './share-card.js?v=20261124-checkup-cards';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards';
+import { parseFenBoard } from './share-card.js?v=20261124-checkup-cards-r2';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261124-checkup-cards';
-import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards';
+import { getLang, t } from './i18n.js?v=20261124-checkup-cards-r2';
+import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import {
   CHECKUP_CLOSE_LOG_GAP, CHECKUP_EXAMPLE_POLICY, checkupFitBands, isCheckupFitExample, summarizeCheckupFit
-} from './checkup-fit.js?v=20261124-checkup-cards';
+} from './checkup-fit.js?v=20261124-checkup-cards-r2';
 
 export function withCheckupFit(report) {
   if (report.fit?.examplePolicy === CHECKUP_EXAMPLE_POLICY || !report.games?.some(game => game.fitSamples?.length)) return report;
