@@ -12,7 +12,7 @@ const output = path.join(root, 'artifacts/delivery-2026-10-25');
 fs.mkdirSync(output, { recursive: true });
 const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
-const releaseVersion = '20261123-fit-report-zh';
+const releaseVersion = '20261124-study-entry';
 const releaseModules = new Set([
  '/ui/theme.js', '/analysis/analysis.js', '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
  '/analysis/checkup-runner.js', '/analysis/checkup-archives.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/checkup-overview.js', '/analysis/study-store.js',
@@ -62,6 +62,36 @@ try {
  const rect=await page.locator('#btn-home-import').boundingBox();assert(rect.y+rect.height<844,'Primary action visible on mobile first screen');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
  await page.screenshot({path:path.join(output,'studio-mobile.png'),fullPage:true});
+ const examples = page.locator('.study-home-examples');
+ assert((await examples.boundingBox()).y > rect.y+rect.height,'Examples follow the mobile import action');
+ for (const width of [700,1440]) {
+  await page.setViewportSize({width,height:900});
+  const intro=await page.locator('#study-home-title').boundingBox(), sample=await examples.boundingBox();
+  assert(sample.x>=intro.x+intro.width,'Examples sit beside the introduction at wide widths');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),width);
+ }
+ await page.locator('#btn-home-import').click();
+ await page.locator('#pgn-modal.open #pgn-input').waitFor();
+ await page.keyboard.press('Escape');
+ await page.locator('#btn-home-checkup').click();
+ await page.locator('#checkup-dialog[open]').waitFor();
+ await page.keyboard.press('Escape');
+ await page.locator('#checkup-dialog[open]').waitFor({state:'detached'});
+ await page.evaluate(()=>{
+  const app=window.__maiaStudioApp;
+  app.positionAnalysis.refresh=()=>{};
+  app.runFullReview=async()=>{};
+ });
+ const preview = page.locator('#study-home-preview .study-home-square');
+ assert.equal(await preview.count(),64);
+ const samplePieces=await preview.evaluateAll(squares=>squares.filter(square=>square.querySelector('svg')).length);
+ assert(samplePieces>16 && samplePieces<32,'The preview renders the featured midgame position');
+ await page.locator('#btn-chip-fischer').click();
+ assert(await page.locator('#empty-study-intro').isHidden());
+ assert.deepEqual(await page.evaluate(()=>{
+  const app=window.__maiaStudioApp;
+  return [app.currentPly,app.positions[app.currentPly].san,app.isReviewingMove,app.boardUI.orientation];
+ }),[34,'Be6',true,'black']);
  const imports=await page.evaluate(async()=>{
   const app=window.__maiaStudioApp;app.positionAnalysis.refresh=()=>{};app.runFullReview=async()=>{};
   const original=window.fetch;let requests=0;

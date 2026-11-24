@@ -2,7 +2,7 @@ import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { intuitionTrapFacts } from '../engine/chess-facts.js?v=20261118-summary-ai';
 import { BuiltInAi } from './built-in-ai.js?v=20261118-summary-ai';
 import { bindCommentary, COMMENTARY_SCHEMA } from './commentary-text.js?v=20261118-recap-reset';
-import { getLang, t } from './i18n.js?v=20261123-fit-report-zh';
+import { getLang, t } from './i18n.js?v=20261124-study-entry';
 import { intuitionKind, isKeyMoment } from '../engine/review-policy.js?v=20261120-review';
 
 const PREFERENCE = 'diverge_review_commentary';

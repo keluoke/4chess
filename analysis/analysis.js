@@ -1,20 +1,21 @@
-import { initWorkbenchLayout } from './workbench-layout.js?v=20261123-fit-report-zh';
+import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-study-entry';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261123-fit-report-zh';
-import { ReviewExplorer } from './review-explorer.js?v=20261123-fit-report-zh';
-import { ReviewOverview } from './review-overview.js?v=20261123-fit-report-zh';
-import { ReviewCommentary } from './review-commentary.js?v=20261123-fit-report-zh';
-import { ConsequencePlayer } from './consequence-player.js?v=20261123-fit-report-zh';
-import { MistakeBank } from './mistake-bank.js?v=20261123-fit-report-zh';
-import { resolvePerspective } from './study-store.js?v=20261123-fit-report-zh';
-import { IntuitionCheckup } from './checkup-runner.js?v=20261123-fit-report-zh';
-import { checkupGameContext } from './checkup-archives.js?v=20261123-fit-report-zh';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261123-fit-report-zh';
-import { CheckupReminders } from './checkup-reminders.js?v=20261123-fit-report-zh';
-import { ReviewShare } from './review-share.js?v=20261123-fit-report-zh';
-import { ShareCardModal } from './share-card.js?v=20261123-fit-report-zh';
+import { IntuitionReview } from './intuition-review.js?v=20261124-study-entry';
+import { ReviewExplorer } from './review-explorer.js?v=20261124-study-entry';
+import { ReviewOverview } from './review-overview.js?v=20261124-study-entry';
+import { ReviewCommentary } from './review-commentary.js?v=20261124-study-entry';
+import { ConsequencePlayer } from './consequence-player.js?v=20261124-study-entry';
+import { MistakeBank } from './mistake-bank.js?v=20261124-study-entry';
+import { resolvePerspective } from './study-store.js?v=20261124-study-entry';
+import { IntuitionCheckup } from './checkup-runner.js?v=20261124-study-entry';
+import { checkupGameContext } from './checkup-archives.js?v=20261124-study-entry';
+import { StudyProfileControls } from './study-profile-controls.js?v=20261124-study-entry';
+import { CheckupReminders } from './checkup-reminders.js?v=20261124-study-entry';
+import { ReviewShare } from './review-share.js?v=20261124-study-entry';
+import { CHESS_PIECES_SVG } from './chess-pieces.js';
+import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-study-entry';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
-import { ReviewPractice } from './review-practice.js?v=20261123-fit-report-zh';
+import { ReviewPractice } from './review-practice.js?v=20261124-study-entry';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
 /**
  * Maia-3 Standalone Deep Analysis Studio Application Coordinator
@@ -22,17 +23,17 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
  */
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261123-fit-report-zh';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261123-fit-report-zh';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-fit-report-zh';
+import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-study-entry';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-study-entry';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-study-entry';
 import { BoardUI } from './board-ui.js?v=20261117-ui';
-import { EvalChart } from './eval-chart.js?v=20261123-fit-report-zh';
+import { EvalChart } from './eval-chart.js?v=20261124-study-entry';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261123-fit-report-zh';
+import { PositionAnalysis } from './position-analysis.js?v=20261124-study-entry';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
-import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261123-fit-report-zh';
-import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261123-fit-report-zh';
+import { t, getLang, setLanguage, toggleLanguage, initI18n, onLanguageChange } from './i18n.js?v=20261124-study-entry';
+import { initializePreferences, getPreferences, savePreferences, subscribePreferences, preferencesLinked, engineExperienceHint } from '../engine/engine-preferences.js?v=20261124-study-entry';
 import { gameLinkInput, parseStudioElo, readPgnTags, withPgnTermination } from '../engine/chess-notation.js?v=20261120-import';
 
 const STUDIO_INPUT_PARAMS = ['pgn', 'text', 'url', 'fen', 'empty', 'white', 'black', 'result', 'elo', 'fallbackElo', 'orientation', 'checkupSource', 'overview'];
@@ -514,6 +515,13 @@ class AnalysisStudioApp {
     this.el.sampleKasparov.addEventListener('click', () => {
       this.el.pgnInput.value = SAMPLE_GAMES.kasparov;
     });
+
+    document.getElementById('btn-home-import').addEventListener('click', () => this.openPgnModal());
+    document.getElementById('btn-home-checkup').addEventListener('click', () => this.checkup?.open());
+    document.getElementById('btn-chip-fischer').addEventListener('click', () => {
+      this.smartLoadInput(SAMPLE_GAMES.fischer, '', { focusMove: this.getFischerSampleMove(), orientation: 'black' });
+    });
+    document.getElementById('btn-chip-kasparov').addEventListener('click', () => this.smartLoadInput(SAMPLE_GAMES.kasparov));
 
     // Reanalyze button
     this.el.btnReanalyze.addEventListener('click', () => {
@@ -1051,77 +1059,40 @@ class AnalysisStudioApp {
     }
   }
 
-  /**
-   * Renders an interactive, welcoming hero card for blank landing visits
-   */
   renderEmptyHomeState() {
     this.el.blunderList.replaceChildren();
-    const intro = document.getElementById('empty-study-intro');
-    intro.hidden = false;
-    intro.replaceChildren();
+    document.getElementById('empty-study-intro').hidden = false;
     document.body.classList.add('empty-study');
+    document.getElementById('btn-home-checkup').hidden = !this.checkup?.allowed();
 
-    const heroCard = document.createElement('div');
-    heroCard.className = 'studio-home-hero';
+    const preview = document.getElementById('study-home-preview');
+    if (preview.children.length) return;
+    const move = this.getFischerSampleMove();
+    const { pieces } = parseFenBoard(move.fenBefore);
+    const bySquare = new Map(pieces.map(({ square, piece }) => [square, piece]));
+    const squares = document.createDocumentFragment();
+    const files = [...'hgfedcba'];
+    // The featured position is shown from Fischer's side, with Black to move.
+    for (let rank = 1; rank <= 8; rank++) {
+      for (const [file, name] of files.entries()) {
+        const square = document.createElement('span');
+        square.className = (rank + file) % 2 ? 'study-home-square' : 'study-home-square dark';
+        const piece = bySquare.get(name + rank);
+        if (piece) square.innerHTML = CHESS_PIECES_SVG[piece];
+        squares.appendChild(square);
+      }
+    }
+    preview.appendChild(squares);
+  }
 
-    heroCard.innerHTML = `
-      <div class="home-hero-header">
-        <div class="home-hero-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 21v-8"></path>
-            <path d="M12 13c0-4.5-6-4.5-6-9"></path>
-            <path d="M12 13c0-4.5 6-4.5 6-9"></path>
-            <polyline points="3 7 6 4 9 7"></polyline>
-            <polyline points="15 7 18 4 21 7"></polyline>
-          </svg>
-        </div>
-        <div class="home-hero-title">${t('heroTitle')}</div>
-        <div class="home-hero-subtitle">${t('heroSubtitle')}</div>
-      </div>
-
-      <div class="home-hero-actions">
-        <a class="btn-home-primary" href="https://chromewebstore.google.com/detail/diverge-chess-analysis-sc/egiimjkekgiaimaagaljiclacljmdkmo">${getLang() === 'zh' ? '安装扩展，扫描网页棋图' : 'Install extension to scan a diagram'}</a>
-        <button type="button" class="btn-home-primary" id="btn-home-import">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
-          ${t('btnImportCompleted')} →
-        </button>
-        ${this.checkup?.allowed() ? `<button type="button" class="btn-home-primary" id="btn-home-checkup">${t('checkupBtn')} →</button>` : ''}
-      </div>
-
-      <div class="home-hero-samples">
-        <div class="home-samples-label">${t('modalSampleLabel')}</div>
-        <div class="home-samples-chips">
-          <button type="button" class="btn-sample-chip" id="btn-chip-fischer">${t('chipFischer')}</button>
-          <button type="button" class="btn-sample-chip" id="btn-chip-kasparov">${t('chipKasparov')}</button>
-        </div>
-      </div>
-
-      <div class="home-hero-tips">
-        <div class="home-tip-item">${t('tipDragDrop')}</div>
-        <div class="home-tip-item">${t('tipPwa')}</div>
-      </div>
-    `;
-
-    heroCard.querySelector('#btn-home-import')?.addEventListener('click', () => {
-      this.openPgnModal();
-    });
-    heroCard.querySelector('#btn-home-checkup')?.addEventListener('click', () => {
-      this.checkup?.open();
-    });
-    heroCard.querySelector('#btn-chip-fischer')?.addEventListener('click', () => {
-      this.el.sampleFischer?.click();
-      this.el.btnSubmitPgn?.click();
-    });
-    heroCard.querySelector('#btn-chip-kasparov')?.addEventListener('click', () => {
-      this.el.sampleKasparov?.click();
-      this.el.btnSubmitPgn?.click();
-    });
-
-    intro.appendChild(heroCard);
+  getFischerSampleMove() {
+    if (!this.fischerSampleMove) {
+      const ply = 34; // 17...Be6
+      const moves = GameAnalyzer.parsePgn(SAMPLE_GAMES.fischer).slice(0, ply);
+      const positions = GameAnalyzer.buildPositionChain(moves);
+      this.fischerSampleMove = { ply, uci: positions[ply].uci, fenBefore: positions[ply - 1].fen };
+    }
+    return this.fischerSampleMove;
   }
 
   /**

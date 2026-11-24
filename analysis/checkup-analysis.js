@@ -1,13 +1,13 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261123-fit-report-zh';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-study-entry';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261117-review-policy';
-import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261123-fit-report-zh';
-import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261123-fit-report-zh';
-import { FEATURED_TRAPS, checkupClockSample, summarizeCheckupGames } from './checkup-insights.js?v=20261123-fit-report-zh';
+import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261124-study-entry';
+import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261124-study-entry';
+import { FEATURED_TRAPS, checkupClockSample, summarizeCheckupGames } from './checkup-insights.js?v=20261124-study-entry';
 
-import { CHECKUP_ELOS, checkupFitBands, LOG_PROB_FLOOR, planCheckupSamples } from './checkup-fit.js?v=20261123-fit-report-zh';
+import { CHECKUP_ELOS, checkupFitBands, LOG_PROB_FLOOR, planCheckupSamples } from './checkup-fit.js?v=20261124-study-entry';
 
 const VERIFY_ROOT_MIN_DEPTH = 14;
 const VERIFY_AFTER_MIN_DEPTH = 13;

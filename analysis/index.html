@@ -16,11 +16,11 @@
   <link rel="icon" type="image/png" sizes="48x48" href="../icons/icon48.png?v=2">
   <link rel="apple-touch-icon" sizes="128x128" href="../icons/icon128.png?v=2">
   <link rel="stylesheet" href="../ui/theme.css?v=20261025-v115">
-  <link rel="stylesheet" href="analysis.css?v=20261118-precise-filter">
+  <link rel="stylesheet" href="analysis.css?v=20261124-study-entry">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261123-fit-report-zh">
-  <link rel="stylesheet" href="./review-share.css?v=20261123-fit-report-zh">
+  <link rel="stylesheet" href="workbench.css?v=20261124-study-entry">
+  <link rel="stylesheet" href="./review-share.css?v=20261124-study-entry">
 </head>
 <body class="diverge-ui">
   <script>
@@ -86,7 +86,60 @@
 
   <!-- Main Workspace Layout -->
   <main class="studio-layout">
-    <section id="empty-study-intro" aria-label="Get started" hidden></section>
+    <section id="empty-study-intro" aria-labelledby="study-home-title" hidden>
+      <div class="study-home-intro">
+        <h1 id="study-home-title">
+          <span data-i18n="heroTitle">一盘棋，</span>
+          <span data-i18n="homeTitleEnding">换个角度看</span>
+        </h1>
+        <p class="study-home-lead" data-i18n="heroSubtitle">对照 Stockfish 的计算和 Maia 的人类直觉，看看一盘棋在哪一步走向分岔。</p>
+        <button type="button" class="study-home-import" id="btn-home-import" aria-haspopup="dialog" aria-controls="pgn-modal" aria-describedby="study-home-formats">
+          <span data-i18n="btnImportCompleted">导入局面或棋谱</span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <p class="study-home-formats" id="study-home-formats" data-i18n="tipDragDrop">支持 FEN、完赛棋谱链接，也可拖入 PGN 文件。</p>
+      </div>
+
+      <div class="study-home-tools">
+        <button type="button" class="study-home-tool" id="btn-home-checkup" aria-haspopup="dialog" aria-controls="checkup-dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v16h16M8 15l4-5 3 2 5-6"/></svg>
+          <span class="study-home-tool-copy">
+            <strong data-i18n="checkupBtn">近期诊断</strong>
+            <span data-i18n="homeCheckupSummary">找出最近对局里的直觉陷阱</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <a class="study-home-tool" href="https://chromewebstore.google.com/detail/diverge-chess-analysis-sc/egiimjkekgiaimaagaljiclacljmdkmo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4m6 0h4a1 1 0 0 1 1 1v4m0 6v4a1 1 0 0 1-1 1h-4m-6 0H5a1 1 0 0 1-1-1v-4M8 12h8"/></svg>
+          <span class="study-home-tool-copy">
+            <strong data-i18n="homeExtensionTitle">安装浏览器扩展</strong>
+            <span data-i18n="homeExtensionSummary">扫描网页上的棋盘截图</span>
+          </span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+
+      <section class="study-home-examples" aria-labelledby="study-home-examples-title">
+        <h2 id="study-home-examples-title" data-i18n="homeExamples">复盘经典对局</h2>
+        <button type="button" class="study-home-feature" id="btn-chip-fischer">
+          <span class="study-home-preview" id="study-home-preview" aria-hidden="true"></span>
+          <span class="study-home-example-row">
+            <span class="study-home-example-copy">
+              <strong data-i18n="chipFischer">菲舍尔世纪之局</strong>
+              <small data-i18n="homeFischerPosition">1956 · 第 17 回合，黑方走</small>
+            </span>
+            <span class="study-home-example-arrow" aria-hidden="true">→</span>
+          </span>
+        </button>
+        <button type="button" class="study-home-example-row study-home-alternate" id="btn-chip-kasparov">
+          <span class="study-home-example-copy">
+            <strong data-i18n="chipKasparov">卡斯帕罗夫不朽之局</strong>
+            <small>1999</small>
+          </span>
+          <span class="study-home-example-arrow" aria-hidden="true">→</span>
+        </button>
+      </section>
+    </section>
     <!-- Left: Chessboard Column -->
     <section class="board-column" aria-label="棋盘与局面走势">
       <p id="practice-context" class="practice-context"></p>
@@ -644,12 +697,12 @@
     <p id="share-card-status" class="bank-status-note" role="status"></p>
   </dialog>
 
-  <script type="module" src="../ui/theme.js?v=20261123-fit-report-zh"></script>
-  <script type="module" src="analysis.js?v=20261123-fit-report-zh"></script>
+  <script type="module" src="../ui/theme.js?v=20261124-study-entry"></script>
+  <script type="module" src="analysis.js?v=20261124-study-entry"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261123-fit-report-zh').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261124-study-entry').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

@@ -753,13 +753,18 @@ export const DICTIONARY = {
     coverageTooltip: '计算覆盖率: {pct}%',
 
     // Empty Hero View
-    heroTitle: '从一个局面或一盘棋开始',
-    heroSubtitle: '导入 FEN 局面或完赛棋谱，探索引擎与人类直觉。网页棋图可先用插件扫描。',
-    btnImportCompleted: '导入局面或完赛棋谱',
-    chipFischer: '♟️ 菲舍尔世纪之局 (1956)',
-    chipKasparov: '♟️ 卡斯帕罗夫不朽之局 (1999)',
-    tipDragDrop: '⚡ 支持直接拖放 .pgn 棋谱文件或文本',
-    tipPwa: '📱 PWA 模式下可直接在系统文件管理器“以此应用打开”',
+    heroTitle: '一盘棋，',
+    homeTitleEnding: '换个角度看',
+    heroSubtitle: '对照 Stockfish 的计算和 Maia 的人类直觉，看看一盘棋在哪一步走向分岔。',
+    btnImportCompleted: '导入局面或棋谱',
+    tipDragDrop: '支持 FEN、完赛棋谱链接，也可拖入 PGN 文件。',
+    homeCheckupSummary: '找出最近对局里的直觉陷阱',
+    homeExtensionTitle: '安装浏览器扩展',
+    homeExtensionSummary: '扫描网页上的棋盘截图',
+    homeExamples: '复盘经典对局',
+    chipFischer: '菲舍尔世纪之局',
+    homeFischerPosition: '1956 · 第 17 回合，黑方走',
+    chipKasparov: '卡斯帕罗夫不朽之局',
 
     // PGN Import Modal & Overlay
     dragDropTitle: '释放以载入 PGN 棋谱',
@@ -1554,13 +1559,18 @@ export const DICTIONARY = {
     coverageTooltip: 'Engine coverage: {pct}%',
 
     // Empty Hero View
-    heroTitle: 'Start with a Position or Game',
-    heroSubtitle: 'Import a FEN position or finished game to explore engine and human choices. Scan webpage diagrams with the extension.',
-    btnImportCompleted: 'Import Position or Game',
-    chipFischer: '♟️ Fischer: Game of the Century (1956)',
-    chipKasparov: '♟️ Kasparov: Pearl of Wijk aan Zee (1999)',
-    tipDragDrop: '⚡ Drag & drop .pgn files or text anywhere',
-    tipPwa: '📱 In PWA mode, open directly via system file manager',
+    heroTitle: 'See the game',
+    homeTitleEnding: 'from a new angle',
+    heroSubtitle: 'Compare Stockfish’s calculation with Maia’s human intuition to see where a game could have taken a different turn.',
+    btnImportCompleted: 'Import a position or game',
+    tipDragDrop: 'Paste a FEN or finished game link, or drop a PGN file.',
+    homeCheckupSummary: 'Find intuition traps in your recent games',
+    homeExtensionTitle: 'Install the browser extension',
+    homeExtensionSummary: 'Scan chess diagrams on the web',
+    homeExamples: 'Replay a classic',
+    chipFischer: 'Fischer’s Game of the Century',
+    homeFischerPosition: '1956 · Move 17, Black to play',
+    chipKasparov: 'Kasparov’s Immortal',
 
     // PGN Import Modal & Overlay
     dragDropTitle: 'Drop to Load PGN Game',

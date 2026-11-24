@@ -359,7 +359,7 @@ export class StockfishInBrowser {
 
       const url = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
         ? chrome.runtime.getURL('engine/stockfish-sandbox.html')
-        : (window.location.pathname.includes('/analysis/') ? '../engine/stockfish-sandbox.html?v=20261123-fit-report-zh' : 'engine/stockfish-sandbox.html');
+        : (window.location.pathname.includes('/analysis/') ? '../engine/stockfish-sandbox.html?v=20261124-study-entry' : 'engine/stockfish-sandbox.html');
       frame.src = url;
 
       const mountFrame = () => {
