@@ -88,6 +88,7 @@ body.live-page { display: block; height: auto; overflow: auto; margin: 0; backgr
 .maia-group .candidate-heading { color: #8b5819; }
 .live-engine-group .candidate-line { grid-template-columns: 52px minmax(0, 1fr); padding: 3px 0; border-bottom: 1px solid var(--line); }
 .live-engine-group .candidate-line:last-child { border-bottom: 0; }
+.live-engine-group .candidate-score { font: 12px/1.7 var(--dg-mono, monospace); }
 .live-engine-group .candidate-variation { gap: .36rem; max-height: none; align-items: baseline; }
 .live-engine-group .candidate-variation > * { font: 12px/1.7 var(--dg-mono, monospace); color: var(--muted); }
 .live-engine-group .candidate-variation strong { color: var(--ink); font-weight: 750; }
