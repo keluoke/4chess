@@ -9,20 +9,27 @@ import { engineExperienceHint, getSavedPreferences, initializePreferences, saveP
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { ModelCache } from '../engine/model-cache.js';
 import { modelCacheKeys } from '../engine/model-loader.js?v=20261124-mobile';
-import { copyShareLink } from '../analysis/share-export.js?v=20261124-divergence-cards';
+import { canvasPng, copyPng, copyShareLink, downloadPng } from '../analysis/share-export.js?v=20261124-divergence-cards';
 
 const copy = {
   zh: {
     moves: '实战着法', engines: '双引擎对比', rating: '段位',
-    first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享局面卡',
+    first: '第一步', previous: '上一步', next: '下一步', latest: '回到最新', share: '分享观赛海报',
     flip: '翻转棋盘', reviewGame: '查看整盘复盘报告 →',
     play: '自动播放', pausePlay: '暂停播放', clear: '清除思考箭头', moveSound: '行棋音效',
     mute: '关闭行棋音效', unmute: '开启行棋音效', threeLines: '3 条候选',
     trend: '人类视角', trendSubtitle: '600–2600 Elo 怎么走', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
     blindSpot: '全分段盲区：Maia 预测 600–2600 Elo 几乎无人想到 {move}',
     trendPeak: 'Stockfish 首选 {move} 在 {elo} Elo 的预测选着概率最高（{prob}%）。',
-    cardContent: '卡片内容', positionCard: '局面卡', perspectiveCard: '局面 + 各段直觉',
-    perspectiveLoading: '正在采样各分段…', perspectiveUnavailable: '暂未取得分段曲线，可以继续分享局面卡。',
+    posterStart: '正在请不同段位的棋手看看这步棋…', posterDrawing: '正在把从新手到大师的选择画成海报…',
+    posterIncomplete: '还有些棋力的选择没算出来，可以再试一次。', posterTerminal: '这局面已经没有合法着法，可以复制棋谱链接。',
+    posterBlind: '600 到 2600 分，几乎没人想到 {sf}！', posterBlindBadge: '全分段盲区', posterBlindNote: '几乎无人想到',
+    posterDivergence: '{elo} Elo 有 {prob}% 会走 {maia}，Stockfish 推荐 {sf}',
+    posterAgreement: '{elo} Elo 有 {prob}% 会走 {maia}，Stockfish 也推荐这步',
+    posterChart: '不同棋力怎么走', posterChartNote: '600 → 2600 Elo · Maia 模型预测',
+    posterScan: '扫码看本步双引擎动态分析', posterSaved: '已保存海报', posterCopied: '已复制海报',
+    posterCopyFail: '复制图片失败，可用「保存图片」。', enablePoster: '启用双引擎',
+    quickScore: 'Stockfish 快算评估',
     perspectiveDisabled: '启用 Maia 后查看各段直觉',
     schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛 {time}', title: '2026 棋王战',
     mobileTitle: '棋王战', loadMaia: '加载 · {size}', loadMaiaLabel: '加载 {model}，约 {size}', loadingMaia: '加载中…',
@@ -33,7 +40,7 @@ const copy = {
     engineIdle: '未启动', engineStarting: '正在启动', engineCache: '正在检查缓存', engineReady: '已就绪', engineError: '加载失败',
     engineDownloading: '下载中', enginePreparing: '正在装载模型', engineCacheSource: 'IndexedDB 缓存', engineBundled: '站内资源',
     copyLink: '复制链接', copyImage: '复制图片',
-    linkCopied: '已复制直达链接', shareLink: '分享链接', close: '关闭', landscape: '16:9 横版', portrait: '3:4 竖版', download: '下载 PNG',
+    linkCopied: '已复制直达链接', shareLink: '分享链接', close: '关闭', download: '保存图片',
     trendRetry: '重试缺失档位', trendProgress: 'Maia 走法选择概率 · 已完成 {count}/{total} 档',
     sourceLead: '转播数据', delay: '着法和时钟以转播为准，可能晚于现场。',
     analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎',
@@ -49,15 +56,23 @@ const copy = {
   },
   en: {
     moves: 'Moves played', engines: 'Compare engines', rating: 'Rating',
-    first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share position card',
+    first: 'Start position', previous: 'Previous move', next: 'Next move', latest: 'Latest move', share: 'Share broadcast poster',
     flip: 'Flip board', reviewGame: 'View the full game review →',
     play: 'Autoplay', pausePlay: 'Pause playback', clear: 'Clear arrows', moveSound: 'Move sounds',
     mute: 'Mute move sounds', unmute: 'Unmute move sounds', threeLines: '3 lines',
     trend: 'Human perspective', trendSubtitle: 'How 600–2600 Elo players might move', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
     blindSpot: 'Across 600–2600 Elo, Maia predicts almost nobody would find {move}',
     trendPeak: 'Stockfish’s {move} is most likely at {elo} Elo ({prob}% predicted).',
-    cardContent: 'Card contents', positionCard: 'Position card', perspectiveCard: 'Position + rating trends',
-    perspectiveLoading: 'Sampling rating bands…', perspectiveUnavailable: 'The rating chart is unavailable. You can still share the position card.',
+    posterStart: 'Seeing how players across ratings read this move…', posterDrawing: 'Drawing the rating curve onto your card…',
+    posterIncomplete: 'Some predictions are still missing. Try again to finish your poster.',
+    posterTerminal: 'This position has no legal moves. You can still copy its link.',
+    posterBlind: 'From 600 to 2600 Elo, almost nobody would find {sf}!', posterBlindBadge: 'Across-rating blind spot', posterBlindNote: 'Almost nobody finds it',
+    posterDivergence: 'At {elo} Elo, {prob}% would play {maia}. Stockfish picks {sf}.',
+    posterAgreement: 'At {elo} Elo, {prob}% would play {maia}. Stockfish agrees.',
+    posterChart: 'How players might move', posterChartNote: '600 → 2600 Elo · Maia predictions',
+    posterScan: 'Scan for live dual-engine analysis', posterSaved: 'Poster saved', posterCopied: 'Poster copied',
+    posterCopyFail: 'Could not copy the image. Use Save image instead.', enablePoster: 'Enable both engines',
+    quickScore: 'Quick Stockfish evaluation',
     perspectiveDisabled: 'Enable Maia to see rating trends',
     schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {time}', title: '2026 World Championship',
     mobileTitle: 'World Championship', loadMaia: 'Load · {size}', loadMaiaLabel: 'Load {model}, about {size}', loadingMaia: 'Loading…',
@@ -68,7 +83,7 @@ const copy = {
     engineIdle: 'Not started', engineStarting: 'Starting', engineCache: 'Checking cache', engineReady: 'Ready', engineError: 'Could not load',
     engineDownloading: 'Downloading', enginePreparing: 'Loading model', engineCacheSource: 'IndexedDB cache', engineBundled: 'Site assets',
     copyLink: 'Copy link', copyImage: 'Copy image',
-    linkCopied: 'Direct link copied', shareLink: 'Share link', close: 'Close', landscape: '16:9 Landscape', portrait: '3:4 Portrait', download: 'Download PNG',
+    linkCopied: 'Direct link copied', shareLink: 'Share link', close: 'Close', download: 'Save image',
     trendRetry: 'Retry missing ratings', trendProgress: 'Maia move probability · {count}/{total} rating bands',
     sourceLead: 'Broadcast by', delay: 'Moves and clock readings may be delayed.',
     analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines',
@@ -96,6 +111,7 @@ const MAX_SHARED_VARIATION = 128;
 const compactLayout = matchMedia('(max-width: 720px)');
 const mobileDownloads = compactLayout.matches || matchMedia('(pointer: coarse)').matches;
 const maiaSizes = { '5m': '28 MiB', '23m': '104 MiB', '79m': '159 MiB' };
+const trendSamples = new Map();
 
 const state = {
   event: null, round: params.get('round'), snapshot: null, cursor: 0, follow: initialPly === null,
@@ -473,6 +489,7 @@ function showTrendView(table) {
 }
 
 function renderTrend(trend) {
+  if (shareSession?.trend === trend) paintPosterProgress(shareSession, trend);
   if (!$('live-trend').open || state.trend !== trend) return;
   const { position, samples } = trend;
   const count = RATINGS.filter(elo => samples.has(elo)).length;
@@ -496,19 +513,26 @@ function trendConclusion({ position, samples }, locale = lang) {
 
 function trendFor(position) {
   if (state.trend?.position !== position) {
-    state.trend = { position, samples: new Map([[position.elo, probabilities(position.moves)]]) };
+    const key = JSON.stringify([MAIA_VARIANTS[state.settings.maiaVariant].key, position.fen, position.history]);
+    const samples = trendSamples.get(key) ?? new Map();
+    if (RATINGS.includes(position.elo) && !samples.has(position.elo)) samples.set(position.elo, probabilities(position.moves));
+    trendSamples.delete(key);
+    trendSamples.set(key, samples);
+    if (trendSamples.size > 24) trendSamples.delete(trendSamples.keys().next().value);
+    state.trend = { position, samples };
   }
   return state.trend;
 }
 
-function sampleTrend(trend) {
+function sampleTrend(trend, requireSeries = false) {
   if (trend.pending) return trend.pending;
   const obsolete = () => state.trend !== trend || !analysisAllowed() || !foreground();
   trend.pending = (async () => {
     await state.momentTask;
     for (const elo of [...RATINGS].sort((a, b) => Math.abs(a - trend.position.elo) - Math.abs(b - trend.position.elo))) {
       if (obsolete()) return;
-      if (trend.samples.has(elo)) continue;
+      const saved = trend.samples.get(elo);
+      if (saved && (!requireSeries || trend.position.series.every(move => Number.isFinite(saved.get(move.uci))))) continue;
       const moves = await state.engines.sampleMaia(trend.position, elo, obsolete);
       if (obsolete()) return;
       const sample = probabilities(moves);
@@ -582,28 +606,39 @@ function paintAnalysis() {
   $('maia-candidates').hidden = !loadMaia.hidden;
   paintEvaluation(result);
   paintEngineStatus();
+  updatePoster();
 }
 
 function paintCandidateLines(result) {
   const stockfish = result?.stockfishLines ?? [];
   const maia = result?.maiaLines ?? [];
-  const row = (score, san, continuation, id) => {
+  const row = (score, san, continuation, id, probability) => {
     const item = Object.assign(document.createElement('div'), { className: 'candidate-line' });
     if (id) item.id = id;
     const moves = Object.assign(document.createElement('div'), { className: 'candidate-variation' });
     moves.append(Object.assign(document.createElement('strong'), { textContent: san }));
     for (const move of continuation) moves.append(Object.assign(document.createElement('span'), { textContent: move.label }));
-    item.append(Object.assign(document.createElement('span'), { className: 'candidate-score', textContent: score }), moves);
+    const number = Object.assign(document.createElement('span'), { className: 'candidate-score', textContent: score?.text ?? '—' });
+    if (score?.approximate) {
+      number.textContent = '≈' + score.text;
+      number.classList.add('approximate');
+      number.title = t('quickScore');
+      number.setAttribute('aria-label', t('quickScore') + ' ' + score.text);
+    }
+    item.append(number, moves);
+    if (probability !== undefined) item.append(Object.assign(document.createElement('span'), {
+      className: 'candidate-probability', textContent: probability
+    }));
     return item;
   };
   $('sf-candidates').replaceChildren(...(stockfish.length ? stockfish.map((line, index) =>
-    row(line.evaluation?.text ?? '—', line.variation[0]?.san ?? '—', line.variation.slice(1, 5), !index && 'sf-line')
-  ) : [row(result?.evaluation?.text ?? '—', result?.stockfish?.san ?? '—', [], 'sf-line')]));
+    row(line.evaluation, line.variation[0]?.san ?? '—', line.variation.slice(1, 5), !index && 'sf-line')
+  ) : [row(result?.evaluation, result?.stockfish?.san ?? '—', [], 'sf-line')]));
   const chances = probabilities(maia);
   $('maia-candidates').replaceChildren(...(maia.length ? maia.map((move, index) => {
     const chance = chances.get(move.uci);
-    return row(Number.isFinite(chance) ? `${chance.toFixed(1)}%` : '—', move.san, [], !index && 'maia-line');
-  }) : [row('—', result?.maia?.san ?? '—', [], 'maia-line')]));
+    return row(result.maiaEvaluations?.get(move.uci), move.san, [], !index && 'maia-line', Number.isFinite(chance) ? `${chance.toFixed(1)}%` : '—');
+  }) : [row(null, result?.maia?.san ?? '—', [], 'maia-line', '—')]));
   $('show-lines').hidden = stockfish.length < 2 && maia.length < 2;
 }
 
@@ -708,7 +743,7 @@ async function analyzeMove() {
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261124-controls');
+      const { LiveEngines } = await import('./engines.js?v=20261125-poster');
       if (obsolete()) return;
       const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
@@ -721,7 +756,15 @@ async function analyzeMove() {
     });
     if (!result || obsolete()) return;
     state.analysis = result;
+    state.maiaScoreTask = result.maiaReady && state.engines.fillMaiaEvaluations(position, result, obsolete, () => {
+      if (!obsolete()) paintCandidateLines(result);
+    }).catch(error => {
+      if (!obsolete()) console.debug('Broadcast candidate scores unavailable', error);
+    });
     paintAnalysis();
+    await state.maiaScoreTask;
+    await state.trend?.pending;
+    if (obsolete()) return;
     if (move && (result.maiaReady || (result.terminal && state.settings.maiaMode !== 'off'))) {
       state.momentTask = state.engines.classify(move, before, position, obsolete);
       const moment = await state.momentTask;
@@ -730,6 +773,7 @@ async function analyzeMove() {
   } catch (error) {
     console.debug('Broadcast analysis unavailable', error);
   } finally {
+    state.maiaScoreTask = null;
     state.momentTask = null;
     state.analyzing = false;
     if (state.requestedKey && state.requestVersion !== version) {
@@ -1044,9 +1088,121 @@ $('copy-live-link').onclick = async () => {
   $('live-link-status').textContent = copied ? t('linkCopied') : '';
 };
 
-let shareModal;
-$('moment').onclick = async () => {
-  const snapshot = state.snapshot;
+let shareSession;
+const posterButtons = ['btn-share-card-copy', 'btn-share-card-download', 'btn-share-card-link'];
+const posterCurrent = share => shareSession === share && $('share-card-dialog').open && analysisAllowed() && foreground()
+  && state.boardFen === share.fen;
+
+function posterNotice(share, key, action = null, label = t('retry', share.lang)) {
+  $('share-card-status').textContent = t(key, share.lang);
+  $('share-card-retry').hidden = !action;
+  $('share-card-retry').textContent = label;
+  share.action = action;
+}
+
+function completeBands(trend) {
+  return RATINGS.filter(elo => trend.position.series.every(move =>
+    Number.isFinite(trend.samples.get(elo)?.get(move.uci)))).length;
+}
+
+function paintPosterProgress(share, trend) {
+  if (!posterCurrent(share) || !share.pending) return;
+  const count = completeBands(trend);
+  $('share-card-progress').firstElementChild.style.width = (12 + count / RATINGS.length * 76) + '%';
+  posterNotice(share, count >= 3 ? 'posterDrawing' : 'posterStart');
+}
+
+function posterSpec(share, analysis, trend) {
+  const { lang: locale, elo } = share;
+  const { stockfish: sf, maia, evaluation } = analysis;
+  const chance = probabilities([maia]).get(maia.uci);
+  const percent = Number.isFinite(chance) ? chance.toFixed(1) : '—';
+  const blind = Math.max(...RATINGS.map(elo => trend.samples.get(elo).get(sf.uci))) < 3;
+  const headline = t(blind ? 'posterBlind' : sf.uci === maia.uci ? 'posterAgreement' : 'posterDivergence', locale)
+    .replace('{elo}', elo).replace('{maia}', maia.san).replace('{sf}', sf.san).replace('{prob}', percent);
+  const kind = !share.branch && state.moment && intuitionKind(state.moment);
+  const score = analysis.maiaEvaluations?.get(maia.uci);
+  const maiaScore = score ? (score.approximate ? '≈' : '') + score.text : '—';
+  const sfScore = evaluation?.text ?? '—';
+  return {
+    ...share,
+    move: { fen: share.fen, bestUci: sf.uci, bestSan: sf.san, maiaTopUci: maia.uci, maiaTopSan: maia.san },
+    badge: blind ? t('posterBlindBadge', locale) : kind ? t(kind, locale) : '',
+    headline, blind, blindNote: t('posterBlindNote', locale),
+    subtitle: [share.label, share.players, 'Stockfish ' + sfScore].filter(Boolean).join(' · '),
+    chartTitle: t('posterChart', locale), chartNote: t('posterChartNote', locale), scan: t('posterScan', locale),
+    series: trend.position.series, samples: trend.samples,
+    legend: [
+      { role: 'sf', text: 'Stockfish · ' + sf.san + ' (' + sfScore + ')' },
+      { role: 'maia', text: 'Maia · ' + maia.san + ' (' + percent + '%, ' + maiaScore + ')' }
+    ]
+  };
+}
+
+function retryPoster(share) {
+  share.failed = false;
+  updatePoster();
+}
+
+function updatePoster() {
+  const share = shareSession;
+  if (!share || !posterCurrent(share) || share.pending || share.blob || share.failed) return;
+  const analysis = state.analysis;
+  if (analysis?.terminal) {
+    $('btn-share-card-link').disabled = false;
+    posterNotice(share, 'posterTerminal');
+    return;
+  }
+  if (!state.engineEnabled) {
+    posterNotice(share, 'posterStart', () => $('analyze').click(), t('enablePoster', share.lang));
+    return;
+  }
+  const load = $('load-maia');
+  if (!load.hidden && !load.disabled) {
+    posterNotice(share, 'posterStart', () => load.click(), load.getAttribute('aria-label'));
+    return;
+  }
+  if (!analysis?.trend || !analysis.stockfish || !analysis.maia) {
+    const canRetry = Boolean(state.requestedKey) && !state.analyzing;
+    posterNotice(share, canRetry ? 'posterIncomplete' : 'posterStart', canRetry ? () => {
+      cancelAnalysis();
+      void analyzeMove();
+    } : null);
+    return;
+  }
+  const trend = share.trend = trendFor(analysis.trend);
+  const scoreTask = state.maiaScoreTask;
+  const current = () => posterCurrent(share) && state.trend === trend;
+  share.pending = true;
+  paintPosterProgress(share, trend);
+  void (async () => {
+    await sampleTrend(trend, true);
+    await scoreTask;
+    if (!current()) return;
+    if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
+    const { renderLivePoster } = await import('./poster.js?v=20261125-poster');
+    const canvas = $('share-card-canvas');
+    if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend), current) || !current()) return;
+    const blob = await canvasPng(canvas);
+    if (!blob) throw new Error('PNG encoding failed');
+    if (!current()) return;
+    share.blob = blob;
+    $('share-card-progress').firstElementChild.style.width = '100%';
+    $('share-card-placeholder').hidden = true;
+    canvas.hidden = false;
+    $('share-card-status').textContent = '';
+    for (const id of posterButtons) $(id).disabled = false;
+  })().catch(() => {
+    if (!current()) return;
+    share.failed = true;
+    posterNotice(share, 'posterIncomplete', () => retryPoster(share));
+  }).finally(() => {
+    share.pending = false;
+    if (!current()) updatePoster();
+  });
+}
+
+$('moment').onclick = () => {
   const round = currentRound();
   if (!round || !analysisAllowed()) return;
   stopPlayback();
@@ -1055,55 +1211,53 @@ $('moment').onclick = async () => {
     $('live-link-status').textContent = t('variationTooLong');
     return;
   }
-  const cardLang = lang;
-  const orientation = board.orientation;
-  const elo = state.settings.elo;
-  const played = snapshot?.moves[state.cursor - 1];
-  const branch = state.branch;
   const ply = state.cursor;
-  const analysis = state.analysis;
-  const kind = !branch && state.moment && intuitionKind(state.moment);
-  const move = {
-    fen: state.boardFen,
-    bestUci: analysis?.stockfish?.uci, bestSan: analysis?.stockfish?.san,
-    maiaTopUci: analysis?.maia?.uci, maiaTopSan: analysis?.maia?.san,
-    maiaTopProb: analysis?.maia && probabilities([analysis.maia]).get(analysis.maia.uci)
+  const branch = state.branch;
+  const played = state.snapshot?.moves[ply - 1];
+  const label = branch ? t('branch') + ' · ' + branch.move.san
+    : played ? played.moveNumber + (played.turn === 'w' ? '. ' : '… ') + played.san : t('startPosition');
+  shareSession = {
+    fen: state.boardFen, orientation: board.orientation, lang, elo: state.settings.elo, branch: Boolean(branch),
+    event: [lang === 'en' ? state.event?.titleEn : state.event?.title, roundName(round)].filter(Boolean).join(' · '),
+    label, players: roundPlayers(round).map(player => playerName(player)).filter(Boolean).join(' vs '), link,
+    filename: ['diverge-wcc', round.id, String(ply), branch && 'variation', 'poster'].filter(Boolean).join('-') + '.png'
   };
-  const label = branch ? t('branch', cardLang) + ' · ' + branch.move.san
-    : played ? played.moveNumber + (played.turn === 'w' ? '. ' : '… ') + played.san : t('startPosition', cardLang);
-  const roundLabel = roundName(round);
-  const [white, black] = roundPlayers(round).map(player => playerName(player, cardLang));
+  $('share-card-link-field').hidden = true;
+  $('share-card-placeholder').hidden = false;
+  $('share-card-canvas').hidden = true;
+  $('share-card-progress').firstElementChild.style.width = '6%';
+  for (const id of posterButtons) $(id).disabled = true;
+  $('share-card-dialog').showModal();
+  posterNotice(shareSession, 'posterStart');
+  updatePoster();
+};
+
+$('btn-close-share-card').onclick = () => $('share-card-dialog').close();
+$('share-card-dialog').addEventListener('close', () => {
+  if (!$('share-card-dialog').open) shareSession = null;
+});
+$('share-card-retry').onclick = () => shareSession?.action?.();
+$('btn-share-card-copy').onclick = async () => {
+  const share = shareSession;
+  if (!share?.blob || !posterCurrent(share)) return;
   try {
-    const { ShareCardModal } = await import('../analysis/share-card.js?v=20261124-perspective');
-    shareModal ||= new ShareCardModal(null, { format: 'portrait', allowed: analysisAllowed });
-    await shareModal.open(move, {
-      lang: cardLang, elo, orientation, white, black, link, linkCopied: t('linkCopied', cardLang),
-      perspectiveLoading: t('perspectiveLoading', cardLang),
-      perspectiveUnavailable: t('perspectiveUnavailable', cardLang),
-      loadPerspective: analysis?.trend && (async () => {
-        if (state.analysis?.trend !== analysis.trend || !analysisAllowed()) return null;
-        const trend = trendFor(analysis.trend);
-        await sampleTrend(trend);
-        if (state.trend !== trend || !analysisAllowed()) return null;
-        const count = RATINGS.filter(rating => trend.samples.has(rating)).length;
-        if (!count) return null;
-        return { samples: trend.samples, series: trend.position.series,
-          headline: trendConclusion(trend, cardLang) || t('trendSubtitle', cardLang),
-          caption: t('trendProgress', cardLang).replace('{count}', count).replace('{total}', RATINGS.length) };
-      }),
-      filename: (format, content) => ['diverge-wcc', round.id, String(ply), branch && 'variation', content === 'perspective' && 'perspective', format].filter(Boolean).join('-') + '.png',
-      decorate(spec) {
-        spec.badge = [t('card', cardLang), roundLabel, kind && t(kind, cardLang)].filter(Boolean).join(' · ');
-        spec.subline = [move.bestSan && label, [white, black].filter(Boolean).join(' vs ')].filter(Boolean).join(' · ');
-        if (!move.bestSan) spec.headline = label;
-        spec.watermark = '4chess.cc/live · Lichess Broadcast';
-        spec.targetUrl = link;
-        spec.scanLabel = t('scan', cardLang);
-      }
-    });
+    await copyPng(share.blob);
+    if (posterCurrent(share)) posterNotice(share, 'posterCopied');
   } catch {
-    $('live-link-status').textContent = t('shareFailed');
+    if (posterCurrent(share)) posterNotice(share, 'posterCopyFail');
   }
+};
+$('btn-share-card-download').onclick = () => {
+  const share = shareSession;
+  if (!share?.blob || !posterCurrent(share)) return;
+  downloadPng(share.blob, share.filename);
+  posterNotice(share, 'posterSaved');
+};
+$('btn-share-card-link').onclick = async () => {
+  const share = shareSession;
+  if (!share || !posterCurrent(share)) return;
+  const copied = await copyShareLink(share.link, $('share-card-link-field'));
+  if (copied && posterCurrent(share)) posterNotice(share, 'linkCopied');
 };
 
 document.addEventListener('visibilitychange', () => {
@@ -1115,6 +1269,7 @@ document.addEventListener('visibilitychange', () => {
     void pollEvent();
     void pollRound();
     if (state.engineEnabled) void analyzeMove();
+    updatePoster();
   } else {
     stopPlayback();
     if (state.trend?.pending) closeTrend();

@@ -64,8 +64,9 @@ async function mockEngines(context) {
         };
       }
       async sampleMaia(position, elo) {
+        (window.sampleMaiaRequests ||= []).push(elo);
         if (elo === 600 && window.missingTrendSample) return [];
-        return [{ uci: position.series[0].uci, rawProb: .01 }];
+        return position.series.map((move, rank) => ({ uci: move.uci, rawProb: rank ? .55 : .01 }));
       }
       async inspect(position) {
         const chess = new ChessBoard(position.fen);
@@ -74,9 +75,9 @@ async function mockEngines(context) {
         const maia = { ...legal.find(move => move.uci !== stockfish.uci), rawProb: .55 };
         const evaluation = chess.turn === 'w' ? { cp: 35, text: '+0.35' } : { cp: -35, text: '-0.35' };
         const stockfishLines = [stockfish, ...legal.filter(move => move.uci !== stockfish.uci).slice(0, 2)]
-          .map(move => ({ evaluation, variation: [{ san: move.san, label: move.san }] }));
+          .map(move => ({ uci: move.uci, evaluation, variation: [{ san: move.san, label: move.san }] }));
         const maiaLines = [maia, ...legal.filter(move => move.uci !== maia.uci).slice(0, 2).map(move => ({ ...move, rawProb: .12 }))];
-        const series = [{ uci: stockfish.uci, san: stockfish.san, label: stockfish.san, role: 'sf' }];
+        const series = [[stockfish, 'sf'], [maia, 'maia']].map(([move, role]) => ({ uci: move.uci, san: move.san, label: move.san, role }));
         const moves = [{ uci: stockfish.uci, rawProb: .016 }, maia];
         (window.positionRequests ||= []).push(position.fen);
         if (window.holdAssessment) {
@@ -84,7 +85,17 @@ async function mockEngines(context) {
           await new Promise(resolve => { window.finishAssessment = resolve; });
         }
         if (this.mode === 'off') return { evaluation, stockfish, stockfishLines, depth: 18 };
-        return { evaluation, stockfish, stockfishLines, maia, maiaLines, depth: 18, maiaReady: true, trend: { ...position, series, moves } };
+        const maiaEvaluations = new Map(stockfishLines.filter(line => maiaLines.some(move => line.uci === move.uci)).map(line => [line.uci, evaluation]));
+        return { evaluation, stockfish, stockfishLines, maia, maiaLines, maiaEvaluations, depth: 18, maiaReady: true, trend: { ...position, series, moves } };
+      }
+      async fillMaiaEvaluations(_position, result, obsolete, refresh) {
+        for (const move of result.maiaLines) {
+          await Promise.resolve();
+          if (obsolete()) return;
+          if (result.maiaEvaluations.has(move.uci)) continue;
+          result.maiaEvaluations.set(move.uci, { text: '-0.82', approximate: true });
+          refresh();
+        }
       }
       async classify(move, { fen: fenBefore }) {
         return {
@@ -120,6 +131,8 @@ try {
   assert.equal(await page.locator('#event-board [data-role="maia"]').count(), 1);
   assert.equal(await page.locator('#sf-candidates .candidate-line:visible').count(), 3);
   assert.equal(await page.locator('#maia-candidates .candidate-line:visible').count(), 3);
+  assert.equal(await page.locator('#maia-line .candidate-probability').innerText(), '55.0%');
+  assert.match(await page.locator('#maia-line .candidate-score').innerText(), /^[+-]/);
   assert.equal(await page.locator('#btn-settings use').getAttribute('href'), '../ui/studio-controls.svg#settings');
   await page.waitForFunction(() => document.querySelector('#btn-settings use').getBBox().width > 0);
   assert.ok(await page.locator('#flip-board use').evaluate(icon => icon.getBBox().width > 0));
@@ -180,6 +193,7 @@ try {
   assert.equal(copied.searchParams.get('ply'), '3');
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
+  await page.locator('#share-card-canvas:visible').waitFor();
   assert.equal(await page.locator('#share-card-canvas').evaluate(el => el.width), 1080);
   await page.locator('#btn-close-share-card').click();
   assert.equal(await page.locator('#event-board .maia-square').count(), 64);
@@ -217,6 +231,7 @@ try {
   assert.equal(await page.locator('#maia-progress').evaluate(el => el.value), 46);
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
+  await page.locator('#btn-share-card-link:not([disabled])').waitFor();
   await page.locator('#btn-share-card-link').click();
   const branchLink = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   assert.equal(branchLink.searchParams.get('ply'), '2');
@@ -246,6 +261,12 @@ try {
   assert.equal(await page.locator('#black-clock').getAttribute('data-low'), 'true');
   assert.equal(await page.locator('#white-seat').getAttribute('data-to-move'), 'true');
   await page.evaluate(() => { window.missingTrendSample = true; });
+  await page.locator('#moment').click();
+  await page.locator('#share-card-retry').waitFor();
+  assert.equal(await page.locator('#share-card-canvas').isVisible(), false);
+  assert.equal(await page.locator('#btn-share-card-copy').isDisabled(), true);
+  assert.match(await page.locator('#share-card-status').innerText(), /再试一次/);
+  await page.locator('#btn-close-share-card').click();
   await page.locator('#trend-toggle').click();
   assert.equal(await page.locator('#trend-board .maia-square').count(), 64);
   assert.equal(await page.locator('#trend-board [data-role="sf"]').count(), 1);
@@ -254,10 +275,10 @@ try {
   await page.evaluate(() => { window.missingTrendSample = false; });
   await page.locator('#trend-retry').click();
   await page.locator('#trend-status').getByText('已完成 6/6 档', { exact: false }).waitFor();
-  assert.equal(await page.locator('#trend-chart circle').count(), 6);
+  assert.equal(await page.locator('#trend-chart circle').count(), 12);
   await page.locator('#trend-data-view').click();
   assert.equal(await page.locator('#trend-data tbody tr').count(), 6);
-  assert.equal(await page.locator('#trend-data tbody tr:first-child td').innerText(), '1.0%');
+  assert.equal(await page.locator('#trend-data tbody tr:first-child td').first().innerText(), '1.0%');
   assert.match(await page.locator('#trend-conclusion').innerText(), /全分段盲区.*Bb5/);
   await page.locator('#trend-chart-view').click();
   assert.equal(await page.locator('#trend-chart').isVisible(), true);
@@ -271,35 +292,29 @@ try {
     };
   });
   await page.locator('#language').click();
+  const cachedSamples = await page.evaluate(() => window.sampleMaiaRequests.length);
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
-  assert.equal(await page.locator('#share-card-canvas').evaluate(el => el.height), 1350);
+  await page.locator('#share-card-canvas:visible').waitFor();
+  assert.equal(await page.locator('#share-card-canvas').evaluate(el => el.height), 1560);
+  assert.equal(await page.evaluate(() => window.sampleMaiaRequests.length), cachedSamples);
   await page.locator('#btn-share-card-link').click();
   assert.equal(new URL(await page.evaluate(() => navigator.clipboard.readText())).searchParams.get('ply'), '4');
   await page.locator('#btn-share-card-copy').click();
-  await page.locator('#share-card-status').getByText('Copied PNG image to clipboard.', { exact: true }).waitFor();
+  await page.locator('#share-card-status').getByText('Poster copied', { exact: true }).waitFor();
   assert.ok(await page.evaluate(async () => (await navigator.clipboard.read()).some(item => item.types.includes('image/png'))));
-  await page.locator('[data-share-content="perspective"]').click();
-  await page.locator('#btn-share-card-download:not([disabled])').waitFor();
-  assert.equal(await page.locator('#share-card-canvas').evaluate(canvas => canvas.height), 1350);
-  assert.equal(await page.locator('[data-share-format="landscape"]').isDisabled(), true);
+  assert.equal(await page.locator('[data-share-format], [data-share-content]').count(), 0);
   assert.ok(await page.evaluate(() => window.cardText.join(' ').includes('almost nobody')));
   assert.ok(await page.evaluate(() => window.cardText.includes('600') && window.cardText.includes('2600')));
   if (process.env.LIVE_SCREENSHOTS) {
     mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
-    await page.locator('#share-card-canvas').screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'perspective-card.png') });
+    await page.locator('#share-card-canvas').screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'poster.png') });
   }
   const perspectiveDownload = page.waitForEvent('download');
   await page.locator('#btn-share-card-download').click();
-  assert.match((await perspectiveDownload).suggestedFilename(), /perspective-portrait\.png$/);
-  await page.locator('[data-share-content="position"]').click();
-  await page.locator('[data-share-format="landscape"]').click();
-  await page.locator('#btn-share-card-download:not([disabled])').waitFor();
-  assert.equal(await page.locator('#share-card-canvas').evaluate(el => el.width), 1200);
-  const downloaded = page.waitForEvent('download');
-  await page.locator('#btn-share-card-download').click();
-  assert.equal((await downloaded).suggestedFilename(), 'diverge-wcc-' + current.id + '-4-landscape.png');
-  assert.ok(await page.evaluate(() => window.cardText.some(text => /Brilliant move/.test(text))));
+  const posterFile = await perspectiveDownload;
+  assert.equal(posterFile.suggestedFilename(), 'diverge-wcc-' + current.id + '-4-poster.png');
+  if (process.env.LIVE_SCREENSHOTS) await posterFile.saveAs(path.join(process.env.LIVE_SCREENSHOTS, 'poster-full.png'));
   await page.locator('#btn-close-share-card').click();
   await page.locator('#language').click();
   await page.evaluate(() => { window.holdAssessment = true; });
@@ -350,6 +365,8 @@ try {
   assert.equal(await page.locator('#sf-line strong').innerText(), '—');
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
+  await page.locator('#share-card-retry').click();
+  await page.locator('#btn-share-card-link:not([disabled])').waitFor();
   await page.locator('#btn-share-card-link').click();
   assert.equal(new URL(await page.evaluate(() => navigator.clipboard.readText())).searchParams.get('ply'), '0');
   await page.locator('#btn-close-share-card').click();
@@ -423,9 +440,13 @@ try {
   await phone.locator('#ply-note').getByText('Variation').waitFor();
   await phone.locator('#moment').click();
   await phone.locator('#share-card-dialog[open]').waitFor();
-  assert.equal(await phone.locator('#share-card-canvas').evaluate(element => element.height), 1350);
+  assert.equal(await phone.locator('#share-card-canvas').isVisible(), false);
+  assert.equal(await phone.locator('#btn-share-card-download').isDisabled(), true);
+  assert.match(await phone.locator('#share-card-retry').innerText(), /5M.*28 MiB/);
+  await phone.locator('#share-card-retry').click();
+  await phone.locator('#share-card-canvas:visible').waitFor();
+  assert.equal(await phone.locator('#share-card-canvas').evaluate(element => element.height), 1560);
   await phone.locator('#btn-close-share-card').click();
-  await phone.locator('#load-maia').click();
   await phone.locator('#trend-toggle:not([disabled])').waitFor();
   assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'download');
 

@@ -5,7 +5,6 @@ import { BOARD_ARROW } from '../ui/board-visuals.js?v=20261124-divergence-cards'
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
 import { canvasPng, copyShareLink, drawShareQr, shareQr, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
-import { RATINGS, TREND_WIDTH, TREND_TICKS, trendX, trendY } from './maia-trend-geometry.js';
 
 export const SHARE_CARD_FORMATS = {
   landscape: { width: 1200, height: 675 },
@@ -227,7 +226,7 @@ function drawCanvasArrow(ctx, fromPt, toPt, color, sqSize) {
   ctx.restore();
 }
 
-function wrapTextLines(ctx, text, maxWidth) {
+export function wrapTextLines(ctx, text, maxWidth) {
   const lines = [];
   let current = '';
   for (const token of String(text || '').trim().split(/(\s+)/)) {
@@ -380,58 +379,6 @@ function drawShareLegend(ctx, spec, theme, x, y, width) {
   }
 }
 
-function drawPerspectiveChart(ctx, { series, samples, caption }, theme, x, y, width) {
-  const { line, ink, muted } = SHARE_PAPER;
-  ctx.save();
-  ctx.translate(x, y);
-  const scale = width / TREND_WIDTH;
-  ctx.scale(scale, scale);
-  ctx.font = '650 13px system-ui, sans-serif';
-  ctx.fillStyle = ink;
-  ctx.fillText(caption, 0, -19, TREND_WIDTH);
-  ctx.font = '11px system-ui, sans-serif';
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 1;
-  for (const percent of TREND_TICKS) {
-    const y = trendY(percent);
-    ctx.beginPath();
-    ctx.moveTo(trendX(RATINGS[0]), y);
-    ctx.lineTo(trendX(RATINGS.at(-1)), y);
-    ctx.stroke();
-    ctx.fillStyle = muted;
-    ctx.fillText(`${percent}%`, 0, y - 5);
-  }
-  ctx.textAlign = 'center';
-  for (const rating of RATINGS) ctx.fillText(String(rating), trendX(rating), 144);
-  ctx.textAlign = 'left';
-  series.forEach((move, index) => {
-    const color = move.role === 'sf' ? theme.stockfish : theme.maia;
-    const points = RATINGS.map(rating => ({
-      rating, probability: samples.get(rating)?.get(move.uci)
-    }));
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    let connected = false;
-    for (const { rating, probability } of points) {
-      if (!Number.isFinite(probability)) { connected = false; continue; }
-      if (connected) ctx.lineTo(trendX(rating), trendY(probability));
-      else ctx.moveTo(trendX(rating), trendY(probability));
-      connected = true;
-    }
-    ctx.stroke();
-    ctx.fillStyle = color;
-    for (const { rating, probability } of points) {
-      if (!Number.isFinite(probability)) continue;
-      ctx.beginPath();
-      ctx.arc(trendX(rating), trendY(probability), 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillText(`${move.role === 'sf' ? 'Stockfish' : 'Maia'} · ${move.san}`, index * 140, 162, 136);
-  });
-  ctx.restore();
-}
-
 export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => true } = {}) {
   if (!canvas) return null;
   const pieceImages = await prepareShareBoards();
@@ -452,15 +399,14 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
   ctx.stroke();
 
   const portrait = spec.format === 'portrait';
-  const perspective = portrait && spec.perspective;
   const theme = spec.theme || defaultBoardTheme;
-  const boardSize = perspective ? 646 : portrait ? 770 : 568;
+  const boardSize = portrait ? 770 : 568;
   const boardX = portrait ? (width - boardSize) / 2 : 48;
-  const boardY = perspective ? 252 : portrait ? 318 : Math.round((height - boardSize) / 2);
+  const boardY = portrait ? 318 : Math.round((height - boardSize) / 2);
   drawShareBoard(ctx, { ...spec, theme }, pieceImages, boardX, boardY, boardSize);
-  const textX = perspective ? 88 : portrait ? boardX : boardX + boardSize + 40;
+  const textX = portrait ? boardX : boardX + boardSize + 40;
   const top = portrait ? 46 : 64;
-  const textWidth = perspective ? width - 2 * textX : portrait ? boardSize : width - textX - 48;
+  const textWidth = portrait ? boardSize : width - textX - 48;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = { trap: theme.played, beyond: theme.stockfish }[spec.kind] || green;
@@ -472,36 +418,21 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
   }
 
   const headlineY = top + 44;
-  const lineHeight = perspective ? 46 : portrait ? 52 : 45;
+  const lineHeight = portrait ? 52 : 45;
   ctx.fillStyle = ink;
   ctx.font = `700 ${portrait ? 43 : 37}px system-ui, sans-serif`;
-  const lines = wrapTextLines(ctx, spec.headline, textWidth).slice(0, perspective ? 2 : 3);
+  const lines = wrapTextLines(ctx, spec.headline, textWidth).slice(0, 3);
   lines.forEach((text, index) => ctx.fillText(text, textX, headlineY + index * lineHeight));
 
   if (spec.subline) {
     const subtitleY = headlineY + lines.length * lineHeight + 9;
     ctx.fillStyle = muted;
     ctx.font = '500 22px system-ui, sans-serif';
-    const sublines = wrapTextLines(ctx, spec.subline, textWidth).slice(0, perspective ? 1 : 2);
+    const sublines = wrapTextLines(ctx, spec.subline, textWidth).slice(0, 2);
     sublines.forEach((text, index) => ctx.fillText(text, textX, subtitleY + index * 28));
   }
 
   const url = moveShareUrl(spec);
-  if (perspective) {
-    drawPerspectiveChart(ctx, perspective, theme, textX, 944, 612);
-    if (url) {
-      drawShareQr(ctx, shareQr(url), width - textX, 990, 226);
-      ctx.fillStyle = green;
-      ctx.font = '650 20px system-ui, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(spec.scanLabel || t('shareCardScanPosition', {}, spec.lang), width - textX, 1222, 226);
-    }
-    ctx.textAlign = 'left';
-    ctx.fillStyle = muted;
-    ctx.font = '550 19px system-ui, sans-serif';
-    ctx.fillText(spec.watermark, textX, height - 67, textWidth);
-    return canvas;
-  }
   // Larger modules survive the downscaling used by chat apps.
   const qrSize = 230;
   const qrRight = textX + textWidth;
@@ -524,7 +455,6 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
 
 export class ShareCardModal {
   format = 'landscape';
-  content = 'position';
   openGeneration = 0;
   renderGeneration = 0;
   exportGeneration = 0;
@@ -539,8 +469,6 @@ export class ShareCardModal {
     this.closeBtn = document.getElementById('btn-close-share-card');
     this.canvas = document.getElementById('share-card-canvas');
     this.formatButtons = [...document.querySelectorAll('#share-card-dialog [data-share-format]')];
-    this.contentGroup = this.dialog?.querySelector('#share-card-content');
-    this.contentButtons = Array.from(this.contentGroup?.querySelectorAll('[data-share-content]') ?? []);
     this.btnCopy = document.getElementById('btn-share-card-copy');
     this.btnDownload = document.getElementById('btn-share-card-download');
     this.btnLink = document.getElementById('btn-share-card-link');
@@ -581,13 +509,6 @@ export class ShareCardModal {
         this.renderPreview();
       };
     }
-    for (const button of this.contentButtons) {
-      button.onclick = () => {
-        this.content = button.dataset.shareContent;
-        if (this.content === 'perspective') this.format = 'portrait';
-        void this.renderPreview();
-      };
-    }
     if (this.btnCopy) this.btnCopy.onclick = () => this.copyImage();
     if (this.btnDownload) this.btnDownload.onclick = () => this.downloadPng();
     if (this.btnLink) this.btnLink.onclick = async () => {
@@ -605,8 +526,6 @@ export class ShareCardModal {
     this.exportGeneration++;
     this.currentMove = move;
     this.currentContext = context;
-    this.content = 'position';
-    if (this.contentGroup) this.contentGroup.hidden = !context.loadPerspective;
     if (this.btnLink) this.btnLink.hidden = !context.link;
     if (this.linkField) this.linkField.hidden = true;
     if (this.statusEl) this.statusEl.textContent = '';
@@ -625,27 +544,12 @@ export class ShareCardModal {
 
   async renderPreview() {
     const renderGen = ++this.renderGeneration;
+    for (const btn of this.formatButtons) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.shareFormat === this.format));
+    }
     if (!this.currentMove || !this.canvas) return;
     this.exportGeneration++;
     this.btnCopy.disabled = this.btnDownload.disabled = true;
-    const isCurrent = () => renderGen === this.renderGeneration && this.allowed();
-    const syncControls = () => {
-      for (const button of this.formatButtons) {
-        button.disabled = this.content === 'perspective' && button.dataset.shareFormat === 'landscape';
-        button.setAttribute('aria-pressed', String(button.dataset.shareFormat === this.format));
-      }
-      for (const button of this.contentButtons) button.setAttribute('aria-pressed', String(button.dataset.shareContent === this.content));
-    };
-    syncControls();
-    let perspective;
-    if (this.content === 'perspective' && this.currentContext.loadPerspective) {
-      if (this.statusEl) this.statusEl.textContent = this.currentContext.perspectiveLoading;
-      try { perspective = await this.currentContext.loadPerspective(); } catch { /* Keep the position card available. */ }
-      if (!isCurrent()) return;
-      if (!perspective) this.content = 'position';
-      if (this.statusEl) this.statusEl.textContent = perspective ? '' : this.currentContext.perspectiveUnavailable;
-      syncControls();
-    } else if (this.statusEl) this.statusEl.textContent = '';
     const orientation = this.currentContext.orientation || this.app?.boardUI?.orientation || (parseFenBoard(this.currentMove.fenBefore || this.currentMove.fen).turn === 'b' ? 'black' : 'white');
     const spec = buildShareCardSpec(this.currentMove, {
       elo: this.currentContext.elo || this.app?.currentElo || 1900,
@@ -657,7 +561,7 @@ export class ShareCardModal {
       theme: readStudioShareBoard(document.getElementById('board-container'))
     });
     this.currentContext.decorate?.(spec);
-    if (perspective) Object.assign(spec, { perspective, headline: perspective.headline });
+    const isCurrent = () => renderGen === this.renderGeneration && this.allowed();
     const rendered = await renderShareCardCanvas(spec, this.canvas, { isCurrent });
     if (isCurrent()) this.btnCopy.disabled = this.btnDownload.disabled = !rendered;
   }
@@ -672,7 +576,7 @@ export class ShareCardModal {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = this.currentContext.filename?.(format, this.content) || `diverge-move-${moveNum}-${format}.png`;
+    link.download = this.currentContext.filename?.(format) || `diverge-move-${moveNum}-${format}.png`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     if (this.statusEl) this.statusEl.textContent = t('shareCardDownloaded', {}, this.currentContext.lang);

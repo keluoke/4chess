@@ -1,7 +1,7 @@
 import { ChessBoard } from '../engine/chess-core.js';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
-import { engineLines, whiteEvaluation } from '../engine/position-lines.js';
+import { engineLines, legalVariation, whiteEvaluation } from '../engine/position-lines.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';
 
 const VERIFIED_MIN_DEPTH = 18;
@@ -52,8 +52,12 @@ export class LiveEngines {
     return this.depth === 22 ? 7000 : this.depth === 20 ? 4000 : 3200;
   }
 
+  positionKey({ fen, history, elo }) {
+    return JSON.stringify([fen, history, elo, this.depth]);
+  }
+
   async evaluate({ fen, history, elo }, obsolete, onStockfish) {
-    const key = JSON.stringify([fen, history, elo, this.depth]);
+    const key = this.positionKey({ fen, history, elo });
     if (this.positions.has(key)) return this.positions.get(key);
     const terminal = !new ChessBoard(fen).getLegalMoves().length;
     const maiaReady = !terminal && this.maia?.initialize().then(() => true, () => false);
@@ -63,7 +67,7 @@ export class LiveEngines {
     if (result) onStockfish?.(result);
     const prediction = await maiaReady && !obsolete() ? await this.maia.predict(fen, elo, result, obsolete, history) : null;
     if (obsolete()) return null;
-    const entry = { result, prediction };
+    const entry = { result, prediction, maiaEvaluations: new Map() };
     if (result && (!this.maia || prediction?.isMaiaReady || result.terminal)) {
       this.positions.set(key, entry);
       if (this.positions.size > 12) this.positions.delete(this.positions.keys().next().value);
@@ -91,7 +95,36 @@ export class LiveEngines {
       }
     }
     const trend = likely ? { ...position, series: [...series.values()], moves: prediction.moves } : null;
-    return { ...displayStockfish(result), maia: likely, maiaLines, maiaReady: !!prediction?.isMaiaReady, trend };
+    const display = displayStockfish(result);
+    const matches = new Map(display.stockfishLines.map(line => [line.uci, line.evaluation]));
+    const maiaEvaluations = new Map(maiaLines.flatMap(move => {
+      const score = matches.get(move.uci) ?? entry.maiaEvaluations.get(move.uci);
+      return score ? [[move.uci, score]] : [];
+    }));
+    return { ...display, maia: likely, maiaLines, maiaEvaluations, maiaReady: !!prediction?.isMaiaReady, trend };
+  }
+
+  async fillMaiaEvaluations(position, display, obsolete, publish) {
+    const entry = this.positions.get(this.positionKey(position));
+    const depth = Math.min(16, this.depth - 2);
+    for (const move of display.maiaLines) {
+      if (obsolete()) return;
+      if (display.stockfishLines.some(line => line.uci === move.uci) || display.maiaEvaluations.has(move.uci)) continue;
+      const child = legalVariation(position.fen, [move.uci])[0];
+      if (!child) continue;
+      const chess = new ChessBoard(child.fen);
+      const terminal = !chess.getLegalMoves().length;
+      const isMate = terminal && chess.inCheck();
+      const result = terminal ? { scoreCp: isMate ? -10000 : 0, isMate, score: isMate ? 'M0' : '0.00' }
+        : await this.stockfish.evaluate(child.fen, depth, 1700, 1, 1200);
+      if (obsolete()) return;
+      const evaluation = result && !result.isBound && whiteEvaluation(result, child.fen);
+      if (!evaluation) continue;
+      const score = terminal ? evaluation : { ...evaluation, approximate: true };
+      entry?.maiaEvaluations.set(move.uci, score);
+      display.maiaEvaluations.set(move.uci, score);
+      publish();
+    }
   }
 
   async classify(move, before, after, obsolete) {

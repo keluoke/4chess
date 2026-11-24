@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124-perspective-r2">
+  <link rel="stylesheet" href="./live.css?v=20261125-poster">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -157,26 +157,21 @@
     <ul class="engine-health"><li id="sf-status"></li><li id="maia-status"></li></ul>
   </dialog>
   <dialog class="share-card-dialog" id="share-card-dialog" aria-labelledby="share-card-title">
-    <header class="live-share-heading"><h2 id="share-card-title" data-copy="share">分享局面卡</h2><button id="btn-close-share-card" type="button" data-copy="close">关闭</button></header>
-    <div class="share-card-formats share-card-content" id="share-card-content" role="group" data-label="cardContent" hidden>
-      <button type="button" data-share-content="position" data-copy="positionCard" aria-pressed="true">局面卡</button>
-      <button type="button" data-share-content="perspective" data-copy="perspectiveCard" aria-pressed="false">局面 + 各段直觉</button>
+    <header class="live-share-heading"><h2 id="share-card-title" data-copy="share">分享观赛海报</h2><button id="btn-close-share-card" type="button" data-copy="close">关闭</button></header>
+    <p id="share-card-status" class="live-link-status" role="status"></p>
+    <div id="share-card-progress" class="poster-progress" aria-hidden="true"><span></span></div>
+    <div class="share-card-preview-wrap">
+      <div id="share-card-placeholder" class="poster-placeholder" aria-hidden="true"><span></span><span></span><span></span></div>
+      <canvas id="share-card-canvas" width="1080" height="1560" data-label="share" role="img" hidden></canvas>
     </div>
-    <div class="share-card-toolbar">
-      <div class="share-card-formats" role="group">
-        <button type="button" data-share-format="landscape" data-copy="landscape" aria-pressed="false">16:9 横版</button>
-        <button type="button" data-share-format="portrait" data-copy="portrait" aria-pressed="true">3:4 竖版</button>
-      </div>
-      <div class="share-card-actions">
-        <button id="btn-share-card-copy" type="button" data-copy="copyImage">复制图片</button>
-        <button id="btn-share-card-link" type="button" data-copy="copyLink">复制链接</button>
-        <button id="btn-share-card-download" type="button" data-copy="download">下载 PNG</button>
-      </div>
+    <div class="share-card-actions">
+      <button id="share-card-retry" type="button" hidden></button>
+      <button id="btn-share-card-copy" type="button" data-copy="copyImage" disabled>复制图片</button>
+      <button id="btn-share-card-download" type="button" data-copy="download" disabled>保存图片</button>
+      <button id="btn-share-card-link" type="button" data-copy="copyLink" disabled>复制链接</button>
     </div>
     <input id="share-card-link-field" class="live-link-field" type="url" readonly aria-label="分享链接" data-label="shareLink" hidden>
-    <div class="share-card-preview-wrap"><canvas id="share-card-canvas"></canvas></div>
-    <p id="share-card-status" class="live-link-status" role="status"></p>
   </dialog>
-  <script type="module" src="./live.js?v=20261124-perspective"></script>
+  <script type="module" src="./live.js?v=20261125-poster"></script>
 </body>
 </html>
