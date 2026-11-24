@@ -6,7 +6,7 @@ const output = resolve(root, 'dist/site');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 // Deploy only the public website. Local service, popup experiments, releases and secrets never enter this output.
-const entries = ['index.html','404.html','favicon.svg','robots.txt','sitemap.xml','site','en','zh','analysis','engine','content/fair-play-guard.js','lib','models','ui','icons','guide','privacy','LICENSE','LICENSES','THIRD_PARTY_NOTICES.md'];
+const entries = ['index.html','404.html','favicon.svg','robots.txt','sitemap.xml','site','en','zh','analysis','live','engine','content/fair-play-guard.js','lib','models','ui','icons','guide','privacy','LICENSE','LICENSES','THIRD_PARTY_NOTICES.md'];
 for (const entry of entries) {
   mkdirSync(resolve(output, entry, '..'), { recursive: true });
   cpSync(resolve(root, entry), resolve(output, entry), { recursive: true });

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="在 4chess.cc 观赛，跟随棋王战官方转播，用 Stockfish 19 和 Maia-3 回看实战着法。">
+  <title>2026 棋王战 · Diverge</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
+  <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
+  <link rel="stylesheet" href="./live.css?v=20261124">
+</head>
+<body class="live-page">
+  <header class="event-nav">
+    <a class="event-brand" href="/">Diverge</a>
+    <a href="/analysis/" data-copy="studio">分析工作台</a>
+    <button type="button" id="language" aria-label="Language">EN</button>
+  </header>
+  <main class="event-main">
+    <section class="event-heading" aria-labelledby="title">
+      <div>
+        <div class="event-status" id="event-status" role="status">正在连接 Lichess 转播</div>
+        <h1 id="title">2026 国际象棋棋王战</h1>
+      </div>
+      <div class="match-score" id="match-score" aria-label="赛况总比分"></div>
+    </section>
+    <div class="event-layout">
+      <section class="board-column" aria-label="转播棋盘">
+        <div class="seat" id="black-seat"><span id="black-name">黑方</span><time id="black-clock">–:––</time></div>
+        <div id="event-board" aria-label="国际象棋棋盘"></div>
+        <div class="seat" id="white-seat"><span id="white-name">白方</span><time id="white-clock">–:––</time></div>
+        <div class="round-controls">
+          <label for="round-select" data-copy="round">轮次</label>
+          <select id="round-select" disabled></select>
+          <button id="first" type="button" aria-label="第一步" data-label="first">|‹</button>
+          <button id="previous" type="button" aria-label="上一步" data-label="previous">‹</button>
+          <button id="next" type="button" aria-label="下一步" data-label="next">›</button>
+          <button id="latest" type="button" data-copy="latest">回到最新</button>
+        </div>
+      </section>
+      <section class="event-panel" aria-label="着法和双引擎">
+        <button type="button" id="new-move" class="update-button" hidden></button>
+        <header class="moves-heading">
+          <h2 data-copy="moves">实战着法</h2>
+          <span id="ply-note"></span>
+        </header>
+        <div id="event-moves" class="event-moves"></div>
+        <section class="engine-pane" aria-labelledby="engine-title">
+          <header>
+            <h2 id="engine-title" data-copy="engines">双引擎对比</h2>
+            <label class="elo-label">
+              <span class="visually-hidden" data-copy="rating">段位</span>
+              <select id="event-elo">
+                <option>1500</option><option selected>1900</option><option>2600</option>
+              </select> Elo
+            </label>
+          </header>
+          <p id="engine-note" role="status"></p>
+          <div class="engine-lines" id="engine-lines" hidden>
+            <div><span>Stockfish 19</span><strong id="sf-line"></strong></div>
+            <div><span>Maia-3</span><strong id="maia-line"></strong></div>
+          </div>
+          <p id="intuition-tag" class="intuition-tag" hidden></p>
+          <div class="engine-actions">
+            <button id="analyze" type="button" data-copy="analyze">启用双引擎</button>
+            <button id="moment" type="button" data-copy="share" hidden>分享棋王战瞬间</button>
+          </div>
+        </section>
+      </section>
+    </div>
+    <footer class="event-source">
+      <span data-copy="sourceLead">转播数据</span>
+      <a id="source" href="https://lichess.org/broadcast/fide-world-chess-championship-2026/game-1/xLgOJ6cb" target="_blank" rel="noopener noreferrer">Lichess Broadcast</a>
+      <span data-copy="delay">着法和时钟以转播为准，可能晚于现场。</span>
+    </footer>
+  </main>
+  <script type="module" src="./live.js?v=20261124"></script>
+</body>
+</html>

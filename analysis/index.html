@@ -8,6 +8,7 @@
   <meta property="og:title" content="Diverge · Chess Analysis Studio">
   <meta property="og:image" content="https://4chess.cc/site/social.png">
   <meta name="description" content="对比 Stockfish 引擎建议与 Maia 人类直觉。探索网页棋图识别出的局面、FEN、PGN 与完赛棋局，查看候选分支和人机分歧。">
+  <script type="module" src="./live-entry.js?v=20261124"></script>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#f2f5f1">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -59,6 +60,7 @@
     </div>
 
     <div class="studio-header-actions">
+      <a class="btn-header" data-live-entry href="../live/" hidden></a>
       <button type="button" class="btn-header review-overview-button" id="btn-review-overview" data-i18n="gameOverview" aria-controls="review-summary" aria-haspopup="dialog" hidden>复盘总览</button>
       <div class="studio-profile-picker" id="studio-profile-picker" hidden>
         <span class="studio-profile-name" id="studio-profile-name"></span>

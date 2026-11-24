@@ -341,6 +341,7 @@ export function drawShareBoard(ctx, spec, pieceImages, boardX, boardY, boardSize
 }
 
 function moveShareUrl(spec) {
+  if (spec.targetUrl?.startsWith('https://4chess.cc/live/?')) return spec.targetUrl;
   if (!new ChessBoard(spec.fen).isValid) return null;
   const params = new URLSearchParams({
     fen: spec.fen, orientation: spec.orientation, lang: spec.lang, elo: spec.elo
@@ -445,7 +446,7 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
   ctx.textBaseline = 'top';
   ctx.fillStyle = green;
   ctx.font = '650 22px system-ui, sans-serif';
-  if (url) ctx.fillText(t('shareCardScanPosition'), textX, footerY, footerWidth);
+  if (url) ctx.fillText(spec.scanLabel || t('shareCardScanPosition'), textX, footerY, footerWidth);
   ctx.fillStyle = muted;
   ctx.font = '550 19px system-ui, sans-serif';
   ctx.fillText(spec.watermark, textX, footerY + 32, footerWidth);

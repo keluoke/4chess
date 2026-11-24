@@ -36,6 +36,7 @@ jobs:
       - run: node scripts/test_package_integrity.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      - run: node scripts/test_live_browser.mjs
       - run: xvfb-run -a node scripts/test_scan_browser.mjs
       - run: npm run test:board-visuals
       - run: npm run test:floating-handoff

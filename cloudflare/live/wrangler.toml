@@ -1,0 +1,12 @@
+name = "diverge-live-collector"
+main = "collector.js"
+compatibility_date = "2026-11-24"
+workers_dev = false
+
+[[durable_objects.bindings]]
+name = "LIVE_COLLECTOR"
+class_name = "LiveCollector"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveCollector"]
