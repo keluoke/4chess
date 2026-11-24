@@ -8,7 +8,7 @@ import {
   resolvePerspective,
   trapId
 } from './study-store.js?v=20261124-checkup-cards-r2';
-import { t } from './i18n.js?v=20261124-divergence-cards';
+import { t } from './i18n.js?v=20261124-review-scan-polish';
 
 export class MistakeBank {
   filter = 'due';

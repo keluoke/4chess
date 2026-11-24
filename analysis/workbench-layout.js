@@ -1,4 +1,4 @@
-import { t, onLanguageChange } from './i18n.js?v=20261124-divergence-cards';
+import { t, onLanguageChange } from './i18n.js?v=20261124-review-scan-polish';
 
 /** Move the existing chart, preserving its data and listeners across breakpoints. */
 export function initWorkbenchLayout() {

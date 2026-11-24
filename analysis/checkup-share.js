@@ -1,12 +1,12 @@
-import { t, getLang } from './i18n.js?v=20261124-divergence-cards';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-divergence-cards';
+import { t, getLang } from './i18n.js?v=20261124-review-scan-polish';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-review-scan-polish';
 import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import {
-  checkupFitBandLabel, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
-} from './checkup-fit-view.js?v=20261124-divergence-cards';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-divergence-cards';
+  checkupFitBandLabel, checkupFitComparison, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
+} from './checkup-fit-view.js?v=20261124-review-scan-polish';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-review-scan-polish';
 import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 const outcomes = ['win', 'draw', 'loss'];
@@ -55,6 +55,7 @@ export function checkupCardData({ report, speedLabel = value => value, challenge
     kind: 'profile', title: t('checkupShareProfileTitle'), name: report.playerName,
     band: checkupFitBandLabel(intuition),
     rating: checkupRatingLine(intuition, speedLabel),
+    fitComparison: checkupFitComparison(intuition),
     fitScope: intuition.isFitWindow ? checkupFitScope(intuition, speedLabel) : '',
     scope: t(report.gameCount === 1 ? 'checkupShareOneGame' : 'checkupOverviewGameCount', { count: report.gameCount }),
     fitStatus: fit?.status === 'limited' ? checkupFitStatusLabel(fit) : '',
@@ -80,7 +81,7 @@ export function summarizeCheckupCard(data, anonymous) {
       .filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
   }
   const headline = data.band ? `${t('checkupSummaryIntuition')} ${data.band}*` : t('checkupNoEloFit');
-  const facts = [data.rating, data.scope, ...data.metrics.map(({ label, value }) => `${label} ${value}`), data.fitScope, data.fitStatus].filter(Boolean);
+  const facts = [data.fitComparison || data.rating, data.scope, ...data.metrics.map(({ label, value }) => `${label} ${value}`), data.fitScope, data.fitStatus].filter(Boolean);
   if (data.band) facts.push(t('checkupFitFootnote'));
   return [headline + name, facts.join(' · '), CHECKUP_URL].join('\n');
 }
@@ -208,7 +209,16 @@ function drawProfile(ctx, data, { width, height, pad, portrait, anonymous }) {
       const right = pad + Math.min(ctx.measureText(data.band).width, bandWidth);
       type(ctx, '*', right + 5, bandY + 6, portrait ? 32 : 24, { size: portrait ? 33 : 23, tone: muted });
     }
-    type(ctx, [data.rating, data.fitStatus].filter(Boolean).join(' · '), pad, portrait ? 333 : 203, content, { size: portrait ? 28 : 21, minimum: 17, tone: muted });
+    if (data.fitComparison) {
+      const size = portrait ? 27 : 20;
+      const top = portrait ? 323 : 196;
+      ctx.font = `650 ${size}px ${font}`;
+      const badgeWidth = Math.min(content, Math.ceil(ctx.measureText(data.fitComparison).width) + 24);
+      panel(ctx, pad, top, badgeWidth, portrait ? 46 : 35, '#e1eee4');
+      type(ctx, data.fitComparison, pad + 12, top + (portrait ? 8 : 5), badgeWidth - 24, { size, minimum: 16, weight: 650, tone: green });
+    } else {
+      type(ctx, [data.rating, data.fitStatus].filter(Boolean).join(' · '), pad, portrait ? 333 : 203, content, { size: portrait ? 28 : 21, minimum: 17, tone: muted });
+    }
     const insightY = portrait ? 423 : 244;
     type(ctx, data.story, pad, insightY, content, { size: portrait ? 42 : 29, minimum: portrait ? 27 : 21, weight: 680, tone: green });
     type(ctx, [data.scope, data.fitScope].filter(Boolean).join(' · '), pad, insightY + (portrait ? 66 : 43), content,

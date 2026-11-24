@@ -471,6 +471,11 @@ try {
     !window.__maiaStudioApp.checkup.busy);
   assert(await statistics.locator('.checkup-fit-breakdown').isHidden());
   assert.equal(await reportBox.locator('.checkup-key-board > span').count(), 64);
+  const mini = reportBox.locator('.checkup-key-board');
+  assert.equal(await mini.locator('[data-played="from"] > svg').count(), 1);
+  assert.equal(await mini.locator('[data-played="to"]').count(), 1);
+  assert.notEqual(await mini.locator('[data-played="from"]').evaluate(cell => getComputedStyle(cell).backgroundColor),
+    await mini.locator('[data-played="to"]').evaluate(cell => getComputedStyle(cell).backgroundColor));
   assert(await reportBox.getByRole('button', { name: 'Practice top 3 now' }).isVisible());
   assert.match(await reportBox.locator('.checkup-summary-metrics').innerText(), /Recent score\s*50%/);
   if (process.env.TEST_CHECKUP_CARDS) {
@@ -511,7 +516,7 @@ try {
     const png = await preview.evaluate(canvas => canvas.toDataURL().split(',')[1]);
     fs.writeFileSync(process.env.TEST_CHECKUP_CARDS + '-challenge.png', Buffer.from(png, 'base64'));
   }
-  const palette = () => preview.evaluate(canvas => {
+  const palette = (reference = null) => preview.evaluate((canvas, reference) => {
     const ctx = canvas.getContext('2d');
     const expected = ['light', 'dark'].map(name => {
       const elem = document.querySelector(`#board-container .maia-square.${name}:not(.last-move-from):not(.last-move-to):not(.selected):not(.check)`);
@@ -523,12 +528,12 @@ try {
     for (let y = 242; y < 828; y += 7) {
       for (let x = 85; x < 523; x += 7) {
         const offset = 4 * (Math.round(y * zoom) * canvas.width + Math.round(x * zoom));
-        const index = expected.indexOf([...pixels.slice(offset, offset + 3)].join(','));
+        const index = (reference || expected).indexOf([...pixels.slice(offset, offset + 3)].join(','));
         if (index >= 0) counts[index]++;
       }
     }
     return { counts, expected };
-  });
+  }, reference);
   const lightBoard = await palette();
   assert(lightBoard.counts.every(count => count > 300), 'Shared board uses the workbench’s computed colors');
   await page.emulateMedia({ colorScheme: 'dark' });
@@ -539,9 +544,10 @@ try {
   await spoiler.check();
   await spoiler.uncheck();
   await readyToShare();
-  const darkBoard = await palette();
+  const darkBoard = await palette(lightBoard.expected);
   assert.notDeepEqual(darkBoard.expected, lightBoard.expected);
-  assert(darkBoard.counts.every(count => count > 300), 'Challenge board follows dark mode');
+  assert.deepEqual(darkBoard.counts, lightBoard.counts, 'Challenge PNG keeps its light board while the workbench changes theme');
+  assert.equal(await preview.evaluate(canvas => canvas.toDataURL()), boardOnly);
   await page.emulateMedia({ colorScheme: 'light' });
   await share.getByRole('button', { name: 'Playing profile', exact: true }).click();
   await readyToShare();
@@ -557,6 +563,27 @@ try {
   await share.getByRole('button', { name: 'Copy image' }).click();
   await share.locator('#checkup-share-status').getByText('Copied to the clipboard.', { exact: true }).waitFor();
   assert(await page.evaluate(async () => (await navigator.clipboard.read()).some(item => item.types.includes('image/png'))));
+  await closeShare();
+
+  await page.evaluate(async () => {
+    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-review-scan-polish');
+    const checkup = __maiaStudioApp.checkup;
+    const games = [1600, 1650, 1700].map(playedRating => ({
+      platform: 'lichess', timeClass: 'rapid', playedRating, fitSamples: [{ scores: [0] }]
+    }));
+    const intuition = { games, fitGameCount: games.length, closestElo: 1900,
+      fit: { status: 'stable', ranges: [{ low: 1900, high: 1900 }], logLead: 1 } };
+    const ctx = document.getElementById('checkup-share-canvas').getContext('2d');
+    const fillText = ctx.fillText.bind(ctx);
+    window.fitBadgeLabels = [];
+    ctx.fillText = (text, ...args) => {
+      if (text.startsWith('Median rating')) window.fitBadgeLabels.push(text);
+      return fillText(text, ...args);
+    };
+    checkup.share.open(checkupCardData({ report: { ...checkup.latestReport, intuition } }));
+  });
+  await readyToShare();
+  assert.deepEqual(await page.evaluate(() => fitBadgeLabels), ['Median rating 1650 · Plays like Maia 1900']);
   await closeShare();
 
   await reportBox.getByRole('button', { name: 'Share a challenge' }).first().click();

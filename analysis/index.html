@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261124-divergence-cards-r2">
+  <link rel="stylesheet" href="workbench.css?v=20261124-review-scan-polish">
   <link rel="stylesheet" href="./review-share.css?v=20261124-checkup-cards-r2">
 </head>
 <body class="diverge-ui">
@@ -265,12 +265,14 @@
     <aside class="insight-column" id="insight-column" data-i18n-aria="gameReview" aria-label="棋局复盘">
       <section id="review-overview" class="review-overview" aria-labelledby="review-explorer-title" hidden>
         <h2 id="review-explorer-title" data-i18n="reviewOverview">双方复盘总览</h2>
-        <div class="review-intuition-grid" id="review-intuition-grid"></div>
-        <div class="review-intuition-scan" id="review-intuition-scan" hidden>
-          <p id="intuition-progress" role="status"></p>
+        <section class="review-intuition-scan" id="review-intuition-scan" data-i18n-aria="intuitionTitle" aria-label="Maia 直觉扫描" hidden>
           <button id="intuition-toggle" class="btn-header" type="button" disabled>开始 Maia 直觉扫描</button>
-        </div>
-        <p id="review-intuition-coverage" class="review-count-note" hidden></p>
+          <div class="review-intuition-status">
+            <p id="intuition-progress" role="status"></p>
+            <p id="review-intuition-coverage" hidden></p>
+          </div>
+        </section>
+        <div class="review-intuition-grid" id="review-intuition-grid" hidden></div>
         <div class="review-engine-summary" id="review-engine-summary"></div>
         <details class="review-classifications" id="review-classifications">
           <summary data-i18n="reviewAllClassifications">查看全部着法分类</summary>
@@ -291,9 +293,16 @@
               <button type="button" data-filter="all" aria-pressed="true" data-i18n="reviewKeyMoves">关键局面</button>
               <button type="button" data-filter="moves" aria-pressed="false" data-i18n="reviewAllMoves">全部着法</button>
             </div>
-            <button type="button" class="btn-header" id="review-clear-filter" data-i18n="reviewReset">重置筛选</button>
+            <div class="review-side-controls" role="group" data-i18n-aria="reviewSideFilter" aria-label="筛选着法方">
+              <button type="button" data-review-side="all" aria-pressed="true" data-i18n="reviewBoth">双方</button>
+              <button type="button" data-review-side="w" aria-pressed="false" data-i18n="reviewWhite">白方</button>
+              <button type="button" data-review-side="b" aria-pressed="false" data-i18n="reviewBlack">黑方</button>
+            </div>
           </div>
-          <p id="review-selection-label" role="status" tabindex="-1"></p>
+          <div class="review-selection">
+            <p id="review-selection-label" role="status" tabindex="-1"></p>
+            <button type="button" class="btn-header" id="review-clear-filter" data-i18n="reviewReset" hidden>重置筛选</button>
+          </div>
         </div>
         <button type="button" class="btn-header review-practice-batch" id="review-practice-batch" disabled></button>
         <div class="blunder-list" id="blunder-list"></div>
@@ -713,11 +722,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261124-divergence-cards"></script>
+  <script type="module" src="analysis.js?v=20261124-review-scan-polish"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261124-divergence-cards-r2').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261124-review-scan-polish').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

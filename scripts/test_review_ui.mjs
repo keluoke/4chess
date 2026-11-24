@@ -115,13 +115,22 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#engine-candidate-lines .candidate-line').length === 3);
   assert.equal(await page.locator('#engine-candidate-lines').isVisible(), true, 'Engine variations remain visible while Maia waits');
   assert.equal(await page.locator('#position-score').evaluate(el => getComputedStyle(el).fontSize), '48px');
-  assert.equal(await page.locator('.candidate-move').first().evaluate(el => getComputedStyle(el).fontSize), '15px');
+  await page.waitForFunction(() => {
+    const move = document.querySelector('.candidate-move');
+    return move && getComputedStyle(move).fontSize === '15px';
+  });
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'running');
+  assert.match(await page.locator('#intuition-progress').innerText(), /准备直觉模型|模型加载|预测/);
+  assert(await page.locator('#review-intuition-grid').isHidden());
   await page.locator('#intuition-toggle').click();
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.intuitionReview.state), 'paused');
+  assert.equal(await page.locator('#intuition-toggle').innerText(), '继续');
   assert.equal(await page.locator('#val-accuracy-white').textContent(), coreAccuracy);
   await page.evaluate(() => window.releaseTestMaia());
   await page.locator('#intuition-toggle').click();
   await page.waitForFunction(() => window.__maiaStudioApp.intuitionReview.state === 'done', null, { timeout: 60000 });
+  assert.equal(await page.locator('.review-intuition-card').count(), 3);
+  assert(await page.locator('#review-intuition-scan').isHidden());
   assert.equal(await page.locator('#val-accuracy-white').textContent(), coreAccuracy, 'Intuition enrichment does not rescore the game');
   assert.equal(await page.locator('#candidate-comparison').count(), 0);
   assert.equal(await page.locator('#maia-candidate-lines').isVisible(), true);
@@ -175,7 +184,7 @@ try {
   const reportBeforeBranch = await page.evaluate(() => JSON.stringify(window.__maiaStudioApp.reviewResult));
   await page.evaluate(async () => {
     const app = window.__maiaStudioApp;
-    const { legalVariation } = await import('./position-analysis.js?v=20261124-divergence-cards');
+    const { legalVariation } = await import('./position-analysis.js?v=20261124-review-scan-polish');
     const initialize = app.maiaEngine.initialize;
     const waiting = new Promise(resolve => { window.releaseBranchMaia = () => { app.maiaEngine.initialize = initialize; resolve(); }; });
     app.maiaEngine.initialize = () => waiting;

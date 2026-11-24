@@ -1,6 +1,6 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { accountKey, checkupReportMatchesAccount, normalizeAccount, normalizeAlias, trapId } from './study-store.js?v=20261124-checkup-cards-r2';
-import { getLang, t } from './i18n.js?v=20261124-divergence-cards';
+import { getLang, t } from './i18n.js?v=20261124-review-scan-polish';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
@@ -10,13 +10,13 @@ import {
   CHECKUP_ELOS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
 } from './checkup-insights.js?v=20261124-checkup-cards-r2';
-import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261124-divergence-cards';
-import { CheckupShare, checkupCardData, checkupChallengeCard, overviewCardData } from './checkup-share.js?v=20261124-divergence-cards';
+import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261124-review-scan-polish';
+import { CheckupShare, checkupCardData, checkupChallengeCard, overviewCardData } from './checkup-share.js?v=20261124-review-scan-polish';
 import { checkupFitBands } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitScope, checkupPositionView, checkupReportDateRange, checkupScoreSummary, renderCheckupFit,
   renderCheckupFitSummary, renderCheckupMiniBoard, renderCheckupStability, withCheckupFit
-} from './checkup-fit-view.js?v=20261124-divergence-cards';
+} from './checkup-fit-view.js?v=20261124-review-scan-polish';
 
 // Keep the original module entry points available to existing callers.
 export {
@@ -1267,7 +1267,7 @@ export class IntuitionCheckup {
       copy.append(heading, story);
       const game = report.games?.[move.gameIndex];
       if (game?.pgn) copy.append(this.reportButton(t('checkupOpenMove'), () => this.openReportGame(report, game, move)));
-      card.append(renderCheckupMiniBoard(position.fen), copy);
+      card.append(renderCheckupMiniBoard(position.fen, position.played), copy);
       summary.append(card);
     }
     if (featured.length) {

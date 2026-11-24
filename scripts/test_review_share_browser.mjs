@@ -44,7 +44,8 @@ try {
     });
     app.applyReviewResult(result);
     app.reviewOverview.show('overview');
-    app.boardUI.container.style.setProperty('--board-light', '#d4e5d3');
+    document.body.dataset.theme = 'dark';
+    app.boardUI.container.style.setProperty('--board-light', 'light-dark(#d4e5d3, #223e30)');
     const canvas = document.getElementById('review-share-preview');
     const ctx = canvas.getContext('2d');
     const fillText = ctx.fillText.bind(ctx);
@@ -60,7 +61,9 @@ try {
   assert.equal(await page.locator('#review-share-preview').evaluate(canvas => canvas.width), 1080);
   const pixel = (canvas, x, y) => canvas.evaluate((element, [left, top]) =>
     Array.from(element.getContext('2d').getImageData(left, top, 1, 1).data), [x, y]);
-  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 89, 789), [212, 229, 211, 255], 'Whole-game diagram uses the board theme');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).colorScheme), 'dark');
+  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 89, 789), [212, 229, 211, 255], 'Whole-game diagram keeps the light board palette in dark mode');
+  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 75, 840), [255, 255, 255, 255]);
   assert.deepEqual(await page.evaluate(() => reportCoordinates.slice(0, 8)), ['1', '2', '3', '4', '5', '6', '7', '8'], 'The black move is drawn from Black’s side');
   const download = page.waitForEvent('download');
   await page.locator('#review-share-png').click();
@@ -129,12 +132,38 @@ try {
   await page.locator('#review-share-close').click();
   await page.locator('#review-report-workbench').click();
   await page.evaluate(() => __maiaStudioApp.boardUI.setOrientation('black'));
-  await page.locator('#review-clear-filter').click();
+  await page.locator('.review-side-controls [data-review-side="all"]').click();
   await page.locator('.review-list-modes [data-filter="moves"]').click();
   await page.locator('#blunder-list .blunder-card[data-ply="4"]').getByRole('button', { name: 'Share card' }).click();
+  await page.locator('#share-card-dialog[open] #btn-share-card-download:enabled').waitFor();
   const moveCard = page.locator('#share-card-canvas');
   assert.deepEqual(await pixel(moveCard, 55, 219), [212, 229, 211, 255], 'Single move matches the board’s light square');
+  assert.deepEqual(await pixel(moveCard, 45, 340), [255, 255, 255, 255], 'Single move keeps the light frame in dark mode');
   assert.deepEqual(await pixel(moveCard, 30, 30), [238, 243, 237, 255], 'Single move uses the diagnosis paper background');
+  const legendRows = await page.evaluate(async () => {
+    const { buildShareCardSpec, readStudioShareBoard, renderShareCardCanvas } =
+      await import('/analysis/share-card.js?v=20261124-review-scan-polish');
+    const host = document.getElementById('board-container');
+    const theme = readStudioShareBoard(host);
+    const move = __maiaStudioApp.reviewResult.allMoves[3];
+    const spec = buildShareCardSpec(move, { lang: 'en', theme });
+    spec.arrows.forEach(arrow => { arrow.label = arrow.label.repeat(14); });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const rows = [];
+    const roundRect = ctx.roundRect.bind(ctx);
+    ctx.roundRect = (x, y, w, h, radius) => {
+      if (h === 34) rows.push({ y, bottom: y + h });
+      return roundRect(x, y, w, h, radius);
+    };
+    await renderShareCardCanvas(spec, canvas);
+    return { rows, theme };
+  });
+  assert.equal(legendRows.rows.length, 2);
+  assert(legendRows.rows[1].y > legendRows.rows[0].bottom, 'Long labels use two separate rows');
+  assert(legendRows.rows[1].bottom < 410, 'The second legend row ends above the QR quiet zone');
+  assert.equal(legendRows.theme.stockfish, 'rgb(46, 96, 134)');
+  assert.equal(legendRows.theme.played, 'rgb(185, 73, 80)');
   for (const [format, width, height] of [['landscape', 1200, 675], ['portrait', 1080, 1350]]) {
     await page.locator(`#share-card-dialog [data-share-format="${format}"]`).click();
     await page.locator('#btn-share-card-download:enabled').waitFor();

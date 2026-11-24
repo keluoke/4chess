@@ -1,5 +1,5 @@
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
-import { getLang, initI18n, t } from './i18n.js?v=20261124-divergence-cards';
+import { getLang, initI18n, t } from './i18n.js?v=20261124-review-scan-polish';
 import { challengeChoices, decodeChallenge } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 

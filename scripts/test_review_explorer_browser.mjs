@@ -120,14 +120,23 @@ try {
   await page.locator('#review-report-workbench').click();
   const classifications = page.locator('#review-classifications');
   assert.equal(await classifications.getAttribute('open'), null, 'Traditional classifications start collapsed');
-  assert.equal(await page.locator('.review-side-controls button[aria-pressed="true"]').getAttribute('data-review-side'), 'b', 'Initial selection follows the entry view');
+  const side = value => page.locator(`.review-filter-toolbar .review-side-controls [data-review-side="${value}"]`);
+  const clear = page.locator('#review-clear-filter');
+  assert(await side('b').isVisible(), 'Side selection works without opening classifications');
+  assert.equal(await side('b').getAttribute('aria-pressed'), 'true', 'Initial selection follows the entry view');
   const metric = (side, quality) => count(side, quality).locator('.review-metric-value');
   const listMode = mode => page.locator(`.review-list-modes [data-filter="${mode}"]`);
-  assert.equal(await metric('b', 'trap').innerText(), '—', 'An unrun intuition scan cannot claim zero traps');
-  assert.equal(await metric('w', 'precise').innerText(), '—');
-  assert.equal(await count('all', 'precise').isDisabled(), true);
+  assert.equal(await page.locator('.review-intuition-card').count(), 0, 'The scan prompt stands alone before results');
   assert(await page.locator('#review-overview #intuition-toggle').isVisible());
-  assert.deepEqual(await page.locator('.review-intuition-card').evaluateAll(cards => cards.map(card => card.dataset.kind)), ['trap', 'beyond', 'precise']);
+  await side('w').click();
+  assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [5, 13]);
+  await listMode('moves').click();
+  await side('b').click();
+  assert.equal(await listMode('moves').getAttribute('aria-pressed'), 'true', 'Switching sides keeps the current category');
+  assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [2, 4, 6, 8, 10, 12, 14]);
+  await clear.click();
+  assert(await clear.isHidden(), 'Both sides and key moments need no reset');
+  await side('b').click();
   assert.deepEqual(await page.locator('.review-engine-value strong').allTextContents(), ['86.3', '80.1']);
   assert.equal(await page.locator('.review-list-modes [data-filter]').count(), 2);
   await classifications.locator('summary').click();
@@ -143,7 +152,8 @@ try {
   assert.equal(await page.locator('#review-intuition-coverage').innerText(), 'Maia scanned 1/14 moves');
   assert.equal(await page.locator('#intuition-toggle').innerText(), 'Retry scan');
   assert.equal(await metric('b', 'trap').innerText(), '1');
-  assert.equal(await metric('w', 'trap').innerText(), '—', 'An incomplete scan only shows confirmed counts');
+  assert.equal(await metric('w', 'trap').count(), 0, 'An incomplete scan only shows confirmed counts');
+  assert.equal(await page.locator('.review-intuition-card').count(), 1);
   assert.notEqual(await classifications.getAttribute('open'), null, 'Enrichment preserves disclosure state');
   await page.evaluate(() => {
     syntheticReview.engineOnly = false;
@@ -153,6 +163,7 @@ try {
   assert.equal(await metric('b', 'trap').innerText(), '1'); assert.equal(await metric('b', 'beyond').innerText(), '1');
   assert.equal(await metric('w', 'trap').innerText(), '0');
   assert.equal(await page.locator('#review-overview #intuition-toggle').isHidden(), true);
+  assert.deepEqual(await page.locator('.review-intuition-card').evaluateAll(cards => cards.map(card => card.dataset.kind)), ['trap', 'beyond', 'precise']);
   assert.equal(await count('b', 'quality:unknown').innerText(), '1'); assert.equal(await count('w', 'quality:forced').innerText(), '1');
   const appearance = button => button.evaluate(el => {
     const style = getComputedStyle(el);
@@ -358,7 +369,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
     const app = __maiaStudioApp;
-    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-divergence-cards');
+    const { setLanguage } = await import('/analysis/i18n.js?v=20261124-review-scan-polish');
     setLanguage('en');
     window.aiCalls = { probes: 0, creates: 0, prompts: 0, gamePrompts: 0, aborts: 0, childDestroys: 0, rootDestroys: 0, availability: 'downloadable' };
     Object.defineProperty(globalThis, 'LanguageModel', { configurable: true, value: {

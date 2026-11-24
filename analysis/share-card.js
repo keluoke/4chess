@@ -3,7 +3,7 @@ import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { intuitionKind } from '../engine/review-policy.js?v=20261117-review-policy';
 import { BOARD_ARROW } from '../ui/board-visuals.js?v=20261124-divergence-cards';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { getLang, t } from './i18n.js?v=20261124-divergence-cards';
+import { getLang, t } from './i18n.js?v=20261124-review-scan-polish';
 import { canvasPng, drawShareQr, shareQr, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 export const SHARE_CARD_FORMATS = {
@@ -261,6 +261,8 @@ export function readStudioShareBoard(host) {
   if (!host?.isConnected) return defaultBoardTheme;
   const probe = host.ownerDocument.createElement('span');
   probe.hidden = true;
+  // Share images use light paper, including when the workbench is dark.
+  probe.style.colorScheme = 'only light';
   host.append(probe);
   const view = host.ownerDocument.defaultView;
   try {
@@ -268,12 +270,11 @@ export function readStudioShareBoard(host) {
       probe.style.color = `var(${name})`;
       return view.getComputedStyle(probe).color;
     };
-    const coordinate = host.querySelector('.coord');
     return {
       light: color('--board-light'), dark: color('--board-dark'),
       frame: color('--dg-surface'), stockfish: color('--dg-blue'),
       maia: color('--dg-gold'), played: color('--dg-red'),
-      coordinate: coordinate ? view.getComputedStyle(coordinate).color : color('--dg-ink')
+      coordinate: defaultBoardTheme.coordinate
     };
   } finally {
     probe.remove();
@@ -349,6 +350,9 @@ function moveShareUrl(spec) {
   return 'https://4chess.cc/analysis/#' + params.toString().replaceAll('%2F', '/');
 }
 
+const legendRowHeight = 34;
+const legendGap = 9;
+
 function drawShareLegend(ctx, spec, theme, x, y, width) {
   const roles = { stockfish: 'Stockfish', maia: 'Maia', played: t('snapshotPlayed') };
   ctx.font = '600 22px system-ui, sans-serif';
@@ -360,19 +364,19 @@ function drawShareLegend(ctx, spec, theme, x, y, width) {
     const itemWidth = Math.min(width, ctx.measureText(text).width + 43);
     if (left > x && left + itemWidth > x + width) {
       left = x;
-      y += 43;
+      y += legendRowHeight + legendGap;
     }
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.roundRect(left, y, itemWidth, 34, 8);
+    ctx.roundRect(left, y, itemWidth, legendRowHeight, 8);
     ctx.fill();
     ctx.fillStyle = theme[role];
     ctx.beginPath();
-    ctx.arc(left + 16, y + 17, 5, 0, Math.PI * 2);
+    ctx.arc(left + 16, y + legendRowHeight / 2, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = SHARE_PAPER.ink;
-    ctx.fillText(text, left + 28, y + 17, itemWidth - 35);
-    left += itemWidth + 9;
+    ctx.fillText(text, left + 28, y + legendRowHeight / 2, itemWidth - 35);
+    left += itemWidth + legendGap;
   }
 }
 
@@ -429,12 +433,13 @@ export async function renderShareCardCanvas(spec, canvas, { isCurrent = () => tr
   // Larger modules survive the downscaling used by chat apps.
   const qrSize = 230;
   const qrRight = textX + textWidth;
+  const qrTop = height - (portrait ? 252 : 265);
   const footerY = portrait ? height - 94 : height - 124;
-  const legendY = portrait ? boardY + boardSize + 21 : 360;
+  const legendY = portrait ? boardY + boardSize + 21 : url ? qrTop - (2 * legendRowHeight + legendGap + 12) : 360;
   drawShareLegend(ctx, spec, theme, textX, legendY, textWidth - (portrait && url ? qrSize + 25 : 0));
 
   const footerWidth = textWidth - (url ? qrSize + 20 : 0);
-  if (url) drawShareQr(ctx, shareQr(url), qrRight, portrait ? height - 252 : height - 265, qrSize);
+  if (url) drawShareQr(ctx, shareQr(url), qrRight, qrTop, qrSize);
   ctx.textBaseline = 'top';
   ctx.fillStyle = green;
   ctx.font = '650 22px system-ui, sans-serif';

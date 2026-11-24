@@ -1,6 +1,6 @@
-import { t, getLang } from './i18n.js?v=20261124-divergence-cards';
+import { t, getLang } from './i18n.js?v=20261124-review-scan-polish';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-divergence-cards';
+import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-review-scan-polish';
 import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
 import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-divergence-cards';
 

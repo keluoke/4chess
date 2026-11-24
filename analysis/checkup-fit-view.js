@@ -1,8 +1,8 @@
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { parseFenBoard } from './share-card.js?v=20261124-divergence-cards';
+import { parseFenBoard, parseUciSquares } from './share-card.js?v=20261124-review-scan-polish';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261124-divergence-cards';
+import { getLang, t } from './i18n.js?v=20261124-review-scan-polish';
 import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import {
   CHECKUP_CLOSE_LOG_GAP, CHECKUP_EXAMPLE_POLICY, checkupFitBands, isCheckupFitExample, summarizeCheckupFit
@@ -110,6 +110,25 @@ export function checkupRatingLine(report, speedLabel) {
   })).join(' · ');
 }
 
+export function checkupFitComparison(report) {
+  const { fit, closestElo, fitGameCount } = report;
+  const range = fit?.ranges?.[0];
+  if (fit?.status !== 'stable' || fit.ranges?.length !== 1 ||
+      !Number.isFinite(range?.low) || !Number.isFinite(range?.high) ||
+      !Number.isFinite(closestElo) || closestElo < range.low || closestElo > range.high) return '';
+
+  const games = (report.games || []).filter(game => game.fitSamples?.length);
+  const { platform, timeClass } = games[0] || {};
+  if (games.length < 3 || games.length !== fitGameCount || !['chesscom', 'lichess'].includes(platform) ||
+      !timeClass || games.some(game => game.platform !== platform || game.timeClass !== timeClass)) return '';
+  const [rating] = pgnRatingGroups(games);
+  if (rating?.count !== games.length) return '';
+
+  // The difference must hold across the whole supported Maia range.
+  const gap = Math.max(range.low - rating.elo, rating.elo - range.high);
+  return gap >= 150 ? t('checkupShareFitComparison', { rating: rating.elo, band: closestElo }) : '';
+}
+
 export function checkupPositionView(move, trap, screenElo) {
   if (!move?.fenBefore) return null;
   const probability = trap ? move.humanProb : move.evidence?.probability;
@@ -126,16 +145,20 @@ export function checkupPositionView(move, trap, screenElo) {
   };
 }
 
-export function renderCheckupMiniBoard(fen) {
+export function renderCheckupMiniBoard(fen, playedUci) {
   const board = node('div', '', 'checkup-key-board');
   board.setAttribute('aria-hidden', 'true');
   const { pieces, turn } = parseFenBoard(fen);
   const squares = new Map(pieces.map(({ square, piece }) => [square, piece]));
+  const played = parseUciSquares(playedUci);
   const files = [...(turn === 'b' ? 'hgfedcba' : 'abcdefgh')];
   for (let row = 0; row < 8; row++) {
     for (const [column, file] of files.entries()) {
       const square = node('span', '', (row + column) % 2 ? 'dark' : '');
-      const piece = squares.get(file + (turn === 'b' ? row + 1 : 8 - row));
+      const coordinate = file + (turn === 'b' ? row + 1 : 8 - row);
+      if (coordinate === played?.from) square.dataset.played = 'from';
+      else if (coordinate === played?.to) square.dataset.played = 'to';
+      const piece = squares.get(coordinate);
       if (piece) square.innerHTML = CHESS_PIECES_SVG[piece];
       board.append(square);
     }

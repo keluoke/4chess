@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=20261124-divergence-cards';
+import { t } from './i18n.js?v=20261124-review-scan-polish';
 import { REVIEW_QUALITIES, reviewCounts, selectReviewMoves, canPractice } from '../engine/review-policy.js?v=20261117-review-policy';
 
 const byId = id => document.getElementById(id);
@@ -26,6 +26,8 @@ export class ReviewExplorer {
     this.details = byId('review-classifications');
     this.toolbar = document.querySelector('.review-filter-toolbar');
     this.modes = this.toolbar.querySelectorAll('[data-filter]');
+    this.sideButtons = this.toolbar.querySelectorAll('[data-review-side]');
+    this.clearButton = byId('review-clear-filter');
     this.column = byId('insight-column');
     this.toolbarObserver = new ResizeObserver(() => {
       this.column.style.setProperty('--review-toolbar-height', `${this.toolbar.getBoundingClientRect().height}px`);
@@ -44,7 +46,8 @@ export class ReviewExplorer {
         this.focusSelection();
       };
     }
-    byId('review-clear-filter').onclick = () => this.select('all', 'all');
+    for (const button of this.sideButtons) button.onclick = () => this.select(button.dataset.reviewSide);
+    this.clearButton.onclick = () => this.select('all', 'all');
     byId('review-practice-batch').onclick = () => {
       const queue = this.visible().filter(canPractice);
       if (queue.length) app.startPractice(queue[0], queue);
@@ -103,13 +106,11 @@ export class ReviewExplorer {
     return button;
   }
 
-  countButton(side, category, count, label, { pending = false, showSide = false } = {}) {
-    const button = this.filterButton(side, category, null,
-      `${t(sideKeys[side])} · ${label} · ${pending ? t('reviewIntuitionPending') : count}`);
-    button.disabled = pending;
+  countButton(side, category, count, label, { showSide = false } = {}) {
+    const button = this.filterButton(side, category, null, `${t(sideKeys[side])} · ${label} · ${count}`);
     if (showSide) button.append(element('span', t(sideKeys[side])));
-    button.append(element('strong', pending ? '—' : String(count), 'review-metric-value'));
-    button.classList.toggle('review-count-positive', !pending && count > 0);
+    button.append(element('strong', String(count), 'review-metric-value'));
+    button.classList.toggle('review-count-positive', count > 0);
     return button;
   }
 
@@ -117,29 +118,30 @@ export class ReviewExplorer {
     const coverage = result.engineOnly ? 0 : moves.some(move => Array.isArray(move._predMoves))
       ? moves.filter(move => move._predMoves?.length).length
       : moves.length;
-    const pending = result.engineOnly || coverage === 0;
     const partial = coverage > 0 && coverage < moves.length;
     const note = byId('review-intuition-coverage');
     note.hidden = !partial;
     note.textContent = partial ? t('reviewIntuitionCoverage', { current: coverage, total: moves.length }) : '';
 
-    const cards = intuitionOrder.map(category => {
+    const grid = byId('review-intuition-grid');
+    const categories = coverage ? intuitionOrder.filter(category => !partial || counts.w[category] + counts.b[category] > 0) : [];
+    const cards = categories.map(category => {
       const label = filterLabel(category);
       const total = counts.w[category] + counts.b[category];
       const card = element('div', null, 'review-intuition-card');
       card.dataset.kind = category;
-      const heading = this.filterButton('all', category, label, `${label} · ${t('reviewBoth')} · ${pending || (partial && !total) ? t('reviewIntuitionPending') : total}`, 'review-intuition-kind');
-      heading.disabled = pending || (partial && !total);
+      const heading = this.filterButton('all', category, label, `${label} · ${t('reviewBoth')} · ${total}`, 'review-intuition-kind');
       card.dataset.selected = String(this.app.currentDivergenceFilter === category);
       const values = element('div', null, 'review-intuition-values');
       for (const side of sides) {
         const count = counts[side][category];
-        values.append(this.countButton(side, category, count, label, { pending: pending || (partial && !count), showSide: true }));
+        if (!partial || count > 0) values.append(this.countButton(side, category, count, label, { showSide: true }));
       }
       card.append(heading, values);
       return card;
     });
-    byId('review-intuition-grid').replaceChildren(...cards);
+    grid.hidden = !cards.length;
+    grid.replaceChildren(...cards);
   }
 
   renderEngineSummary(counts, result) {
@@ -165,13 +167,6 @@ export class ReviewExplorer {
   }
 
   renderClassifications(counts) {
-    const controls = element('div', null, 'review-side-controls');
-    controls.setAttribute('role', 'group');
-    controls.setAttribute('aria-label', t('reviewSideFilter'));
-    for (const side of ['all', ...sides]) {
-      const label = t(sideKeys[side]);
-      controls.append(this.filterButton(side, null, label, label));
-    }
     const table = element('table', null, 'review-count-table');
     table.setAttribute('aria-labelledby', 'review-explorer-title');
     const head = table.createTHead().insertRow();
@@ -192,7 +187,7 @@ export class ReviewExplorer {
       row.append(heading);
       for (const side of sides) row.insertCell().append(this.countButton(side, key, counts[side][category], label));
     }
-    byId('review-classification-table').replaceChildren(controls, table);
+    byId('review-classification-table').replaceChildren(table);
   }
 
   render(moves) {
@@ -217,6 +212,8 @@ export class ReviewExplorer {
     const side = t(sideKeys[this.side]);
     byId('review-selection-label').textContent = result ? t('reviewSelected', { side, label: filterLabel(filter), count: visible.length }) : '';
     for (const button of this.modes) button.setAttribute('aria-pressed', String(button.dataset.filter === filter));
+    for (const button of this.sideButtons) button.setAttribute('aria-pressed', String(button.dataset.reviewSide === this.side));
+    this.clearButton.hidden = !result || (this.side === 'all' && filter === 'all');
     const queue = visible.filter(canPractice), batch = byId('review-practice-batch');
     batch.disabled = !queue.length || !!this.app.scanSourceLocked;
     batch.textContent = t('reviewPracticeBatch', { count: queue.length });

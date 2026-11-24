@@ -641,6 +641,22 @@ assert.deepEqual(contested.fit.ranges, [{ low: 1500, high: 1500 }, { low: 2200, 
 assert.equal(contested.fit.status, 'variation');
 assert.equal(fineFit.fit.status, 'stable');
 assert.equal(example.fit.status, 'limited');
+const ratedFit = {
+  ...fineFit, playerName: 'Sample', gameCount: fineGames.length,
+  games: fineGames.map((game, index) => ({ ...game, platform: 'lichess', timeClass: 'rapid',
+    orientation: 'white', playedRating: [1600, 1650, 1650, 1700][index] }))
+};
+const compare = report => checkupCardData({ report }).fitComparison;
+assert.match(compare(ratedFit), /1650.*Maia 1900/);
+assert.match(summarizeCheckupCard(checkupCardData({ report: ratedFit }), true), /1650.*Maia 1900/);
+assert.equal(compare({ ...ratedFit, fit: { ...ratedFit.fit, status: 'variation' } }), '');
+assert.equal(compare({ ...ratedFit, fit: broadStable.fit }), '', 'A wide supported range can cross the sampled rating');
+for (const other of [{ platform: 'chesscom' }, { timeClass: 'blitz' }, { playedRating: '' }]) {
+  assert.equal(compare({ ...ratedFit, games: [{ ...ratedFit.games[0], ...other }, ...ratedFit.games.slice(1)] }), '');
+}
+const withRating = playedRating => ({ ...ratedFit, games: ratedFit.games.map(game => ({ ...game, playedRating })) });
+assert.match(compare(withRating(1750)), /1750.*Maia 1900/, 'A supported gap of 150 qualifies');
+assert.equal(compare(withRating(1751)), '');
 
 const makeWindowGame = index => ({
   ...makeEvidence('game-' + index, 7), platform: 'lichess', playedAt: 100 * index, orientation: 'white',

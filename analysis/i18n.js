@@ -354,6 +354,7 @@ export const DICTIONARY = {
     checkupHistoryOne: "本批 1 盘",
     checkupFitSupportRange: "主要匹配范围 · {ranges}",
     checkupFitRatedSpeed: "实战{speed}中位分 {elo}",
+    checkupShareFitComparison: "实战中位分 {rating} · 走法接近 Maia {band}",
     checkupFitRatedUnknown: "棋谱实战中位分 {elo}",
     checkupFitCoverageMoves: "{moves} 步参与拟合",
     checkupFitEvidenceFavors: "更像 {elo} 分段",
@@ -595,7 +596,7 @@ export const DICTIONARY = {
 
     gameReview: "棋局复盘",
     intuitionTitle: "Maia 直觉扫描",
-    intuitionIdle: "扫描后显示双方分歧",
+    intuitionIdle: "找出直觉陷阱、突破直觉与精准直觉",
     intuitionScanning: "准备直觉模型…",
     intuitionPaused: "已暂停 · 评分仍可查看",
     intuitionDone: "扫描完成",
@@ -1179,6 +1180,7 @@ export const DICTIONARY = {
     checkupHistoryOne: "This batch · 1 game",
     checkupFitSupportRange: "Main fit range · {ranges}",
     checkupFitRatedSpeed: "{speed} rating median {elo}",
+    checkupShareFitComparison: "Median rating {rating} · Plays like Maia {band}",
     checkupFitRatedUnknown: "PGN rating median {elo}",
     checkupFitCoverageMoves: "{moves} moves in the fit",
     checkupFitEvidenceFavors: "Closer to {elo}",
@@ -1420,7 +1422,7 @@ export const DICTIONARY = {
 
     gameReview: "Game review",
     intuitionTitle: "Maia intuition scan",
-    intuitionIdle: "Scan to compare both sides",
+    intuitionIdle: "Find intuition traps, breakthroughs and precise moves",
     intuitionScanning: "Preparing intuition model…",
     intuitionPaused: "Paused · Scores remain available",
     intuitionDone: "Scan complete",
