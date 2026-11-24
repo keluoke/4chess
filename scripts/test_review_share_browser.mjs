@@ -142,7 +142,7 @@ try {
   assert.deepEqual(await pixel(moveCard, 30, 30), [238, 243, 237, 255], 'Single move uses the diagnosis paper background');
   const legendRows = await page.evaluate(async () => {
     const { buildShareCardSpec, readStudioShareBoard, renderShareCardCanvas } =
-      await import('/analysis/share-card.js?v=20261124-review-navigation');
+      await import('/analysis/share-card.js?v=20261124-checkup-results');
     const host = document.getElementById('board-container');
     const theme = readStudioShareBoard(host);
     const move = __maiaStudioApp.reviewResult.allMoves[3];

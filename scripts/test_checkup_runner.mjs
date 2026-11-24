@@ -702,10 +702,20 @@ const summary = checkupScoreSummary({
     { orientation: 'white', result: '0-1' }, { orientation: 'white', result: '*' }
   ], stability: { density: 2, reviewed: 4, errors: 1 }, phaseTraps: { opening: 1, middlegame: 3, endgame: 0 }
 });
-assert.equal(summary.metrics[0].value, '50%', 'Wins count as one point and draws as half; exclude unfinished records');
-assert.equal(summary.metrics[1].value, '1.0');
+assert.match(summary.metrics[0].value, /^1 (W|胜) 1 (D|和) 1 (L|负)$/);
+assert.match(summary.metrics[0].detail, /50%/, 'Wins count as one point and draws as half; exclude unfinished records');
+assert.match(summary.metrics[1].value, /^1\.0 (次\/盘|\/ game)$/);
 assert.equal(summary.metrics[2].detail, '3/4');
 assert.equal(summary.clock, null, 'Keep low-clock rates out of the summary until enough moves were reviewed');
+const recordGames = ['1-0', '1-0', '1-0', '1-0', '1-0', '1-0', '1/2-1/2', '0-1', '0-1', '0-1']
+  .map(result => ({ orientation: 'white', result }));
+const record = checkupScoreSummary({ games: recordGames, gameCount: 10, isFullWindow: true }).metrics[0];
+assert.match(record.label, /10/);
+assert.match(record.value, /^6 (W|胜) 1 (D|和) 3 (L|负)$/);
+assert.match(record.detail, /65%/);
+assert.doesNotMatch(checkupScoreSummary({ games: recordGames, gameCount: 10 }).metrics[0].label, /10/);
+const missingResult = [{ orientation: 'white', result: '*' }, ...recordGames.slice(1)];
+assert.doesNotMatch(checkupScoreSummary({ games: missingResult, gameCount: 10, isFullWindow: true }).metrics[0].label, /10/);
 
 const ties = summarizeCheckupFit([makeEvidence('tie', 0, [-2.4, -2.4, -2.4, -2.32])], 'standard');
 assert.deepEqual(ties.fit.ranges, [{ low: 1100, high: 2200 }], 'An exact tie at the support boundary must not favor the lowest band');

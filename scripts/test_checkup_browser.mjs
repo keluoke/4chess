@@ -254,7 +254,7 @@ try {
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const combinedSummary = await page.evaluate(() => navigator.clipboard.readText());
-  assert.match(combinedSummary, /3 games · Recent score 67%/);
+  assert.match(combinedSummary, /3 games · Batch results 2 W 0 D 1 L \(Score 67%\)/);
   assert(combinedSummary.includes('Long-term fit · Rapid · 2/30 games'));
   assert(combinedSummary.includes('3 games'));
   assert.equal(await page.locator('#checkup-report-tools').getByRole('button', { name: 'Share diagnosis' }).count(), 1);
@@ -406,7 +406,7 @@ try {
   await readyToShare();
   await share.getByRole('button', { name: 'Copy text summary' }).click();
   const splitCardSummary = await page.evaluate(() => navigator.clipboard.readText());
-  assert.match(splitCardSummary, /2 games · Recent score 100%/);
+  assert.match(splitCardSummary, /2 games · Batch results 2 W 0 D 0 L \(Score 100%\)/);
   assert.equal(archiveLookups, missingOverviewFetches, 'Sharing uses the report even if the archive is unavailable');
   await closeShare();
   failArchive = false;
@@ -476,8 +476,17 @@ try {
   assert.equal(await mini.locator('[data-played="to"]').count(), 1);
   assert.notEqual(await mini.locator('[data-played="from"]').evaluate(cell => getComputedStyle(cell).backgroundColor),
     await mini.locator('[data-played="to"]').evaluate(cell => getComputedStyle(cell).backgroundColor));
-  assert(await reportBox.getByRole('button', { name: 'Practice top 3 now' }).isVisible());
-  assert.match(await reportBox.locator('.checkup-summary-metrics').innerText(), /Recent score\s*50%/);
+  const featured = reportBox.locator('.checkup-featured-traps');
+  const practiceFeatured = featured.locator('.checkup-featured-header').getByRole('button', { name: 'Practice top 3 now' });
+  assert(await practiceFeatured.isVisible());
+  assert.equal(await reportBox.locator('.checkup-summary-card .checkup-practice-featured').count(), 0);
+  assert.equal(await featured.locator(':scope > .checkup-top-traps .checkup-trap-row').count(), 3);
+  assert.match(await reportBox.locator('.checkup-summary-record').innerText(), /Batch results\s*0 W 1 D 0 L\s*Score 50%/);
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert(await featured.evaluate(section => section.scrollWidth <= section.clientWidth));
+    assert(await practiceFeatured.isVisible());
+  }
   if (process.env.TEST_CHECKUP_CARDS) {
     await reportBox.locator('.checkup-summary-card').screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-mobile-layout.png' });
   }
@@ -492,6 +501,7 @@ try {
   await sixthJump.waitFor();
   const replay = await page.evaluate(() => window.__maiaStudioApp.checkup.latestReport);
   assert.equal(await reportBox.locator('.checkup-trap-row:visible').count(), replay.traps.length);
+  assert(await practiceFeatured.isVisible(), 'The three recommended positions remain playable when all traps are expanded');
   await shareDiagnosis();
   await readyToShare();
   assert.deepEqual(await preview.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1440]);
@@ -566,7 +576,7 @@ try {
   await closeShare();
 
   await page.evaluate(async () => {
-    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-review-navigation');
+    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-checkup-results');
     const checkup = __maiaStudioApp.checkup;
     const games = [1600, 1650, 1700].map(playedRating => ({
       platform: 'lichess', timeClass: 'rapid', playedRating, fitSamples: [{ scores: [0] }]
@@ -577,13 +587,13 @@ try {
     const fillText = ctx.fillText.bind(ctx);
     window.fitBadgeLabels = [];
     ctx.fillText = (text, ...args) => {
-      if (text.startsWith('Median rating')) window.fitBadgeLabels.push(text);
+      if (text.startsWith('Playing rating')) window.fitBadgeLabels.push(text);
       return fillText(text, ...args);
     };
     checkup.share.open(checkupCardData({ report: { ...checkup.latestReport, intuition } }));
   });
   await readyToShare();
-  assert.deepEqual(await page.evaluate(() => fitBadgeLabels), ['Median rating 1650 · Plays like Maia 1900']);
+  assert.deepEqual(await page.evaluate(() => fitBadgeLabels), ['Playing rating 1650 (rapid) · Plays like Maia 1900']);
   await closeShare();
 
   await reportBox.getByRole('button', { name: 'Share a challenge' }).first().click();
@@ -718,6 +728,14 @@ try {
   await dialog.waitFor();
   await openDetails(reportBox.locator('.checkup-games-trends'));
   assert.match(await reportBox.innerText(), /Trainee – Rival/);
+  await practiceFeatured.click();
+  await page.waitForFunction(() => window.reportPractice?.queue.length === 3);
+  assert.deepEqual(await page.evaluate(() => window.reportPractice.queue.map(trap => trap.id)),
+    replay.traps.slice(0, 3).map(trap => trap.id), 'The header starts the three positions displayed, in order');
+  await page.evaluate(() => { window.reportPractice = null; });
+  await dialog.waitFor({ state: 'hidden' });
+  await page.locator('#btn-intuition-checkup').click();
+  await page.locator('#checkup-tab-report').click();
   await openDetails(allTraps);
   await reportBox.getByRole('button', { name: /Practice high-temptation moves/ }).click();
   await page.waitForFunction(() => !!window.reportPractice);
@@ -815,10 +833,13 @@ try {
     checkup.renderReport(report);
   });
   assert.equal(await reportBox.locator('.checkup-fit-number').textContent(), '1900*');
-  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /Rapid rating median 1409/);
+  assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /Playing rating 1409 \(Rapid\)/);
+  assert.match(await reportBox.locator('.checkup-summary-record').innerText(), /Last 10 results/);
+  assert.match(await reportBox.locator('.checkup-summary-metrics').innerText(), /1\.1 \/ game/);
   assert(await statistics.locator('.checkup-fit-status').isHidden());
   await openDetails(statistics);
   assert.match(await reportBox.locator('.checkup-fit-metadata').innerText(), /1500–2200/);
+  assert.match(await reportBox.locator('.checkup-fit-metadata').innerText(), /median of the game ratings/);
   assert.match(await reportBox.locator('.checkup-fit-status.stable').innerText(), /Consistent leader/);
   assert.match(await reportBox.locator('.checkup-fit-bar.best').innerText(), /1900[\s\S]*48.4%/);
   const evidenceBox = reportBox.locator('.checkup-fit-evidence');

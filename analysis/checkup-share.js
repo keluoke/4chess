@@ -1,12 +1,12 @@
-import { t, getLang } from './i18n.js?v=20261124-review-navigation';
-import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-review-navigation';
+import { t, getLang } from './i18n.js?v=20261124-checkup-results';
+import { drawShareBoard, parseFenBoard, parseUciSquares, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-checkup-results';
 import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitBandLabel, checkupFitComparison, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
-} from './checkup-fit-view.js?v=20261124-review-navigation';
-import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-review-navigation';
+} from './checkup-fit-view.js?v=20261124-checkup-results';
+import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-checkup-results';
 import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
 const outcomes = ['win', 'draw', 'loss'];
@@ -55,7 +55,7 @@ export function checkupCardData({ report, speedLabel = value => value, challenge
     kind: 'profile', title: t('checkupShareProfileTitle'), name: report.playerName,
     band: checkupFitBandLabel(intuition),
     rating: checkupRatingLine(intuition, speedLabel),
-    fitComparison: checkupFitComparison(intuition),
+    fitComparison: checkupFitComparison(intuition, speedLabel),
     fitScope: intuition.isFitWindow ? checkupFitScope(intuition, speedLabel) : '',
     scope: t(report.gameCount === 1 ? 'checkupShareOneGame' : 'checkupOverviewGameCount', { count: report.gameCount }),
     fitStatus: fit?.status === 'limited' ? checkupFitStatusLabel(fit) : '',
@@ -81,7 +81,9 @@ export function summarizeCheckupCard(data, anonymous) {
       .filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
   }
   const headline = data.band ? `${t('checkupSummaryIntuition')} ${data.band}*` : t('checkupNoEloFit');
-  const facts = [data.fitComparison || data.rating, data.scope, ...data.metrics.map(({ label, value }) => `${label} ${value}`), data.fitScope, data.fitStatus].filter(Boolean);
+  const metrics = data.metrics.map(({ label, value, detail, type }) =>
+    type === 'record' ? `${label} ${value} (${detail})` : `${label} ${value}`);
+  const facts = [data.fitComparison || data.rating, data.scope, ...metrics, data.fitScope, data.fitStatus].filter(Boolean);
   if (data.band) facts.push(t('checkupFitFootnote'));
   return [headline + name, facts.join(' · '), CHECKUP_URL].join('\n');
 }

@@ -1,8 +1,8 @@
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { parseFenBoard, parseUciSquares } from './share-card.js?v=20261124-review-navigation';
+import { parseFenBoard, parseUciSquares } from './share-card.js?v=20261124-checkup-results';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
-import { getLang, t } from './i18n.js?v=20261124-review-navigation';
+import { getLang, t } from './i18n.js?v=20261124-checkup-results';
 import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import {
   CHECKUP_CLOSE_LOG_GAP, CHECKUP_EXAMPLE_POLICY, checkupFitBands, isCheckupFitExample, summarizeCheckupFit
@@ -78,21 +78,31 @@ export function checkupFitScope(report, speedLabel) {
 }
 
 export function checkupScoreSummary(report) {
-  let played = 0, points = 0;
+  const outcomes = { win: 0, draw: 0, loss: 0 };
   for (const game of report.games || []) {
     if (!['white', 'black'].includes(game.orientation) || !['1-0', '0-1', '1/2-1/2'].includes(game.result)) continue;
-    played++;
-    points += game.result === '1/2-1/2' ? 0.5 : Number(game.result === (game.orientation === 'white' ? '1-0' : '0-1'));
+    if (game.result === '1/2-1/2') outcomes.draw++;
+    else if (game.result === (game.orientation === 'white' ? '1-0' : '0-1')) outcomes.win++;
+    else outcomes.loss++;
   }
   const phases = ['opening', 'middlegame', 'endgame'].map(phase => [phase, report.phaseTraps?.[phase] || 0]);
   const hits = phases.reduce((sum, [, count]) => sum + count, 0);
   const peak = Math.max(...phases.map(([, count]) => count));
   const phaseLabels = phases.filter(([, count]) => count > 0 && count === peak).map(([phase]) => t(`bankPhase_${phase}`));
   const metrics = [];
-  if (played) metrics.push({ label: t('checkupSummaryScore'), value: Math.round(points * 100 / played) + '%',
-    detail: t(played === 1 ? 'checkupShareOneGame' : 'checkupSummaryScoredGames', { count: played }) });
+  const played = outcomes.win + outcomes.draw + outcomes.loss;
+  if (played) {
+    const points = outcomes.win + outcomes.draw * 0.5;
+    metrics.push({
+      label: t(report.isFullWindow && played === report.gameCount ? 'checkupSummaryRecentRecord' : 'checkupSummaryRecord'),
+      type: 'record',
+      value: Object.entries(outcomes).map(([kind, count]) => t(`checkupOutcome_${kind}`, { count })).join(' '),
+      detail: t('checkupSummaryPoints', { score: Math.round(points * 100 / played) })
+    });
+  }
   if (report.stability?.density != null && report.gameCount) {
-    metrics.push({ label: t('checkupSummaryAverage'), value: (hits / report.gameCount).toFixed(1) });
+    metrics.push({ label: t('checkupSummaryAverage'),
+      value: t('checkupSummaryAverageValue', { count: (hits / report.gameCount).toFixed(1) }) });
   }
   if (phaseLabels.length) metrics.push({ label: t('checkupSummaryPhase'), type: 'phase', value: phaseLabels.join(' / '), detail: phaseLabels.length === 1 ? `${peak}/${hits}` : undefined });
   return {
@@ -110,7 +120,7 @@ export function checkupRatingLine(report, speedLabel) {
   })).join(' · ');
 }
 
-export function checkupFitComparison(report) {
+export function checkupFitComparison(report, speedLabel = value => value) {
   const { fit, closestElo, fitGameCount } = report;
   const range = fit?.ranges?.[0];
   if (fit?.status !== 'stable' || fit.ranges?.length !== 1 ||
@@ -126,7 +136,9 @@ export function checkupFitComparison(report) {
 
   // The difference must hold across the whole supported Maia range.
   const gap = Math.max(range.low - rating.elo, rating.elo - range.high);
-  return gap >= 150 ? t('checkupShareFitComparison', { rating: rating.elo, band: closestElo }) : '';
+  if (gap < 150) return '';
+  const label = t('checkupFitRatedSpeed', { elo: rating.elo, speed: speedLabel(timeClass) });
+  return t('checkupShareFitComparison', { rating: label, band: closestElo });
 }
 
 export function checkupPositionView(move, trap, screenElo) {
@@ -212,6 +224,7 @@ export function renderCheckupFit(report, { openMove, viewCount }) {
   if (ranges && ranges !== String(report.closestElo)) {
     context.append(node('p', t('checkupFitSupportRange', { ranges }), 'checkup-elo-note'));
   }
+  if (pgnRatingGroups(report.games).length) context.append(node('p', t('checkupFitRatingMethod'), 'checkup-elo-note'));
   if (context.children.length) section.append(context);
 
   const bands = fit?.bands || checkupFitBands(report.fitMethod);

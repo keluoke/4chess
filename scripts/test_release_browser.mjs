@@ -18,7 +18,7 @@ const releaseModules = new Map([
   '/analysis/review-explorer.js', '/analysis/review-share.js', '/analysis/share-card.js',
   '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
   '/analysis/challenge.js'
- ].map(path => [path, '20261124-review-navigation']),
+ ].map(path => [path, '20261124-checkup-results']),
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']
   .map(path => [path, '20261124-divergence-cards']),
  ...[
