@@ -63,7 +63,10 @@ async function mockEngines(context) {
             : { state: 'downloading', source: 'cdn', percent: 46 }
         };
       }
-      async sampleMaia(position, elo) { return [{ uci: position.series[0].uci, rawProb: elo / 4000 }]; }
+      async sampleMaia(position, elo) {
+        if (elo === 600 && window.missingTrendSample) return [];
+        return [{ uci: position.series[0].uci, rawProb: .01 }];
+      }
       async inspect(position) {
         const chess = new ChessBoard(position.fen);
         const legal = chess.getLegalMoves();
@@ -74,7 +77,7 @@ async function mockEngines(context) {
           .map(move => ({ evaluation, variation: [{ san: move.san, label: move.san }] }));
         const maiaLines = [maia, ...legal.filter(move => move.uci !== maia.uci).slice(0, 2).map(move => ({ ...move, rawProb: .12 }))];
         const series = [{ uci: stockfish.uci, san: stockfish.san, label: stockfish.san, role: 'sf' }];
-        const moves = [{ uci: stockfish.uci, rawProb: .16 }, maia];
+        const moves = [{ uci: stockfish.uci, rawProb: .016 }, maia];
         (window.positionRequests ||= []).push(position.fen);
         if (window.holdAssessment) {
           window.holdAssessment = false;
@@ -106,7 +109,7 @@ try {
   const origin = 'http://127.0.0.1:' + server.address().port;
   await page.goto(origin + '/live/?lang=zh');
   await page.locator('#event-moves button[data-ply="3"]').waitFor();
-  await page.locator('#sf-line').getByText('Nc6 · -0.35 · D18').waitFor();
+  await page.locator('#sf-line strong').getByText('Nc6').waitFor();
   await page.locator('#analyze:not([disabled])').waitFor();
   assert.equal(await page.locator('#analyze').innerText(), '暂停双引擎');
   const expectedFen = parseRoundPgn(pgn(line), event)[0].fen;
@@ -115,8 +118,8 @@ try {
   assert.ok(Number.parseFloat(await page.locator('#gauge-white').evaluate(el => el.style.height)) < 50);
   assert.equal(await page.locator('#event-board [data-role="sf"]').count(), 1);
   assert.equal(await page.locator('#event-board [data-role="maia"]').count(), 1);
-  assert.equal(await page.locator('#sf-candidates li:visible').count(), 2);
-  assert.equal(await page.locator('#maia-candidates li:visible').count(), 2);
+  assert.equal(await page.locator('#sf-candidates .candidate-line:visible').count(), 3);
+  assert.equal(await page.locator('#maia-candidates .candidate-line:visible').count(), 3);
   assert.equal(await page.locator('#btn-settings use').getAttribute('href'), '../ui/studio-controls.svg#settings');
   await page.waitForFunction(() => document.querySelector('#btn-settings use').getBBox().width > 0);
   assert.ok(await page.locator('#flip-board use').evaluate(icon => icon.getBBox().width > 0));
@@ -205,7 +208,7 @@ try {
   await drag('g1', 'f3', 'right', true);
   assert.equal(await page.locator('#ply-note').innerText(), '试走变化');
   assert.match(await page.locator('.study-annotations').textContent(), /!!/);
-  await page.locator('#sf-line').getByText('Nc6 · -0.35 · D18').waitFor();
+  await page.locator('#sf-line strong').getByText('Nc6').waitFor();
   await page.locator('#flip-board').click();
   assert.equal(await page.locator('#board-frame').evaluate(element => element.previousElementSibling.id), 'white-seat');
   assert.ok(await page.locator('#evaluation-gauge').evaluate(el => el.classList.contains('flipped')));
@@ -237,18 +240,28 @@ try {
   await page.locator('#new-move').click();
   assert.equal(await page.locator('#ply-note').innerText(), '4 / 4');
   await page.locator('#intuition-tag').getByText('Nc6 · 神之一手').waitFor();
-  assert.equal(await page.locator('#sf-line').innerText(), 'Bb5 · +0.35 · D18');
+  assert.equal(await page.locator('#sf-line strong').innerText(), 'Bb5');
+  assert.equal(await page.locator('#sf-line .candidate-score').innerText(), '+0.35');
   assert.equal(await page.locator('#black-clock').innerText(), '4:59');
   assert.equal(await page.locator('#black-clock').getAttribute('data-low'), 'true');
   assert.equal(await page.locator('#white-seat').getAttribute('data-to-move'), 'true');
+  await page.evaluate(() => { window.missingTrendSample = true; });
   await page.locator('#trend-toggle').click();
+  assert.equal(await page.locator('#trend-board .maia-square').count(), 64);
+  assert.equal(await page.locator('#trend-board [data-role="sf"]').count(), 1);
+  await page.locator('#trend-status').getByText('已完成 5/6 档', { exact: false }).waitFor();
+  assert.equal(await page.locator('#trend-conclusion').isVisible(), false);
+  await page.evaluate(() => { window.missingTrendSample = false; });
+  await page.locator('#trend-retry').click();
   await page.locator('#trend-status').getByText('已完成 6/6 档', { exact: false }).waitFor();
   assert.equal(await page.locator('#trend-chart circle').count(), 6);
   await page.locator('#trend-data-view').click();
   assert.equal(await page.locator('#trend-data tbody tr').count(), 6);
-  assert.equal(await page.locator('#trend-data tbody tr:first-child td').innerText(), '15.0%');
+  assert.equal(await page.locator('#trend-data tbody tr:first-child td').innerText(), '1.0%');
+  assert.match(await page.locator('#trend-conclusion').innerText(), /全分段盲区.*Bb5/);
   await page.locator('#trend-chart-view').click();
   assert.equal(await page.locator('#trend-chart').isVisible(), true);
+  await page.locator('#live-trend form button').click();
   await page.evaluate(() => {
     window.cardText = [];
     const fillText = CanvasRenderingContext2D.prototype.fillText;
@@ -266,6 +279,20 @@ try {
   await page.locator('#btn-share-card-copy').click();
   await page.locator('#share-card-status').getByText('Copied PNG image to clipboard.', { exact: true }).waitFor();
   assert.ok(await page.evaluate(async () => (await navigator.clipboard.read()).some(item => item.types.includes('image/png'))));
+  await page.locator('[data-share-content="perspective"]').click();
+  await page.locator('#btn-share-card-download:not([disabled])').waitFor();
+  assert.equal(await page.locator('#share-card-canvas').evaluate(canvas => canvas.height), 1350);
+  assert.equal(await page.locator('[data-share-format="landscape"]').isDisabled(), true);
+  assert.ok(await page.evaluate(() => window.cardText.join(' ').includes('almost nobody')));
+  assert.ok(await page.evaluate(() => window.cardText.includes('600') && window.cardText.includes('2600')));
+  if (process.env.LIVE_SCREENSHOTS) {
+    mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
+    await page.locator('#share-card-canvas').screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'perspective-card.png') });
+  }
+  const perspectiveDownload = page.waitForEvent('download');
+  await page.locator('#btn-share-card-download').click();
+  assert.match((await perspectiveDownload).suggestedFilename(), /perspective-portrait\.png$/);
+  await page.locator('[data-share-content="position"]').click();
   await page.locator('[data-share-format="landscape"]').click();
   await page.locator('#btn-share-card-download:not([disabled])').waitFor();
   assert.equal(await page.locator('#share-card-canvas').evaluate(el => el.width), 1200);
@@ -286,7 +313,7 @@ try {
     }
     window.finishAssessment();
   });
-  await page.locator('#sf-line').getByText('Nc6 · -0.35 · D18').waitFor();
+  await page.locator('#sf-line strong').getByText('Nc6').waitFor();
   assert.ok(await page.evaluate(fen => window.positionRequests.filter(request => request === fen).length >= 4, expectedFen));
   await drag('b8', 'c6', 'left');
   assert.equal(await page.locator('#ply-note').innerText(), '试走变化');
@@ -303,10 +330,11 @@ try {
   const board = await page.locator('#event-board').boundingBox();
   assert.equal(board.width, board.height);
   assert.equal(board.width, 390);
-  assert.equal(await page.locator('#sf-candidates li:visible').count(), 0);
+  assert.equal(await page.locator('#sf-candidates .candidate-line:visible').count(), 1);
   await page.locator('#show-lines').click();
-  assert.equal(await page.locator('#sf-candidates li:visible').count(), 2);
-  assert.equal(await page.locator('#maia-candidates li:visible').count(), 2);
+  assert.equal(await page.locator('#sf-candidates .candidate-line:visible').count(), 3);
+  assert.equal(await page.locator('#maia-candidates .candidate-line:visible').count(), 3);
+  assert.equal(await page.locator('#sf-candidates .candidate-line').first().evaluate(row => getComputedStyle(row).gridTemplateColumns.split(' ')[0]), '52px');
   await page.locator('#show-lines').click();
   if (process.env.LIVE_SCREENSHOTS) {
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'mobile.png'), fullPage: true });
@@ -319,7 +347,7 @@ try {
   assert.notEqual(await page.locator('#round-countdown').innerText(), countdown);
   assert.equal(await page.locator('#event-moves button').count(), 0);
   await page.locator('#analyze').click();
-  assert.equal(await page.locator('#sf-line').innerText(), '—');
+  assert.equal(await page.locator('#sf-line strong').innerText(), '—');
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
   await page.locator('#btn-share-card-link').click();
@@ -358,7 +386,8 @@ try {
     { maiaVariant: '5m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
   assert.match(await phone.locator('#load-maia').getAttribute('aria-label'), /5M.*28 MiB/);
   assert.match(await phone.locator('#match-score').innerText(), /SIN\s+0 – 0\s+GUK/);
-  assert.equal(await phone.locator('#event-board').evaluate(element => getComputedStyle(element).touchAction), 'none');
+  assert.equal(await phone.locator('#event-board').evaluate(element => getComputedStyle(element).touchAction), 'pan-y');
+  assert.equal(await phone.locator('#event-board .maia-chessboard').evaluate(element => getComputedStyle(element).touchAction), 'pan-y');
   const phoneLayout = await phone.evaluate(() => Object.fromEntries([
     'event-moves', 'event-board', 'black-clock', 'white-clock', 'engine-lines', 'round-controls'
   ].map(id => {
@@ -372,7 +401,9 @@ try {
   assert.ok(Object.values(phoneLayout).every(rect => rect.y >= 0 && rect.bottom <= 710), JSON.stringify(phoneLayout));
   assert.equal(await phone.locator('#copy-live-link').isVisible(), false);
   assert.equal(await phone.locator('#event-moves').evaluate(element => element.scrollLeft > 0), true);
-  await phone.locator('#first').tap();
+  assert.equal(await phone.locator('#trend-mobile-slot #trend-toggle').isVisible(), true);
+  assert.equal(await phone.locator('#first').isVisible(), false);
+  await phone.keyboard.press('Home');
   const touch = await mobile.newCDPSession(phone);
   const center = async square => {
     const box = await phone.locator('#event-board [data-square="' + square + '"]').boundingBox();
@@ -383,14 +414,19 @@ try {
   await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [await center('d4')] });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await touch.detach();
+  await phone.waitForFunction(() => scrollY > 0);
+  assert.equal(await phone.locator('#event-board [data-square="d2"] .maia-piece:visible').count(), 1);
+  assert.equal(await phone.locator('#event-board [data-square="d4"] .maia-piece:visible').count(), 0);
+  await phone.evaluate(() => scrollTo(0, 0));
+  await phone.locator('#event-board [data-square="d2"]').tap();
+  await phone.locator('#event-board [data-square="d4"]').tap();
   await phone.locator('#ply-note').getByText('Variation').waitFor();
-  assert.equal(await phone.evaluate(() => scrollY), 0);
   await phone.locator('#moment').click();
   await phone.locator('#share-card-dialog[open]').waitFor();
   assert.equal(await phone.locator('#share-card-canvas').evaluate(element => element.height), 1350);
   await phone.locator('#btn-close-share-card').click();
   await phone.locator('#load-maia').click();
-  await phone.locator('#trend-toggle').waitFor();
+  await phone.locator('#trend-toggle:not([disabled])').waitFor();
   assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'download');
 
   await phone.evaluate(async () => {
@@ -400,7 +436,7 @@ try {
     await (await import('/engine/engine-preferences.js')).savePreferences({ stockfishVariant: 'standard' });
   });
   await phone.reload();
-  await phone.locator('#trend-toggle').waitFor();
+  await phone.locator('#trend-toggle:not([disabled])').waitFor();
   assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'cache');
   assert.deepEqual(await phone.evaluate(() => window.liveEngineSettings),
     { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
@@ -411,4 +447,4 @@ try {
   await browser.close();
   server.close();
 }
-console.log('PASS live browser: desktop and mobile first screens, touch drag, cold and cached Maia, clocks, shared variations, settings and PNG.');
+console.log('PASS live browser: desktop drag, mobile scroll and tap, candidate rows, perspective and PNG, cold and cached Maia, clocks and sharing.');

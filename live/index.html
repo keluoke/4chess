@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261124-controls">
+  <link rel="stylesheet" href="./live.css?v=20261124-perspective">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -42,7 +42,8 @@
         <div class="seat" id="white-seat"><span id="white-name">白方</span><time id="white-clock">–:––</time></div>
         <div class="board-controls round-controls">
           <div class="btn-nav-group live-nav">
-            <button id="first" class="btn-nav" type="button" aria-label="第一步" data-label="first">|◀</button>
+            <button id="first" class="btn-nav desktop-control" type="button" aria-label="第一步" data-label="first">|◀</button>
+            <div id="trend-mobile-slot"></div>
             <button id="previous" class="btn-nav" type="button" aria-label="上一步" data-label="previous">◀</button>
             <button id="play" class="btn-nav desktop-control" type="button" aria-label="自动播放">▶</button>
             <button id="next" class="btn-nav" type="button" aria-label="下一步" data-label="next">▶</button>
@@ -91,31 +92,23 @@
             </div>
             <p id="engine-note" role="status"></p>
             <div class="engine-lines" id="engine-lines" hidden>
-              <div>
-                <div class="engine-lead"><span id="sf-edition"></span><strong id="sf-line">—</strong></div>
-                <span id="sf-continuation" class="engine-continuation" hidden></span>
-                <ol id="sf-candidates" class="engine-candidates" start="2"></ol>
+              <div class="live-engine-group sf-group">
+                <h3 class="candidate-heading" id="sf-edition"></h3>
+                <div id="sf-candidates" class="candidate-lines"></div>
               </div>
-              <div>
-                <div class="engine-lead"><span id="maia-edition"></span><strong id="maia-line">—</strong><button id="load-maia" type="button" hidden></button></div>
-                <ol id="maia-candidates" class="engine-candidates" start="2"></ol>
+              <div class="live-engine-group maia-group">
+                <h3 class="candidate-heading" id="maia-edition"></h3>
+                <div id="maia-candidates" class="candidate-lines"></div>
+                <button id="load-maia" type="button" hidden></button>
               </div>
             </div>
           </div>
-          <div class="engine-actions">
-            <button id="trend-toggle" type="button" data-copy="trend" aria-controls="live-trend" aria-expanded="false" hidden>Maia 分段趋势</button>
+          <div class="engine-actions" id="trend-desktop-slot">
+            <button id="trend-toggle" type="button" data-label="trend" aria-haspopup="dialog" aria-controls="live-trend" disabled>
+              <span class="toolbar-text" data-copy="trend">人类视角</span>
+              <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19h6m-5 3h4m-6-6v-2a6.5 6.5 0 1 1 8 0v2z"/></svg>
+            </button>
           </div>
-          <section id="live-trend" class="live-trend" aria-labelledby="trend-toggle" hidden>
-            <div class="trend-views">
-              <button id="trend-chart-view" type="button" data-copy="chart" aria-pressed="true">曲线</button>
-              <button id="trend-data-view" type="button" data-copy="trendData" aria-pressed="false">采样数据</button>
-              <button id="trend-retry" type="button" data-copy="trendRetry" hidden>重试缺失档位</button>
-            </div>
-            <p id="trend-status" role="status"></p>
-            <ul id="trend-legend"></ul>
-            <div id="trend-chart" class="maia-trend-chart"></div>
-            <div id="trend-data" class="maia-trend-data" hidden><table></table></div>
-          </section>
         </section>
       </section>
     </div>
@@ -125,6 +118,24 @@
       <span data-copy="delay">着法和时钟以转播为准，可能晚于现场。</span>
     </footer>
   </main>
+  <dialog id="live-trend" class="live-trend" aria-labelledby="trend-title">
+    <header class="live-share-heading">
+      <h2 id="trend-title" data-copy="trend">人类视角</h2>
+      <form method="dialog"><button type="submit" data-copy="close">关闭</button></form>
+    </header>
+    <div id="trend-board" aria-hidden="true"></div>
+    <h3 class="trend-subtitle" data-copy="trendSubtitle">600–2600 Elo 怎么走</h3>
+    <p id="trend-conclusion"></p>
+    <div class="trend-views">
+      <button id="trend-chart-view" type="button" data-copy="chart" aria-pressed="true">曲线</button>
+      <button id="trend-data-view" type="button" data-copy="trendData" aria-pressed="false">采样数据</button>
+      <button id="trend-retry" type="button" data-copy="trendRetry" hidden>重试缺失档位</button>
+    </div>
+    <p id="trend-status" role="status"></p>
+    <ul id="trend-legend"></ul>
+    <div id="trend-chart" class="maia-trend-chart"></div>
+    <div id="trend-data" class="maia-trend-data" hidden><table></table></div>
+  </dialog>
   <dialog class="live-settings" id="live-settings" aria-labelledby="live-settings-title">
     <header class="live-share-heading">
       <h2 id="live-settings-title" data-copy="settings">设置</h2>
@@ -147,6 +158,10 @@
   </dialog>
   <dialog class="share-card-dialog" id="share-card-dialog" aria-labelledby="share-card-title">
     <header class="live-share-heading"><h2 id="share-card-title" data-copy="share">分享局面卡</h2><button id="btn-close-share-card" type="button" data-copy="close">关闭</button></header>
+    <div class="share-card-formats share-card-content" id="share-card-content" role="group" data-label="cardContent" hidden>
+      <button type="button" data-share-content="position" data-copy="positionCard" aria-pressed="true">局面卡</button>
+      <button type="button" data-share-content="perspective" data-copy="perspectiveCard" aria-pressed="false">局面 + 各段直觉</button>
+    </div>
     <div class="share-card-toolbar">
       <div class="share-card-formats" role="group">
         <button type="button" data-share-format="landscape" data-copy="landscape" aria-pressed="false">16:9 横版</button>
@@ -162,6 +177,6 @@
     <div class="share-card-preview-wrap"><canvas id="share-card-canvas"></canvas></div>
     <p id="share-card-status" class="live-link-status" role="status"></p>
   </dialog>
-  <script type="module" src="./live.js?v=20261124-controls"></script>
+  <script type="module" src="./live.js?v=20261124-perspective"></script>
 </body>
 </html>

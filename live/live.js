@@ -1,10 +1,10 @@
-import { BoardUI } from '../analysis/board-ui.js?v=20261124-divergence-cards';
+import { BoardUI } from '../analysis/board-ui.js?v=20261124-perspective';
 import { boardShortcut, playNavigationSound } from '../analysis/board-controls.js?v=20261124-controls';
 import { soundEffects } from '../analysis/sound-effects.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { expectedScore, intuitionKind } from '../engine/review-policy.js';
-import { RATINGS, probabilities, renderMaiaTrendPlot } from '../analysis/maia-elo-trend.js?v=20261124-intuition-labels';
+import { RATINGS, probabilities, renderMaiaTrendPlot } from '../analysis/maia-elo-trend.js?v=20261124-perspective';
 import { engineExperienceHint, getSavedPreferences, initializePreferences, savePreferences, subscribePreferences } from '../engine/engine-preferences.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { ModelCache } from '../engine/model-cache.js';
@@ -18,7 +18,12 @@ const copy = {
     flip: '翻转棋盘', reviewGame: '查看整盘复盘报告 →',
     play: '自动播放', pausePlay: '暂停播放', clear: '清除思考箭头', moveSound: '行棋音效',
     mute: '关闭行棋音效', unmute: '开启行棋音效', threeLines: '3 条候选',
-    trend: 'Maia 分段趋势', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
+    trend: '人类视角', trendSubtitle: '600–2600 Elo 怎么走', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
+    blindSpot: '全分段盲区：Maia 预测 600–2600 Elo 几乎无人想到 {move}',
+    trendPeak: 'Stockfish 首选 {move} 在 {elo} Elo 的预测选着概率最高（{prob}%）。',
+    cardContent: '卡片内容', positionCard: '局面卡', perspectiveCard: '局面 + 各段直觉',
+    perspectiveLoading: '正在采样各分段…', perspectiveUnavailable: '暂未取得分段曲线，可以继续分享局面卡。',
+    perspectiveDisabled: '启用 Maia 后查看各段直觉',
     schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛 {time}', title: '2026 棋王战',
     mobileTitle: '棋王战', loadMaia: '加载 · {size}', loadMaiaLabel: '加载 {model}，约 {size}', loadingMaia: '加载中…',
     settings: '设置', sfArrows: 'Stockfish 箭头', maiaArrows: 'Maia 箭头', whiteEvaluation: '白方视角评估',
@@ -48,7 +53,12 @@ const copy = {
     flip: 'Flip board', reviewGame: 'View the full game review →',
     play: 'Autoplay', pausePlay: 'Pause playback', clear: 'Clear arrows', moveSound: 'Move sounds',
     mute: 'Mute move sounds', unmute: 'Unmute move sounds', threeLines: '3 lines',
-    trend: 'Maia rating trends', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
+    trend: 'Human perspective', trendSubtitle: 'How 600–2600 Elo players might move', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
+    blindSpot: 'Across 600–2600 Elo, Maia predicts almost nobody would find {move}',
+    trendPeak: 'Stockfish’s {move} is most likely at {elo} Elo ({prob}% predicted).',
+    cardContent: 'Card contents', positionCard: 'Position card', perspectiveCard: 'Position + rating trends',
+    perspectiveLoading: 'Sampling rating bands…', perspectiveUnavailable: 'The rating chart is unavailable. You can still share the position card.',
+    perspectiveDisabled: 'Enable Maia to see rating trends',
     schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {time}', title: '2026 World Championship',
     mobileTitle: 'World Championship', loadMaia: 'Load · {size}', loadMaiaLabel: 'Load {model}, about {size}', loadingMaia: 'Loading…',
     settings: 'Settings', sfArrows: 'Stockfish arrows', maiaArrows: 'Maia arrows', whiteEvaluation: 'Evaluation from White’s perspective',
@@ -98,6 +108,7 @@ const state = {
 };
 const board = new BoardUI($('event-board'), {
   brilliantArrows: true,
+  touchTapOnly: true,
   onMove(move, fen) {
     state.boardFen = fen;
     state.boardMove = move.uci;
@@ -171,9 +182,11 @@ function arrangeMoment() {
   if (compactLayout.matches) {
     $('mobile-moment-slot').append(badge);
     $('round-title').closest('.round-strip').append($('new-move'));
+    $('trend-mobile-slot').append($('trend-toggle'));
   } else {
     $('ply-note').before(badge);
     $('event-moves').closest('.event-panel').prepend($('new-move'));
+    $('trend-desktop-slot').append($('trend-toggle'));
   }
   paint();
 }
@@ -449,8 +462,7 @@ function cancelAnalysis() {
 
 function closeTrend() {
   state.trend = null;
-  $('live-trend').hidden = true;
-  $('trend-toggle').setAttribute('aria-expanded', 'false');
+  if ($('live-trend').open) $('live-trend').close();
 }
 
 function showTrendView(table) {
@@ -461,19 +473,38 @@ function showTrendView(table) {
 }
 
 function renderTrend(trend) {
+  if (!$('live-trend').open || state.trend !== trend) return;
   const { position, samples } = trend;
   const count = RATINGS.filter(elo => samples.has(elo)).length;
   $('trend-status').textContent = t('trendProgress').replace('{count}', count).replace('{total}', RATINGS.length);
-  $('trend-retry').hidden = trend.running || count === RATINGS.length;
+  $('trend-retry').hidden = Boolean(trend.pending) || count === RATINGS.length;
+  const conclusion = trendConclusion(trend);
+  $('trend-conclusion').textContent = conclusion;
+  $('trend-conclusion').hidden = !conclusion;
   $('trend-chart').replaceChildren(renderMaiaTrendPlot($('trend-data').querySelector('table'), position.series, samples, position.elo));
 }
 
-async function sampleTrend(trend) {
-  if (trend.running) return;
+function trendConclusion({ position, samples }, locale = lang) {
+  const best = position.series.find(move => move.role === 'sf');
+  if (!best) return '';
+  const points = RATINGS.map(elo => ({ elo, probability: samples.get(elo)?.get(best.uci) }));
+  if (!points.every(point => Number.isFinite(point.probability))) return '';
+  const peak = points.reduce((highest, point) => point.probability > highest.probability ? point : highest);
+  return t(peak.probability < 3 ? 'blindSpot' : 'trendPeak', locale)
+    .replace('{move}', best.san).replace('{elo}', peak.elo).replace('{prob}', peak.probability.toFixed(1));
+}
+
+function trendFor(position) {
+  if (state.trend?.position !== position) {
+    state.trend = { position, samples: new Map([[position.elo, probabilities(position.moves)]]) };
+  }
+  return state.trend;
+}
+
+function sampleTrend(trend) {
+  if (trend.pending) return trend.pending;
   const obsolete = () => state.trend !== trend || !analysisAllowed() || !foreground();
-  trend.running = true;
-  renderTrend(trend);
-  try {
+  trend.pending = (async () => {
     await state.momentTask;
     for (const elo of [...RATINGS].sort((a, b) => Math.abs(a - trend.position.elo) - Math.abs(b - trend.position.elo))) {
       if (obsolete()) return;
@@ -484,12 +515,14 @@ async function sampleTrend(trend) {
       if (sample.size) trend.samples.set(elo, sample);
       renderTrend(trend);
     }
-  } catch (error) {
+  })().catch(error => {
     if (!obsolete()) console.debug('Broadcast Maia trend unavailable', error);
-  } finally {
-    trend.running = false;
+  }).finally(() => {
+    trend.pending = null;
     if (!obsolete()) renderTrend(trend);
-  }
+  });
+  renderTrend(trend);
+  return trend.pending;
 }
 
 function paintEvaluation(result) {
@@ -520,7 +553,8 @@ function paintEvaluation(result) {
 function paintAnalysis() {
   const allowed = analysisAllowed();
   const result = allowed && state.engineEnabled ? state.analysis : null;
-  $('trend-toggle').hidden = !result?.trend;
+  $('trend-toggle').disabled = !result?.trend;
+  $('trend-toggle').title = t(result?.trend ? 'trend' : 'perspectiveDisabled');
   if (state.trend) renderTrend(state.trend);
   $('engine-lines').hidden = !result && !compactLayout.matches;
   $('analyze').disabled = !state.preferencesReady || !allowed;
@@ -535,10 +569,6 @@ function paintAnalysis() {
   $('engine-note').textContent = !state.engineEnabled || !allowed ? ''
     : result?.maiaReady || result?.terminal ? '' : state.analyzing ? t('engineBusy') : result ? (state.settings.maiaMode === 'off' ? '' : t('partial'))
       : state.requestedKey ? t('engineFailed') : '';
-  const compact = compactLayout.matches;
-  $('sf-line').textContent = [result?.stockfish?.san, result?.evaluation?.text, result?.depth && !compact ? 'D' + result.depth : ''].filter(Boolean).join(' · ') || '—';
-  const probability = result?.maia && probabilities([result.maia]).get(result.maia.uci);
-  $('maia-line').textContent = [result?.maia?.san, Number.isFinite(probability) ? probability.toFixed(1) + '%' : ''].filter(Boolean).join(' · ') || '—';
   paintCandidateLines(result);
   const loadMaia = $('load-maia');
   const mode = state.settings.maiaMode;
@@ -549,7 +579,7 @@ function paintAnalysis() {
   const size = maiaSizes[state.settings.maiaVariant];
   if (awaitingModel) loadMaia.textContent = offerDownload ? t('loadMaia').replace('{size}', size) : t('loadingMaia');
   loadMaia.setAttribute('aria-label', t('loadMaiaLabel').replace('{model}', MAIA_VARIANTS[state.settings.maiaVariant].name).replace('{size}', size));
-  $('maia-line').hidden = !loadMaia.hidden;
+  $('maia-candidates').hidden = !loadMaia.hidden;
   paintEvaluation(result);
   paintEngineStatus();
 }
@@ -557,24 +587,23 @@ function paintAnalysis() {
 function paintCandidateLines(result) {
   const stockfish = result?.stockfishLines ?? [];
   const maia = result?.maiaLines ?? [];
-  const continuation = line => line?.variation.slice(1).map(move => move.label).join(' ') ?? '';
-  const lead = $('sf-continuation');
-  lead.textContent = lead.title = continuation(stockfish[0]);
-  lead.hidden = !lead.textContent;
-  const row = (label, followup) => {
-    const item = document.createElement('li');
-    item.append(Object.assign(document.createElement('strong'), { textContent: label }));
-    if (followup) item.append(Object.assign(document.createElement('span'), { textContent: followup, title: followup }));
+  const row = (score, san, continuation, id) => {
+    const item = Object.assign(document.createElement('div'), { className: 'candidate-line' });
+    if (id) item.id = id;
+    const moves = Object.assign(document.createElement('div'), { className: 'candidate-variation' });
+    moves.append(Object.assign(document.createElement('strong'), { textContent: san }));
+    for (const move of continuation) moves.append(Object.assign(document.createElement('span'), { textContent: move.label }));
+    item.append(Object.assign(document.createElement('span'), { className: 'candidate-score', textContent: score }), moves);
     return item;
   };
-  $('sf-candidates').replaceChildren(...stockfish.slice(1).map(line => row(
-    [line.variation[0]?.san, line.evaluation?.text].filter(Boolean).join(' · '), continuation(line)
-  )));
+  $('sf-candidates').replaceChildren(...(stockfish.length ? stockfish.map((line, index) =>
+    row(line.evaluation?.text ?? '—', line.variation[0]?.san ?? '—', line.variation.slice(1, 5), !index && 'sf-line')
+  ) : [row(result?.evaluation?.text ?? '—', result?.stockfish?.san ?? '—', [], 'sf-line')]));
   const chances = probabilities(maia);
-  $('maia-candidates').replaceChildren(...maia.slice(1).map(move => {
+  $('maia-candidates').replaceChildren(...(maia.length ? maia.map((move, index) => {
     const chance = chances.get(move.uci);
-    return row(Number.isFinite(chance) ? `${move.san} · ${chance.toFixed(1)}%` : move.san);
-  }));
+    return row(Number.isFinite(chance) ? `${chance.toFixed(1)}%` : '—', move.san, [], !index && 'maia-line');
+  }) : [row('—', result?.maia?.san ?? '—', [], 'maia-line')]));
   $('show-lines').hidden = stockfish.length < 2 && maia.length < 2;
 }
 
@@ -582,7 +611,8 @@ function paintEngineStatus() {
   const { stockfishVariant, maiaVariant, depth } = state.settings;
   const sfName = stockfishVariant === 'standard' ? (lang === 'zh' ? 'Stockfish 19 标准版' : 'Stockfish 19 Standard') : 'Stockfish 19 Lite';
   const maiaName = MAIA_VARIANTS[maiaVariant].name;
-  $('sf-edition').textContent = compactLayout.matches ? 'SF19' : `${sfName} · ${t('targetDepth')} D${depth}`;
+  const reached = state.analysis?.depth;
+  $('sf-edition').textContent = compactLayout.matches ? 'SF19' : `${sfName} · ${reached ? 'D' + reached : `${t('targetDepth')} D${depth}`}`;
   $('maia-edition').textContent = compactLayout.matches ? 'Maia-3' : maiaName;
   $('engine-hint').textContent = engineExperienceHint(state.settings, lang);
   const status = state.engines?.status?.();
@@ -826,7 +856,8 @@ async function pollRound() {
     const old = state.snapshot;
     const mainlineChanged = old && (old.moves.length !== next.moves.length ||
       next.moves.some((move, i) => old.moves[i]?.uci !== move.uci));
-    if (state.follow && mainlineChanged && (board.gesture || board.selectedSq || board.promotionPicker)) {
+    if (state.follow && mainlineChanged && (board.gesture || board.selectedSq || board.promotionPicker
+      || $('live-trend').open || $('share-card-dialog').open)) {
       state.follow = false;
     }
     state.snapshot = next;
@@ -954,19 +985,30 @@ $('load-maia').onclick = () => {
 $('setting-sf-arrows').onchange = () => void savePreferences({ showStockfishArrows: $('setting-sf-arrows').checked });
 $('setting-maia-arrows').onchange = () => void savePreferences({ showArrows: $('setting-maia-arrows').checked });
 $('btn-settings').onclick = () => $('live-settings').showModal();
+let trendBoard;
 $('trend-toggle').onclick = () => {
-  if (state.trend) { closeTrend(); return; }
   const position = state.analysis?.trend;
-  if (!position || !analysisAllowed() || !foreground()) return;
-  const trend = state.trend = { position, samples: new Map([[position.elo, probabilities(position.moves)]]) };
+  const dialog = $('live-trend');
+  if (dialog.open || !position || !analysisAllowed() || !foreground()) return;
+  stopPlayback();
+  const trend = trendFor(position);
+  trendBoard ||= new BoardUI($('trend-board'), { interactive: false });
+  if (trendBoard.orientation !== board.orientation) trendBoard.flip();
+  trendBoard.setPosition(position.fen, board.lastMove);
+  const { stockfish, maia } = state.analysis;
+  const arrow = (uci, color, role) => ({ from: uci.slice(0, 2), to: uci.slice(2, 4), color, role });
+  const same = stockfish?.uci && stockfish.uci === maia?.uci;
+  trendBoard.setArrows([
+    stockfish?.uci && arrow(stockfish.uci, 'green', same ? 'consensus' : 'sf'),
+    maia?.uci && !same && arrow(maia.uci, 'gold', 'maia')
+  ].filter(Boolean));
   $('trend-legend').replaceChildren(...position.series.map(move => {
     const item = document.createElement('li');
     item.className = 'trend-' + move.role;
     item.textContent = move.san;
     return item;
   }));
-  $('live-trend').hidden = false;
-  $('trend-toggle').setAttribute('aria-expanded', 'true');
+  dialog.showModal();
   showTrendView(false);
   void sampleTrend(trend);
 };
@@ -1007,6 +1049,7 @@ $('moment').onclick = async () => {
   const snapshot = state.snapshot;
   const round = currentRound();
   if (!round || !analysisAllowed()) return;
+  stopPlayback();
   const link = liveLink();
   if (!link) {
     $('live-link-status').textContent = t('variationTooLong');
@@ -1031,11 +1074,24 @@ $('moment').onclick = async () => {
   const roundLabel = roundName(round);
   const [white, black] = roundPlayers(round).map(player => playerName(player, cardLang));
   try {
-    const { ShareCardModal } = await import('../analysis/share-card.js?v=20261124-intuition-labels');
+    const { ShareCardModal } = await import('../analysis/share-card.js?v=20261124-perspective');
     shareModal ||= new ShareCardModal(null, { format: 'portrait', allowed: analysisAllowed });
     await shareModal.open(move, {
       lang: cardLang, elo, orientation, white, black, link, linkCopied: t('linkCopied', cardLang),
-      filename: format => 'diverge-wcc-' + round.id + '-' + ply + (branch ? '-variation-' : '-') + format + '.png',
+      perspectiveLoading: t('perspectiveLoading', cardLang),
+      perspectiveUnavailable: t('perspectiveUnavailable', cardLang),
+      loadPerspective: analysis?.trend && (async () => {
+        if (state.analysis?.trend !== analysis.trend || !analysisAllowed()) return null;
+        const trend = trendFor(analysis.trend);
+        await sampleTrend(trend);
+        if (state.trend !== trend || !analysisAllowed()) return null;
+        const count = RATINGS.filter(rating => trend.samples.has(rating)).length;
+        if (!count) return null;
+        return { samples: trend.samples, series: trend.position.series,
+          headline: trendConclusion(trend, cardLang) || t('trendSubtitle', cardLang),
+          caption: t('trendProgress', cardLang).replace('{count}', count).replace('{total}', RATINGS.length) };
+      }),
+      filename: (format, content) => ['diverge-wcc', round.id, String(ply), branch && 'variation', content === 'perspective' && 'perspective', format].filter(Boolean).join('-') + '.png',
       decorate(spec) {
         spec.badge = [t('card', cardLang), roundLabel, kind && t(kind, cardLang)].filter(Boolean).join(' · ');
         spec.subline = [move.bestSan && label, [white, black].filter(Boolean).join(' vs ')].filter(Boolean).join(' · ');
@@ -1061,7 +1117,7 @@ document.addEventListener('visibilitychange', () => {
     if (state.engineEnabled) void analyzeMove();
   } else {
     stopPlayback();
-    if (state.trend?.running) closeTrend();
+    if (state.trend?.pending) closeTrend();
     if (state.analyzing) cancelAnalysis();
   }
 });

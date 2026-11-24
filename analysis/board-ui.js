@@ -14,6 +14,7 @@ export class BoardUI {
     this.container = containerEl;
     this.motion = options.motion === true;
     this.brilliantArrows = options.brilliantArrows === true;
+    this.touchTapOnly = options.touchTapOnly === true;
     this.orientation = options.orientation || 'white';
     this.onMove = options.onMove || null; // callback(fromSq, toSq, promotion)
     this.onSelectSquare = options.onSelectSquare || null;
@@ -33,7 +34,7 @@ export class BoardUI {
     this.highlights = []; // [{ square, color }]
 
     this.initDOM();
-    this.bindEvents();
+    if (options.interactive !== false) this.bindEvents();
     this.render();
   }
 
@@ -290,6 +291,7 @@ export class BoardUI {
     this.boardEl.addEventListener('contextmenu', event => event.preventDefault());
     this.boardEl.addEventListener('dragstart', event => event.preventDefault());
     this.boardEl.addEventListener('pointerdown', event => {
+      if (this.touchTapOnly && event.pointerType === 'touch') return;
       this.cancelPieceMotion();
       if (event.target.closest('.promotion-picker') || this.promotionPicker || ![0, 2].includes(event.button)) return;
       const square = this.squareAtPoint(event.clientX, event.clientY);

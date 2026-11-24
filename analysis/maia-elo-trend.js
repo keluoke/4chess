@@ -1,7 +1,8 @@
 import { t } from './i18n.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
+import { RATINGS, TREND_WIDTH, TREND_HEIGHT, TREND_TICKS, trendX as x, trendY as y } from './maia-trend-geometry.js';
 
-export const RATINGS = [600, 1000, 1400, 1800, 2200, 2600];
+export { RATINGS };
 const CACHE_POSITIONS = 24;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const symbols = { sf: '★ ', maia: 'M ', consensus: '★ M ' };
@@ -25,10 +26,8 @@ function formatProbability(probability) {
 }
 
 export function renderMaiaTrendPlot(table, series, samples, elo) {
-  const x = rating => 36 + (rating - RATINGS[0]) / 2000 * 360;
-  const y = percentage => 135 - percentage * 1.16;
-  const svg = svgElement('svg', { viewBox: '0 0 420 161', 'aria-hidden': 'true' });
-  for (const percent of [0, 25, 50, 75, 100]) {
+  const svg = svgElement('svg', { viewBox: `0 0 ${TREND_WIDTH} ${TREND_HEIGHT}`, 'aria-hidden': 'true' });
+  for (const percent of TREND_TICKS) {
     svg.append(
       svgElement('line', { x1: 36, x2: 396, y1: y(percent), y2: y(percent), class: 'maia-trend-grid' }),
       svgElement('text', { x: 31, y: y(percent) + 4, 'text-anchor': 'end' }, `${percent}%`)
