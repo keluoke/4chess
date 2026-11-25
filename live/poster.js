@@ -95,13 +95,25 @@ function drawChart(ctx, poster) {
   ctx.textAlign = 'left';
   if (poster.blind) {
     const point = groups[0].points[2];
+    const noteX = point.x - 64;
+    const preferredY = point.y - 51;
+    ctx.font = '700 17px system-ui, sans-serif';
+    const noteWidth = Math.min(260, ctx.measureText(poster.blindNote).width);
+    // Each cubic segment stays within its endpoints' height range.
+    const spans = groups.flatMap(({ points }) => points.slice(1).flatMap((right, index) => {
+      const left = points[index];
+      if (right.x < noteX - 6 || left.x > noteX + noteWidth + 6) return [];
+      return [{ top: Math.min(left.y, right.y), bottom: Math.max(left.y, right.y) }];
+    }));
+    const overlaps = spans.some(({ top, bottom }) => top < preferredY + 23 && bottom > preferredY - 6);
+    const noteY = overlaps ? Math.min(...spans.map(span => span.top)) - 26 : preferredY;
     ctx.strokeStyle = theme.stockfish;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(point.x, point.y - 7);
-    ctx.lineTo(point.x, point.y - 28);
+    ctx.lineTo(point.x, Math.max(point.y - 28, noteY + 23));
     ctx.stroke();
-    label(ctx, poster.blindNote, point.x - 64, point.y - 51, 17, 700, theme.stockfish, 260);
+    label(ctx, poster.blindNote, noteX, noteY, 17, 700, theme.stockfish, 260);
   }
 }
 

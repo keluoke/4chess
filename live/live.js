@@ -40,13 +40,14 @@ const copy = {
     engineIdle: '未启动', engineStarting: '正在启动', engineCache: '正在检查缓存', engineReady: '已就绪', engineError: '加载失败',
     engineDownloading: '下载中', enginePreparing: '正在装载模型', engineCacheSource: 'IndexedDB 缓存', engineBundled: '站内资源',
     copyLink: '复制链接', copyImage: '复制图片',
-    linkCopied: '已复制直达链接', shareLink: '分享链接', close: '关闭', download: '保存图片',
+    linkCopied: '已复制直达链接', linkCopyManual: '可长按下方链接复制。', shareLink: '分享链接', close: '关闭', download: '保存图片',
     trendRetry: '重试缺失档位', trendProgress: 'Maia 走法选择概率 · 已完成 {count}/{total} 档',
     sourceLead: '转播数据', delay: '着法和时钟以转播为准，可能晚于现场。',
     analyze: '启用双引擎', retry: '重试分析', pause: '暂停双引擎',
     mobileAnalyze: '启用', mobileRetry: '重试', mobilePause: '暂停',
     engineBusy: '正在分析当前局面…', engineFailed: '双引擎暂不可用。', partial: 'Maia-3 暂不可用。',
-    branch: '试走变化', live: '转播中', finished: '本局已结束', cancelled: '本局取消',
+    branch: '试走变化', returnGame: '返回实战', trendTerminal: '这个局面已无合法着法。',
+    live: '转播中', finished: '本局已结束', cancelled: '本局取消',
     scheduled: '尚未开赛', waiting: '等待官方着法', loading: '正在连接 Lichess 转播',
     stale: '转播更新暂缓 · 显示最近收到的棋谱', unavailable: '暂时无法连接转播，将自动重试',
     newMove: '新着法已更新 · 回到最新', waitingMove: '等待第一步', white: '白方', black: '黑方',
@@ -83,13 +84,14 @@ const copy = {
     engineIdle: 'Not started', engineStarting: 'Starting', engineCache: 'Checking cache', engineReady: 'Ready', engineError: 'Could not load',
     engineDownloading: 'Downloading', enginePreparing: 'Loading model', engineCacheSource: 'IndexedDB cache', engineBundled: 'Site assets',
     copyLink: 'Copy link', copyImage: 'Copy image',
-    linkCopied: 'Direct link copied', shareLink: 'Share link', close: 'Close', download: 'Save image',
+    linkCopied: 'Direct link copied', linkCopyManual: 'Select and copy the link below.', shareLink: 'Share link', close: 'Close', download: 'Save image',
     trendRetry: 'Retry missing ratings', trendProgress: 'Maia move probability · {count}/{total} rating bands',
     sourceLead: 'Broadcast by', delay: 'Moves and clock readings may be delayed.',
     analyze: 'Enable engines', retry: 'Retry analysis', pause: 'Pause engines',
     mobileAnalyze: 'Enable', mobileRetry: 'Retry', mobilePause: 'Pause',
     engineBusy: 'Analyzing the current position…', engineFailed: 'Engine analysis is unavailable.', partial: 'Maia-3 is unavailable.',
-    branch: 'Variation', live: 'On air', finished: 'Game finished', cancelled: 'Cancelled',
+    branch: 'Variation', returnGame: 'Return to game', trendTerminal: 'This position has no legal moves.',
+    live: 'On air', finished: 'Game finished', cancelled: 'Cancelled',
     scheduled: 'Scheduled', waiting: 'Waiting for official moves', loading: 'Connecting to Lichess Broadcast',
     stale: 'Feed delayed · showing the last received moves', unavailable: 'Broadcast unavailable. Retrying automatically.',
     newMove: 'New moves available · go to latest', waitingMove: 'Waiting for the first move', white: 'White', black: 'Black',
@@ -268,13 +270,16 @@ function paintCountdown() {
   const round = currentRound();
   const status = state.snapshot?.status ?? round?.status;
   let notice = '';
+  let countingDown = false;
   if (status === 'scheduled' && round?.startsAt) {
     const remaining = Math.ceil((round.startsAt - Date.now()) / 1000);
     const time = [Math.floor(remaining / 3600), Math.floor(remaining / 60) % 60, remaining % 60]
       .map(part => String(part).padStart(2, '0')).join(':');
-    notice = remaining > 0 ? t('countdown').replace('{time}', time) : t('waiting');
+    countingDown = remaining > 0;
+    notice = countingDown ? t('countdown').replace('{time}', time) : t('waiting');
   }
   const countdown = $('round-countdown');
+  countdown.parentElement.dataset.countingDown = String(countingDown);
   countdown.hidden = !notice;
   if (countdown.textContent !== notice) countdown.textContent = notice;
 }
@@ -409,6 +414,7 @@ function paintControls() {
   $('ply-note').textContent = state.branch ? t('branch')
     : length ? state.cursor + t('of') + length : t('waitingMove');
   $('ply-note').dataset.following = String(state.follow);
+  $('return-game').hidden = !state.branch;
   $('new-move').hidden = !state.unseen;
   $('new-move').textContent = t('newMove');
   $('previous').disabled = state.cursor === 0 && !state.branch;
@@ -478,7 +484,8 @@ function cancelAnalysis() {
 
 function closeTrend() {
   state.trend = null;
-  if ($('live-trend').open) $('live-trend').close();
+  if ($('live-trend').open && displayedTrend) $('live-trend').close();
+  displayedTrend = null;
 }
 
 function showTrendView(table) {
@@ -577,7 +584,7 @@ function paintEvaluation(result) {
 function paintAnalysis() {
   const allowed = analysisAllowed();
   const result = allowed && state.engineEnabled ? state.analysis : null;
-  $('trend-toggle').disabled = !result?.trend;
+  $('trend-toggle').disabled = !allowed || !state.snapshot;
   $('trend-toggle').title = t(result?.trend ? 'trend' : 'perspectiveDisabled');
   if (state.trend) renderTrend(state.trend);
   $('engine-lines').hidden = !result && !compactLayout.matches;
@@ -606,6 +613,7 @@ function paintAnalysis() {
   $('maia-candidates').hidden = !loadMaia.hidden;
   paintEvaluation(result);
   paintEngineStatus();
+  updateTrendDialog(result);
   updatePoster();
 }
 
@@ -756,20 +764,28 @@ async function analyzeMove() {
     });
     if (!result || obsolete()) return;
     state.analysis = result;
-    state.maiaScoreTask = result.maiaReady && state.engines.fillMaiaEvaluations(position, result, obsolete, () => {
-      if (!obsolete()) paintCandidateLines(result);
+    const engines = state.engines;
+    const classify = move && (result.maiaReady || (result.terminal && state.settings.maiaMode !== 'off'));
+    const momentTask = state.momentTask = classify ? engines.classify(move, before, position, obsolete).then(moment => {
+      if (!obsolete()) {
+        state.moment = moment;
+        paintAnalysis();
+        return moment;
+      }
+    }).catch(error => {
+      if (!obsolete()) console.debug('Broadcast move classification unavailable', error);
+    }) : null;
+    // Classification and the supplementary scores share a single Stockfish queue.
+    state.maiaScoreTask = result.maiaReady && Promise.resolve(momentTask).then(() => {
+      if (!obsolete()) return engines.fillMaiaEvaluations(position, result, obsolete, () => {
+        if (!obsolete()) paintCandidateLines(result);
+      });
     }).catch(error => {
       if (!obsolete()) console.debug('Broadcast candidate scores unavailable', error);
     });
     paintAnalysis();
+    await momentTask;
     await state.maiaScoreTask;
-    await state.trend?.pending;
-    if (obsolete()) return;
-    if (move && (result.maiaReady || (result.terminal && state.settings.maiaMode !== 'off'))) {
-      state.momentTask = state.engines.classify(move, before, position, obsolete);
-      const moment = await state.momentTask;
-      if (!obsolete()) state.moment = moment;
-    }
   } catch (error) {
     console.debug('Broadcast analysis unavailable', error);
   } finally {
@@ -964,6 +980,7 @@ $('previous').onclick = () => jump(state.branch ? state.cursor : state.cursor - 
 $('next').onclick = () => jump(state.branch ? state.cursor : state.cursor + 1);
 $('play').onclick = togglePlayback;
 $('clear-notes').onclick = () => board.clearAnnotations();
+$('return-game').onclick = () => jump(state.cursor);
 function toggleSound() {
   const enabled = soundEffects.toggle();
   paintSoundToggle();
@@ -981,7 +998,7 @@ window.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); board.closePromotion(); }
     return;
   }
-  if (event.key === 'Escape' && state.branch) { event.preventDefault(); jump(state.cursor); return; }
+  if (event.key === 'Escape' && state.branch) { event.preventDefault(); $('return-game').click(); return; }
   const shortcut = boardShortcut(event);
   if (!shortcut) return;
   const button = $({ play: 'play', flip: 'flip-board' }[shortcut] || shortcut);
@@ -1029,17 +1046,37 @@ $('load-maia').onclick = () => {
 $('setting-sf-arrows').onchange = () => void savePreferences({ showStockfishArrows: $('setting-sf-arrows').checked });
 $('setting-maia-arrows').onchange = () => void savePreferences({ showArrows: $('setting-maia-arrows').checked });
 $('btn-settings').onclick = () => $('live-settings').showModal();
-let trendBoard;
-$('trend-toggle').onclick = () => {
-  const position = state.analysis?.trend;
-  const dialog = $('live-trend');
-  if (dialog.open || !position || !analysisAllowed() || !foreground()) return;
-  stopPlayback();
-  const trend = trendFor(position);
+function analysisAction(locale = lang) {
+  if (!state.engineEnabled) return { label: t('enablePoster', locale), run: () => $('analyze').click() };
+  const load = $('load-maia');
+  if (!load.hidden && !load.disabled) return { label: load.getAttribute('aria-label'), run: () => load.click() };
+  if (state.requestedKey && !state.analyzing) return {
+    retry: true, label: t('retry', locale), run: () => { cancelAnalysis(); void analyzeMove(); }
+  };
+  return null;
+}
+
+let trendBoard, displayedTrend;
+function updateTrendDialog(result) {
+  if (!$('live-trend').open || !analysisAllowed() || !foreground()) return;
+  const position = result?.trend;
+  const trend = position ? trendFor(position) : null;
+  const action = !trend && !result?.terminal && analysisAction();
+  $('trend-enable').hidden = !action;
+  if (action) $('trend-enable').textContent = action.label;
+  $('trend-enable').onclick = action ? action.run : null;
+  $('trend-results').hidden = !trend;
   trendBoard ||= new BoardUI($('trend-board'), { interactive: false });
   if (trendBoard.orientation !== board.orientation) trendBoard.flip();
-  trendBoard.setPosition(position.fen, board.lastMove);
-  const { stockfish, maia } = state.analysis;
+  if (trendBoard.chess.getFen() !== state.boardFen) trendBoard.setPosition(state.boardFen, board.lastMove);
+  if (!trend) {
+    trendBoard.setArrows([]);
+    $('trend-status').textContent = t(result?.terminal ? 'trendTerminal' : action ? 'perspectiveDisabled' : 'engineBusy');
+    return;
+  }
+  if (displayedTrend === trend) return;
+  displayedTrend = trend;
+  const { stockfish, maia } = result;
   const arrow = (uci, color, role) => ({ from: uci.slice(0, 2), to: uci.slice(2, 4), color, role });
   const same = stockfish?.uci && stockfish.uci === maia?.uci;
   trendBoard.setArrows([
@@ -1052,9 +1089,16 @@ $('trend-toggle').onclick = () => {
     item.textContent = move.san;
     return item;
   }));
+  void sampleTrend(trend);
+}
+$('trend-toggle').onclick = () => {
+  const dialog = $('live-trend');
+  if (dialog.open || !state.snapshot || !analysisAllowed() || !foreground()) return;
+  stopPlayback();
+  displayedTrend = null;
   dialog.showModal();
   showTrendView(false);
-  void sampleTrend(trend);
+  updateTrendDialog(state.engineEnabled ? state.analysis : null);
 };
 $('trend-chart-view').onclick = () => showTrendView(false);
 $('trend-data-view').onclick = () => showTrendView(true);
@@ -1089,9 +1133,9 @@ $('copy-live-link').onclick = async () => {
 };
 
 let shareSession;
-const posterButtons = ['btn-share-card-copy', 'btn-share-card-download', 'btn-share-card-link'];
-const posterCurrent = share => shareSession === share && $('share-card-dialog').open && analysisAllowed() && foreground()
-  && state.boardFen === share.fen;
+const posterImageButtons = ['btn-share-card-copy', 'btn-share-card-download'];
+const shareDialogCurrent = share => shareSession === share && $('share-card-dialog').open && analysisAllowed() && foreground();
+const posterCurrent = share => shareDialogCurrent(share) && state.boardFen === share.fen;
 
 function posterNotice(share, key, action = null, label = t('retry', share.lang)) {
   $('share-card-status').textContent = t(key, share.lang);
@@ -1112,7 +1156,7 @@ function paintPosterProgress(share, trend) {
   posterNotice(share, count >= 3 ? 'posterDrawing' : 'posterStart');
 }
 
-function posterSpec(share, analysis, trend) {
+function posterSpec(share, analysis, trend, moment) {
   const { lang: locale, elo } = share;
   const { stockfish: sf, maia, evaluation } = analysis;
   const chance = probabilities([maia]).get(maia.uci);
@@ -1120,7 +1164,7 @@ function posterSpec(share, analysis, trend) {
   const blind = Math.max(...RATINGS.map(elo => trend.samples.get(elo).get(sf.uci))) < 3;
   const headline = t(blind ? 'posterBlind' : sf.uci === maia.uci ? 'posterAgreement' : 'posterDivergence', locale)
     .replace('{elo}', elo).replace('{maia}', maia.san).replace('{sf}', sf.san).replace('{prob}', percent);
-  const kind = !share.branch && state.moment && intuitionKind(state.moment);
+  const kind = !share.branch && moment && intuitionKind(moment);
   const score = analysis.maiaEvaluations?.get(maia.uci);
   const maiaScore = score ? (score.approximate ? '≈' : '') + score.text : '—';
   const sfScore = evaluation?.text ?? '—';
@@ -1149,40 +1193,28 @@ function updatePoster() {
   if (!share || !posterCurrent(share) || share.pending || share.blob || share.failed) return;
   const analysis = state.analysis;
   if (analysis?.terminal) {
-    $('btn-share-card-link').disabled = false;
     posterNotice(share, 'posterTerminal');
     return;
   }
-  if (!state.engineEnabled) {
-    posterNotice(share, 'posterStart', () => $('analyze').click(), t('enablePoster', share.lang));
-    return;
-  }
-  const load = $('load-maia');
-  if (!load.hidden && !load.disabled) {
-    posterNotice(share, 'posterStart', () => load.click(), load.getAttribute('aria-label'));
-    return;
-  }
-  if (!analysis?.trend || !analysis.stockfish || !analysis.maia) {
-    const canRetry = Boolean(state.requestedKey) && !state.analyzing;
-    posterNotice(share, canRetry ? 'posterIncomplete' : 'posterStart', canRetry ? () => {
-      cancelAnalysis();
-      void analyzeMove();
-    } : null);
+  if (!state.engineEnabled || !analysis?.trend || !analysis.stockfish || !analysis.maia) {
+    const action = analysisAction(share.lang);
+    posterNotice(share, action?.retry ? 'posterIncomplete' : 'posterStart', action?.run, action?.label);
     return;
   }
   const trend = share.trend = trendFor(analysis.trend);
+  const momentTask = state.momentTask ?? state.moment;
   const scoreTask = state.maiaScoreTask;
   const current = () => posterCurrent(share) && state.trend === trend;
   share.pending = true;
   paintPosterProgress(share, trend);
   void (async () => {
     await sampleTrend(trend, true);
-    await scoreTask;
+    const [moment] = await Promise.all([momentTask, scoreTask]);
     if (!current()) return;
     if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
-    const { renderLivePoster } = await import('./poster.js?v=20261125-poster');
+    const { renderLivePoster } = await import('./poster.js?v=20261125-live-fixes');
     const canvas = $('share-card-canvas');
-    if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend), current) || !current()) return;
+    if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
     const blob = await canvasPng(canvas);
     if (!blob) throw new Error('PNG encoding failed');
     if (!current()) return;
@@ -1191,7 +1223,7 @@ function updatePoster() {
     $('share-card-placeholder').hidden = true;
     canvas.hidden = false;
     $('share-card-status').textContent = '';
-    for (const id of posterButtons) $(id).disabled = false;
+    for (const id of posterImageButtons) $(id).disabled = false;
   })().catch(() => {
     if (!current()) return;
     share.failed = true;
@@ -1223,10 +1255,12 @@ $('moment').onclick = () => {
     filename: ['diverge-wcc', round.id, String(ply), branch && 'variation', 'poster'].filter(Boolean).join('-') + '.png'
   };
   $('share-card-link-field').hidden = true;
+  $('share-card-copy-status').textContent = '';
   $('share-card-placeholder').hidden = false;
   $('share-card-canvas').hidden = true;
   $('share-card-progress').firstElementChild.style.width = '6%';
-  for (const id of posterButtons) $(id).disabled = true;
+  for (const id of posterImageButtons) $(id).disabled = true;
+  $('btn-share-card-link').disabled = false;
   $('share-card-dialog').showModal();
   posterNotice(shareSession, 'posterStart');
   updatePoster();
@@ -1255,9 +1289,9 @@ $('btn-share-card-download').onclick = () => {
 };
 $('btn-share-card-link').onclick = async () => {
   const share = shareSession;
-  if (!share || !posterCurrent(share)) return;
+  if (!share || !shareDialogCurrent(share)) return;
   const copied = await copyShareLink(share.link, $('share-card-link-field'));
-  if (copied && posterCurrent(share)) posterNotice(share, 'linkCopied');
+  if (shareDialogCurrent(share)) $('share-card-copy-status').textContent = t(copied ? 'linkCopied' : 'linkCopyManual', share.lang);
 };
 
 document.addEventListener('visibilitychange', () => {

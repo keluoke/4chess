@@ -66,7 +66,9 @@ async function mockEngines(context) {
       async sampleMaia(position, elo) {
         (window.sampleMaiaRequests ||= []).push(elo);
         if (elo === 600 && window.missingTrendSample) return [];
-        return position.series.map((move, rank) => ({ uci: move.uci, rawProb: rank ? .55 : .01 }));
+        return position.series.map((move, rank) => ({
+          uci: move.uci, rawProb: rank ? (window.lowCurve ? .24 : .55) : (window.nonBlind ? .2 : .01)
+        }));
       }
       async inspect(position) {
         const chess = new ChessBoard(position.fen);
@@ -78,7 +80,7 @@ async function mockEngines(context) {
           .map(move => ({ uci: move.uci, evaluation, variation: [{ san: move.san, label: move.san }] }));
         const maiaLines = [maia, ...legal.filter(move => move.uci !== maia.uci).slice(0, 2).map(move => ({ ...move, rawProb: .12 }))];
         const series = [[stockfish, 'sf'], [maia, 'maia']].map(([move, role]) => ({ uci: move.uci, san: move.san, label: move.san, role }));
-        const moves = [{ uci: stockfish.uci, rawProb: .016 }, maia];
+        const moves = [{ uci: stockfish.uci, rawProb: window.nonBlind ? .2 : .016 }, maia];
         (window.positionRequests ||= []).push(position.fen);
         if (window.holdAssessment) {
           window.holdAssessment = false;
@@ -89,6 +91,10 @@ async function mockEngines(context) {
         return { evaluation, stockfish, stockfishLines, maia, maiaLines, maiaEvaluations, depth: 18, maiaReady: true, trend: { ...position, series, moves } };
       }
       async fillMaiaEvaluations(_position, result, obsolete, refresh) {
+        if (window.holdScores) {
+          window.holdScores = false;
+          await new Promise(resolve => { window.releaseScores = resolve; });
+        }
         for (const move of result.maiaLines) {
           await Promise.resolve();
           if (obsolete()) return;
@@ -98,6 +104,10 @@ async function mockEngines(context) {
         }
       }
       async classify(move, { fen: fenBefore }) {
+        if (window.holdMoment) {
+          window.holdMoment = false;
+          await new Promise(resolve => { window.releaseMoment = resolve; });
+        }
         return {
           ...move, fenBefore, bestUci: move.uci === 'b8c6' ? 'g8f6' : move.uci,
           bestSan: move.san === 'Nc6' ? 'Nf6' : move.san, maiaTopUci: 'f1c4', maiaTopSan: 'Bc4',
@@ -197,6 +207,32 @@ try {
   assert.equal(await page.locator('#share-card-canvas').evaluate(el => el.width), 1080);
   await page.locator('#btn-close-share-card').click();
   assert.equal(await page.locator('#event-board .maia-square').count(), 64);
+  await page.evaluate(() => {
+    window.holdMoment = window.holdScores = window.nonBlind = true;
+    window.raceLabels = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+      window.raceLabels.push(String(text));
+      return fillText.call(this, text, ...args);
+    };
+  });
+  await page.locator('#previous').click();
+  await page.locator('#maia-line .candidate-probability').getByText('55.0%').waitFor();
+  await page.locator('#moment').click();
+  await page.locator('#share-card-dialog[open]').waitFor();
+  assert.equal(await page.locator('#btn-share-card-link').isEnabled(), true);
+  assert.equal(await page.locator('#btn-share-card-download').isDisabled(), true);
+  await page.waitForFunction(() => !!window.releaseMoment);
+  assert.equal(await page.evaluate(() => !!window.releaseScores), false, 'Classification starts before the supplementary search');
+  await page.evaluate(() => window.releaseMoment());
+  await page.waitForFunction(() => !!window.releaseScores);
+  assert.equal(await page.locator('#share-card-canvas').isVisible(), false);
+  await page.evaluate(() => window.releaseScores());
+  await page.locator('#share-card-canvas:visible').waitFor();
+  assert.ok(await page.evaluate(() => window.raceLabels.includes('神之一手') && !window.raceLabels.includes('全分段盲区')));
+  await page.locator('#btn-close-share-card').click();
+  await page.evaluate(() => { window.nonBlind = false; });
+  await page.locator('#latest').click();
   assert.equal(await page.locator('#white-clock').innerText(), '1:57:33');
   const blackBefore = await page.locator('#black-clock').innerText();
   await page.clock.fastForward(2000);
@@ -260,7 +296,7 @@ try {
   assert.equal(await page.locator('#black-clock').innerText(), '4:59');
   assert.equal(await page.locator('#black-clock').getAttribute('data-low'), 'true');
   assert.equal(await page.locator('#white-seat').getAttribute('data-to-move'), 'true');
-  await page.evaluate(() => { window.missingTrendSample = true; });
+  await page.evaluate(() => { window.missingTrendSample = window.lowCurve = true; });
   await page.locator('#moment').click();
   await page.locator('#share-card-retry').waitFor();
   assert.equal(await page.locator('#share-card-canvas').isVisible(), false);
@@ -285,9 +321,11 @@ try {
   await page.locator('#live-trend form button').click();
   await page.evaluate(() => {
     window.cardText = [];
+    window.cardNoteY = null;
     const fillText = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
       window.cardText.push(String(text));
+      if (text === 'Almost nobody finds it') window.cardNoteY = args[1];
       return fillText.call(this, text, ...args);
     };
   });
@@ -306,6 +344,9 @@ try {
   assert.equal(await page.locator('[data-share-format], [data-share-content]').count(), 0);
   assert.ok(await page.evaluate(() => window.cardText.join(' ').includes('almost nobody')));
   assert.ok(await page.evaluate(() => window.cardText.includes('600') && window.cardText.includes('2600')));
+  const noteY = await page.evaluate(() => window.cardNoteY);
+  const lowMaiaLineY = 1122 + (100 - 24) * 1.16 * 1.35;
+  assert.ok(noteY !== null && noteY + 23 < lowMaiaLineY, 'Blind-spot note stays above the low Maia curve');
   if (process.env.LIVE_SCREENSHOTS) {
     mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
     await page.locator('#share-card-canvas').screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'poster.png') });
@@ -354,8 +395,11 @@ try {
   if (process.env.LIVE_SCREENSHOTS) {
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'mobile.png'), fullPage: true });
   }
+  await page.setViewportSize({ width: 360, height: 710 });
   await page.locator('#round-rail button[data-round="' + rounds[1].id + '"]').click();
-  await page.locator('#event-status').getByText('尚未开赛').waitFor();
+  await page.locator('#round-countdown').waitFor();
+  assert.equal(await page.locator('#event-status').isVisible(), false);
+  assert.ok(await page.locator('#round-countdown').evaluate(element => element.getBoundingClientRect().right <= innerWidth));
   const countdown = await page.locator('#round-countdown').innerText();
   assert.match(countdown, /距开赛 \d{2,}:\d{2}:\d{2}/);
   await page.clock.fastForward(1100);
@@ -373,6 +417,7 @@ try {
   finished = true;
   await page.locator('#round-rail button[data-round="' + current.id + '"]').click();
   await page.locator('#workbench-game').getByText('查看整盘复盘报告 →').waitFor();
+  assert.equal(await page.locator('#event-status').isVisible(), true);
   assert.match(await page.locator('#round-rail button[aria-current]').innerText(), /½–½/);
   assert.match(await page.locator('#workbench-game').getAttribute('href'), /^\/analysis\/#pgn=/);
   assert.deepEqual(issues, []);
@@ -443,7 +488,30 @@ try {
   assert.equal(await phone.locator('#share-card-canvas').isVisible(), false);
   assert.equal(await phone.locator('#btn-share-card-download').isDisabled(), true);
   assert.match(await phone.locator('#share-card-retry').innerText(), /5M.*28 MiB/);
-  await phone.locator('#share-card-retry').click();
+  await phone.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new Error('Clipboard unavailable'); };
+  });
+  await phone.locator('#btn-share-card-link').click();
+  const manual = phone.locator('#share-card-link-field');
+  await manual.waitFor();
+  const copiedVariation = new URL(await manual.inputValue());
+  assert.equal(copiedVariation.searchParams.get('line'), 'd2d4');
+  assert.match(await phone.locator('#share-card-retry').innerText(), /5M.*28 MiB/);
+  assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'off');
+  await phone.locator('#btn-close-share-card').click();
+  await phone.locator('#return-game').tap();
+  assert.equal(await phone.locator('#ply-note').innerText(), '0 / 24');
+  assert.equal(await phone.locator('#return-game').isVisible(), false);
+  assert.equal(await phone.locator('#event-board [data-square="d2"] .maia-piece:visible').count(), 1);
+  await phone.locator('#trend-toggle').tap();
+  await phone.locator('#live-trend[open]').waitFor();
+  assert.match(await phone.locator('#trend-enable').innerText(), /5M.*28 MiB/);
+  assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'off');
+  await phone.locator('#trend-enable').click();
+  await phone.locator('#trend-status').getByText('6/6 rating bands', { exact: false }).waitFor();
+  assert.equal(await phone.locator('#trend-chart').isVisible(), true);
+  await phone.locator('#live-trend form button').click();
+  await phone.locator('#moment').click();
   await phone.locator('#share-card-canvas:visible').waitFor();
   assert.equal(await phone.locator('#share-card-canvas').evaluate(element => element.height), 1560);
   await phone.locator('#btn-close-share-card').click();
@@ -457,7 +525,8 @@ try {
     await (await import('/engine/engine-preferences.js')).savePreferences({ stockfishVariant: 'standard' });
   });
   await phone.reload();
-  await phone.locator('#trend-toggle:not([disabled])').waitFor();
+  await phone.waitForFunction(() => window.liveMaiaMode === 'cache');
+  await phone.locator('#maia-line .candidate-probability').getByText('55.0%').waitFor();
   assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'cache');
   assert.deepEqual(await phone.evaluate(() => window.liveEngineSettings),
     { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
@@ -468,4 +537,4 @@ try {
   await browser.close();
   server.close();
 }
-console.log('PASS live browser: desktop drag, mobile scroll and tap, candidate rows, perspective and PNG, cold and cached Maia, clocks and sharing.');
+console.log('PASS live browser: cold link sharing and Maia opt-in, poster classification and annotation, touch replay, narrow countdown, engines and PNG.');

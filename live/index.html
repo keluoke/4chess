@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261125-poster">
+  <link rel="stylesheet" href="./live.css?v=20261125-live-fixes">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -74,6 +74,7 @@
           <h2 data-copy="moves">实战着法</h2>
           <span id="intuition-tag" class="intuition-tag" hidden></span>
           <span id="ply-note"></span>
+          <button id="return-game" type="button" data-copy="returnGame" hidden>返回实战</button>
         </header>
         <div id="event-moves" class="event-moves"></div>
         <section class="engine-pane" aria-labelledby="engine-title">
@@ -125,16 +126,19 @@
     </header>
     <div id="trend-board" aria-hidden="true"></div>
     <h3 class="trend-subtitle" data-copy="trendSubtitle">600–2600 Elo 怎么走</h3>
-    <p id="trend-conclusion"></p>
-    <div class="trend-views">
-      <button id="trend-chart-view" type="button" data-copy="chart" aria-pressed="true">曲线</button>
-      <button id="trend-data-view" type="button" data-copy="trendData" aria-pressed="false">采样数据</button>
-      <button id="trend-retry" type="button" data-copy="trendRetry" hidden>重试缺失档位</button>
-    </div>
     <p id="trend-status" role="status"></p>
-    <ul id="trend-legend"></ul>
-    <div id="trend-chart" class="maia-trend-chart"></div>
-    <div id="trend-data" class="maia-trend-data" hidden><table></table></div>
+    <button id="trend-enable" type="button" hidden></button>
+    <div id="trend-results" hidden>
+      <p id="trend-conclusion"></p>
+      <div class="trend-views">
+        <button id="trend-chart-view" type="button" data-copy="chart" aria-pressed="true">曲线</button>
+        <button id="trend-data-view" type="button" data-copy="trendData" aria-pressed="false">采样数据</button>
+        <button id="trend-retry" type="button" data-copy="trendRetry" hidden>重试缺失档位</button>
+      </div>
+      <ul id="trend-legend"></ul>
+      <div id="trend-chart" class="maia-trend-chart"></div>
+      <div id="trend-data" class="maia-trend-data" hidden><table></table></div>
+    </div>
   </dialog>
   <dialog class="live-settings" id="live-settings" aria-labelledby="live-settings-title">
     <header class="live-share-heading">
@@ -170,8 +174,9 @@
       <button id="btn-share-card-download" type="button" data-copy="download" disabled>保存图片</button>
       <button id="btn-share-card-link" type="button" data-copy="copyLink" disabled>复制链接</button>
     </div>
+    <p id="share-card-copy-status" class="live-link-status" role="status"></p>
     <input id="share-card-link-field" class="live-link-field" type="url" readonly aria-label="分享链接" data-label="shareLink" hidden>
   </dialog>
-  <script type="module" src="./live.js?v=20261125-poster"></script>
+  <script type="module" src="./live.js?v=20261125-live-fixes"></script>
 </body>
 </html>
