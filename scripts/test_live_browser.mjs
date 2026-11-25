@@ -666,21 +666,24 @@ try {
   });
   await mockBroadcast(coldShared);
   let sharedReady = false;
-  await coldShared.route('**/api/live/analysis?*', async route => {
+  const mockShared = async route => {
+    const params = new URL(route.request().url()).searchParams;
+    const round = params.get('round');
     if (!sharedReady) return route.fulfill({ status: 202, json: { status: 'pending' } });
-    const { initialFen, moves } = parseRoundPgn(pgn(line), event)[0];
-    const ply = Number(new URL(route.request().url()).searchParams.get('ply'));
+    const { initialFen, moves } = parseRoundPgn(pgn(round === current.id ? line : ''), event)[0];
+    const ply = Number(params.get('ply'));
     const fen = moves[ply - 1]?.fen ?? initialFen;
     const legal = new ChessBoard(fen).getLegalMoves();
     const policies = Object.fromEntries(LIVE_ANALYSIS_RATINGS.map(elo => [elo,
       Object.fromEntries(legal.map(({ uci }) => [uci, 1 / legal.length]))
     ]));
-    return route.fulfill({ json: { status: 'ready', round: current.id, ply, fen, version: LIVE_ANALYSIS_VERSION,
+    return route.fulfill({ json: { status: 'ready', round, ply, fen, version: LIVE_ANALYSIS_VERSION,
       key: await livePositionKey(initialFen, moves, ply),
       result: { engine: 'Stockfish 19', model: 'maia3-79m', policies,
         lines: legal.slice(0, 3).map(({ uci }) => ({ cp: 10, mate: null, depth: 24, uci, pv: [uci] })) }
     } });
-  });
+  };
+  await coldShared.route('**/api/live/analysis?*', mockShared);
   await cold.clock.install();
   await cold.goto(origin + '/live/?lang=en&ply=3');
   await cold.locator('#engine-note').getByText('Waiting for shared analysis.').waitFor();
@@ -694,6 +697,17 @@ try {
   assert.equal(await cold.locator('#engine-note').getByText(/Cloud Stockfish D24/).count(), 1);
   assert.deepEqual(downloads, [], 'Shared result, six-band curve and poster load no browser engine assets');
   await coldShared.close();
+
+  sharedReady = false;
+  await phone.context().route('**/api/live/analysis?*', mockShared);
+  await phone.clock.install();
+  await phone.goto(origin + '/live/?lang=en&round=' + rounds[1].id + '&ply=0');
+  await phone.locator('#maia-line .candidate-probability').getByText('55.0%').waitFor();
+  assert.equal(await phone.evaluate(() => window.liveMaiaMode), 'cache');
+  sharedReady = true;
+  await phone.clock.fastForward(9000);
+  await phone.locator('#engine-note').getByText(/Cloud Stockfish D24/).waitFor();
+  await phone.context().unroute('**/api/live/analysis?*', mockShared);
   for (const [rank, label, role] of [[0, '★ M Nc6', 'consensus'], [1, '★ Nc6', 'sf']]) {
     const duplicate = await context.newPage();
     await duplicate.addInitScript(rank => {

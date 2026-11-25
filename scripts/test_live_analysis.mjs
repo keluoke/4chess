@@ -35,10 +35,10 @@ const route = (path, init) => ({ env, request: new Request('https://4chess.cc/ap
   waitUntil: promise => void promise });
 const round = 'round=xLgOJ6cb';
 const headers = { Authorization: 'Bearer internal-test-token' };
-const read = (ply, etag) => serveAnalysis(route('analysis?' + round + '&ply=' + ply, {
+const read = (ply, etag, roundQuery = round) => serveAnalysis(route('analysis?' + roundQuery + '&ply=' + ply, {
   headers: etag ? { 'If-None-Match': etag } : {}
 }));
-const worker = (op, payload, authorization = headers) => serveAnalysis(route('analysis-work?' + round + '&op=' + op, {
+const worker = (op, payload, authorization = headers, roundQuery = round) => serveAnalysis(route('analysis-work?' + roundQuery + '&op=' + op, {
   method: 'POST', headers: authorization, body: JSON.stringify(payload ?? {})
 }), true);
 const claim = async () => (await worker('claim')).json();
@@ -79,4 +79,13 @@ const backfill = await claim();
 assert.equal(backfill.ply, 3);
 assert.equal((await worker('publish', { lease: backfill.lease, result: result(backfill.fen) })).status, 204);
 assert.equal((await read(3)).status, 200);
+const secondRound = 'round=L3j03TZq';
+assert.equal((await read(3, null, secondRound)).status, 202);
+const second = await (await worker('claim', null, headers, secondRound)).json();
+assert.equal(second.round, 'L3j03TZq');
+assert.equal(second.ply, 4);
+assert.equal((await worker('publish', { lease: second.lease, result: result(second.fen) }, headers, secondRound)).status, 204);
+assert.equal((await read(4, null, secondRound)).status, 200);
+assert.equal((await read(4)).status, 202, 'The same position key is scoped to a round');
+assert.equal((await read(4, null, 'round=AAAAAAAA')).status, 404);
 console.log('PASS live analysis: private lease, validated output, clock identity, corrected lines, late jobs, batched backfill and ETag.');

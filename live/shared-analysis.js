@@ -3,8 +3,6 @@ import { ChessBoard } from '../engine/chess-core.js';
 import { LIVE_ANALYSIS_RATINGS, LIVE_ANALYSIS_VERSION, livePositionKey } from '../engine/live-analysis-position.js';
 import { maiaTrendSeries } from '../analysis/maia-elo-trend.js?v=20261125-position-poster';
 
-export const usesSharedAnalysis = (event, round) => event === 'wcc2026' && round === 'xLgOJ6cb';
-
 function evaluation({ cp, mate }) {
   if (Number.isInteger(mate)) return {
     cp: (mate < 0 ? -1 : 1) * (10000 - Math.abs(mate) * 10), isMate: true, text: (mate < 0 ? '-M' : '+M') + Math.abs(mate)

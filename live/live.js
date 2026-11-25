@@ -11,7 +11,7 @@ import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { ModelCache } from '../engine/model-cache.js';
 import { modelCacheKeys } from '../engine/model-loader.js?v=20261124-mobile';
 import { canvasPng, copyPng, copyShareLink, downloadPng } from '../analysis/share-export.js?v=20261124-divergence-cards';
-import { sharedAnalysis, usesSharedAnalysis } from './shared-analysis.js?v=20261125-position-poster';
+import { sharedAnalysis } from './shared-analysis.js?v=20261125-live-rounds';
 
 const copy = {
   zh: {
@@ -495,6 +495,7 @@ function paint() {
 function cancelAnalysis() {
   closeTrend();
   clearTimeout(state.sharedTimer);
+  state.sharedRetry = null;
   state.sharedPending = false;
   state.requestVersion++;
   state.requestedKey = '';
@@ -767,13 +768,18 @@ function applyPreferences() {
 async function analyzeMove() {
   if (!state.snapshot || !state.preferencesReady || !state.engineEnabled || !analysisAllowed() || !foreground()) return;
   const { cursor, branch } = state;
+  if (!branch && !state.snapshot.initialFen) return;
   const move = branch ? null : state.snapshot.moves[cursor - 1];
   const elo = state.settings.elo;
   const position = { fen: branch?.fen ?? fenAt(cursor), history: branch?.history ?? historyAt(cursor), elo };
   const before = move ? { fen: fenAt(cursor - 1), history: historyAt(cursor - 1), elo } : null;
-  const key = JSON.stringify([state.round, cursor, position, move?.uci]);
+  const mainline = branch ? null : state.snapshot.moves.slice(0, cursor).map(step => step.uci);
+  const key = JSON.stringify([state.round, cursor, position, mainline]);
   if (state.requestedKey === key) return;
   closeTrend();
+  clearTimeout(state.sharedTimer);
+  state.sharedRetry = null;
+  state.sharedPending = false;
   const version = ++state.requestVersion;
   state.requestedKey = key;
   state.analysis = null;
@@ -785,28 +791,65 @@ async function analyzeMove() {
   }
   state.analyzing = true;
   paintAnalysis();
-  const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
+  const inactive = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
+  let sharedReady = false;
+  let cacheFallback = false;
+  const obsolete = () => inactive() || sharedReady;
   try {
-    if (!branch && state.localAnalysisRound !== state.round && usesSharedAnalysis(eventId, state.round)) {
+    if (!branch && state.localAnalysisRound !== state.round && eventId === 'wcc2026') {
       const cached = await sharedAnalysis(eventId, state.snapshot, cursor, position);
       if (obsolete()) return;
-      if (cached) {
-        state.analysis = cached.display || null;
+      if (cached?.display) {
+        state.analysis = cached.display;
         state.moment = cached.moment || null;
-        state.sharedPending = cached.pending === true;
-        if (state.sharedPending) state.sharedTimer = setTimeout(() => {
-          if (obsolete()) return;
-          state.requestedKey = '';
-          void analyzeMove();
-        }, 8500);
         return;
       }
+      if (cached?.pending) {
+        const ready = state.engines?.status();
+        cacheFallback = (state.settings.stockfishVariant === 'lite' || ready?.sf.state === 'ready') &&
+          (ready?.maia?.state === 'ready' || state.cachedMaia.includes(state.settings.maiaVariant));
+        state.sharedPending = !cacheFallback;
+        let refreshing = false;
+        state.sharedRetry = async () => {
+          if (inactive() || refreshing) return;
+          clearTimeout(state.sharedTimer);
+          refreshing = true;
+          const next = await sharedAnalysis(eventId, state.snapshot, cursor, position);
+          refreshing = false;
+          if (inactive()) return;
+          if (next?.display) {
+            sharedReady = true;
+            state.sharedPending = false;
+            state.sharedRetry = null;
+            state.analysis = next.display;
+            state.moment = next.moment || null;
+            if (state.analyzing) state.engines?.cancel();
+            paintAnalysis();
+          } else if (next?.pending) {
+            state.sharedTimer = setTimeout(state.sharedRetry, 8500);
+          } else {
+            state.sharedRetry = null;
+            if (state.sharedPending) {
+              state.requestedKey = '';
+              void analyzeMove();
+            }
+          }
+        };
+        state.sharedTimer = setTimeout(state.sharedRetry, 8500);
+        if (!cacheFallback) return;
+      }
     }
-    state.sharedPending = false;
+    if (!cacheFallback && state.settings.maiaMode === 'download' && state.engines?.maia?.cacheOnly &&
+        state.engines.status().maia?.state !== 'ready') {
+      state.reusableStockfish = state.engines.stockfish;
+      state.engines.dispose(true);
+      state.engines = null;
+    }
     if (!state.engines) {
       const { LiveEngines } = await import('./engines.js?v=20261125-position-poster');
       if (obsolete()) return;
-      const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
+      const settings = cacheFallback ? { ...state.settings, maiaMode: 'cache' } : state.settings;
+      const owner = new LiveEngines(settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
       state.reusableStockfish = null;
     }
@@ -1386,7 +1429,7 @@ document.addEventListener('visibilitychange', () => {
     paintCountdown();
     void pollEvent();
     void pollRound();
-    if (state.sharedPending) state.requestedKey = '';
+    if (state.sharedRetry) void state.sharedRetry();
     if (state.engineEnabled) void analyzeMove();
     updatePoster();
   } else {
@@ -1397,10 +1440,13 @@ document.addEventListener('visibilitychange', () => {
 });
 subscribePreferences(applyPreferences);
 void initializePreferences().then(applyPreferences, applyPreferences);
-if (mobileDownloads && analysisAllowed()) {
+if (analysisAllowed()) {
   const variants = Object.entries(MAIA_VARIANTS).map(([variant, { url }]) => [variant, modelCacheKeys(url)]);
   void ModelCache.findModelKeys(variants.flatMap(([, keys]) => keys)).then(keys => {
     state.cachedMaia = variants.filter(([, candidates]) => candidates.some(key => keys.includes(key))).map(([variant]) => variant);
+    if (state.preferencesReady && state.sharedPending && state.cachedMaia.includes(state.settings.maiaVariant)) {
+      state.requestedKey = '';
+    }
     if (state.preferencesReady) applyPreferences();
   });
 }

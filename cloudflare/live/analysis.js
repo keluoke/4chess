@@ -1,12 +1,11 @@
 import { ChessBoard } from '../../engine/chess-core.js';
 import { expectedScore, positiveIntuition, qualifiesTrap } from '../../engine/review-policy.js';
 import { LIVE_ANALYSIS_RATINGS, LIVE_ANALYSIS_VERSION, livePositionKey } from '../../engine/live-analysis-position.js';
+import { LIVE_EVENTS } from './events.js';
 
 const MAX_PLIES = 600;
 const LEASE_MS = 180_000;
 const RETRY_MS = 60_000;
-
-export const pilotRound = (eventId, round) => eventId === 'wcc2026' && round === 'xLgOJ6cb';
 
 const textEncoder = new TextEncoder();
 async function authorize(header, secret) {
@@ -87,7 +86,9 @@ export function createAnalysisService({ storage, secret, getGame, ensureGame }) 
   }
 
   return async function handle(request, url, event, round) {
-    if (!pilotRound(event, round) || !secret) return new Response(null, { status: 404 });
+    if (!secret || event !== 'wcc2026' || !LIVE_EVENTS.wcc2026.roundIds.includes(round)) {
+      return new Response(null, { status: 404 });
+    }
     const game = getGame(event, round);
     if (url.pathname === '/analysis') {
       const requestedPly = url.searchParams.get('ply');

@@ -20,13 +20,31 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 HTTP = build_opener(NoRedirect())
+USER_AGENT = "DivergeChess Live Precompute (+https://4chess.cc)"
 
-def request_job(origin, token, op, data=None):
-    query = urlencode({"event": "wcc2026", "round": "xLgOJ6cb", "op": op})
+
+def request_rounds(origin):
+    req = Request(origin + "/api/live/event?id=wcc2026",
+                  headers={"Accept": "application/json", "User-Agent": USER_AGENT})
+    with HTTP.open(req, timeout=10) as response:
+        event = json.load(response)
+    if event.get("eventId") != "wcc2026":
+        raise ValueError("Unexpected broadcast schedule")
+    if not event.get("enabled"):
+        return None, []
+    rounds = [row for row in event["rounds"] if re.fullmatch(r"[a-zA-Z0-9]{8}", row["id"])]
+    active = event.get("activeRoundId")
+    current = [row["id"] for row in rounds if row["id"] == active and row["status"] in ("live", "waiting")]
+    history = [row["id"] for row in reversed(rounds) if row["status"] == "finished"]
+    return next(iter(current), None), current + history
+
+
+def request_job(origin, token, round_id, op, data=None):
+    query = urlencode({"event": "wcc2026", "round": round_id, "op": op})
     req = Request(origin + "/api/live/analysis-work?" + query,
                   data=json.dumps(data or {}).encode(), method="POST",
                   headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json",
-                           "User-Agent": "DivergeChess Live Precompute (+https://4chess.cc)"})
+                           "User-Agent": USER_AGENT})
     try:
         with HTTP.open(req, timeout=18) as response:
             return json.load(response) if response.status == 200 else {}
@@ -154,22 +172,43 @@ async def run(args, token):
         print(json.dumps(await service.analyze(job)))
         return
     claimed = 0
+    rounds = [args.round] if args.round else []
+    active = args.round
+    refresh_at = 0
+    check_after = {}
+    print(f"Watching round {active}" if active else "Watching wcc2026 schedule", flush=True)
     while args.jobs == 0 or claimed < args.jobs:
         started = time.monotonic()
         try:
-            job = await asyncio.to_thread(request_job, args.origin, token, "claim")
-            if job.get("status") != "claimed":
-                if args.jobs and job.get("status") == "idle":
+            if not args.round and started >= refresh_at:
+                next_active, rounds = await asyncio.to_thread(request_rounds, args.origin)
+                if next_active != active:
+                    print(f"Active round: {next_active or 'none'}", flush=True)
+                active = next_active
+                refresh_at = started + 30
+            job = None
+            for round_id in rounds:
+                if round_id != active and started < check_after.get(round_id, 0):
+                    continue
+                candidate = await asyncio.to_thread(request_job, args.origin, token, round_id, "claim")
+                if candidate.get("status") == "claimed" and candidate.get("round") == round_id:
+                    job = candidate
+                    break
+                if candidate.get("status") == "idle" and round_id != active:
+                    check_after[round_id] = started + 300
+            if not job:
+                if args.jobs:
                     break
                 await asyncio.sleep(8)
                 continue
             claimed += 1
             try:
                 result = await service.analyze(job)
-                published = await asyncio.to_thread(request_job, args.origin, token, "publish",
+                published = await asyncio.to_thread(request_job, args.origin, token, job["round"], "publish",
                                                     {"lease": job["lease"], "result": result})
             except Exception as error:
-                await asyncio.to_thread(request_job, args.origin, token, "publish", {"lease": job["lease"], "retry": True})
+                await asyncio.to_thread(request_job, args.origin, token, job["round"], "publish",
+                                        {"lease": job["lease"], "retry": True})
                 print(f"round={job['round']} ply={job['ply']} {type(error).__name__}: {error}", file=sys.stderr, flush=True)
                 continue
             if published.get("status") == "stale":
@@ -192,15 +231,20 @@ if __name__ == "__main__":
     parser.add_argument("--budget", type=int, default=12_000, help="milliseconds per Stockfish search")
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--jobs", type=int, default=0, help="finish after N jobs or on idle, 0 polls continuously")
+    parser.add_argument("--round", help="claim a specific official round instead of following the event")
     parser.add_argument("--fixture", help="read one job JSON locally and print the result")
     args = parser.parse_args()
     token = os.environ.get("LIVE_ANALYSIS_TOKEN")
+    if not token and os.environ.get("LIVE_ANALYSIS_TOKEN_FILE") and not args.fixture:
+        token = Path(os.environ["LIVE_ANALYSIS_TOKEN_FILE"]).read_text().strip()
     origin = urlsplit(args.origin)
     loopback = origin.hostname in {"127.0.0.1", "localhost"}
     if origin.scheme != "https" and not (origin.scheme == "http" and loopback):
         parser.error("Use HTTPS or a local test origin")
     if not args.fixture and not token:
         parser.error("LIVE_ANALYSIS_TOKEN is required")
+    if args.round and not re.fullmatch(r"[a-zA-Z0-9]{8}", args.round):
+        parser.error("Invalid broadcast round")
     if not 100 <= args.budget <= 30_000 or not 1 <= args.threads <= 4 or args.jobs < 0:
         parser.error("Out of range budget, threads or job count")
     asyncio.run(run(args, token))
