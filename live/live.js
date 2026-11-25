@@ -5,12 +5,13 @@ import { ChessBoard } from '../engine/chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { expectedScore, intuitionKind } from '../engine/review-policy.js';
 import { RATINGS, probabilities, highlightMaiaTrend, renderMaiaTrendLegend, renderMaiaTrendPlot
-} from '../analysis/maia-elo-trend.js?v=20261125-trend-lines';
+} from '../analysis/maia-elo-trend.js?v=20261125-position-poster';
 import { engineExperienceHint, getSavedPreferences, initializePreferences, savePreferences, subscribePreferences } from '../engine/engine-preferences.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { ModelCache } from '../engine/model-cache.js';
 import { modelCacheKeys } from '../engine/model-loader.js?v=20261124-mobile';
 import { canvasPng, copyPng, copyShareLink, downloadPng } from '../analysis/share-export.js?v=20261124-divergence-cards';
+import { sharedAnalysis, usesSharedAnalysis } from './shared-analysis.js?v=20261125-position-poster';
 
 const copy = {
   zh: {
@@ -21,6 +22,8 @@ const copy = {
     mute: '关闭行棋音效', unmute: '开启行棋音效', threeLines: '3 条候选',
     trend: '人类视角', trendSubtitle: '600–2600 Elo 怎么走', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
     trendLegend: '着法图例。★ 为 Stockfish 首选，M 为 Maia 首选。',
+    sharedPending: '正在等待云端分析。', sharedSource: '云端 Stockfish D{depth} · Maia 79M · {elo} Elo',
+    sharedLocal: '本地分析',
     blindSpot: '全分段盲区：Maia 预测 600–2600 Elo 几乎无人想到 {move}',
     trendPeak: 'Stockfish 首选 {move} 在 {elo} Elo 的预测选着概率最高（{prob}%）。',
     posterStart: '正在请不同段位的棋手看看这步棋…', posterDrawing: '正在把从新手到大师的选择画成海报…',
@@ -30,7 +33,7 @@ const copy = {
     posterWhiteEdge: '白优', posterBlackEdge: '黑优', posterEqual: '均势',
     posterWhiteMate: '白方有将杀', posterBlackMate: '黑方有将杀',
     posterEngineChoice: '引擎首选', posterHumanChoice: '人类直觉',
-    posterChart: '各段位会怎么选', posterChartNote: '从 600 到 2600 分的直觉变化 · Maia 预测',
+    posterChart: '人类视角 · 各段位会怎么选', posterChartNote: '从 600 到 2600 分的直觉变化 · Maia 预测',
     posterScan: '扫码在 4chess.cc 试走这一步', posterScanGame: '扫码回到本局实战',
     posterQrFallback: '变化较长。海报扫码回到实战起点，复制链接可分享完整变化。',
     posterSaved: '已保存海报', posterCopied: '已复制海报',
@@ -69,6 +72,8 @@ const copy = {
     mute: 'Mute move sounds', unmute: 'Unmute move sounds', threeLines: '3 lines',
     trend: 'Human perspective', trendSubtitle: 'How 600–2600 Elo players might move', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
     trendLegend: 'Move legend. ★ marks the Stockfish pick and M marks the Maia pick.',
+    sharedPending: 'Waiting for shared analysis.', sharedSource: 'Cloud Stockfish D{depth} · Maia 79M · {elo} Elo',
+    sharedLocal: 'Analyze locally',
     blindSpot: 'Across 600–2600 Elo, Maia predicts almost nobody would find {move}',
     trendPeak: 'Stockfish’s {move} is most likely at {elo} Elo ({prob}% predicted).',
     posterStart: 'Seeing how players across ratings read this move…', posterDrawing: 'Drawing the rating curve onto your card…',
@@ -79,7 +84,7 @@ const copy = {
     posterWhiteEdge: 'White is ahead', posterBlackEdge: 'Black is ahead', posterEqual: 'Even',
     posterWhiteMate: 'White has mate', posterBlackMate: 'Black has mate',
     posterEngineChoice: 'Engine pick', posterHumanChoice: 'Human instinct',
-    posterChart: 'What would each rating play?', posterChartNote: 'From 600 to 2600 Elo · Maia predictions',
+    posterChart: 'Human perspective · Moves by rating', posterChartNote: 'From 600 to 2600 Elo · Maia predictions',
     posterScan: 'Scan to try this move on 4chess.cc', posterScanGame: 'Scan to return to the game position',
     posterQrFallback: 'The QR code opens the game position. Copy the link to share the full variation.',
     posterSaved: 'Poster saved', posterCopied: 'Poster copied',
@@ -489,6 +494,8 @@ function paint() {
 
 function cancelAnalysis() {
   closeTrend();
+  clearTimeout(state.sharedTimer);
+  state.sharedPending = false;
   state.requestVersion++;
   state.requestedKey = '';
   state.analysis = null;
@@ -538,11 +545,13 @@ function trendConclusion({ position, samples }, locale = lang) {
 function trendFor(position) {
   if (state.trend?.position !== position) {
     const key = JSON.stringify([MAIA_VARIANTS[state.settings.maiaVariant].key, position.fen, position.history]);
-    const samples = trendSamples.get(key) ?? new Map();
+    const samples = position.samples ?? trendSamples.get(key) ?? new Map();
     if (RATINGS.includes(position.elo) && !samples.has(position.elo)) samples.set(position.elo, probabilities(position.moves));
-    trendSamples.delete(key);
-    trendSamples.set(key, samples);
-    if (trendSamples.size > 24) trendSamples.delete(trendSamples.keys().next().value);
+    if (!position.samples) {
+      trendSamples.delete(key);
+      trendSamples.set(key, samples);
+      if (trendSamples.size > 24) trendSamples.delete(trendSamples.keys().next().value);
+    }
     state.trend = { position, samples };
   }
   return state.trend;
@@ -616,20 +625,22 @@ function paintAnalysis() {
   $('engine-lines').hidden = !result && !compactLayout.matches;
   $('analyze').disabled = !state.preferencesReady || !allowed;
   const control = state.engineEnabled ? (result || state.analyzing || !state.requestedKey ? 'pause' : 'retry') : 'analyze';
-  $('analyze').textContent = t(compactLayout.matches ? 'mobile' + control[0].toUpperCase() + control.slice(1) : control);
-  $('analyze').setAttribute('aria-label', t(control));
+  $('analyze').textContent = t(state.sharedPending ? 'sharedLocal' : compactLayout.matches ? 'mobile' + control[0].toUpperCase() + control.slice(1) : control);
+  $('analyze').setAttribute('aria-label', t(state.sharedPending ? 'sharedLocal' : control));
   const kind = result && state.moment && intuitionKind(state.moment);
   $('intuition-tag').hidden = !kind;
   const momentText = kind ? state.moment.san + ' · ' + t(kind) : '';
   $('intuition-tag').textContent = kind && compactLayout.matches ? t(kind) : momentText;
   $('intuition-tag').title = momentText;
   $('engine-note').textContent = !state.engineEnabled || !allowed ? ''
-    : result?.maiaReady || result?.terminal ? '' : state.analyzing ? t('engineBusy') : result ? (state.settings.maiaMode === 'off' ? '' : t('partial'))
+    : state.sharedPending ? t('sharedPending') : result?.cloud && result.maiaReady
+      ? t('sharedSource').replace('{depth}', result.depth).replace('{elo}', result.cloudElo)
+      : result?.maiaReady || result?.terminal ? '' : state.analyzing ? t('engineBusy') : result ? (state.settings.maiaMode === 'off' ? '' : t('partial'))
       : state.requestedKey ? t('engineFailed') : '';
   paintCandidateLines(result);
   const loadMaia = $('load-maia');
   const mode = state.settings.maiaMode;
-  const awaitingModel = mobileDownloads && allowed && state.engineEnabled && !result?.maiaReady && !result?.terminal;
+  const awaitingModel = mobileDownloads && allowed && state.engineEnabled && !state.sharedPending && !result?.maiaReady && !result?.terminal;
   const offerDownload = mode === 'off' || (state.requestedKey && !state.analyzing);
   loadMaia.hidden = !awaitingModel || !state.preferencesReady;
   loadMaia.disabled = !offerDownload || !state.snapshot;
@@ -776,8 +787,24 @@ async function analyzeMove() {
   paintAnalysis();
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
+    if (!branch && state.localAnalysisRound !== state.round && usesSharedAnalysis(eventId, state.round)) {
+      const cached = await sharedAnalysis(eventId, state.snapshot, cursor, position);
+      if (obsolete()) return;
+      if (cached) {
+        state.analysis = cached.display || null;
+        state.moment = cached.moment || null;
+        state.sharedPending = cached.pending === true;
+        if (state.sharedPending) state.sharedTimer = setTimeout(() => {
+          if (obsolete()) return;
+          state.requestedKey = '';
+          void analyzeMove();
+        }, 8500);
+        return;
+      }
+    }
+    state.sharedPending = false;
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261125-trend-lines');
+      const { LiveEngines } = await import('./engines.js?v=20261125-position-poster');
       if (obsolete()) return;
       const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
@@ -1077,6 +1104,7 @@ $('setting-sf-arrows').onchange = () => void savePreferences({ showStockfishArro
 $('setting-maia-arrows').onchange = () => void savePreferences({ showArrows: $('setting-maia-arrows').checked });
 $('btn-settings').onclick = () => $('live-settings').showModal();
 function analysisAction(locale = lang) {
+  if (state.sharedPending) return { label: t('sharedLocal', locale), run: () => $('analyze').click() };
   if (!state.engineEnabled) return { label: t('enablePoster', locale), run: () => $('analyze').click() };
   const load = $('load-maia');
   if (!load.hidden && !load.disabled) return { label: load.getAttribute('aria-label'), run: () => load.click() };
@@ -1101,7 +1129,8 @@ function updateTrendDialog(result) {
   if (trendBoard.chess.getFen() !== state.boardFen) trendBoard.setPosition(state.boardFen, board.lastMove);
   if (!trend) {
     trendBoard.setArrows([]);
-    $('trend-status').textContent = t(result?.terminal ? 'trendTerminal' : action ? 'perspectiveDisabled' : 'engineBusy');
+    $('trend-status').textContent = t(result?.terminal ? 'trendTerminal' :
+      state.sharedPending ? 'sharedPending' : action ? 'perspectiveDisabled' : 'engineBusy');
     return;
   }
   if (displayedTrend === trend) return;
@@ -1133,6 +1162,12 @@ $('trend-data-view').onclick = () => showTrendView(true);
 $('trend-retry').onclick = () => { if (state.trend) void sampleTrend(state.trend, true); };
 $('analyze').onclick = () => {
   if (!analysisAllowed()) return;
+  if (state.sharedPending) {
+    state.localAnalysisRound = state.round;
+    cancelAnalysis();
+    void analyzeMove();
+    return;
+  }
   const failed = state.requestedKey && !state.analysis && !state.analyzing;
   state.engineEnabled = failed || !state.engineEnabled;
   cancelAnalysis();
@@ -1215,6 +1250,7 @@ function posterSpec(share, analysis, trend, moment) {
     blind, blindUci: enginePick?.uci, blindNote: t('posterBlindNote', locale),
     subtitle: [share.players, outlook].filter(Boolean).join(' · '),
     chartTitle: t('posterChart', locale), chartNote: t('posterChartNote', locale),
+    source: analysis.cloud ? 'Lichess Broadcast · Stockfish D' + analysis.depth + ' · Maia 79M' : undefined,
     scan: t(share.qrLink === share.link ? 'posterScan' : 'posterScanGame', locale),
     series: trend.position.series, samples: trend.samples,
     legend: [
@@ -1239,7 +1275,8 @@ function updatePoster() {
   }
   if (!state.engineEnabled || !analysis?.trend || !analysis.stockfish || !analysis.maia) {
     const action = analysisAction(share.lang);
-    posterNotice(share, action?.retry ? 'posterIncomplete' : 'posterStart', action?.run, action?.label);
+    posterNotice(share, state.sharedPending ? 'sharedPending' :
+      action?.retry ? 'posterIncomplete' : 'posterStart', action?.run, action?.label);
     return;
   }
   const trend = share.trend = trendFor(analysis.trend);
@@ -1253,9 +1290,9 @@ function updatePoster() {
     const [moment] = await Promise.all([momentTask, scoreTask]);
     if (!current()) return;
     if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
-    const { renderLivePoster } = await import('./poster.js?v=20261125-trend-lines');
+    const { renderPositionPoster } = await import('../analysis/position-poster.js?v=20261125-position-poster');
     const canvas = $('share-card-canvas');
-    if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
+    if (!await renderPositionPoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
     const blob = await canvasPng(canvas);
     if (!blob) throw new Error('PNG encoding failed');
     if (!current()) return;
@@ -1343,11 +1380,13 @@ $('btn-share-card-link').onclick = async () => {
 document.addEventListener('visibilitychange', () => {
   clearTimeout(state.eventTimer);
   clearTimeout(state.roundTimer);
+  clearTimeout(state.sharedTimer);
   if (foreground()) {
     paintClocks();
     paintCountdown();
     void pollEvent();
     void pollRound();
+    if (state.sharedPending) state.requestedKey = '';
     if (state.engineEnabled) void analyzeMove();
     updatePoster();
   } else {

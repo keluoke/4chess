@@ -275,22 +275,26 @@ export class MaiaEloTrend {
     else void this.start();
   }
 
+  samplesFor(engine, { fen, history }) {
+    if (this.cacheEngine !== engine) {
+      this.cache.clear();
+      this.cacheEngine = engine;
+    }
+    const key = JSON.stringify([engine.modelKey, fen, history]);
+    const samples = this.cache.get(key) || new Map();
+    this.cache.delete(key);
+    this.cache.set(key, samples);
+    if (this.cache.size > CACHE_POSITIONS) this.cache.delete(this.cache.keys().next().value);
+    return samples;
+  }
+
   async start() {
     const snapshot = this.snapshot;
     const { app } = this.analysis;
     if (this.busy || !this.dialog.open || !this.analysis.current(snapshot) || FairPlayGuard.isLiveGameInProgress()) return;
     const { ctx, entry } = snapshot;
     const engine = app.maiaEngine;
-    // Each model instance owns its distributions, including custom weights.
-    if (this.cacheEngine !== engine) {
-      this.cache.clear();
-      this.cacheEngine = engine;
-    }
-    const key = JSON.stringify([engine.modelKey, ctx.fen, ctx.history]);
-    const samples = this.cache.get(key) || new Map();
-    this.cache.delete(key);
-    this.cache.set(key, samples);
-    if (this.cache.size > CACHE_POSITIONS) this.cache.delete(this.cache.keys().next().value);
+    const samples = this.samplesFor(engine, ctx);
     samples.set(ctx.elo, probabilities(entry.prediction.moves));
     const request = { snapshot, samples, candidates: this.moves, running: true };
     this.request = request;

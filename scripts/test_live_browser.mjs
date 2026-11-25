@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { LIVE_EVENTS } from '../cloudflare/live/events.js';
 import { eventView, fallbackRounds, parseRoundPgn } from '../cloudflare/live/model.js';
 import { ChessBoard } from '../engine/chess-core.js';
+import { LIVE_ANALYSIS_RATINGS, LIVE_ANALYSIS_VERSION, livePositionKey } from '../engine/live-analysis-position.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const mime = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.svg': 'image/svg+xml' };
@@ -50,7 +51,7 @@ async function mockEngines(context) {
   await context.route('**/live/engines.js?*', route => route.fulfill({
     contentType: 'application/javascript',
     body: `import { ChessBoard } from '/engine/chess-core.js';
-    import { maiaTrendSeries } from '/analysis/maia-elo-trend.js?v=20261125-trend-lines';
+    import { maiaTrendSeries } from '/analysis/maia-elo-trend.js?v=20261125-position-poster';
     export class LiveEngines {
       constructor({ maiaVariant, maiaMode, stockfishVariant, depth, elo }) {
         this.mode = maiaMode;
@@ -432,7 +433,7 @@ try {
     CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
       window.cardText.push(String(text));
       if (text === 'Almost nobody finds it') window.cardNoteY = args[1];
-      if (text === 'What would each rating play?') window.chartTitleInk = this.fillStyle;
+      if (text === 'Human perspective · Moves by rating') window.chartTitleInk = this.fillStyle;
       return fillText.call(this, text, ...args);
     };
   });
@@ -458,7 +459,7 @@ try {
   assert.equal(chartLegend.length, 4);
   assert.ok(chartLegend.some(text => text.startsWith('★ Bb5  1.0% → ')));
   assert.ok(chartLegend.some(text => text.startsWith('M ')));
-  assert.ok(posterText.includes('What would each rating play?'));
+  assert.ok(posterText.includes('Human perspective · Moves by rating'));
   assert.equal(await page.evaluate(() => window.chartTitleInk), '#193129', 'Chart title has dark ink against the light chart card');
   assert.ok(posterText.includes('Scan to try this move on 4chess.cc'));
   assert.ok(!posterText.some(text => text.startsWith('At 2600 Elo')));
@@ -657,6 +658,42 @@ try {
   assert.deepEqual(await phone.evaluate(() => window.liveEngineSettings),
     { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
   assert.equal(await phone.locator('#load-maia').isVisible(), false);
+  const coldShared = await browser.newContext({ viewport: { width: 390, height: 710 }, isMobile: true, hasTouch: true });
+  const cold = await coldShared.newPage();
+  const downloads = [];
+  cold.on('request', request => {
+    if (/weights\.4chess|engines\.js|stockfish.*wasm|maia-worker/.test(request.url())) downloads.push(request.url());
+  });
+  await mockBroadcast(coldShared);
+  let sharedReady = false;
+  await coldShared.route('**/api/live/analysis?*', async route => {
+    if (!sharedReady) return route.fulfill({ status: 202, json: { status: 'pending' } });
+    const { initialFen, moves } = parseRoundPgn(pgn(line), event)[0];
+    const ply = Number(new URL(route.request().url()).searchParams.get('ply'));
+    const fen = moves[ply - 1]?.fen ?? initialFen;
+    const legal = new ChessBoard(fen).getLegalMoves();
+    const policies = Object.fromEntries(LIVE_ANALYSIS_RATINGS.map(elo => [elo,
+      Object.fromEntries(legal.map(({ uci }) => [uci, 1 / legal.length]))
+    ]));
+    return route.fulfill({ json: { status: 'ready', round: current.id, ply, fen, version: LIVE_ANALYSIS_VERSION,
+      key: await livePositionKey(initialFen, moves, ply),
+      result: { engine: 'Stockfish 19', model: 'maia3-79m', policies,
+        lines: legal.slice(0, 3).map(({ uci }) => ({ cp: 10, mate: null, depth: 24, uci, pv: [uci] })) }
+    } });
+  });
+  await cold.clock.install();
+  await cold.goto(origin + '/live/?lang=en&ply=3');
+  await cold.locator('#engine-note').getByText('Waiting for shared analysis.').waitFor();
+  assert.equal(await cold.locator('#load-maia').isHidden(), true);
+  await cold.locator('#moment').click();
+  await cold.locator('#share-card-status').getByText('Waiting for shared analysis.').waitFor();
+  assert.equal(await cold.locator('#btn-share-card-link').isEnabled(), true);
+  sharedReady = true;
+  await cold.clock.fastForward(9000);
+  await cold.locator('#share-card-canvas:visible').waitFor();
+  assert.equal(await cold.locator('#engine-note').getByText(/Cloud Stockfish D24/).count(), 1);
+  assert.deepEqual(downloads, [], 'Shared result, six-band curve and poster load no browser engine assets');
+  await coldShared.close();
   for (const [rank, label, role] of [[0, '★ M Nc6', 'consensus'], [1, '★ Nc6', 'sf']]) {
     const duplicate = await context.newPage();
     await duplicate.addInitScript(rank => {

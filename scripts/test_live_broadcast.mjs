@@ -63,6 +63,7 @@ async function collector() {
     blockConcurrencyWhile: callback => { initialization = callback(); },
     storage: {
       list: async () => storage.entries(),
+      get: async key => storage.get(key),
       put: async (key, value) => storage.set(key, structuredClone(value))
     }
   }, {});

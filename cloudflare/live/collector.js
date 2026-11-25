@@ -1,10 +1,12 @@
 import { LIVE_EVENTS } from './events.js';
 import { activeRound, completeSnapshot, eventView, fallbackRounds, normalizeRounds, parseFinishedRounds, parseRoundPgn, roundStatus } from './model.js';
+import { createAnalysisService } from './analysis.js';
 
 const META_INTERVAL = 60_000;
 const ROUND_INTERVAL = 12_000;
 const CLOSED_INTERVAL = 300_000;
 const MAX_BODY = 512 * 1024;
+const snapshotGame = snapshot => snapshot?.games.findLast(game => game.moves.length || game.result !== '*') || snapshot?.games[0];
 
 export class LiveCollector {
   constructor(ctx, env) {
@@ -18,10 +20,25 @@ export class LiveCollector {
     this.pending = Promise.resolve();
     this.inflight = new Map();
     ctx.blockConcurrencyWhile(async () => {
-      for (const [key, value] of await this.storage.list()) {
-        if (key === 'retryUntil') this.retryUntil = value;
+      this.retryUntil = await this.storage.get('retryUntil') || 0;
+      for (const [key, value] of await this.storage.list({ prefix: 'meta:' })) {
         if (key.startsWith('meta:')) this.meta.set(key.slice(5), value);
+      }
+      for (const [key, value] of await this.storage.list({ prefix: 'round:' })) {
         if (key.startsWith('round:')) this.snapshots.set(key.slice(6), value);
+      }
+    });
+    const getGame = (event, round) => snapshotGame(this.snapshots.get(this.roundKey(event, round)));
+    this.analysis = createAnalysisService({
+      storage: this.storage, secret: env.LIVE_ANALYSIS_TOKEN, getGame,
+      ensureGame: async (eventId, id) => {
+        const event = LIVE_EVENTS[eventId];
+        const round = (this.meta.get(eventId)?.rounds || fallbackRounds(event)).find(round => round.id === id);
+        if (round && event.enabled && Date.now() < event.hideAfter) {
+          try { await this.refreshRound(eventId, event, round); }
+          catch { /* Pending jobs can still use the last accepted official snapshot. */ }
+        }
+        return getGame(eventId, id);
       }
     });
   }
@@ -114,12 +131,15 @@ export class LiveCollector {
     return new Map(rounds.map(({ id }) => [id, this.snapshots.get(this.roundKey(eventId, id))]));
   }
 
-  async dispatch(url) {
+  async dispatch(url, request) {
     const eventId = url.searchParams.get('event');
     if (!Object.hasOwn(LIVE_EVENTS, eventId)) return new Response(null, { status: 404 });
     const event = LIVE_EVENTS[eventId];
     const wantsEvent = url.pathname === '/event';
     const roundId = url.searchParams.get('round');
+    if (['/analysis', '/analysis-work', '/analysis-result'].includes(url.pathname)) {
+      return this.analysis(request, url, eventId, roundId);
+    }
     const now = Date.now();
     let stale = false;
     let meta = this.meta.get(eventId);
@@ -177,7 +197,7 @@ export class LiveCollector {
       if (!snapshot && stale) return this.response({ stale, status }, 503);
       return this.response({ stale, status, pgn: snapshot?.games.map(game => game.pgn).join('\n\n') ?? '' });
     }
-    const game = snapshot?.games.findLast(game => game.moves.length || game.result !== '*') || snapshot?.games[0];
+    const game = snapshotGame(snapshot);
     return this.response({
       stale, status, body: {
         eventId, roundId, roundName: round.name, status,
@@ -199,9 +219,14 @@ export class LiveCollector {
 
   fetch(request) {
     const url = new URL(request.url);
+    if (request.method !== 'GET') {
+      const response = this.pending.then(() => this.dispatch(url, request));
+      this.pending = response.catch(() => {});
+      return response;
+    }
     let response = this.inflight.get(url.href);
     if (!response) {
-      response = this.pending.then(() => this.dispatch(url));
+      response = this.pending.then(() => this.dispatch(url, request));
       this.inflight.set(url.href, response);
       this.pending = response.catch(() => {}).finally(() => this.inflight.delete(url.href));
     }

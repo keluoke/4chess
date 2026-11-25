@@ -3,7 +3,7 @@ import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
 import { engineLines, legalVariation, whiteEvaluation } from '../engine/position-lines.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';
-import { maiaTrendSeries } from '../analysis/maia-elo-trend.js?v=20261125-trend-lines';
+import { maiaTrendSeries } from '../analysis/maia-elo-trend.js?v=20261125-position-poster';
 
 const VERIFIED_MIN_DEPTH = 18;
 const usable = (result, depth) => Number.isFinite(result?.scoreCp)

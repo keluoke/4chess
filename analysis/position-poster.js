@@ -1,6 +1,6 @@
-import { buildShareCardSpec, drawShareBoard, prepareShareBoards, wrapTextLines } from '../analysis/share-card.js?v=20261124-intuition-labels';
-import { drawShareQr, shareQr } from '../analysis/share-export.js?v=20261124-divergence-cards';
-import { RATINGS, TREND_TICKS, trendX, trendY } from '../analysis/maia-trend-geometry.js';
+import { buildShareCardSpec, drawShareBoard, prepareShareBoards, wrapTextLines } from './share-card.js?v=20261124-intuition-labels';
+import { drawShareQr, shareQr } from './share-export.js?v=20261124-divergence-cards';
+import { RATINGS, TREND_TICKS, trendX, trendY } from './maia-trend-geometry.js';
 
 const WIDTH = 1080;
 const HEIGHT = 1560;
@@ -139,7 +139,7 @@ function drawChart(ctx, poster) {
   }
 }
 
-export async function renderLivePoster(canvas, poster, current) {
+export async function renderPositionPoster(canvas, poster, current) {
   const pieces = await prepareShareBoards();
   if (!current()) return false;
   canvas.width = WIDTH;
@@ -180,7 +180,12 @@ export async function renderLivePoster(canvas, poster, current) {
   const spec = buildShareCardSpec(poster.move, { lang: poster.lang, orientation: poster.orientation, theme });
   drawShareBoard(ctx, spec, pieces, x, y, size);
   drawLegend(ctx, poster.legend);
-  drawChart(ctx, poster);
+  if (poster.series?.length) drawChart(ctx, poster);
+  else {
+    box(ctx, 62, 1044, 956, 286, 21, '#f4f5ee');
+    label(ctx, poster.chartTitle, 88, 1062, 28, 750);
+    label(ctx, poster.chartUnavailable, 88, 1124, 23, 550, muted, 900);
+  }
 
   ctx.strokeStyle = '#e1e6da';
   ctx.lineWidth = 2;
@@ -188,9 +193,9 @@ export async function renderLivePoster(canvas, poster, current) {
   ctx.moveTo(72, 1360);
   ctx.lineTo(1008, 1360);
   ctx.stroke();
-  label(ctx, '4chess.cc/live', 73, 1391, 44, 780, theme.stockfish);
+  label(ctx, poster.brand || '4chess.cc/live', 73, 1391, 44, 780, theme.stockfish);
   label(ctx, poster.scan, 74, 1447, 23, 650, ink, 710);
-  label(ctx, 'Lichess Broadcast', 74, 1490, 21, 550, muted);
-  drawShareQr(ctx, shareQr(poster.qrLink), 1008, 1376, 154);
+  label(ctx, poster.source || 'Lichess Broadcast', 74, 1490, 21, 550, muted);
+  if (poster.qrLink) drawShareQr(ctx, shareQr(poster.qrLink), 1008, 1376, 154);
   return true;
 }

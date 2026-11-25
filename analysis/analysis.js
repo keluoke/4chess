@@ -13,7 +13,8 @@ import { StudyProfileControls } from './study-profile-controls.js?v=20261124-int
 import { CheckupReminders } from './checkup-reminders.js?v=20261124-intuition-labels';
 import { ReviewShare } from './review-share.js?v=20261125-poster-focus-r2';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
-import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
+import { parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
+import { PositionPosterDialog } from './position-poster-dialog.js?v=20261125-position-poster';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
 import { ReviewPractice } from './review-practice.js?v=20261125-trend-lines';
 import { authorizeScan, setScanAvailability, showScanLock } from './scan-authorization.js?v=20261121-study-reminders';
@@ -29,7 +30,7 @@ import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261125-game-story';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { PositionAnalysis } from './position-analysis.js?v=20261125-trend-lines';
+import { PositionAnalysis } from './position-analysis.js?v=20261125-position-poster';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { soundEffects } from './sound-effects.js?v=20261025-v115';
 import { boardShortcut, playNavigationSound } from './board-controls.js?v=20261124-controls';
@@ -117,7 +118,7 @@ class AnalysisStudioApp {
     this.checkup = new IntuitionCheckup(this);
     this.studyProfiles = new StudyProfileControls(this);
     this.checkupReminders = new CheckupReminders(this);
-    this.shareCard = new ShareCardModal(this);
+    this.shareCard = new PositionPosterDialog(this);
     this.reviewShare = new ReviewShare(this);
     this.bindEvents();
     this.applyPreferences({ ...preferences, maiaVariant: this.modelVariant, stockfishVariant: location.protocol === 'chrome-extension:' ? preferences.stockfishVariant : this.engineVariant });

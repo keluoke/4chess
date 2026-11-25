@@ -22,8 +22,9 @@ const releaseModules = new Map([
  ['/analysis/board-controls.js', '20261124-controls'],
  ['/engine/game-analyzer.js', '20261125-game-story'],
  ['/analysis/review-share.js', '20261125-poster-focus-r2'],
- ...['/analysis/analysis.js', '/analysis/position-analysis.js', '/analysis/maia-elo-trend.js', '/analysis/review-practice.js']
-   .map(path => [path, '20261125-trend-lines']),
+ ...['/analysis/analysis.js', '/analysis/position-analysis.js', '/analysis/maia-elo-trend.js', '/analysis/position-poster.js',
+  '/analysis/position-poster-dialog.js'].map(path => [path, '20261125-position-poster']),
+ ['/analysis/review-practice.js', '20261125-trend-lines'],
  ...['/analysis/review-snapshot.js', '/analysis/shared-review.js']
    .map(path => [path, '20261125-poster-focus']),
  ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',

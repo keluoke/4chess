@@ -231,12 +231,50 @@ try {
   await page.evaluate(() => __maiaStudioApp.boardUI.setOrientation('black'));
   await page.locator('.review-side-controls [data-review-side="all"]').click();
   await page.locator('.review-list-modes [data-filter="moves"]').click();
-  await page.locator('#blunder-list .blunder-card[data-ply="4"]').getByRole('button', { name: 'Share card' }).click();
+  await page.evaluate(async () => {
+    const { ChessBoard } = await import('/engine/chess-core.js');
+    const app = window.__maiaStudioApp;
+    window.positionPosterRequests = [];
+    window.positionPosterText = [];
+    const preview = document.getElementById('share-card-canvas').getContext('2d');
+    const draw = preview.fillText.bind(preview);
+    preview.fillText = (value, ...args) => {
+      window.positionPosterText.push(String(value));
+      draw(value, ...args);
+    };
+    app.maiaEngine.predict = async (fen, elo, _, canceled) => {
+      window.positionPosterRequests.push([fen, elo]);
+      if (elo === 1000 && !window.releasePositionPoster) {
+        await new Promise(resolve => { window.releasePositionPoster = resolve; });
+      }
+      if (canceled()) return null;
+      const moves = new ChessBoard(fen).getLegalMoves();
+      return { moves: moves.map((move, index) => ({ ...move, rawProb: index < 3 ? (.28 - .07 * index) : .04 })) };
+    };
+  });
+  const shareMove = page.locator('#blunder-list .blunder-card[data-ply="4"]').getByRole('button', { name: 'Share card' });
+  await shareMove.click();
+  await page.waitForFunction(() => typeof window.releasePositionPoster === 'function');
+  await page.locator('#position-poster-placeholder:visible').waitFor();
+  assert.equal(await page.locator('#btn-share-card-download').isDisabled(), true);
+  await page.locator('#btn-share-card-link').click();
+  const positionLink = new URL(await page.evaluate(() => navigator.clipboard.readText()));
+  const reviewedFen = await page.evaluate(() => window.__maiaStudioApp.reviewResult.allMoves[3].fenBefore);
+  assert.equal(new URLSearchParams(positionLink.hash.slice(1)).get('fen'), reviewedFen);
+  await page.evaluate(() => window.releasePositionPoster());
   await page.locator('#share-card-dialog[open] #btn-share-card-download:enabled').waitFor();
   const moveCard = page.locator('#share-card-canvas');
-  assert.deepEqual(await pixel(moveCard, 55, 219), [212, 229, 211, 255], 'Single move matches the board’s light square');
-  assert.deepEqual(await pixel(moveCard, 45, 340), [255, 255, 255, 255], 'Single move keeps the light frame in dark mode');
-  assert.deepEqual(await pixel(moveCard, 30, 30), [238, 243, 237, 255], 'Single move uses the diagnosis paper background');
+  assert.deepEqual(await moveCard.evaluate(canvas => [canvas.width, canvas.height]), [1080, 1560]);
+  const positionPoster = await page.evaluate(() => ({ text: window.positionPosterText, requests: window.positionPosterRequests }));
+  assert.ok(positionPoster.text.includes('2… f6 · Sample Black'));
+  assert.ok(positionPoster.text.includes('Human perspective · Moves by rating'));
+  assert.ok(positionPoster.text.filter(text => text.includes('% → ')).length >= 3);
+  assert.ok(positionPoster.requests.every(([fen]) => fen === reviewedFen));
+  assert.deepEqual(positionPoster.requests.map(([, elo]) => elo).sort((a, b) => a - b), [600, 1000, 1400, 1800, 2200, 2600]);
+  await page.locator('#btn-close-share-card').click();
+  await shareMove.click();
+  await page.locator('#btn-share-card-download:enabled').waitFor();
+  assert.equal(await page.evaluate(() => window.positionPosterRequests.length), 6);
   const legendRows = await page.evaluate(async () => {
     const { buildShareCardSpec, readStudioShareBoard, renderShareCardCanvas } =
       await import('/analysis/share-card.js?v=20261124-intuition-labels');
@@ -271,17 +309,12 @@ try {
   assert(legendRows.rows[1].bottom < 410, 'The second legend row ends above the QR quiet zone');
   assert.equal(legendRows.theme.stockfish, 'rgb(46, 96, 134)');
   assert.equal(legendRows.theme.played, 'rgb(185, 73, 80)');
-  for (const [format, width, height] of [['landscape', 1200, 675], ['portrait', 1080, 1350]]) {
-    await page.locator(`#share-card-dialog [data-share-format="${format}"]`).click();
-    await page.locator('#btn-share-card-download:enabled').waitFor();
-    const exported = page.waitForEvent('download');
-    await page.locator('#btn-share-card-download').click();
-    const image = await exported;
-    const data = fs.readFileSync(await image.path());
-    assert.deepEqual([data.readUInt32BE(16), data.readUInt32BE(20)], [width, height]);
-    assert.match(image.suggestedFilename(), new RegExp(`-${format}\\.png$`));
-    if (process.env.TEST_SHARE_SCREENSHOT) await image.saveAs(process.env.TEST_SHARE_SCREENSHOT.replace(/\.png$/, `-move-${format}.png`));
-  }
+  const exported = page.waitForEvent('download');
+  await page.locator('#btn-share-card-download').click();
+  const positionPng = await exported;
+  const positionPngBytes = fs.readFileSync(await positionPng.path());
+  assert.deepEqual([positionPngBytes.readUInt32BE(16), positionPngBytes.readUInt32BE(20)], [1080, 1560]);
+  if (process.env.TEST_SHARE_SCREENSHOT) await positionPng.saveAs(process.env.TEST_SHARE_SCREENSHOT.replace(/\.png$/, '-position.png'));
   await page.locator('#btn-share-card-copy').click();
   await page.locator('#share-card-status').getByText('Copied PNG image to clipboard.', { exact: true }).waitFor();
   assert.deepEqual(errors, []);

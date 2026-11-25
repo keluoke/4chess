@@ -118,3 +118,55 @@ export async function serveLive(context, type) {
   }
   return output(response, request);
 }
+
+export async function serveAnalysis(context, worker = false) {
+  const { request, env } = context;
+  const method = worker ? 'POST' : 'GET';
+  if (!worker && request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (request.method !== method) return errorResponse(405, 'Method not allowed');
+  const url = new URL(request.url);
+  const event = url.searchParams.get('event') || 'wcc2026';
+  const round = url.searchParams.get('round');
+  const ply = url.searchParams.get('ply');
+  const operation = url.searchParams.get('op');
+  if (!Object.hasOwn(LIVE_EVENTS, event) || !/^[a-z\d]{8}$/i.test(round ?? '') ||
+      (ply !== null && !/^\d{1,3}$/.test(ply)) || (worker && !['claim', 'publish'].includes(operation))) {
+    return errorResponse(400, 'Invalid analysis request');
+  }
+  if (!env.LIVE_COLLECTOR) return errorResponse(503, 'Broadcast service unavailable');
+  if (worker && !request.headers.get('Authorization')?.startsWith('Bearer ')) {
+    return errorResponse(401, 'Authorization required');
+  }
+  const query = new URLSearchParams({ event, round, ...(ply === null ? {} : { ply }) });
+  const path = !worker ? 'analysis' : operation === 'claim' ? 'analysis-work' : 'analysis-result';
+  const urlKey = new URL('/api/live/analysis?' + query, url.origin);
+  const cache = worker ? null : globalThis.caches?.default;
+  const cached = await cache?.match(urlKey);
+  if (cached && Date.now() < Number(cached.headers.get('X-Live-Fresh-Until'))) return output(cached, request);
+  const collector = env.LIVE_COLLECTOR.get(env.LIVE_COLLECTOR.idFromName('lichess-broadcasts'));
+  try {
+    const response = await collector.fetch('https://live-collector.internal/' + path + '?' + query, {
+      method, ...(worker ? { headers: { Authorization: request.headers.get('Authorization') },
+        ...(operation === 'publish' ? { body: request.body, duplex: 'half' } : {}) } : {})
+    });
+    if (worker) return new Response(response.body, { status: response.status, headers: {
+      'Content-Type': 'application/json', 'Cache-Control': 'no-store'
+    } });
+    if (response.status === 404) return errorResponse(404, 'Analysis unavailable for this round');
+    if (![200, 202].includes(response.status)) return errorResponse(503, 'Analysis temporarily unavailable', 10);
+    const data = await response.json();
+    if (!['ready', 'pending'].includes(data?.status)) return errorResponse(404, 'Analysis unavailable for this round');
+    if (data.status === 'pending') return Response.json(data, { status: 202, headers: {
+      ...CORS, 'Cache-Control': 'no-store', 'Retry-After': '8'
+    } });
+    const body = JSON.stringify(data);
+    const ready = new Response(body, { headers: {
+      ...CORS, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60',
+      'X-Live-Fresh-Until': String(Date.now() + 6000), 'ETag': '"' + await hash(body) + '"'
+    } });
+    if (cache) context.waitUntil(cache.put(urlKey, ready.clone()).catch(() => {}));
+    return output(ready, request);
+  } catch {
+    return errorResponse(503, 'Analysis temporarily unavailable', 10);
+  }
+}
