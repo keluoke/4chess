@@ -21,7 +21,8 @@ const releaseModules = new Map([
  ].map(path => [path, '20261124-intuition-labels']),
  ['/analysis/board-controls.js', '20261124-controls'],
  ['/engine/game-analyzer.js', '20261125-game-story'],
- ...['/analysis/analysis.js', '/analysis/review-share.js', '/analysis/review-snapshot.js', '/analysis/shared-review.js']
+ ...['/analysis/analysis.js', '/analysis/review-share.js'].map(path => [path, '20261125-poster-focus-r2']),
+ ...['/analysis/review-snapshot.js', '/analysis/shared-review.js']
    .map(path => [path, '20261125-poster-focus']),
  ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
   '/engine/model-cache-client.js', '/engine/model-loader.js'].map(path => [path, '20261124-mobile']),

@@ -214,6 +214,17 @@ try {
   assert.equal(alternativeFocuses.narrowFocus.board.length, 0);
   assert.ok(alternativeFocuses.narrowFocus.height < alternativeFocuses.rareFocus.height);
   assert.ok(!alternativeFocuses.blunderFocus.text.some(text => text.includes('No blunders')));
+  const broadcastFooter = await page.evaluate(async () => {
+    const app = window.__maiaStudioApp;
+    app.reviewShare.anonymize.checked = false;
+    app.pgnTags.gameurl = 'https://lichess.org/broadcast/fide-world-chess-championship-2026/game-1/xLgOJ6cb/j7pdr7s2';
+    window.reportText = [];
+    await app.reviewShare.prepare();
+    delete app.pgnTags.gameurl;
+    return window.reportText;
+  });
+  assert.ok(broadcastFooter.includes('Scan to replay the game'));
+  await page.locator('#review-share-status').getByText(/QR code opens the broadcast replay/).waitFor();
 
   await page.locator('#review-share-close').click();
   await page.locator('#review-report-workbench').click();

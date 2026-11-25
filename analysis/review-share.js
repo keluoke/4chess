@@ -16,14 +16,16 @@ const POSTER_COPY = {
     engine: '引擎首选', intuition: '人类直觉', predicted: 'Maia 预测 {elo} Elo 棋手有 {prob}% 会走这一步',
     rare: '最冷门的引擎首选', tightrope: '确认 {narrow} 次走钢丝，实战全部走对',
     narrow: '确认 {narrow} 次走钢丝，实战走对 {found} 次',
-    preciseDraw: '一场高精度和棋', draw: '双方握手言和', win: '{side}在第 {number} 回合取胜'
+    preciseDraw: '一场高精度和棋', draw: '双方握手言和', win: '{side}在第 {number} 回合取胜',
+    watch: '扫码回看本局', watchHint: '扫码打开棋王战回放。分享链接可查看完整复盘。'
   },
   en: {
     title: 'Game review', noBlunders: 'No blunders', trend: 'Game evaluation', details: 'View analysis details',
     engine: 'Engine pick', intuition: 'Human instinct', predicted: 'Maia predicts {prob}% of {elo} Elo players would play this move',
     rare: 'Least expected engine pick', tightrope: 'Found the best move in all {narrow} confirmed tightrope positions',
     narrow: 'Found the best move in {found} of {narrow} confirmed tightrope positions',
-    preciseDraw: 'A high-accuracy draw', draw: 'The game ended in a draw', win: '{side} won on move {number}'
+    preciseDraw: 'A high-accuracy draw', draw: 'The game ended in a draw', win: '{side} won on move {number}',
+    watch: 'Scan to replay the game', watchHint: 'The QR code opens the broadcast replay. Use the share link for the full review.'
   }
 };
 
@@ -31,11 +33,19 @@ function posterText(key, values = {}) {
   return (POSTER_COPY[getLang()] ?? POSTER_COPY.en)[key].replace(/\{(\w+)\}/g, (_, name) => values[name] ?? '');
 }
 
-function qrSpec(snapshotUrl, source) {
+function qrSpec(snapshotUrl, source, move) {
+  const round = source?.match(/^https:\/\/lichess\.org\/broadcast\/fide-world-chess-championship-2026\/[a-z0-9-]+\/([a-zA-Z0-9]{8})(?:\/[a-zA-Z0-9]{8})?$/)?.[1];
   // Keep ample pixels per module after chat apps resize the report image.
-  const target = [snapshotUrl, source].find(url => url && url.length <= 230);
-  if (!target) return null;
-  return { qr: shareQr(target), snapshot: target === snapshotUrl };
+  if (snapshotUrl && snapshotUrl.length <= 230) return { code: shareQr(snapshotUrl), kind: 'snapshot' };
+  if (round) {
+    const query = new URLSearchParams({ event: 'wcc2026', round, lang: getLang() });
+    if (move) {
+      query.set('ply', move.ply - 1);
+      query.set('orientation', move.turn === 'b' ? 'black' : 'white');
+    }
+    return { code: shareQr('https://4chess.cc/live/?' + query), kind: 'broadcast' };
+  }
+  return source && source.length <= 230 ? { code: shareQr(source), kind: 'source' } : null;
 }
 
 function posterFocus(report, precise) {
@@ -131,9 +141,10 @@ function drawFocus(ctx, focus, report, theme, pieces) {
   }
 }
 
-async function drawReport(canvas, report, qr, theme, isCurrent) {
+async function drawReport(canvas, report, url, theme, isCurrent) {
   const precise = report.accuracy.every(accuracy => accuracy > 95);
   const focus = posterFocus(report, precise);
+  const qr = qrSpec(url, report.source, focus.move);
   const pieces = focus.move ? await prepareShareBoards() : null;
   if (!isCurrent()) return false;
 
@@ -172,10 +183,12 @@ async function drawReport(canvas, report, qr, theme, isCurrent) {
   fit(ctx, '4chess.cc · Diverge', 60, footer + 25, 690);
   if (qr) {
     ctx.font = '500 20px system-ui';
-    fit(ctx, t(qr.snapshot ? 'snapshotQrReview' : 'snapshotQrOriginal'), 60, footer + 69, 690);
-    drawShareQr(ctx, qr.qr, 1020, footer + 8, 184);
+    const cue = qr.kind === 'broadcast' ? posterText('watch')
+      : t(qr.kind === 'snapshot' ? 'snapshotQrReview' : 'snapshotQrOriginal');
+    fit(ctx, cue, 60, footer + 69, 690);
+    drawShareQr(ctx, qr.code, 1020, footer + 8, 184);
   }
-  return true;
+  return { qr };
 }
 
 export class ReviewShare {
@@ -324,8 +337,9 @@ export class ReviewShare {
       try { url = VIEWER + '#' + new URLSearchParams({ review: await encodeReviewSnapshot(snapshot), lang: getLang() }).toString(); }
       catch { /* PNG export also works without browser compression support. */ }
       const theme = readStudioShareBoard(byId('board-container'));
-      const qr = qrSpec(url, report.source);
-      if (!(await drawReport(this.canvas, report, qr, theme, current)) || !current()) return;
+      const rendered = await drawReport(this.canvas, report, url, theme, current);
+      if (!rendered || !current()) return;
+      const { qr } = rendered;
       const blob = await canvasPng(this.canvas);
       if (!current()) return;
       this.blob = blob;
@@ -354,8 +368,9 @@ export class ReviewShare {
       this.download.disabled = this.image.disabled = !blob;
       this.text.disabled = false;
       this.copy.disabled = !url;
-      this.status.textContent = !url ? t('snapshotLinkUnavailable') : qr?.snapshot ? '' :
-        t(qr ? 'snapshotQrOriginalHint' : 'snapshotNoQr');
+      this.status.textContent = !url ? t('snapshotLinkUnavailable')
+        : qr?.kind === 'snapshot' ? '' : qr?.kind === 'broadcast' ? posterText('watchHint')
+          : t(qr ? 'snapshotQrOriginalHint' : 'snapshotNoQr');
     } catch {
       if (current()) this.status.textContent = t('reviewShareError');
     }
