@@ -36,7 +36,7 @@
           : (localStorage.getItem('maia3_lang') || (navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'));
         document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
         const hasInput = ['pgn', 'fen', 'url', 'text', 'scan'].some(k => search.has(k) || hash.has(k))
-          || !!history.state?.diverge_studio_session || !!globalThis.chrome?.storage?.local;
+          || !!history.state?.divergeStudioSession || !!globalThis.chrome?.storage?.local;
         if (!hasInput && search.get('empty') !== '0') document.body.classList.add('empty-study');
       } catch {}
     })();
@@ -215,10 +215,10 @@
 
         <div class="eval-chart-wrapper" id="eval-chart-container"></div>
     </section>
-    <nav id="mobile-study-tabs" class="mobile-study-tabs" role="tablist" data-i18n-aria="mobileTabsLabel" aria-label="复盘视图">
-      <button type="button" role="tab" data-mobile-tab="candidates" aria-selected="true" data-i18n="mobileTabCandidates">候选</button>
-      <button type="button" role="tab" data-mobile-tab="moves" aria-selected="false" data-i18n="mobileTabMoves">记谱</button>
-      <button type="button" role="tab" data-mobile-tab="review" aria-selected="false" data-i18n="mobileTabReview">复盘</button>
+    <nav id="mobile-study-tabs" class="mobile-study-tabs" data-i18n-aria="mobileTabsLabel" aria-label="复盘视图">
+      <button type="button" data-mobile-tab="candidates" aria-current="location" data-i18n="mobileTabCandidates">候选</button>
+      <button type="button" data-mobile-tab="moves" data-i18n="mobileTabMoves">记谱</button>
+      <button type="button" data-mobile-tab="review" data-i18n="mobileTabReview">复盘</button>
     </nav>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <div class="analysis-scroll">

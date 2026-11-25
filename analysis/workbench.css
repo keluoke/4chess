@@ -488,7 +488,7 @@ button,input,select,textarea { font-family:inherit; }
     min-height:38px;border:0;border-radius:10px;background:transparent;
     color:var(--dg-muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;
   }
-  .mobile-study-tabs button[aria-selected="true"] {
+  .mobile-study-tabs button[aria-current="location"] {
     background:var(--dg-green);color:var(--dg-on-green);
   }
 }

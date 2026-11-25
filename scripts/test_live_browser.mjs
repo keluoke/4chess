@@ -746,6 +746,53 @@ try {
     assert.ok(labels.some(text => text.startsWith(label + ' ')));
     await duplicate.close();
   }
+  await phone.setViewportSize({ width: 320, height: 710 });
+  const narrow = await phone.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth > innerWidth,
+    titleWidth: document.getElementById('title').getBoundingClientRect().width
+  }));
+  assert.equal(narrow.overflow, false, '320px English header has no horizontal overflow');
+  assert.ok(narrow.titleWidth > 20, '320px English header keeps event title visible: ' + narrow.titleWidth);
+
+  let phase = 'intermission';
+  const intermissionRounds = rounds.map((round, index) => ({
+    ...round,
+    startsAt: index === 0 ? current.startsAt - 3600_000 : current.startsAt + 3600_000
+  }));
+  const autoCtx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const autoPage = await autoCtx.newPage();
+  autoPage.on('pageerror', error => issues.push(error.message));
+  await autoPage.clock.install({ time: current.startsAt });
+  await autoCtx.route('**/api/live/event?*', route => {
+    const g1Raw = pgn(line).replace('[Result "*"]', '[Result "1/2-1/2"]').replace(/\*$/, '1/2-1/2');
+    const g1 = { games: parseRoundPgn(g1Raw, event) };
+    const map = new Map([[intermissionRounds[0].id, g1]]);
+    if (phase === 'live') map.set(intermissionRounds[1].id, { games: parseRoundPgn(pgn('1. d4'), event) });
+    return route.fulfill({ json: eventView('wcc2026', event, intermissionRounds, map, phase === 'live' ? intermissionRounds[1].startsAt + 1000 : current.startsAt) });
+  });
+  await autoCtx.route('**/api/live/round?*', route => {
+    const roundId = new URL(route.request().url()).searchParams.get('id');
+    const isFirst = roundId === intermissionRounds[0].id;
+    const raw = isFirst ? pgn(line).replace('[Result "*"]', '[Result "1/2-1/2"]').replace(/\*$/, '1/2-1/2')
+      : pgn(phase === 'live' ? '1. d4' : '');
+    const game = parseRoundPgn(raw, event)[0];
+    return route.fulfill({ json: {
+      ...game, roundId, updatedAt, roundName: isFirst ? 'Game 1' : 'Game 2',
+      status: isFirst ? 'finished' : phase === 'live' ? 'live' : 'scheduled'
+    } });
+  });
+  await mockEngines(autoCtx);
+  await autoPage.goto(origin + '/live/?lang=en');
+  await autoPage.locator(`#round-rail button[data-round="${intermissionRounds[0].id}"][aria-current="true"]`).waitFor();
+  phase = 'live';
+  await autoPage.clock.fastForward(35_000);
+  await autoPage.locator(`#round-rail button[data-round="${intermissionRounds[1].id}"][aria-current="true"]`).waitFor();
+  await autoPage.locator(`#round-rail button[data-round="${intermissionRounds[0].id}"]`).click();
+  await autoPage.locator(`#round-rail button[data-round="${intermissionRounds[0].id}"][aria-current="true"]`).waitFor();
+  await autoPage.clock.fastForward(35_000);
+  assert.equal(await autoPage.locator('#round-rail button[aria-current="true"]').getAttribute('data-round'), intermissionRounds[0].id, 'Manual round selection stays pinned');
+  await autoCtx.close();
+
   assert.deepEqual(issues, []);
   console.log('390×710 mobile layout', JSON.stringify(phoneLayout));
 } finally {

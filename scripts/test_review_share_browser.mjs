@@ -157,6 +157,16 @@ try {
   await view.locator('#snapshot-lines button', { hasText: 'Bb5' }).click();
   assert.match(await view.locator('#snapshot-position').innerText(), /Variation.*Bb5/);
   assert.match(await view.locator('#snapshot-analyze').getAttribute('href'), /#fen=/);
+  await view.locator('#snapshot-flip').click();
+  await view.locator('#snapshot-lang').click();
+  assert.equal(await view.evaluate(() => document.documentElement.lang), 'zh-CN');
+  assert.equal(await view.locator('#snapshot-lang').innerText(), 'English');
+  assert.match(await view.locator('#snapshot-position').innerText(), /变例.*Bb5/);
+  assert.equal(await view.locator('#snapshot-board [data-square="h1"]').evaluate(sq => sq.getBoundingClientRect().top < document.querySelector('#snapshot-board [data-square="h8"]').getBoundingClientRect().top), true, 'Language switch preserves flipped black orientation');
+  await view.locator('#snapshot-lang').click();
+  assert.equal(await view.evaluate(() => document.documentElement.lang), 'en');
+  assert.equal(await view.locator('#snapshot-lang').innerText(), '中文');
+  assert.match(await view.locator('#snapshot-position').innerText(), /Variation.*Bb5/);
   await view.locator('#snapshot-next').click();
   assert.equal(await view.locator('#snapshot-position').innerText(), '2… f6');
   await view.locator('#snapshot-story').getByRole('button', { name: '2. Nf3', exact: true }).click();

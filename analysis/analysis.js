@@ -436,10 +436,10 @@ class AnalysisStudioApp {
       this.openPgnModal();
     });
     this.el.btnCancelPgn.addEventListener('click', () => {
-      this.closePgnModal();
+      this.closePgnModal({ cancel: true });
     });
     this.el.pgnModal.addEventListener('click', (e) => {
-      if (e.target === this.el.pgnModal) this.closePgnModal();
+      if (e.target === this.el.pgnModal) this.closePgnModal({ cancel: true });
     });
 
     this.el.pgnInput?.addEventListener('input', () => this.setPgnModalError(''));
@@ -452,8 +452,10 @@ class AnalysisStudioApp {
       }
       this.setPgnModalError('');
       this.el.btnSubmitPgn.disabled = true;
+      const expectedGen = (this.importGeneration || 0) + 1;
       try {
         const loaded = await this.smartLoadInput(input);
+        if (this.importGeneration !== expectedGen || !this.el.pgnModal.classList.contains('open')) return;
         if (loaded) {
           this.closePgnModal();
         } else {
@@ -559,7 +561,7 @@ class AnalysisStudioApp {
     window.addEventListener('keydown', (e) => {
       if (this.studyProfiles?.editor?.open || this.el.settingsDialog.open || this.reviewOverview.summary.open || this.mistakeBank?.dialog?.open || this.checkup?.dialog?.open || this.shareCard?.dialog?.open || this.reviewShare?.dialog?.open) return;
       if (this.el.pgnModal.classList.contains('open')) {
-        if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal(); }
+        if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal({ cancel: true }); }
         if (e.key === 'Tab') {
           const controls = [...this.el.pgnModal.querySelectorAll('button, textarea, input, select')].filter(el => !el.disabled && el.getClientRects().length);
           const first = controls[0], last = controls[controls.length - 1];
@@ -789,7 +791,8 @@ class AnalysisStudioApp {
   setMobileTab(tab = 'candidates') {
     document.body.dataset.mobileTab = tab;
     for (const btn of document.querySelectorAll('#mobile-study-tabs button[data-mobile-tab]')) {
-      btn.setAttribute('aria-selected', String(btn.dataset.mobileTab === tab));
+      if (btn.dataset.mobileTab === tab) btn.setAttribute('aria-current', 'location');
+      else btn.removeAttribute('aria-current');
     }
   }
 
@@ -806,7 +809,11 @@ class AnalysisStudioApp {
     }
   }
 
-  closePgnModal() {
+  closePgnModal({ cancel = false } = {}) {
+    if (cancel) {
+      this.importGeneration = (this.importGeneration || 0) + 1;
+      this.importController?.abort();
+    }
     if (this.el.pgnModal) {
       this.setPgnModalError('');
       this.el.pgnModal.classList.remove('open');
@@ -892,8 +899,10 @@ class AnalysisStudioApp {
           }
         }
       } catch (err) {
+        if (!current()) return false;
         console.warn('[Analysis Studio] Lichess export error:', err);
       }
+      if (!current()) return false;
       this._lastLoadError = t('toastFailedLichess');
       this.showToast(this._lastLoadError);
       return false;
@@ -1009,6 +1018,7 @@ class AnalysisStudioApp {
         }
       }
 
+      if (!current()) return false;
       this._lastLoadError = t('toastFailedChesscom');
       this.showToast(this._lastLoadError);
       return false;

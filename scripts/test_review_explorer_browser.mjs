@@ -910,5 +910,54 @@ try {
   console.log('PASS conditional overview and multi-account checkup: profile switch and link guide, first lookup, new-game dot, transient failure, diagnosis clears processed games, profile isolation and IndexedDB reload.');
 
   assert.deepEqual(errors, []);
+  // Regression 1: cancelling an in-flight PGN/URL import must not replace the current game when the late response arrives.
+  const cancelContext = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  const cancelPage = await cancelContext.newPage();
+  const cancelErrors = []; cancelPage.on('pageerror', e => cancelErrors.push(e.message));
+  let markLichessStarted, releaseDelayedLichess;
+  const lichessStarted = new Promise(resolve => { markLichessStarted = resolve; });
+  await cancelPage.route('https://weights.4chess.cc/**', route => route.abort());
+  await cancelPage.route('https://lichess.org/game/export/*', async route => {
+    markLichessStarted();
+    await new Promise(resolve => { releaseDelayedLichess = resolve; });
+    await route.fulfill({ json: { status: 'resign', pgn: '[White "LateA"]\n[Black "LateB"]\n[Result "1-0"]\n1. d4 d5 1-0' } }).catch(() => {});
+  });
+  await cancelPage.goto(`http://127.0.0.1:${server.address().port}/analysis/?lang=en`);
+  await cancelPage.waitForFunction(() => window.__maiaStudioApp?.positions.length);
+  await cancelPage.evaluate(() => {
+    __maiaStudioApp.positionAnalysis.refresh = () => {};
+    __maiaStudioApp.runFullReview = async () => {};
+    __maiaStudioApp.startNewSession({ pgn: '[White "KeptWhite"]\n[Black "KeptBlack"]\n[Result "1-0"]\n1. e4 e5 1-0', autoReview: false });
+  });
+  await cancelPage.locator('#btn-import-pgn').click();
+  await cancelPage.locator('#pgn-input').fill('https://lichess.org/AbCd1234');
+  await cancelPage.locator('#btn-submit-pgn').click();
+  await lichessStarted;
+  await cancelPage.locator('#btn-cancel-pgn').click();
+  releaseDelayedLichess();
+  await cancelPage.waitForTimeout(100);
+  assert.equal(await cancelPage.locator('#meta-white').textContent(), '⚪ KeptWhite', 'Cancelling modal aborts late import');
+  // Regression 2: reloading with history.state.divergeStudioSession skips empty-study flash even while analysis.js is delayed.
+  let markAnalysisJsStarted, releaseAnalysisJs;
+  const analysisJsStarted = new Promise(resolve => { markAnalysisJsStarted = resolve; });
+  await cancelPage.route('**/analysis/analysis.js*', async route => {
+    markAnalysisJsStarted();
+    await new Promise(resolve => { releaseAnalysisJs = resolve; });
+    await route.continue();
+  });
+  const reloadPromise = cancelPage.reload({ waitUntil: 'commit' });
+  await analysisJsStarted;
+  await reloadPromise;
+  await cancelPage.waitForSelector('#empty-study-intro', { state: 'attached' });
+  const preHydration = await cancelPage.evaluate(() => ({
+    emptyClass: document.body.classList.contains('empty-study'),
+    introHidden: document.getElementById('empty-study-intro').hidden
+  }));
+  assert.deepEqual(preHydration, { emptyClass: false, introHidden: true }, 'Session reload must not flash empty-study intro');
+  releaseAnalysisJs();
+  await cancelPage.waitForFunction(() => window.__maiaStudioApp?.moves?.length === 2);
+  assert.deepEqual(cancelErrors, []);
+  await cancelContext.close();
+
   console.log('PASS review UI and local commentary: default off, explicit download, progress, verified facts, grounded English loss wording, recap cancellation on all review resets, cache, practice isolation and Chinese fallback.');
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

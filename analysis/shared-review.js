@@ -14,7 +14,9 @@ function scoreForChart(score, fen) {
   return score ? { cp: score.cp * fenSign(fen), text: score.mate === null ? score.text : 'M' + score.mate } : { text: '?' };
 }
 
-function renderSnapshot(report) {
+let getViewState = null;
+
+function renderSnapshot(report, preserved = null) {
   const names = [report.white || t('reviewWhite'), report.black || t('reviewBlack')];
   byId('snapshot-title').textContent = names[0] + '  ' + report.result + '  ' + names[1];
   byId('snapshot-opening').textContent = report.opening;
@@ -36,7 +38,7 @@ function renderSnapshot(report) {
     report.verified > 0 && t('accuracyVerifiedDepth', { count: report.verified, depth: report.verifiedDepth })].filter(Boolean).join(' · ');
 
   const boardEl = byId('snapshot-board');
-  const board = new BoardUI(boardEl);
+  const board = new BoardUI(boardEl, { orientation: preserved?.orientation === 'black' ? 'black' : 'white' });
   const chart = new EvalChart(byId('snapshot-chart'), ply => show(ply));
   const initial = scoreForChart(report.initial, report.startFen);
   chart.setData(report.plies.map(move => {
@@ -55,7 +57,7 @@ function renderSnapshot(report) {
   const notation = byId('snapshot-notation');
   const evidence = byId('snapshot-lines');
   const analyze = byId('snapshot-analyze');
-  let cursor = 0, selected;
+  let cursor = 0, selected, activeVariation = null;
   const button = (label, onClick) => {
     const el = document.createElement('button');
     el.type = 'button'; el.className = 'btn-header'; el.textContent = label; el.onclick = onClick;
@@ -96,8 +98,19 @@ function renderSnapshot(report) {
     analyze.hidden = false;
   }
 
+  function applyVariation(step, role) {
+    if (FairPlayGuard.isLiveGameInProgress()) return;
+    activeVariation = { role, uci: step.uci, fen: step.fen, label: step.label };
+    board.setPosition(step.fen, { from: step.uci.slice(0, 2), to: step.uci.slice(2, 4) });
+    board.clearArrows();
+    boardEl.setAttribute('aria-label', step.label + ' · ' + step.fen.split(' ')[0]);
+    byId('snapshot-position').textContent = t('snapshotVariation', { move: step.label });
+    analyzeAt(step.fen);
+  }
+
   function show(ply) {
     if (FairPlayGuard.isLiveGameInProgress()) return;
+    activeVariation = null;
     cursor = Math.max(0, Math.min(ply, report.plies.length));
     const last = report.plies[cursor - 1];
     const upcoming = report.plies[cursor];
@@ -133,14 +146,8 @@ function renderSnapshot(report) {
       if (variation.length > 1) {
         const line = document.createElement('div');
         line.className = 'snapshot-tags';
-        line.append(...variation.map(step => button(step.label, () => {
-          if (FairPlayGuard.isLiveGameInProgress()) return;
-          board.setPosition(step.fen, { from: step.uci.slice(0, 2), to: step.uci.slice(2, 4) });
-          board.clearArrows();
-          boardEl.setAttribute('aria-label', step.label + ' · ' + step.fen.split(' ')[0]);
-          byId('snapshot-position').textContent = t('snapshotVariation', { move: step.label });
-          analyzeAt(step.fen);
-        })), button(t('snapshotMainLine'), () => show(cursor)));
+        line.append(...variation.map(step => button(step.label, () => applyVariation(step, role))),
+          button(t('snapshotMainLine'), () => show(cursor)));
         row.append(line);
       }
       lines.push(row);
@@ -173,8 +180,10 @@ function renderSnapshot(report) {
     });
   }
   window.__snapshotStep = delta => show(cursor + delta);
+  getViewState = () => ({ cursor, orientation: board.orientation, variation: activeVariation });
   byId('snapshot-report').hidden = false;
-  show(report.keyPlies.length ? report.keyPlies[0] - 1 : 0);
+  show(preserved?.cursor ?? (report.keyPlies.length ? report.keyPlies[0] - 1 : 0));
+  if (preserved?.variation) applyVariation(preserved.variation, preserved.variation.role);
 }
 
 const syncSnapshotHeader = () => {
@@ -203,10 +212,11 @@ let loadedReport = null;
 const langBtn = byId('snapshot-lang');
 if (langBtn) {
   langBtn.onclick = () => {
+    const prev = getViewState?.();
     const next = getLang() === 'zh' ? 'en' : 'zh';
     setLanguage(next);
     syncSnapshotHeader();
-    if (loadedReport) renderSnapshot(loadedReport);
+    if (loadedReport) renderSnapshot(loadedReport, prev);
     else status.textContent = t('snapshotInvalid');
   };
 }

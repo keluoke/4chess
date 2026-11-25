@@ -160,10 +160,10 @@ body.live-page, .live-page :is(button, select, a, .maia-chessboard, #event-moves
   .event-main { padding: 0 0 1rem; }
   .event-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .live-page .board-column, .event-panel, .engine-pane { display: contents; }
-  .event-nav { gap: .35rem; padding-inline: .6rem; }
-  .event-nav h1 { font-size: .85rem; }
-  .event-nav-link { padding: .15rem .4rem; font-size: .75rem; }
-  .event-brand { font-size: .92rem; }
+  .event-nav { gap: .25rem; padding-inline: .45rem; }
+  .event-nav h1 { font-size: .85rem; min-width: 0; flex: 1 1 auto; }
+  .event-nav-link { padding: .15rem .4rem; font-size: .75rem; flex-shrink: 0; }
+  .event-brand { font-size: .92rem; flex-shrink: 0; }
   .settings-label, .match-score .score-full { display: none; }
   .match-score { gap: .25rem; font-size: .74rem; }
   .match-score .score-short { display: inline; }
@@ -233,4 +233,10 @@ body.live-page, .live-page :is(button, select, a, .maia-chessboard, #event-moves
 
 @media (max-width: 480px) {
   .round-strip[data-counting-down="true"] .event-status:not([data-state="stale"]) { display: none; }
+}
+
+@media (max-width: 380px) {
+  .event-nav-link { display: none; }
+  .event-nav .btn-settings { width: 32px; height: 32px; }
+  .event-nav button { min-height: 30px; padding: .15rem .35rem; font-size: .78rem; }
 }

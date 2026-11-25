@@ -138,7 +138,7 @@ const maiaSizes = { '5m': '28 MiB', '23m': '104 MiB', '79m': '159 MiB' };
 const trendSamples = new Map();
 
 const state = {
-  event: null, round: params.get('round'), snapshot: null, cursor: 0, follow: initialPly === null,
+  event: null, round: params.get('round'), followEvent: !params.get('round'), snapshot: null, cursor: 0, follow: initialPly === null,
   initialPly, initialVariation: params.get('line'), initialBase: params.get('base'),
   branch: null, unseen: false, stale: false, roundKey: 0,
   engines: null, engineEnabled: analysisAllowed(), requestedKey: '', analysis: null, analyzing: false, requestVersion: 0,
@@ -237,6 +237,7 @@ function arrangeMoment() {
 const RESULTS = { '1-0': '1–0', '0-1': '0–1', '1/2-1/2': '½–½' };
 const currentRound = () => state.event?.rounds.find(round => round.id === state.round);
 const selectRound = id => {
+  state.followEvent = false;
   state.initialPly = null;
   state.initialVariation = null;
   chooseRound(id);
@@ -979,18 +980,22 @@ async function pollEvent() {
       state.event = await response.json();
       state.eventTag = response.headers.get('ETag');
       const rounds = state.event.rounds;
+      const liveId = (state.event.activeRoundId && rounds.some(round => round.id === state.event.activeRoundId) && state.event.activeRoundId)
+        || rounds.find(round => round.status === 'live')?.id
+        || null;
       if (!rounds.some(round => round.id === state.round)) {
         if (state.round) {
           state.initialPly = null;
           state.initialVariation = null;
         }
         chooseRound(
-          (state.event.activeRoundId && rounds.some(round => round.id === state.event.activeRoundId) && state.event.activeRoundId)
-          || rounds.find(round => round.status === 'live')?.id
+          liveId
           || rounds.findLast(round => round.status === 'finished')?.id
           || rounds.find(round => round.status === 'scheduled')?.id
           || rounds.at(-1)?.id
         );
+      } else if (state.followEvent && liveId && liveId !== state.round) {
+        chooseRound(liveId);
       } else if (!state.snapshot && state.roundBusy !== state.roundKey) {
         void pollRound();
       }
