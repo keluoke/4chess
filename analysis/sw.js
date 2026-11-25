@@ -89,7 +89,6 @@ const STATIC_ASSETS = [
   "../engine/model-sources.js",
   "../engine/opening-book.js",
   "../engine/position-lines.js",
-  "../engine/review-policy.js?v=20261117-review-policy",
   "../engine/review-policy.js?v=20261120-review",
   "../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2",
   "../engine/stockfish-sandbox.html?v=20261124-checkup-cards-r2",

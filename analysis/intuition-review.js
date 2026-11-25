@@ -40,7 +40,9 @@ export class IntuitionReview {
     }
     const action = { running: 'intuitionPause', paused: 'intuitionResume', error: 'intuitionRetry', partial: 'intuitionRetry' };
     const label = t(action[this.state] || 'intuitionStart');
-    this.button.textContent = Number.isFinite(fraction) ? `${label} · ${Math.round(fraction * 100)}%` : label;
+    this.button.textContent = this.state === 'running' && this.progress?.total > 0
+      ? `${label} · ${this.progress.current}/${this.progress.total}`
+      : Number.isFinite(fraction) ? `${label} · ${Math.round(fraction * 100)}%` : label;
     this.button.disabled = !this.app.coreReview || !!this.app.scanSourceLocked;
   }
   pause() {

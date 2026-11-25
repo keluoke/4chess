@@ -25,6 +25,23 @@
 </head>
 <body class="diverge-ui">
   <script>
+    (function () {
+      try {
+        const theme = localStorage.getItem('diverge_ui_theme');
+        if (theme === 'light' || theme === 'dark') document.body.dataset.theme = theme;
+        const search = new URLSearchParams(location.search);
+        const hash = new URLSearchParams(location.hash.slice(1));
+        const urlLang = search.get('lang') || hash.get('lang');
+        const lang = urlLang === 'zh' || urlLang === 'en' ? urlLang
+          : (localStorage.getItem('maia3_lang') || (navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'));
+        document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+        const hasInput = ['pgn', 'fen', 'url', 'text', 'scan'].some(k => search.has(k) || hash.has(k))
+          || !!history.state?.diverge_studio_session || !!globalThis.chrome?.storage?.local;
+        if (!hasInput && search.get('empty') !== '0') document.body.classList.add('empty-study');
+      } catch {}
+    })();
+  </script>
+  <script>
     if (location.protocol === 'file:') {
       const banner = document.createElement('div');
       banner.style.cssText = 'background: #991b1b; color: #fff; padding: 10px 16px; font-size: 13px; text-align: center; position: sticky; top: 0; z-index: 99999; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
@@ -142,6 +159,7 @@
         </button>
       </section>
     </section>
+    <script>if (document.body.classList.contains('empty-study')) document.getElementById('empty-study-intro').hidden = false;</script>
     <!-- Left: Chessboard Column -->
     <section class="board-column" data-i18n-aria="boardRegionLabel" aria-label="棋盘与局面走势">
       <p id="practice-context" class="practice-context"></p>
@@ -197,6 +215,11 @@
 
         <div class="eval-chart-wrapper" id="eval-chart-container"></div>
     </section>
+    <nav id="mobile-study-tabs" class="mobile-study-tabs" role="tablist" data-i18n-aria="mobileTabsLabel" aria-label="复盘视图">
+      <button type="button" role="tab" data-mobile-tab="candidates" aria-selected="true" data-i18n="mobileTabCandidates">候选</button>
+      <button type="button" role="tab" data-mobile-tab="moves" aria-selected="false" data-i18n="mobileTabMoves">记谱</button>
+      <button type="button" role="tab" data-mobile-tab="review" aria-selected="false" data-i18n="mobileTabReview">复盘</button>
+    </nav>
     <section class="analysis-column" data-i18n-aria="positionAnalysis" aria-label="当前局面分析">
       <div class="analysis-scroll">
       <aside id="checkup-background-offer" class="checkup-background-offer" hidden>

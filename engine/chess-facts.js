@@ -1,5 +1,5 @@
 import { ChessBoard } from './chess-core.js';
-import { intuitionKind } from './review-policy.js?v=20261117-review-policy';
+import { intuitionKind } from './review-policy.js?v=20261120-review';
 
 function replay(fen, variation) {
   const board = new ChessBoard(fen);

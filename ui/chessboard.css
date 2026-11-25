@@ -3,7 +3,7 @@
   width: 100%;
   max-width: 600px;
   aspect-ratio: 1 / 1;
-  background: #151515;
+  background: repeating-conic-gradient(var(--board-light, #e8eee7) 0% 25%, var(--board-dark, #9caf9f) 0% 50%) 0 0 / 25% 25%;
   border-radius: 12px;
   box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
   position: relative;

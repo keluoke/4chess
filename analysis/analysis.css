@@ -672,6 +672,18 @@ body {
   pointer-events: auto;
 }
 
+@media (min-width: 721px) {
+  .studio-toast {
+    left: auto;
+    right: 20px;
+    bottom: 20px;
+    transform: translateY(16px);
+  }
+  .studio-toast.show {
+    transform: translateY(0);
+  }
+}
+
 /* Mobile & PWA Responsive Optimization */
 @media (max-width: 768px) {
   body {

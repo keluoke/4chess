@@ -388,6 +388,17 @@ class AnalysisStudioApp {
     });
     this.el.btnExitBranch.addEventListener('click', () => this.goToPly(this.currentPly));
 
+    document.getElementById('mobile-study-tabs')?.addEventListener('click', event => {
+      const btn = event.target.closest('button[data-mobile-tab]');
+      if (!btn) return;
+      const tab = btn.dataset.mobileTab;
+      this.setMobileTab(tab);
+      const target = tab === 'moves' ? document.querySelector('.notation-section')
+        : tab === 'review' ? document.getElementById('insight-column')
+        : document.querySelector('.position-analysis');
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    });
+
     this.el.btnSettings.addEventListener('click', () => {
       this.updateEngineStatus();
       this.reviewCommentary.sync({ recheck: true });
@@ -773,6 +784,13 @@ class AnalysisStudioApp {
     if (!this.el.pgnModalError) return;
     this.el.pgnModalError.textContent = message;
     this.el.pgnModalError.hidden = !message;
+  }
+
+  setMobileTab(tab = 'candidates') {
+    document.body.dataset.mobileTab = tab;
+    for (const btn of document.querySelectorAll('#mobile-study-tabs button[data-mobile-tab]')) {
+      btn.setAttribute('aria-selected', String(btn.dataset.mobileTab === tab));
+    }
   }
 
   openPgnModal() {
@@ -1254,6 +1272,7 @@ class AnalysisStudioApp {
     }
 
     document.body.classList.toggle('position-only', positionOnly && this.hasAnalysisInput);
+    this.setMobileTab('candidates');
     this.isReviewingMove = false;
     this.isBranching = false;
     document.body.classList.remove('exploring-branch');

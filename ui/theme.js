@@ -11,7 +11,6 @@ const applyTheme = (theme) => {
     const english = document.documentElement.lang.startsWith('en');
     button.textContent = resolved === 'dark' ? (english ? 'Light' : '浅色') : (english ? 'Dark' : '深色');
     button.setAttribute('aria-label', english ? `Switch to ${resolved === 'dark' ? 'light' : 'dark'} theme` : `切换为${resolved === 'dark' ? '浅色' : '深色'}界面`);
-    button.setAttribute('aria-pressed', String(resolved === 'dark'));
   });
 };
 const extensionStorage = globalThis.chrome?.storage?.local;
