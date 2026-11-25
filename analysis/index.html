@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="workbench.css?v=20261124-intuition-labels-r2">
-  <link rel="stylesheet" href="./review-share.css?v=20261124-checkup-cards-r2">
+  <link rel="stylesheet" href="./review-share.css?v=20261125-poster-focus">
 </head>
 <body class="diverge-ui">
   <script>
@@ -400,6 +400,10 @@
       <button type="button" class="btn-header btn-primary" id="review-share-copy" data-i18n="reviewShareCopy" disabled>复制复盘分享链接</button>
     </div>
     <textarea id="review-share-field" readonly hidden rows="3" data-i18n-aria="shareExportField"></textarea>
+    <details id="review-share-details" hidden>
+      <summary id="review-share-details-title">查看分析细节</summary>
+      <div id="review-share-story"></div>
+    </details>
   </dialog>
 
   <dialog id="maia-elo-trend" class="maia-trend-dialog" aria-labelledby="maia-trend-heading">
@@ -735,11 +739,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261125-game-story"></script>
+  <script type="module" src="analysis.js?v=20261125-poster-focus"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261125-game-story').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261125-poster-focus').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

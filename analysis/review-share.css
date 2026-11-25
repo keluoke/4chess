@@ -18,6 +18,10 @@
 :is(#review-share-preview,#checkup-share-canvas)[hidden], .snapshot-page [hidden] { display: none !important; }
 :is(#review-share-status,#checkup-share-status) { min-height: 1.35em; font-size: 14px; }
 :is(#review-share-field,#checkup-share-field) { width: 100%; box-sizing: border-box; margin-top: 12px; }
+#review-share-details { margin-top: 16px; font-size: 14px; }
+#review-share-details summary { cursor: pointer; font-weight: 600; }
+#review-share-story h3 { margin: 12px 0 4px; font-size: 14px; }
+#review-share-story p { margin: 0; color: var(--text-muted); }
 
 .snapshot-page { display: block; overflow: auto; min-height: 100dvh; background: var(--dg-paper, #f4f7ef); color: var(--text-main, #18342d); }
 .snapshot-wrap { box-sizing: border-box; width: min(1120px, 100%); margin: 0 auto; padding: 18px clamp(14px, 4vw, 40px) 48px; }

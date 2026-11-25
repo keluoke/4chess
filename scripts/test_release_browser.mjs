@@ -20,8 +20,9 @@ const releaseModules = new Map([
   '/analysis/challenge.js'
  ].map(path => [path, '20261124-intuition-labels']),
  ['/analysis/board-controls.js', '20261124-controls'],
- ...['/analysis/analysis.js', '/analysis/review-share.js', '/analysis/review-snapshot.js', '/analysis/shared-review.js', '/engine/game-analyzer.js']
-   .map(path => [path, '20261125-game-story']),
+ ['/engine/game-analyzer.js', '20261125-game-story'],
+ ...['/analysis/analysis.js', '/analysis/review-share.js', '/analysis/review-snapshot.js', '/analysis/shared-review.js']
+   .map(path => [path, '20261125-poster-focus']),
  ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
   '/engine/model-cache-client.js', '/engine/model-loader.js'].map(path => [path, '20261124-mobile']),
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']

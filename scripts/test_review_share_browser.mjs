@@ -50,8 +50,10 @@ try {
     const ctx = canvas.getContext('2d');
     const fillText = ctx.fillText.bind(ctx);
     window.reportCoordinates = [];
+    window.reportText = [];
     ctx.fillText = (text, x, y, maxWidth) => {
-      if (x === 82 && /^[1-8]$/.test(text)) window.reportCoordinates.push(text);
+      if (x === 274 && /^[1-8]$/.test(text)) window.reportCoordinates.push(text);
+      window.reportText.push(String(text));
       fillText(text, x, y, maxWidth);
     };
     return { accuracy: [result.accuracyWhite, result.accuracyBlack], path: app.evalChart.linePath.getAttribute('d') };
@@ -62,9 +64,9 @@ try {
   const pixel = (canvas, x, y) => canvas.evaluate((element, [left, top]) =>
     Array.from(element.getContext('2d').getImageData(left, top, 1, 1).data), [x, y]);
   assert.equal(await page.evaluate(() => getComputedStyle(document.body).colorScheme), 'dark');
-  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 89, 789), [212, 229, 211, 255], 'Whole-game diagram keeps the light board palette in dark mode');
+  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 281, 762), [212, 229, 211, 255], 'Whole-game diagram keeps the light board palette in dark mode');
   assert.deepEqual(await pixel(page.locator('#review-share-preview'), 75, 840), [255, 255, 255, 255]);
-  assert.deepEqual(await page.evaluate(() => reportCoordinates.slice(0, 8)), ['1', '2', '3', '4', '5', '6', '7', '8'], 'The black move is drawn from Black’s side');
+  assert.deepEqual(await page.evaluate(() => reportCoordinates), ['1', '2', '3', '4', '5', '6', '7', '8'], 'The black move is drawn from Black’s side');
   const download = page.waitForEvent('download');
   await page.locator('#review-share-png').click();
   const png = await download;
@@ -90,13 +92,18 @@ try {
     const app = window.__maiaStudioApp;
     const report = app.reviewResult;
     report.elo = 2600;
-    Object.assign(report.allMoves[0], { reviewStoryBestUci: report.allMoves[0].uci, humanProbability: 2.8 });
+    Object.assign(report.allMoves[0], { reviewStoryBestUci: report.allMoves[0].uci, humanProbability: 2.8,
+      maiaTopUci: 'd2d4', maiaTopProb: 41 });
     Object.assign(report.allMoves[3], { narrowChoice: { narrow: true, found: false } });
-    Object.assign(report.allMoves[4], { narrowChoice: { narrow: true, found: true } });
+    Object.assign(report.allMoves[4], { narrowChoice: { narrow: true, found: true }, isBeyondIntuition: true,
+      divergenceType: 'beyond_intuition', divergenceStatus: 'confirmed', reviewStoryBestUci: report.allMoves[4].uci,
+      maiaTopUci: 'f1c4', maiaLossCp: 85, maiaESL: 5 });
     Object.assign(report.allMoves[5], { narrowChoice: { narrow: false, found: false } });
     app.maiaEngine.isReady = true;
     let stalled = true;
     window.compareRequests = [];
+    window.reportText = [];
+    window.reportCoordinates = [];
     app.maiaEngine.predict = async (fen, elo, _, cancelled, history) => {
       if (stalled) {
         stalled = false;
@@ -122,6 +129,11 @@ try {
   assert.match(storyText, /1\. e4 · Maia predicts 2\.8% of 2600 Elo players/);
   assert.match(storyText, /3\/8 plies checked · 2 narrow positions · 1 correct replies/);
   assert.match(storyText, /1500 · 1\. e4 +\/ +1900 · 2\. Nf3 +\/ +2600 · No streak/);
+  await page.locator('#review-share-details[open]').getByText(/first run of 4 consecutive plies/).waitFor();
+  const firstFocus = await page.evaluate(() => ({ text: window.reportText, board: window.reportCoordinates }));
+  assert.ok(firstFocus.text.includes('Intuition trap'));
+  assert.equal(firstFocus.board.length, 8, 'Only one board is drawn even with two confirmed candidates');
+  assert.doesNotMatch(firstFocus.text.join(' '), /Brilliant move|Least expected|narrow positions|first run|Where each rating|checked|0 precise/);
   assert.deepEqual(await page.evaluate(() => window.compareRequests.find(request => request.elo === 1900 && request.ply === 2)?.history.length), 2);
   await page.locator('#review-share-copy').click();
   const withStory = new URL(await page.evaluate(() => navigator.clipboard.readText()));
@@ -163,7 +175,7 @@ try {
   await page.locator('#review-share-copy').click();
   const anonymous = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   const data = await view.evaluate(async hash => {
-    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261125-game-story');
+    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261125-poster-focus');
     return decodeReviewSnapshot(new URLSearchParams(hash.slice(1)).get('review'));
   }, anonymous.hash);
   assert.deepEqual([data.white, data.black, data.source], ['', '', null]);
@@ -171,6 +183,37 @@ try {
   await view.goto(origin + shared.pathname + '?lang=zh#review=invalid');
   await view.getByText('无法打开这份复盘，请让分享者重新复制链接。', { exact: true }).waitFor();
   assert(await view.locator('#snapshot-report').isHidden());
+
+  const alternativeFocuses = await page.evaluate(async () => {
+    const app = window.__maiaStudioApp;
+    const original = app.reviewResult;
+    const rare = original.allMoves.map(move => ({
+      ...move, divergenceType: null, isHumanTrap: false, isBeyondIntuition: false,
+      severity: 'good', lossCp: 0, accuracy: 98
+    }));
+    const shot = async allMoves => {
+      window.reportText = [];
+      window.reportCoordinates = [];
+      app.reviewResult = { ...original, accuracyWhite: 98.3, accuracyBlack: 97.6, allMoves };
+      await app.reviewShare.prepare();
+      return { text: window.reportText, board: window.reportCoordinates, height: app.reviewShare.canvas.height };
+    };
+    const rareFocus = await shot(rare);
+    const narrowFocus = await shot(rare.map(move => ({ ...move, humanProbability: null })));
+    const blunderFocus = await shot(rare.map((move, index) => index === 2 ? { ...move, severity: 'blunder', lossCp: 250 } : move));
+    app.reviewResult = original;
+    return { rareFocus, narrowFocus, blunderFocus };
+  });
+  assert.ok(alternativeFocuses.rareFocus.text.includes('Least expected engine pick'));
+  assert.ok(alternativeFocuses.rareFocus.text.includes('Human instinct d4'));
+  assert.ok(alternativeFocuses.rareFocus.text.includes('Engine pick e4'));
+  assert.ok(alternativeFocuses.rareFocus.text.some(text => text.includes('98.3%') && text.includes('No blunders')));
+  assert.equal(alternativeFocuses.rareFocus.board.length, 8);
+  assert.doesNotMatch(alternativeFocuses.rareFocus.text.join(' '), /only correct|unique|tightrope|Where each rating/);
+  assert.ok(alternativeFocuses.narrowFocus.text.includes('Found the best move in 1 of 2 confirmed tightrope positions'));
+  assert.equal(alternativeFocuses.narrowFocus.board.length, 0);
+  assert.ok(alternativeFocuses.narrowFocus.height < alternativeFocuses.rareFocus.height);
+  assert.ok(!alternativeFocuses.blunderFocus.text.some(text => text.includes('No blunders')));
 
   await page.locator('#review-share-close').click();
   await page.locator('#review-report-workbench').click();

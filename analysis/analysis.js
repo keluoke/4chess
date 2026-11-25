@@ -11,7 +11,7 @@ import { IntuitionCheckup } from './checkup-runner.js?v=20261124-intuition-label
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
 import { StudyProfileControls } from './study-profile-controls.js?v=20261124-intuition-labels';
 import { CheckupReminders } from './checkup-reminders.js?v=20261124-intuition-labels';
-import { ReviewShare } from './review-share.js?v=20261125-game-story';
+import { ReviewShare } from './review-share.js?v=20261125-poster-focus';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';

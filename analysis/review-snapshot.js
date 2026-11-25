@@ -67,6 +67,10 @@ export function publicGameLink(value) {
       const id = url.pathname.split('/').filter(Boolean).at(-1);
       if (!['analysis', 'training', 'practice', 'insights', 'streamer'].includes(id.toLowerCase())) return 'https://lichess.org/' + id;
     }
+    if (url.hostname === 'lichess.org' &&
+        /^\/broadcast\/[a-z0-9-]{1,90}\/[a-z0-9-]{1,70}\/[a-zA-Z0-9]{8}(?:\/[a-zA-Z0-9]{8})?\/?$/.test(url.pathname)) {
+      return url.origin + url.pathname.replace(/\/$/, '');
+    }
   } catch { /* Local PGNs do not necessarily have a public original. */ }
   return null;
 }
