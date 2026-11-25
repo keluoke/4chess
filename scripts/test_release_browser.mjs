@@ -80,6 +80,7 @@ try {
  await page.setViewportSize({width:390,height:844});
  const rect=await page.locator('#btn-home-import').boundingBox();assert(rect.y+rect.height<844,'Primary action visible on mobile first screen');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+ assert.equal(await page.locator('.btn-nav').first().evaluate(button => getComputedStyle(button).touchAction), 'manipulation');
  await page.screenshot({path:path.join(output,'studio-mobile.png'),fullPage:true});
  const examples = page.locator('.study-home-examples');
  assert((await examples.boundingBox()).y > rect.y+rect.height,'Examples follow the mobile import action');

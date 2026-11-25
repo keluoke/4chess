@@ -575,8 +575,11 @@ try {
     { maiaVariant: '5m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
   assert.match(await phone.locator('#load-maia').getAttribute('aria-label'), /5M.*28 MiB/);
   assert.match(await phone.locator('#match-score').innerText(), /SIN\s+0 – 0\s+GUK/);
-  assert.equal(await phone.locator('#event-board').evaluate(element => getComputedStyle(element).touchAction), 'pan-y');
-  assert.equal(await phone.locator('#event-board .maia-chessboard').evaluate(element => getComputedStyle(element).touchAction), 'pan-y');
+  assert.equal(await phone.locator('#event-board').evaluate(element => getComputedStyle(element).touchAction), 'pan-y pinch-zoom');
+  assert.equal(await phone.locator('#event-board .maia-chessboard').evaluate(element => getComputedStyle(element).touchAction), 'pan-y pinch-zoom');
+  for (const selector of ['body', '#previous', '#next', '#event-moves', '#round-rail']) {
+    assert.equal(await phone.locator(selector).evaluate(element => getComputedStyle(element).touchAction), 'manipulation');
+  }
   const phoneLayout = await phone.evaluate(() => Object.fromEntries([
     'event-moves', 'event-board', 'black-clock', 'white-clock', 'engine-lines', 'round-controls'
   ].map(id => {
@@ -592,6 +595,13 @@ try {
   assert.equal(await phone.locator('#event-moves').evaluate(element => element.scrollLeft > 0), true);
   assert.equal(await phone.locator('#trend-mobile-slot #trend-toggle').isVisible(), true);
   assert.equal(await phone.locator('#first').isVisible(), false);
+  const initialPly = await phone.locator('#ply-note').innerText();
+  const previous = await phone.locator('#previous').boundingBox();
+  for (let count = 0; count < 2; count++) {
+    await phone.touchscreen.tap(previous.x + previous.width / 2, previous.y + previous.height / 2);
+  }
+  assert.equal(Number.parseInt(await phone.locator('#ply-note').innerText(), 10), Number.parseInt(initialPly, 10) - 2);
+  assert.equal(await phone.evaluate(() => visualViewport.scale), 1);
   await phone.keyboard.press('Home');
   const touch = await mobile.newCDPSession(phone);
   const center = async square => {

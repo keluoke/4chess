@@ -206,7 +206,7 @@ button,input,select,textarea { font-family:inherit; }
 #maia-svg-arrows-group line { filter:drop-shadow(0 0 .7px light-dark(#ffffff,#101a16)); }
 .board-controls { margin:4px 0 0;padding:8px;border:0;border-radius:18px;background:var(--dg-surface);box-shadow:var(--dg-shadow); }
 .btn-nav-group { gap:5px; }
-.btn-nav { border:0;border-radius:50%;color:var(--text-muted);min-width:32px; }
+.btn-nav { border:0;border-radius:50%;color:var(--text-muted);min-width:32px;touch-action:manipulation; }
 #btn-play { background:var(--brand-green);color:var(--dg-on-green); }
 #board-status-text { font-size:12px!important;font-weight:500!important;font-variant-numeric:tabular-nums; }
 .branch-banner { border:0;border-radius:0;background:transparent;padding:3px 2px 0;gap:10px;font-size:12px;color:var(--brand-green); }
