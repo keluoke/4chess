@@ -4,7 +4,7 @@ import { LIVE_ANALYSIS_RATINGS, LIVE_ANALYSIS_VERSION, livePositionKey } from '.
 
 const MAX_PLIES = 600;
 const LEASE_MS = 180_000;
-const RETRY_MS = 10_000;
+const RETRY_MS = 60_000;
 
 export const pilotRound = (eventId, round) => eventId === 'wcc2026' && round === 'xLgOJ6cb';
 
@@ -18,6 +18,7 @@ async function authorize(header, secret) {
 
 const fenAt = (game, ply) => ply ? game.moves[ply - 1]?.fen : game.initialFen;
 const resultKey = (round, key) => 'analysis:' + round + ':' + key;
+const retryKey = (round, key) => 'analysis-retry:' + round + ':' + key;
 
 function parseLine(value, fen) {
   if (!value || !Number.isInteger(value.depth) || value.depth < 16 || value.depth > 64 ||
@@ -110,10 +111,11 @@ export function createAnalysisService({ storage, secret, getGame, ensureGame }) 
       if (lease && lease.until > now) return Response.json({ status: 'busy' });
       const available = await ensureGame(event, round);
       if (!available) return Response.json({ status: 'idle' });
-      const skip = await storage.get('analysis-retry:' + round);
       for (let ply = Math.min(available.moves.length, MAX_PLIES); ply >= 0; ply--) {
         const position = await identity(round, available, ply);
-        if (skip?.key === position.key && skip.until > now || await storage.get(resultKey(round, position.key))) continue;
+        if (await storage.get(resultKey(round, position.key))) continue;
+        const retry = await storage.get(retryKey(round, position.key));
+        if (retry?.until > now) continue;
         const id = crypto.randomUUID();
         await storage.put(leaseKey, { ...position, id, until: now + LEASE_MS });
         return Response.json({ status: 'claimed', ...position, lease: id, version: LIVE_ANALYSIS_VERSION,
@@ -133,13 +135,17 @@ export function createAnalysisService({ storage, secret, getGame, ensureGame }) 
       return new Response(null, { status: 409 });
     }
     if (value.retry === true) {
-      await storage.put('analysis-retry:' + round, { key: lease.key, until: now + RETRY_MS });
+      const key = retryKey(round, lease.key);
+      const prior = await storage.get(key);
+      const attempts = Math.min((prior?.attempts ?? 0) + 1, 5);
+      await storage.put(key, { attempts, until: now + RETRY_MS * 2 ** (attempts - 1) });
       await storage.delete(leaseKey);
       return new Response(null, { status: 204 });
     }
     const result = sanitize(value.result, game, lease.ply);
     if (!result) return new Response(null, { status: 422 });
     await storage.put(resultKey(round, lease.key), result);
+    await storage.delete(retryKey(round, lease.key));
     await storage.delete(leaseKey);
     return new Response(null, { status: 204 });
   };

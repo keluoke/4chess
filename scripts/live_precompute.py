@@ -9,19 +9,26 @@ import sys
 import time
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 RATINGS = (600, 1000, 1400, 1800, 2200, 2600)
 VERSION = "sf19-mpv3-maia79m-v1"
 
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+HTTP = build_opener(NoRedirect())
 
 def request_job(origin, token, op, data=None):
     query = urlencode({"event": "wcc2026", "round": "xLgOJ6cb", "op": op})
     req = Request(origin + "/api/live/analysis-work?" + query,
                   data=json.dumps(data or {}).encode(), method="POST",
-                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json",
+                           "User-Agent": "DivergeChess Live Precompute (+https://4chess.cc)"})
     try:
-        with urlopen(req, timeout=18) as response:
+        with HTTP.open(req, timeout=18) as response:
             return json.load(response) if response.status == 200 else {}
     except HTTPError as error:
         if error.code == 409:
@@ -141,8 +148,8 @@ async def run(args, token):
         job = json.loads(Path(args.fixture).read_text())
         print(json.dumps(await service.analyze(job)))
         return
-    completed = 0
-    while args.jobs == 0 or completed < args.jobs:
+    claimed = 0
+    while args.jobs == 0 or claimed < args.jobs:
         started = time.monotonic()
         try:
             job = await asyncio.to_thread(request_job, args.origin, token, "claim")
@@ -151,13 +158,14 @@ async def run(args, token):
                     break
                 await asyncio.sleep(8)
                 continue
+            claimed += 1
             try:
                 result = await service.analyze(job)
                 await asyncio.to_thread(request_job, args.origin, token, "publish", {"lease": job["lease"], "result": result})
-            except Exception:
+            except Exception as error:
                 await asyncio.to_thread(request_job, args.origin, token, "publish", {"lease": job["lease"], "retry": True})
-                raise
-            completed += 1
+                print(f"round={job['round']} ply={job['ply']} {type(error).__name__}: {error}", file=sys.stderr, flush=True)
+                continue
             print(f"round={job['round']} ply={job['ply']} elapsed={time.monotonic() - started:.2f}s", flush=True)
         except Exception as error:
             if args.jobs:
