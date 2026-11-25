@@ -5,6 +5,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { LIVE_EVENTS } from '../cloudflare/live/events.js';
 import { eventView, fallbackRounds, parseRoundPgn } from '../cloudflare/live/model.js';
+import { ChessBoard } from '../engine/chess-core.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const mime = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.svg': 'image/svg+xml' };
@@ -27,13 +28,14 @@ const pgn = line => '[Event "Game 1"]\n[White "Sindarov"]\n[WhiteFideId "1420548
 let line = '1. e4 { [%clk 1:59:32] } e5 { [%clk 1:58:52] } 2. Nf3 { [%clk 1:57:33] }';
 let updatedAt = current.startsAt + 1000;
 let finished = false;
-async function mockBroadcast(context) {
+async function mockBroadcast(context, firstSnapshot) {
   await context.route('**/api/live/event?*', route => {
     const raw = finished ? pgn(line).replace('[Result "*"]', '[Result "1/2-1/2"]').replace(/\*$/, '1/2-1/2') : pgn(line);
     const snapshot = { games: parseRoundPgn(raw, event) };
     return route.fulfill({ json: eventView('wcc2026', event, rounds, new Map([[current.id, snapshot]]), current.startsAt + 1000) });
   });
-  await context.route('**/api/live/round?*', route => {
+  await context.route('**/api/live/round?*', async route => {
+    await firstSnapshot;
     const roundId = new URL(route.request().url()).searchParams.get('id');
     const isCurrent = roundId === current.id;
     const raw = pgn(isCurrent ? line : '');
@@ -66,9 +68,18 @@ async function mockEngines(context) {
       async sampleMaia(position, elo) {
         (window.sampleMaiaRequests ||= []).push(elo);
         if (elo === 600 && window.missingTrendSample) return [];
-        return position.series.map((move, rank) => ({
+        if (elo === window.heldTrendBand) {
+          window.heldTrendBand = null;
+          await new Promise(resolve => { window.releaseTrendBand = resolve; });
+        }
+        const moves = position.series.map((move, rank) => ({
           uci: move.uci, rawProb: rank ? (window.lowCurve ? .24 : .55) : (window.nonBlind ? .2 : .01)
         }));
+        if (elo === window.partialTrendBand) {
+          window.partialTrendBand = null;
+          return moves.slice(0, 1);
+        }
+        return moves;
       }
       async inspect(position) {
         const chess = new ChessBoard(position.fen);
@@ -119,17 +130,46 @@ async function mockEngines(context) {
 }
 
 const browser = await chromium.launch({ channel: process.env.TEST_BROWSER_CHANNEL || 'chromium', headless: true });
+async function assertPosterQr(page, target) {
+  assert.ok(await page.locator('#share-card-canvas').evaluate(async (canvas, url) => {
+    const { shareQr } = await import('/analysis/share-export.js?v=20261124-divergence-cards');
+    const qr = shareQr(url);
+    const size = qr.getModuleCount();
+    const scale = Math.floor(154 / (size + 8));
+    if (scale < 2) return false;
+    const x = 1008 - (size + 4) * scale, y = 1376 + 4 * scale;
+    const ctx = canvas.getContext('2d');
+    const { data } = ctx.getImageData(x, y, size * scale, size * scale);
+    for (let row = 0; row < size; row++) {
+      for (let col = 0; col < size; col++) {
+        const offset = 4 * (row * size * scale * scale + col * scale);
+        if (data[offset] !== (qr.isDark(row, col) ? 17 : 255)) return false;
+      }
+    }
+    return true;
+  }, target), 'Poster QR encodes the expected link with modules at least two pixels wide');
+}
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
   const issues = [];
   page.on('pageerror', error => issues.push(error.message));
   await page.clock.install({ time: current.startsAt + 1000 });
-  await mockBroadcast(context);
+  let releaseSnapshot;
+  const firstSnapshot = new Promise(resolve => { releaseSnapshot = resolve; });
+  await mockBroadcast(context, firstSnapshot);
   await mockEngines(context);
   const origin = 'http://127.0.0.1:' + server.address().port;
   await page.goto(origin + '/live/?lang=zh');
+  await page.locator('#round-rail button[aria-current]').waitFor();
+  assert.equal(await page.locator('#moment').isDisabled(), true);
+  assert.equal(await page.locator('#copy-live-link').isDisabled(), true);
+  await page.locator('#moment').dispatchEvent('click');
+  assert.equal(await page.locator('#share-card-dialog').isVisible(), false);
+  releaseSnapshot();
   await page.locator('#event-moves button[data-ply="3"]').waitFor();
+  assert.equal(await page.locator('#moment').isEnabled(), true);
+  assert.equal(await page.locator('#copy-live-link').isEnabled(), true);
   await page.locator('#sf-line strong').getByText('Nc6').waitFor();
   await page.locator('#analyze:not([disabled])').waitFor();
   assert.equal(await page.locator('#analyze').innerText(), '暂停双引擎');
@@ -201,6 +241,7 @@ try {
   const copied = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   assert.equal(copied.searchParams.get('round'), current.id);
   assert.equal(copied.searchParams.get('ply'), '3');
+  assert.equal(copied.searchParams.get('orientation'), 'white');
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
   await page.locator('#share-card-canvas:visible').waitFor();
@@ -272,16 +313,63 @@ try {
   const branchLink = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   assert.equal(branchLink.searchParams.get('ply'), '2');
   assert.equal(branchLink.searchParams.get('line'), 'g1f3');
+  assert.equal(branchLink.searchParams.get('orientation'), 'black');
+  await page.locator('#share-card-canvas:visible').waitFor();
+  assert.equal(await page.locator('#share-card-qr-note').isHidden(), true);
+  await assertPosterQr(page, branchLink.href);
   const recipient = await context.newPage();
   await recipient.goto(origin + '/live/' + branchLink.search);
   await recipient.locator('#ply-note').getByText('试走变化').waitFor();
   assert.equal(await recipient.locator('#event-board [data-square="f3"] .maia-piece').count(), 1);
+  assert.equal(await recipient.locator('#board-frame').evaluate(frame => frame.previousElementSibling.id), 'white-seat');
+  assert.equal(await recipient.locator('#evaluation-gauge').evaluate(el => el.classList.contains('flipped')), true);
+  const legalBranch = new URL(branchLink);
+  legalBranch.searchParams.delete('orientation');
+  await recipient.goto(origin + '/live/' + legalBranch.search);
+  await recipient.locator('#ply-note').getByText('试走变化').waitFor();
+  assert.equal(await recipient.locator('#board-frame').evaluate(frame => frame.previousElementSibling.id), 'black-seat');
   branchLink.searchParams.set('line', 'g1g6');
   await recipient.goto(origin + '/live/' + branchLink.search);
   await recipient.locator('#live-link-status').getByText('此链接中的试走变化无法在当前棋谱上重现。').waitFor();
   assert.equal(await recipient.locator('#event-board [data-square="g1"] .maia-piece').count(), 1);
   await recipient.close();
   await page.locator('#btn-close-share-card').click();
+
+  const longBranch = await context.newPage();
+  await longBranch.addInitScript(() => {
+    window.partialTrendBand = 1800;
+    window.heldTrendBand = 600;
+  });
+  const gameQuery = new URLSearchParams({ event: 'wcc2026', round: current.id, lang: 'en', ply: '0', orientation: 'black' });
+  const gameLink = 'https://4chess.cc/live/?' + gameQuery;
+  const line128 = Array.from({ length: 32 }, () => 'g1f3.g8f6.f3g1.f6g8').join('.');
+  gameQuery.set('line', line128);
+  gameQuery.set('base', ChessBoard.INITIAL_FEN);
+  await longBranch.goto(origin + '/live/?' + gameQuery);
+  await longBranch.locator('#ply-note').getByText('Variation', { exact: true }).waitFor();
+  await longBranch.locator('#maia-line strong').filter({ hasNotText: '—' }).waitFor();
+  await longBranch.locator('#trend-toggle').click();
+  await longBranch.waitForFunction(() => typeof window.releaseTrendBand === 'function');
+  assert.equal(await longBranch.evaluate(() => window.sampleMaiaRequests.filter(elo => elo === 1800).length), 1);
+  await longBranch.locator('#live-trend form button').click();
+  await longBranch.locator('#moment').click();
+  await longBranch.locator('#share-card-qr-note').getByText(/Copy the link to share the full variation/).waitFor();
+  await longBranch.locator('#btn-share-card-link').click();
+  const fullLink = await longBranch.evaluate(() => navigator.clipboard.readText());
+  assert.equal(fullLink, 'https://4chess.cc/live/?' + gameQuery);
+  assert.ok(fullLink.length > 600);
+  await longBranch.evaluate(() => window.releaseTrendBand());
+  await longBranch.locator('#share-card-canvas:visible').waitFor();
+  assert.deepEqual(await longBranch.evaluate(() => window.sampleMaiaRequests), [2200, 1800, 1400, 1000, 600, 1800]);
+  await assertPosterQr(longBranch, gameLink);
+  if (process.env.LIVE_SCREENSHOTS) {
+    mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
+    const download = longBranch.waitForEvent('download');
+    await longBranch.locator('#btn-share-card-download').click();
+    await (await download).saveAs(path.join(process.env.LIVE_SCREENSHOTS, 'long-variation.png'));
+  }
+  await longBranch.close();
+
   line += ' Nc6 { [%clk 0:04:59] }';
   updatedAt = await page.evaluate(() => Date.now() + 11000);
   await page.clock.fastForward(11000);

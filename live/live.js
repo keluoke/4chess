@@ -29,7 +29,9 @@ const copy = {
     posterWhiteMate: '白方有将杀', posterBlackMate: '黑方有将杀',
     posterEngineChoice: '引擎首选', posterHumanChoice: '人类直觉',
     posterChart: '各段位会怎么选', posterChartNote: '从 600 到 2600 分的直觉变化 · Maia 预测',
-    posterScan: '扫码在 4chess.cc 试走这一步', posterSaved: '已保存海报', posterCopied: '已复制海报',
+    posterScan: '扫码在 4chess.cc 试走这一步', posterScanGame: '扫码回到本局实战',
+    posterQrFallback: '变化较长。海报扫码回到实战起点，复制链接可分享完整变化。',
+    posterSaved: '已保存海报', posterCopied: '已复制海报',
     posterCopyFail: '复制图片失败，可用「保存图片」。', enablePoster: '启用双引擎',
     quickScore: 'Stockfish 快算评估',
     perspectiveDisabled: '启用 Maia 后查看各段直觉',
@@ -75,7 +77,9 @@ const copy = {
     posterWhiteMate: 'White has mate', posterBlackMate: 'Black has mate',
     posterEngineChoice: 'Engine pick', posterHumanChoice: 'Human instinct',
     posterChart: 'What would each rating play?', posterChartNote: 'From 600 to 2600 Elo · Maia predictions',
-    posterScan: 'Scan to try this move on 4chess.cc', posterSaved: 'Poster saved', posterCopied: 'Poster copied',
+    posterScan: 'Scan to try this move on 4chess.cc', posterScanGame: 'Scan to return to the game position',
+    posterQrFallback: 'The QR code opens the game position. Copy the link to share the full variation.',
+    posterSaved: 'Poster saved', posterCopied: 'Poster copied',
     posterCopyFail: 'Could not copy the image. Use Save image instead.', enablePoster: 'Enable both engines',
     quickScore: 'Quick Stockfish evaluation',
     perspectiveDisabled: 'Enable Maia to see rating trends',
@@ -114,6 +118,8 @@ const foreground = () => !document.hidden;
 const analysisAllowed = () => window.top === window && !FairPlayGuard.isLiveGameInProgress();
 const initialPly = /^\d{1,6}$/.test(params.get('ply') || '') ? Number(params.get('ply')) : null;
 const MAX_SHARED_VARIATION = 128;
+// Keep modules at least two pixels wide in the poster's 154 px QR area.
+const MAX_POSTER_QR_URL = 230;
 const compactLayout = matchMedia('(max-width: 720px)');
 const mobileDownloads = compactLayout.matches || matchMedia('(pointer: coarse)').matches;
 const maiaSizes = { '5m': '28 MiB', '23m': '104 MiB', '79m': '159 MiB' };
@@ -129,6 +135,7 @@ const state = {
     stockfishVariant: 'lite', depth: 18, elo: 2600, sfArrows: true, maiaArrows: true }
 };
 const board = new BoardUI($('event-board'), {
+  orientation: params.get('orientation') === 'black' ? 'black' : 'white',
   brilliantArrows: true,
   touchTapOnly: true,
   onMove(move, fen) {
@@ -427,7 +434,7 @@ function paintControls() {
   $('latest').disabled = state.follow && !state.branch;
   paintPlayback();
   paintSoundToggle();
-  $('copy-live-link').disabled = $('moment').disabled = !round || !analysisAllowed();
+  $('copy-live-link').disabled = $('moment').disabled = !canSharePosition(round);
   paintRoundHeading();
   paintWorkbenchLink();
   paintAnalysis();
@@ -535,19 +542,28 @@ function trendFor(position) {
   return state.trend;
 }
 
+function completeBand(trend, elo) {
+  return trend.position.series.every(move => Number.isFinite(trend.samples.get(elo)?.get(move.uci)));
+}
+
 function sampleTrend(trend, requireSeries = false) {
-  if (trend.pending) return trend.pending;
   const obsolete = () => state.trend !== trend || !analysisAllowed() || !foreground();
+  if (obsolete()) return;
+  if (trend.pending) {
+    if (requireSeries && !trend.requiresSeries) return trend.pending.then(() => sampleTrend(trend, true));
+    return trend.pending;
+  }
+  trend.requiresSeries = requireSeries;
   trend.pending = (async () => {
     await state.momentTask;
     for (const elo of [...RATINGS].sort((a, b) => Math.abs(a - trend.position.elo) - Math.abs(b - trend.position.elo))) {
       if (obsolete()) return;
       const saved = trend.samples.get(elo);
-      if (saved && (!requireSeries || trend.position.series.every(move => Number.isFinite(saved.get(move.uci))))) continue;
+      if (saved && (!requireSeries || completeBand(trend, elo))) continue;
       const moves = await state.engines.sampleMaia(trend.position, elo, obsolete);
       if (obsolete()) return;
       const sample = probabilities(moves);
-      if (sample.size) trend.samples.set(elo, sample);
+      if (sample.size) trend.samples.set(elo, new Map([...(saved ?? []), ...sample]));
       renderTrend(trend);
     }
   })().catch(error => {
@@ -1017,12 +1033,16 @@ for (const type of ['pointerup', 'keydown']) {
   }, { capture: true });
 }
 $('latest').onclick = $('new-move').onclick = () => jump(state.snapshot?.moves.length || 0, true);
+function paintBoardOrientation() {
+  const blackAtBottom = board.orientation === 'black';
+  const frame = $('board-frame');
+  frame.closest('.board-column').dataset.orientation = board.orientation;
+  frame.before($(blackAtBottom ? 'white-seat' : 'black-seat'));
+  frame.after($(blackAtBottom ? 'black-seat' : 'white-seat'));
+}
 $('flip-board').onclick = () => {
   board.flip();
-  const blackAtBottom = board.orientation === 'black';
-  $('board-frame').closest('.board-column').dataset.orientation = board.orientation;
-  $('board-frame').before($(blackAtBottom ? 'white-seat' : 'black-seat'));
-  $('board-frame').after($(blackAtBottom ? 'black-seat' : 'white-seat'));
+  paintBoardOrientation();
   paintEvaluation(state.analysis);
   paintWorkbenchLink();
 };
@@ -1115,24 +1135,32 @@ $('analyze').onclick = () => {
   paintAnalysis();
   void analyzeMove();
 };
-function liveLink() {
-  const query = new URLSearchParams({ event: eventId, round: state.round, lang, ply: String(state.cursor) });
+function canSharePosition(round) {
+  return Boolean(round && state.snapshot && state.boardFen && analysisAllowed());
+}
+
+function liveLinks() {
+  const query = new URLSearchParams({
+    event: eventId, round: state.round, lang, ply: String(state.cursor), orientation: board.orientation
+  });
+  const baseLink = 'https://4chess.cc/live/?' + query;
   if (state.branch) {
     if (state.branch.line.length > MAX_SHARED_VARIATION) return null;
     query.set('line', state.branch.line.join('.'));
     query.set('base', state.branch.baseFen);
   }
-  return 'https://4chess.cc/live/?' + query;
+  const link = 'https://4chess.cc/live/?' + query;
+  return { link, qrLink: link.length <= MAX_POSTER_QR_URL ? link : baseLink };
 }
 
 $('copy-live-link').onclick = async () => {
-  if (!currentRound()) return;
-  const link = liveLink();
-  if (!link) {
+  if (!canSharePosition(currentRound())) return;
+  const links = liveLinks();
+  if (!links) {
     $('live-link-status').textContent = t('variationTooLong');
     return;
   }
-  const copied = await copyShareLink(link, $('live-link-field'));
+  const copied = await copyShareLink(links.link, $('live-link-field'));
   $('live-link-status').textContent = copied ? t('linkCopied') : '';
 };
 
@@ -1149,8 +1177,7 @@ function posterNotice(share, key, action = null, label = t('retry', share.lang))
 }
 
 function completeBands(trend) {
-  return RATINGS.filter(elo => trend.position.series.every(move =>
-    Number.isFinite(trend.samples.get(elo)?.get(move.uci)))).length;
+  return RATINGS.filter(elo => completeBand(trend, elo)).length;
 }
 
 function paintPosterProgress(share, trend) {
@@ -1182,7 +1209,8 @@ function posterSpec(share, analysis, trend, moment) {
     badge: blind ? t('posterBlindBadge', locale) : kind ? t(kind, locale) : '',
     blind, blindNote: t('posterBlindNote', locale),
     subtitle: [share.players, outlook].filter(Boolean).join(' · '),
-    chartTitle: t('posterChart', locale), chartNote: t('posterChartNote', locale), scan: t('posterScan', locale),
+    chartTitle: t('posterChart', locale), chartNote: t('posterChartNote', locale),
+    scan: t(share.qrLink === share.link ? 'posterScan' : 'posterScanGame', locale),
     series: trend.position.series, samples: trend.samples,
     legend: [
       { role: 'sf', text: t('posterEngineChoice', locale) + ' ' + sf.san + ' (' + sfScore + ')' },
@@ -1220,7 +1248,7 @@ function updatePoster() {
     const [moment] = await Promise.all([momentTask, scoreTask]);
     if (!current()) return;
     if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
-    const { renderLivePoster } = await import('./poster.js?v=20261125-game-story-r2');
+    const { renderLivePoster } = await import('./poster.js?v=20261125-share-links');
     const canvas = $('share-card-canvas');
     if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
     const blob = await canvasPng(canvas);
@@ -1244,10 +1272,10 @@ function updatePoster() {
 
 $('moment').onclick = () => {
   const round = currentRound();
-  if (!round || !analysisAllowed()) return;
+  if (!canSharePosition(round)) return;
   stopPlayback();
-  const link = liveLink();
-  if (!link) {
+  const links = liveLinks();
+  if (!links) {
     $('live-link-status').textContent = t('variationTooLong');
     return;
   }
@@ -1263,10 +1291,11 @@ $('moment').onclick = () => {
   shareSession = {
     fen: state.boardFen, orientation: board.orientation, lang, branch: Boolean(branch),
     event: [lang === 'en' ? state.event?.titleEn : state.event?.title, roundName(round)].filter(Boolean).join(' · '),
-    headline, players: players.filter(Boolean).join(' vs '), link,
+    headline, players: players.filter(Boolean).join(' vs '), ...links,
     filename: ['diverge-wcc', round.id, String(ply), branch && 'variation', 'poster'].filter(Boolean).join('-') + '.png'
   };
   $('share-card-link-field').hidden = true;
+  $('share-card-qr-note').hidden = links.qrLink === links.link;
   $('share-card-copy-status').textContent = '';
   $('share-card-placeholder').hidden = false;
   $('share-card-canvas').hidden = true;
@@ -1332,6 +1361,7 @@ if (mobileDownloads && analysisAllowed()) {
   });
 }
 compactLayout.addEventListener('change', arrangeMoment);
+paintBoardOrientation();
 paintLanguage();
 arrangeMoment();
 setInterval(() => {

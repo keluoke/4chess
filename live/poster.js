@@ -1,4 +1,4 @@
-import { buildShareCardSpec, drawShareBoard, prepareShareBoards, wrapTextLines } from '../analysis/share-card.js?v=20261125-live-poster';
+import { buildShareCardSpec, drawShareBoard, prepareShareBoards, wrapTextLines } from '../analysis/share-card.js?v=20261124-intuition-labels';
 import { drawShareQr, shareQr } from '../analysis/share-export.js?v=20261124-divergence-cards';
 import { RATINGS, TREND_TICKS, trendX, trendY } from '../analysis/maia-trend-geometry.js';
 
@@ -169,6 +169,6 @@ export async function renderLivePoster(canvas, poster, current) {
   label(ctx, '4chess.cc/live', 73, 1391, 44, 780, theme.stockfish);
   label(ctx, poster.scan, 74, 1447, 23, 650, ink, 710);
   label(ctx, 'Lichess Broadcast', 74, 1490, 21, 550, muted);
-  drawShareQr(ctx, shareQr(poster.link), 1008, 1376, 154);
+  drawShareQr(ctx, shareQr(poster.qrLink), 1008, 1376, 154);
   return true;
 }
