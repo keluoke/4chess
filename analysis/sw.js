@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261125-review-sidebar';
+const CACHE_NAME = '4chess-review-20261125-review-sidebar-r2';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -27,7 +27,7 @@ const STATIC_ASSETS = [
   "../ui/fonts/InterVariable.woff2?v=4.1",
   "./workbench.css?v=20261125-review-sidebar",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261125-review-sidebar",
+  "./analysis.js?v=20261125-review-sidebar-r2",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
   "./commentary-text.js?v=20261118-recap-reset",
@@ -64,7 +64,7 @@ const STATIC_ASSETS = [
   "./position-analysis.js?v=20261125-position-poster",
   "./review-explorer.js?v=20261125-review-sidebar",
   "./review-practice.js?v=20261125-trend-lines",
-  "./review-overview.js?v=20261124-intuition-labels",
+  "./review-overview.js?v=20261125-review-sidebar",
   "./scan-authorization.js?v=20261121-study-reminders",
   "./sound-effects.js?v=20261025-v115",
   "./workbench-layout.js?v=20261124-intuition-labels",

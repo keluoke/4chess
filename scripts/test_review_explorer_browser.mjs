@@ -118,6 +118,8 @@ try {
   assert.equal(await page.locator('#btn-review-overview').evaluate(el => el === document.activeElement), true);
   await page.locator('#btn-review-overview').click();
   await page.locator('#review-report-side [data-practice-side="all"]').click();
+  assert(await page.locator('#review-report-workbench').evaluate(button => button.classList.contains('btn-primary')),
+    'The footer action stays primary when review practice is available');
   await page.getByRole('button', { name: 'Replay these 2 positions' }).click();
   assert.equal(await page.locator('#practice-panel').isVisible(), true);
   assert.equal(await page.locator('#review-summary').isVisible(), false);

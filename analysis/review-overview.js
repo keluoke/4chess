@@ -293,6 +293,5 @@ export class ReviewOverview {
     byId('review-report-practice-status').textContent = completed ? t('reviewPracticed', { count: completed }) : '';
     this.practiceButton.hidden = !this.queue.length;
     this.practiceButton.textContent = t(this.queue.length === 1 ? 'reviewPracticeOne' : 'reviewPracticeTwo');
-    this.scoreButton.classList.toggle('btn-primary', !this.queue.length);
   }
 }

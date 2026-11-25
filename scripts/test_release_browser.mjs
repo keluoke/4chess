@@ -21,7 +21,8 @@ const releaseModules = new Map([
  ['/analysis/board-controls.js', '20261124-controls'],
  ['/engine/game-analyzer.js', '20261125-game-story'],
  ['/analysis/review-share.js', '20261125-poster-focus-r2'],
- ...['/analysis/analysis.js', '/analysis/review-explorer.js', '/analysis/intuition-review.js', '/analysis/study-profile-controls.js']
+ ['/analysis/analysis.js', '20261125-review-sidebar-r2'],
+ ...['/analysis/review-overview.js', '/analysis/review-explorer.js', '/analysis/intuition-review.js', '/analysis/study-profile-controls.js']
   .map(path => [path, '20261125-review-sidebar']),
  ...['/analysis/position-analysis.js', '/analysis/maia-elo-trend.js', '/analysis/position-poster.js',
   '/analysis/position-poster-dialog.js'].map(path => [path, '20261125-position-poster']),
