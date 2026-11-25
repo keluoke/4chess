@@ -32,7 +32,7 @@ def request_job(origin, token, op, data=None):
             return json.load(response) if response.status == 200 else {}
     except HTTPError as error:
         if error.code == 409:
-            return {}
+            return {"status": "stale"}
         raise
 
 
@@ -51,9 +51,26 @@ class Precompute:
         self.budget = budget
         self.cache = {}
 
-    async def search(self, initial_fen, prefix, multipv=3, searchmoves=None):
-        return await self.sf.search(initial_fen, moves=prefix, depth=self.depth,
+    async def search(self, initial_fen, prefix, multipv=3, searchmoves=None, depth=None):
+        return await self.sf.search(initial_fen, moves=prefix, depth=depth or self.depth,
                                     multipv=multipv, searchmoves=searchmoves, timeout=self.budget / 1000 + 1)
+
+    async def engine_lines(self, initial_fen, prefix, count):
+        for target in dict.fromkeys([self.depth, 18]):
+            analysis = await self.search(initial_fen, prefix, depth=target)
+            engine = analysis["engineName"]
+            if not re.fullmatch(r"Stockfish 19(?:\.?[0-9]+)?", engine):
+                raise RuntimeError(f"SF19 is required, got {engine}")
+            lines = []
+            for line in analysis["allPv"]:
+                if not line["pv"] or not line.get("score") or line["score"].get("bound"):
+                    continue
+                score = line["score"]
+                lines.append({"uci": line["pv"][0], "pv": line["pv"][:12], "depth": line["depth"],
+                              "cp": score["cp"], "mate": score["mate"]})
+            if len(lines) >= count and lines[0]["uci"] == analysis["bestmove"] and all(line["depth"] >= 16 for line in lines[:count]):
+                return engine, lines[:count]
+        raise RuntimeError("Stockfish did not return enough verified multipv lines within the budget")
 
     async def position(self, initial_fen, prefix):
         import chess
@@ -68,26 +85,14 @@ class Precompute:
             history.append(board.copy(stack=False))
         if not any(board.legal_moves):
             return {"terminal": True}
-        analysis = await self.search(initial_fen, prefix)
-        engine = analysis["engineName"]
-        if not re.fullmatch(r"Stockfish 19(?:\.?[0-9]+)?", engine):
-            raise RuntimeError(f"SF19 is required, got {engine}")
-        lines = []
-        for line in analysis["allPv"]:
-            if not line["pv"] or not line.get("score") or line["score"].get("bound"):
-                continue
-            score = line["score"]
-            lines.append({"uci": line["pv"][0], "pv": line["pv"][:12], "depth": line["depth"],
-                          "cp": score["cp"], "mate": score["mate"]})
-        if len(lines) < min(len(list(board.legal_moves)), 3) or any(line["depth"] < 16 for line in lines):
-            raise RuntimeError("Stockfish did not return enough verified multipv lines within the budget")
+        engine, lines = await self.engine_lines(initial_fen, prefix, min(len(list(board.legal_moves)), 3))
         batch = [{"board": board.copy(stack=False), "history": history[-8:], "self_elo": rating, "oppo_elo": rating}
                  for rating in RATINGS]
         predictions = await asyncio.to_thread(self.maia.predict_batch, batch, 3)
         policies = {rating: result["allLegalProbs"] for rating, result in zip(RATINGS, predictions, strict=True)}
         if any(not policy for policy in policies.values()):
             raise RuntimeError("Maia did not return all six legal-move distributions")
-        result = {"engine": engine, "model": "maia3-79m", "lines": lines[:3], "policies": policies}
+        result = {"engine": engine, "model": "maia3-79m", "lines": lines, "policies": policies}
         self.cache[key] = result
         if len(self.cache) > 8:
             del self.cache[next(iter(self.cache))]
@@ -154,17 +159,21 @@ async def run(args, token):
         try:
             job = await asyncio.to_thread(request_job, args.origin, token, "claim")
             if job.get("status") != "claimed":
-                if args.jobs:
+                if args.jobs and job.get("status") == "idle":
                     break
                 await asyncio.sleep(8)
                 continue
             claimed += 1
             try:
                 result = await service.analyze(job)
-                await asyncio.to_thread(request_job, args.origin, token, "publish", {"lease": job["lease"], "result": result})
+                published = await asyncio.to_thread(request_job, args.origin, token, "publish",
+                                                    {"lease": job["lease"], "result": result})
             except Exception as error:
                 await asyncio.to_thread(request_job, args.origin, token, "publish", {"lease": job["lease"], "retry": True})
                 print(f"round={job['round']} ply={job['ply']} {type(error).__name__}: {error}", file=sys.stderr, flush=True)
+                continue
+            if published.get("status") == "stale":
+                print(f"round={job['round']} ply={job['ply']} lease superseded", flush=True)
                 continue
             print(f"round={job['round']} ply={job['ply']} elapsed={time.monotonic() - started:.2f}s", flush=True)
         except Exception as error:
