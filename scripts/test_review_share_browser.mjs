@@ -64,7 +64,7 @@ try {
   const pixel = (canvas, x, y) => canvas.evaluate((element, [left, top]) =>
     Array.from(element.getContext('2d').getImageData(left, top, 1, 1).data), [x, y]);
   assert.equal(await page.evaluate(() => getComputedStyle(document.body).colorScheme), 'dark');
-  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 281, 762), [212, 229, 211, 255], 'Whole-game diagram keeps the light board palette in dark mode');
+  assert.deepEqual(await pixel(page.locator('#review-share-preview'), 303, 790), [212, 229, 211, 255], 'Empty h3 square keeps the light board palette in dark mode');
   assert.deepEqual(await pixel(page.locator('#review-share-preview'), 75, 840), [255, 255, 255, 255]);
   assert.deepEqual(await page.evaluate(() => reportCoordinates), ['1', '2', '3', '4', '5', '6', '7', '8'], 'The black move is drawn from Black’s side');
   const download = page.waitForEvent('download');
