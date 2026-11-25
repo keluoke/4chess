@@ -41,9 +41,9 @@ function drawLegend(ctx, lines) {
 
 function drawChart(ctx, poster) {
   box(ctx, 62, 1044, 956, 286, 21, '#f4f5ee');
-  label(ctx, poster.chartTitle, 88, 1062, 28, 750);
+  label(ctx, poster.chartTitle, 88, 1062, 28, 750, 430);
   ctx.textAlign = 'right';
-  label(ctx, poster.chartNote, 990, 1069, 19, 550, muted);
+  label(ctx, poster.chartNote, 990, 1069, 19, 550, muted, 450);
   ctx.textAlign = 'left';
   const x = elo => 170 + (trendX(elo) - trendX(600)) * 2.03;
   const y = probability => 1122 + (trendY(probability) - trendY(100)) * 1.35;
@@ -144,8 +144,9 @@ export async function renderLivePoster(canvas, poster, current) {
     ctx.font = `770 ${headlineSize}px system-ui, sans-serif`;
     lines = wrapTextLines(ctx, poster.headline, 934);
   }
-  lines.slice(0, 2).forEach((text, i) => label(ctx, text, 72, 103 + i * (headlineSize + 6), headlineSize, 770, ink, 934));
-  label(ctx, poster.subtitle, 74, 226, 23, 550, muted, 930);
+  const headlineTop = lines.length > 1 ? 103 : 126;
+  lines.slice(0, 2).forEach((text, i) => label(ctx, text, 72, headlineTop + i * (headlineSize + 6), headlineSize, 770, ink, 934));
+  label(ctx, poster.subtitle, 74, lines.length > 1 ? 226 : 203, 23, 550, muted, 930);
 
   const size = 716, x = (WIDTH - size) / 2, y = 266;
   ctx.save();

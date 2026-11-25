@@ -1129,6 +1129,7 @@ export class GameAnalyzer {
           if (!root?.bestMove?.uci || !Number.isFinite(root.scoreCp) || !(root.depth >= minimumDepth) || root.isBound ||
               (root.pv?.length && root.pv[0] !== root.bestMove.uci)) continue;
           const verificationDepth = Math.min(root.depth, targetDepth);
+          move.reviewStoryBestUci = root.bestMove.uci;
 
           const scores = new Map([[root.bestMove.uci, root.scoreCp]]);
           let playedPv;
@@ -1161,6 +1162,14 @@ export class GameAnalyzer {
             }
           }
 
+          const runnerUp = root.lines?.find(line => line.multipv === 2 && line.uci !== root.bestMove.uci &&
+            line.depth === root.depth && !line.isBound && Number.isFinite(line.scoreCp) && line.scoreCp <= root.scoreCp);
+          const intuitionScore = move.maiaTopUci === root.bestMove.uci ? root.scoreCp : scores.get(move.maiaTopUci);
+          if (runnerUp && Number.isFinite(intuitionScore)) {
+            // A narrow position needs a gap to the actual runner-up as well as to Maia's first choice.
+            const floor = expectedScore(root.scoreCp) - expectedScore(Math.max(runnerUp.scoreCp, intuitionScore));
+            move.narrowChoice = { narrow: floor >= 0.08, found: move.uci === root.bestMove.uci };
+          }
           const playedScore = scores.get(move.uci);
           if (!Number.isFinite(playedScore)) continue;
           const lossCp = Math.max(0, root.scoreCp - playedScore);

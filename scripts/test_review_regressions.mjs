@@ -66,6 +66,37 @@ const work=analyzer.analyzeGame(GameAnalyzer.parsePgn('1. a3'),{depth:6,forceRef
 await searching; document.body.innerHTML='<div class="clock-running"></div>'; analyzer.cancel(); releasePlayed(null);
 assert.equal(await work,null); assert.equal(calls.filter(c=>c.locked).length,0,'No search may start after fair-play lock');
 document.body.innerHTML='<div class="move-list-result">1-0</div>';
+const storyMoves = GameAnalyzer.parsePgn('1. a3 h6 2. a4 h5 3. b3 g6 4. Ba3 Bg7 5. e3 d6 6. h3 a6 7. h4 a5 1/2-1/2');
+const storyPositions = GameAnalyzer.buildPositionChain(storyMoves);
+const storyRoots = new Map(storyPositions.slice(0, -1).map((position, index) => [position.fen, {
+  index,
+  best: storyPositions[index + 1].uci,
+  alternative: new ChessBoard(position.fen).getLegalMoves().find(move => move.uci !== storyPositions[index + 1].uci).uci
+}]));
+const storySf = {
+  isReady: true, engineKey: 'story-regression',
+  async evaluate(fen, depth, timeout, multipv) {
+    const root = storyRoots.get(fen);
+    const bestMove = new ChessBoard(fen).getLegalMoves().find(move => move.uci === root?.best);
+    const lines = multipv === 2 ? [
+      { uci: root.best, multipv: 1, scoreCp: 190, depth },
+      { uci: root.alternative, multipv: 2, scoreCp: root.index === 12 ? 170 : 13, depth, isBound: root.index === 11 }
+    ] : [];
+    return { score: '+1.90', scoreCp: 190, depth, bestMove, lines };
+  }
+};
+const storyMaia = {
+  isReady: true, modelKey: 'story-regression',
+  async predict(fen) {
+    const root = storyRoots.get(fen);
+    return { moves: [{ uci: root.alternative, prob: 60 }, { uci: root.best, prob: 2.8 }] };
+  }
+};
+const measuredStory = await new GameAnalyzer(storySf, storyMaia).analyzeGame(storyMoves, { forceRefresh: true });
+assert.deepEqual(measuredStory.allMoves[10].narrowChoice, { narrow: true, found: true });
+assert.equal(measuredStory.allMoves[11].narrowChoice, undefined, 'A bound runner-up cannot establish a narrow choice');
+assert.deepEqual(measuredStory.allMoves[12].narrowChoice, { narrow: false, found: true });
+
 const model=new MaiaEngine(null,{isReady:true,initialize:async()=>true});
 const initialization=model.initialize(); await new Promise(r=>setImmediate(r));model.worker.onerror({message:'Injected crash'});
 await assert.rejects(initialization,/Injected crash/);assert.equal(model.isLoading,false);assert.equal(model.initPromise,null);model.dispose();

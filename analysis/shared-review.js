@@ -1,7 +1,7 @@
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
 import { t, initI18n, getLang } from './i18n.js?v=20261124-intuition-labels';
-import { decodeReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
+import { decodeReviewSnapshot, reviewStoryRows } from './review-snapshot.js?v=20261125-game-story';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 
@@ -71,6 +71,23 @@ function renderSnapshot(report) {
   const turns = byId('snapshot-turns');
   turns.replaceChildren(...report.keyPlies.map(ply => button(moveLabel(report.plies[ply - 1]), () => show(ply - 1))));
   byId('snapshot-turning').hidden = !turns.children.length;
+  const story = byId('snapshot-story');
+  story.replaceChildren(...reviewStoryRows(report, getLang()).map(row => {
+    const section = document.createElement('section');
+    const title = document.createElement('h2');
+    title.textContent = row.title;
+    const text = document.createElement('p');
+    text.textContent = row.note ? row.text + ' · ' + row.note : row.text;
+    section.append(title, text);
+    if (row.moves.length) {
+      const links = document.createElement('div');
+      links.className = 'snapshot-tags';
+      links.append(...[...new Set(row.moves)].map(move => button(moveLabel(move), () => show(move.ply - 1))));
+      section.append(links);
+    }
+    return section;
+  }));
+  story.hidden = !story.children.length;
 
   function analyzeAt(fen) {
     const url = new URL('./index.html', location.href);

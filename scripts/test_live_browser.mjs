@@ -342,7 +342,14 @@ try {
   await page.locator('#share-card-status').getByText('Poster copied', { exact: true }).waitFor();
   assert.ok(await page.evaluate(async () => (await navigator.clipboard.read()).some(item => item.types.includes('image/png'))));
   assert.equal(await page.locator('[data-share-format], [data-share-content]').count(), 0);
-  assert.ok(await page.evaluate(() => window.cardText.join(' ').includes('almost nobody')));
+  const posterText = await page.evaluate(() => window.cardText);
+  assert.ok(posterText.some(text => /^2… .* · /.test(text)), 'The headline names the played move and Black');
+  assert.ok(posterText.includes('Across-rating blind spot'));
+  assert.ok(posterText.includes('Almost nobody finds it'));
+  assert.ok(posterText.some(text => text.startsWith('Engine pick ')) && posterText.some(text => text.startsWith('Human instinct ')));
+  assert.ok(posterText.includes('What would each rating play?'));
+  assert.ok(posterText.includes('Scan to try this move on 4chess.cc'));
+  assert.ok(!posterText.some(text => text.startsWith('At 2600 Elo')));
   assert.ok(await page.evaluate(() => window.cardText.includes('600') && window.cardText.includes('2600')));
   const noteY = await page.evaluate(() => window.cardNoteY);
   const lowMaiaLineY = 1122 + (100 - 24) * 1.16 * 1.35;
@@ -377,6 +384,11 @@ try {
   await square('g1').click();
   await square('f3').click();
   assert.equal(await page.locator('#ply-note').innerText(), '试走变化');
+  await page.evaluate(() => { window.cardText = []; });
+  await page.locator('#moment').click();
+  await page.locator('#share-card-canvas:visible').waitFor();
+  assert.ok(await page.evaluate(() => window.cardText.includes('如果改走 Nf3？')));
+  await page.locator('#btn-close-share-card').click();
   if (process.env.LIVE_SCREENSHOTS) {
     mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
     await page.screenshot({ path: path.join(process.env.LIVE_SCREENSHOTS, 'desktop.png'), fullPage: true });
@@ -410,6 +422,8 @@ try {
   await page.locator('#moment').click();
   await page.locator('#share-card-dialog[open]').waitFor();
   await page.locator('#share-card-retry').click();
+  await page.locator('#share-card-canvas:visible').waitFor();
+  assert.ok(await page.evaluate(() => window.cardText.includes('第 2 局 · 即将开战')));
   await page.locator('#btn-share-card-link:not([disabled])').waitFor();
   await page.locator('#btn-share-card-link').click();
   assert.equal(new URL(await page.evaluate(() => navigator.clipboard.readText())).searchParams.get('ply'), '0');

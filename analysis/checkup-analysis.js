@@ -1,6 +1,6 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261125-game-story';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261117-review-policy';
 import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261124-checkup-cards-r2';

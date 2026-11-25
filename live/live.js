@@ -23,11 +23,13 @@ const copy = {
     trendPeak: 'Stockfish 首选 {move} 在 {elo} Elo 的预测选着概率最高（{prob}%）。',
     posterStart: '正在请不同段位的棋手看看这步棋…', posterDrawing: '正在把从新手到大师的选择画成海报…',
     posterIncomplete: '还有些棋力的选择没算出来，可以再试一次。', posterTerminal: '这局面已经没有合法着法，可以复制棋谱链接。',
-    posterBlind: '600 到 2600 分，几乎没人想到 {sf}！', posterBlindBadge: '全分段盲区', posterBlindNote: '几乎无人想到',
-    posterDivergence: '{elo} Elo 有 {prob}% 会走 {maia}，Stockfish 推荐 {sf}',
-    posterAgreement: '{elo} Elo 有 {prob}% 会走 {maia}，Stockfish 也推荐这步',
-    posterChart: '不同棋力怎么走', posterChartNote: '600 → 2600 Elo · Maia 模型预测',
-    posterScan: '扫码看本步双引擎动态分析', posterSaved: '已保存海报', posterCopied: '已复制海报',
+    posterBlindBadge: '全分段盲区', posterBlindNote: '几乎没人想到',
+    posterVariation: '如果改走 {move}？', posterUpcoming: '即将开战',
+    posterWhiteEdge: '白优', posterBlackEdge: '黑优', posterEqual: '均势',
+    posterWhiteMate: '白方有将杀', posterBlackMate: '黑方有将杀',
+    posterEngineChoice: '引擎首选', posterHumanChoice: '人类直觉',
+    posterChart: '各段位会怎么选', posterChartNote: '从 600 到 2600 分的直觉变化 · Maia 预测',
+    posterScan: '扫码在 4chess.cc 试走这一步', posterSaved: '已保存海报', posterCopied: '已复制海报',
     posterCopyFail: '复制图片失败，可用「保存图片」。', enablePoster: '启用双引擎',
     quickScore: 'Stockfish 快算评估',
     perspectiveDisabled: '启用 Maia 后查看各段直觉',
@@ -67,11 +69,13 @@ const copy = {
     posterStart: 'Seeing how players across ratings read this move…', posterDrawing: 'Drawing the rating curve onto your card…',
     posterIncomplete: 'Some predictions are still missing. Try again to finish your poster.',
     posterTerminal: 'This position has no legal moves. You can still copy its link.',
-    posterBlind: 'From 600 to 2600 Elo, almost nobody would find {sf}!', posterBlindBadge: 'Across-rating blind spot', posterBlindNote: 'Almost nobody finds it',
-    posterDivergence: 'At {elo} Elo, {prob}% would play {maia}. Stockfish picks {sf}.',
-    posterAgreement: 'At {elo} Elo, {prob}% would play {maia}. Stockfish agrees.',
-    posterChart: 'How players might move', posterChartNote: '600 → 2600 Elo · Maia predictions',
-    posterScan: 'Scan for live dual-engine analysis', posterSaved: 'Poster saved', posterCopied: 'Poster copied',
+    posterBlindBadge: 'Across-rating blind spot', posterBlindNote: 'Almost nobody finds it',
+    posterVariation: 'What if {move}?', posterUpcoming: 'About to begin',
+    posterWhiteEdge: 'White is ahead', posterBlackEdge: 'Black is ahead', posterEqual: 'Even',
+    posterWhiteMate: 'White has mate', posterBlackMate: 'Black has mate',
+    posterEngineChoice: 'Engine pick', posterHumanChoice: 'Human instinct',
+    posterChart: 'What would each rating play?', posterChartNote: 'From 600 to 2600 Elo · Maia predictions',
+    posterScan: 'Scan to try this move on 4chess.cc', posterSaved: 'Poster saved', posterCopied: 'Poster copied',
     posterCopyFail: 'Could not copy the image. Use Save image instead.', enablePoster: 'Enable both engines',
     quickScore: 'Quick Stockfish evaluation',
     perspectiveDisabled: 'Enable Maia to see rating trends',
@@ -1157,28 +1161,32 @@ function paintPosterProgress(share, trend) {
 }
 
 function posterSpec(share, analysis, trend, moment) {
-  const { lang: locale, elo } = share;
+  const { lang: locale } = share;
   const { stockfish: sf, maia, evaluation } = analysis;
   const chance = probabilities([maia]).get(maia.uci);
-  const percent = Number.isFinite(chance) ? chance.toFixed(1) : '—';
+  const percent = Number.isFinite(chance) ? Math.round(chance) + '%' : '—';
   const blind = Math.max(...RATINGS.map(elo => trend.samples.get(elo).get(sf.uci))) < 3;
-  const headline = t(blind ? 'posterBlind' : sf.uci === maia.uci ? 'posterAgreement' : 'posterDivergence', locale)
-    .replace('{elo}', elo).replace('{maia}', maia.san).replace('{sf}', sf.san).replace('{prob}', percent);
   const kind = !share.branch && moment && intuitionKind(moment);
   const score = analysis.maiaEvaluations?.get(maia.uci);
   const maiaScore = score ? (score.approximate ? '≈' : '') + score.text : '—';
   const sfScore = evaluation?.text ?? '—';
+  let outlook = '';
+  if (Number.isFinite(evaluation?.cp)) {
+    const key = evaluation.isMate ? (evaluation.cp > 0 ? 'posterWhiteMate' : 'posterBlackMate')
+      : evaluation.cp > 0 ? 'posterWhiteEdge' : evaluation.cp < 0 ? 'posterBlackEdge' : 'posterEqual';
+    outlook = t(key, locale) + ' ' + sfScore;
+  }
   return {
     ...share,
     move: { fen: share.fen, bestUci: sf.uci, bestSan: sf.san, maiaTopUci: maia.uci, maiaTopSan: maia.san },
     badge: blind ? t('posterBlindBadge', locale) : kind ? t(kind, locale) : '',
-    headline, blind, blindNote: t('posterBlindNote', locale),
-    subtitle: [share.label, share.players, 'Stockfish ' + sfScore].filter(Boolean).join(' · '),
+    blind, blindNote: t('posterBlindNote', locale),
+    subtitle: [share.players, outlook].filter(Boolean).join(' · '),
     chartTitle: t('posterChart', locale), chartNote: t('posterChartNote', locale), scan: t('posterScan', locale),
     series: trend.position.series, samples: trend.samples,
     legend: [
-      { role: 'sf', text: 'Stockfish · ' + sf.san + ' (' + sfScore + ')' },
-      { role: 'maia', text: 'Maia · ' + maia.san + ' (' + percent + '%, ' + maiaScore + ')' }
+      { role: 'sf', text: t('posterEngineChoice', locale) + ' ' + sf.san + ' (' + sfScore + ')' },
+      { role: 'maia', text: t('posterHumanChoice', locale) + ' ' + maia.san + ' (' + percent + ', ' + maiaScore + ')' }
     ]
   };
 }
@@ -1212,7 +1220,7 @@ function updatePoster() {
     const [moment] = await Promise.all([momentTask, scoreTask]);
     if (!current()) return;
     if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
-    const { renderLivePoster } = await import('./poster.js?v=20261125-live-fixes');
+    const { renderLivePoster } = await import('./poster.js?v=20261125-game-story');
     const canvas = $('share-card-canvas');
     if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
     const blob = await canvasPng(canvas);
@@ -1246,12 +1254,16 @@ $('moment').onclick = () => {
   const ply = state.cursor;
   const branch = state.branch;
   const played = state.snapshot?.moves[ply - 1];
-  const label = branch ? t('branch') + ' · ' + branch.move.san
-    : played ? played.moveNumber + (played.turn === 'w' ? '. ' : '… ') + played.san : t('startPosition');
+  const players = roundPlayers(round).map(player => playerName(player));
+  const status = state.snapshot?.status ?? round.status;
+  const mover = played && (players[played.turn === 'w' ? 0 : 1] || t(played.turn === 'w' ? 'white' : 'black'));
+  const headline = branch ? t('posterVariation').replace('{move}', branch.move.san)
+    : played ? played.moveNumber + (played.turn === 'w' ? '. ' : '… ') + played.san + ' · ' + mover
+      : roundName(round) + ' · ' + t(status === 'scheduled' ? 'posterUpcoming' : 'startPosition');
   shareSession = {
-    fen: state.boardFen, orientation: board.orientation, lang, elo: state.settings.elo, branch: Boolean(branch),
+    fen: state.boardFen, orientation: board.orientation, lang, branch: Boolean(branch),
     event: [lang === 'en' ? state.event?.titleEn : state.event?.title, roundName(round)].filter(Boolean).join(' · '),
-    label, players: roundPlayers(round).map(player => playerName(player)).filter(Boolean).join(' vs '), link,
+    headline, players: players.filter(Boolean).join(' vs '), link,
     filename: ['diverge-wcc', round.id, String(ply), branch && 'variation', 'poster'].filter(Boolean).join('-') + '.png'
   };
   $('share-card-link-field').hidden = true;

@@ -85,6 +85,47 @@ try {
   assert.equal(shared.pathname, '/analysis/shared.html');
   assert.match(shared.hash, /review=/);
 
+  await page.evaluate(async () => {
+    const { ChessBoard } = await import('/engine/chess-core.js');
+    const app = window.__maiaStudioApp;
+    const report = app.reviewResult;
+    report.elo = 2600;
+    Object.assign(report.allMoves[0], { reviewStoryBestUci: report.allMoves[0].uci, humanProbability: 2.8 });
+    Object.assign(report.allMoves[3], { narrowChoice: { narrow: true, found: false } });
+    Object.assign(report.allMoves[4], { narrowChoice: { narrow: true, found: true } });
+    Object.assign(report.allMoves[5], { narrowChoice: { narrow: false, found: false } });
+    app.maiaEngine.isReady = true;
+    let stalled = true;
+    window.compareRequests = [];
+    app.maiaEngine.predict = async (fen, elo, _, cancelled, history) => {
+      if (stalled) {
+        stalled = false;
+        await new Promise(resolve => { window.releaseComparison = resolve; });
+        if (cancelled()) return null;
+      }
+      const ply = report.allMoves.findIndex(move => move.fenBefore === fen);
+      window.compareRequests.push({ ply, elo, history });
+      const played = report.allMoves[ply].uci;
+      const alternative = new ChessBoard(fen).getLegalMoves().find(move => move.uci !== played)?.uci;
+      return { moves: [{ uci: elo === 1500 || elo === 1900 && ply >= 2 ? alternative : played }] };
+    };
+  });
+  await page.locator('#review-share-compare').click();
+  await page.waitForFunction(() => window.releaseComparison);
+  await page.getByRole('button', { name: 'Stop comparing' }).click();
+  await page.evaluate(() => window.releaseComparison());
+  assert.equal(await page.locator('#review-share-copy').isEnabled(), true);
+  await page.getByRole('button', { name: 'Compare 1500 / 1900 / 2600 Elo' }).click();
+  await page.locator('#review-share-compare-status').getByText('Rating comparison added', { exact: true }).waitFor();
+  await page.locator('#review-share-text:enabled').click();
+  const storyText = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(storyText, /1\. e4 · Maia predicts 2\.8% of 2600 Elo players/);
+  assert.match(storyText, /3\/8 plies checked · 2 narrow positions · 1 correct replies/);
+  assert.match(storyText, /1500 · 1\. e4 +\/ +1900 · 2\. Nf3 +\/ +2600 · No streak/);
+  assert.deepEqual(await page.evaluate(() => window.compareRequests.find(request => request.elo === 1900 && request.ply === 2)?.history.length), 2);
+  await page.locator('#review-share-copy').click();
+  const withStory = new URL(await page.evaluate(() => navigator.clipboard.readText()));
+
   const recipient = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const engineAssets = [];
   recipient.on('request', request => {
@@ -93,7 +134,7 @@ try {
   });
   const view = await recipient.newPage();
   view.on('pageerror', error => errors.push(error.message));
-  await view.goto(origin + shared.pathname + shared.hash);
+  await view.goto(origin + withStory.pathname + withStory.hash);
   await view.locator('#snapshot-report').waitFor();
   assert.match(await view.locator('#snapshot-title').innerText(), /Sample White.*Sample Black/);
   assert.deepEqual(await view.locator('#snapshot-scores dd').allTextContents(), expected.accuracy.map(value => value.toFixed(1) + '%'));
@@ -106,6 +147,8 @@ try {
   assert.match(await view.locator('#snapshot-analyze').getAttribute('href'), /#fen=/);
   await view.locator('#snapshot-next').click();
   assert.equal(await view.locator('#snapshot-position').innerText(), '2… f6');
+  await view.locator('#snapshot-story').getByRole('button', { name: '2. Nf3', exact: true }).click();
+  assert.equal(await view.locator('#snapshot-position').innerText(), '1… e5');
   assert.equal(await view.evaluate(() => document.documentElement.scrollWidth), 390);
   assert.deepEqual(engineAssets, [], 'Viewing and replaying a snapshot must never start an engine');
   if (process.env.TEST_SHARE_SCREENSHOT) {
@@ -120,7 +163,7 @@ try {
   await page.locator('#review-share-copy').click();
   const anonymous = new URL(await page.evaluate(() => navigator.clipboard.readText()));
   const data = await view.evaluate(async hash => {
-    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261124-checkup-cards-r2');
+    const { decodeReviewSnapshot } = await import('./review-snapshot.js?v=20261125-game-story');
     return decodeReviewSnapshot(new URLSearchParams(hash.slice(1)).get('review'));
   }, anonymous.hash);
   assert.deepEqual([data.white, data.black, data.source], ['', '', null]);

@@ -11,7 +11,7 @@ import { IntuitionCheckup } from './checkup-runner.js?v=20261124-intuition-label
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
 import { StudyProfileControls } from './study-profile-controls.js?v=20261124-intuition-labels';
 import { CheckupReminders } from './checkup-reminders.js?v=20261124-intuition-labels';
-import { ReviewShare } from './review-share.js?v=20261124-intuition-labels';
+import { ReviewShare } from './review-share.js?v=20261125-game-story';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { ShareCardModal, parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
 import { coreTurningPoints, moveQuality, intuitionKind, canPractice, INTUITION_KINDS, selectReviewObservations } from '../engine/review-policy.js?v=20261120-review';
@@ -25,7 +25,7 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261124-checkup-cards-r2';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261125-game-story';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';

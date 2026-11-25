@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { GameAnalyzer } from '../engine/game-analyzer.js';
-import { decodeReviewSnapshot, encodeReviewSnapshot, makeReviewSnapshot, publicGameLink } from '../analysis/review-snapshot.js';
+import { decodeReviewSnapshot, encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot, reviewStoryRows } from '../analysis/review-snapshot.js';
 
 const pgn = '[FEN "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1"]\n[Result "1-0"]\n1. Qg7# 1-0';
 const positions = GameAnalyzer.buildPositionChain(GameAnalyzer.parsePgn(pgn));
@@ -30,6 +30,16 @@ assert.equal(restored.plies[0].best[0].san, 'Qg7#');
 assert.equal(restored.white, '棋手甲');
 assert.equal(restored.source, 'https://lichess.org/AbCd1234');
 assert.equal(restored.verifiedDepth, 18);
+assert.equal(restored.story, null, 'Older snapshots remain readable');
+const verifiedMove = { ...report.allMoves[0], reviewStoryBestUci: final.uci, humanProbability: 2.8,
+  narrowChoice: { narrow: true, found: true } };
+const storytelling = makeReviewSnapshot({ report: { ...report, allMoves: [verifiedMove] }, game, splits: [null, null, null] });
+const story = await decodeReviewSnapshot(await encodeReviewSnapshot(storytelling));
+assert.equal(story.story.rare.playedProb, 2.8);
+assert.deepEqual(story.story.coverage, { checked: 1, narrow: 1, found: 1 });
+assert.deepEqual(reviewStoryRows(story, 'zh').map(row => row.title), ['最冷门的引擎首选', '走钢丝的局面', '各段位从哪一步分岔']);
+const malformedStory = restoreReviewSnapshot({ ...storytelling, s: [3, 1, 5, 2, [1, null, null]] });
+assert.deepEqual(malformedStory.story, { rare: null, coverage: null, splits: null });
 assert.doesNotMatch(JSON.stringify(snapshot), /private|secret|comment|userId/);
 const anonymous = await decodeReviewSnapshot(await encodeReviewSnapshot(makeReviewSnapshot({ report, game, anonymize: true })));
 assert.equal(anonymous.white, '');

@@ -4,17 +4,17 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261124-perspective';
+const CACHE_NAME = '4chess-review-20261125-game-story';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
   "./",
   "./shared.html",
   "./challenge.html",
-  "./shared-review.js?v=20261124-intuition-labels",
+  "./shared-review.js?v=20261125-game-story",
   "./review-share.css?v=20261124-checkup-cards-r2",
-  "./review-share.js?v=20261124-intuition-labels",
-  "./review-snapshot.js?v=20261124-checkup-cards-r2",
+  "./review-share.js?v=20261125-game-story",
+  "./review-snapshot.js?v=20261125-game-story",
   "./manifest.webmanifest",
   "./favicon.svg?v=2",
   "../icons/icon48.png?v=2",
@@ -27,7 +27,7 @@ const STATIC_ASSETS = [
   "../ui/fonts/InterVariable.woff2?v=4.1",
   "./workbench.css?v=20261124-intuition-labels-r2",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261124-controls",
+  "./analysis.js?v=20261125-game-story",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
   "./commentary-text.js?v=20261118-recap-reset",
@@ -77,7 +77,7 @@ const STATIC_ASSETS = [
   "../engine/engine-preferences.js?v=20261124-checkup-cards-r2",
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
-  "../engine/game-analyzer.js?v=20261124-checkup-cards-r2",
+  "../engine/game-analyzer.js?v=20261125-game-story",
   "../engine/maia-engine.js?v=20261124-mobile",
   "../engine/maia-inbrowser.js?v=20261124-mobile",
   "../engine/maia-worker.js?v=20261124-mobile",

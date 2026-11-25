@@ -1,7 +1,8 @@
 import { t, getLang } from './i18n.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { parseFenBoard, parseUciSquares, drawShareBoard, prepareShareBoards, readStudioShareBoard } from './share-card.js?v=20261124-intuition-labels';
-import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot } from './review-snapshot.js?v=20261124-checkup-cards-r2';
+import { encodeReviewSnapshot, makeReviewSnapshot, publicGameLink, restoreReviewSnapshot, reviewStoryRows, reviewStoryText,
+  STORY_RATINGS, STORY_STREAK } from './review-snapshot.js?v=20261125-game-story';
 import { canvasPng, copyPng, downloadPng, drawShareQr, shareQr, showCopyField } from './share-export.js?v=20261124-divergence-cards';
 
 const VIEWER = 'https://4chess.cc/analysis/shared.html';
@@ -52,7 +53,9 @@ async function drawReport(canvas, report, url, theme, isCurrent) {
       (move.kind === 'trap' ? move.played[0]?.uci !== move.best[0].uci : move.maia[0]?.uci !== move.best[0].uci && move.maia.length))
     .sort((a, b) => (b.kind === 'trap' ? b.playedLoss : b.maiaLoss) - (a.kind === 'trap' ? a.playedLoss : a.maiaLoss) || a.ply - b.ply).slice(0, 2);
   const qr = qrSpec(url, report.source);
-  const footer = 724 + comparisons.length * 316;
+  const story = reviewStoryRows(report, getLang());
+  const storyHeight = story.reduce((height, row) => height + (row.note ? 140 : 110), 0);
+  const footer = 724 + storyHeight + comparisons.length * 316;
   canvas.width = 1080;
   canvas.height = footer + (qr ? 230 : 118);
   const ctx = canvas.getContext('2d');
@@ -97,8 +100,26 @@ async function drawReport(canvas, report, url, theme, isCurrent) {
   ctx.font = '500 26px system-ui';
   fit(ctx, turn ? t('snapshotKeyMove', { move: turn.number + (turn.turn === 'w' ? '. ' : '… ') + turn.san }) : t('snapshotPlies', { count: report.plies.length }), 60, 657);
 
+  let storyY = 704;
+  for (const row of story) {
+    const height = row.note ? 140 : 110;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(60, storyY, 960, height - 12);
+    ctx.fillStyle = '#193b31';
+    ctx.font = '650 28px system-ui';
+    fit(ctx, row.title, 82, storyY + 14, 906);
+    ctx.font = '500 24px system-ui';
+    fit(ctx, row.text, 82, storyY + 54, 906);
+    if (row.note) {
+      ctx.fillStyle = '#485c53';
+      ctx.font = '500 20px system-ui';
+      fit(ctx, row.note, 82, storyY + 88, 906);
+    }
+    storyY += height;
+  }
+
   comparisons.forEach((move, index) => {
-    const y = 704 + index * 316;
+    const y = storyY + index * 316;
     const isTrap = move.kind === 'trap';
     const human = isTrap ? move.played[0] : move.maia[0];
     const probability = isTrap ? move.playedProb : move.maiaProb;
@@ -157,15 +178,27 @@ export class ReviewShare {
     this.text = byId('review-share-text');
     this.field = byId('review-share-field');
     this.status = byId('review-share-status');
+    this.compare = byId('review-share-compare');
+    this.compareStatus = byId('review-share-compare-status');
     this.version = 0;
     this.button.onclick = () => { if (this.allowed()) { this.dialog.showModal(); void this.prepare(); } };
     byId('review-share-close').onclick = () => this.dialog.close();
-    this.dialog.addEventListener('close', () => { this.version++; });
+    this.dialog.addEventListener('close', () => {
+      this.version++;
+      this.comparison = null;
+      this.compareStatus.textContent = '';
+    });
     this.anonymize.onchange = () => { void this.prepare(); };
     this.download.onclick = () => this.savePng();
     this.copy.onclick = () => { void this.copyLink(); };
     this.image.onclick = () => { void this.copyImage(); };
     this.text.onclick = () => { void this.copySummary(); };
+    this.compare.onclick = () => {
+      if (this.comparison) {
+        this.comparison = null;
+        this.paintComparison();
+      } else void this.compareRatings();
+    };
   }
 
   allowed() {
@@ -178,10 +211,76 @@ export class ReviewShare {
   sync() {
     this.button.hidden = !this.allowed();
     if (this.button.hidden && this.dialog.open) this.dialog.close();
+    else if (this.dialog.open && this.preparedReport !== this.app.reviewResult) void this.prepare();
+  }
+
+  ratingSplits() {
+    const split = this.splitResult;
+    return split && split.moves === this.app.moves && split.engine === this.app.maiaEngine ? split.results : null;
+  }
+
+  paintComparison() {
+    const job = this.comparison;
+    const done = !!this.ratingSplits();
+    const locale = getLang();
+    this.compare.hidden = done;
+    this.compare.textContent = reviewStoryText(job ? 'storyStop' : 'storyCompare', locale);
+    const status = job ? reviewStoryText('storyComparing', locale, { percent: job.percent })
+      : done ? reviewStoryText('storyDone', locale) : '';
+    if (this.compareStatus.textContent !== status) this.compareStatus.textContent = status;
+  }
+
+  async compareRatings() {
+    const { reviewResult: report, gameEpoch, maiaEngine: engine, moves: gameMoves, positionAnalysis } = this.app;
+    if (!this.dialog.open || !this.allowed() || this.ratingSplits()) return;
+    const job = this.comparison = { percent: 0 };
+    const cancelled = () => this.comparison !== job || this.app.gameEpoch !== gameEpoch ||
+      this.app.moves !== gameMoves || this.app.maiaEngine !== engine || !this.dialog.open || !this.allowed();
+    this.paintComparison();
+    try {
+      if (!engine.isReady) await engine.initialize();
+      if (cancelled()) return;
+      if (!engine.isReady) throw new Error('Maia is unavailable');
+      const moves = report.allMoves;
+      const results = STORY_RATINGS.map(() => null);
+      const streaks = STORY_RATINGS.map(() => 0);
+      for (const [index, move] of moves.entries()) {
+        if (cancelled() || results.every(Boolean)) break;
+        const history = moves.slice(Math.max(0, index - 7), index).map(previous => previous.fenBefore);
+        for (const [band, elo] of STORY_RATINGS.entries()) {
+          if (results[band]) continue;
+          const top = move.isOnlyLegalMove ? move.uci
+            : elo === report.elo && report.modelKey === engine.modelKey && move.maiaTopUci ? move.maiaTopUci
+              : (await positionAnalysis.predictMaia(engine, move.fenBefore, elo, null, cancelled, history, 2))?.moves?.[0]?.uci;
+          if (cancelled()) return;
+          if (!top) throw new Error('Missing Maia result');
+          streaks[band] = top === move.uci ? 0 : streaks[band] + 1;
+          if (streaks[band] === STORY_STREAK) results[band] = index + 2 - STORY_STREAK;
+        }
+        job.percent = Math.floor((index + 1) * 20 / moves.length) * 5;
+        this.paintComparison();
+      }
+      if (cancelled()) return;
+      this.splitResult = { moves: gameMoves, engine, results };
+      this.comparison = null;
+      await this.prepare();
+    } catch {
+      if (!cancelled()) {
+        this.comparison = null;
+        this.paintComparison();
+        this.compareStatus.textContent = reviewStoryText('storyCompareError', getLang());
+      }
+    } finally {
+      if (this.comparison === job) {
+        this.comparison = null;
+        this.paintComparison();
+      }
+    }
   }
 
   async prepare() {
     const version = ++this.version, epoch = this.app.gameEpoch;
+    this.preparedReport = this.app.reviewResult;
     const current = () => version === this.version && epoch === this.app.gameEpoch && this.dialog.open && this.allowed();
     this.download.disabled = this.copy.disabled = this.image.disabled = this.text.disabled = true;
     this.blob = this.summary = null;
@@ -189,6 +288,7 @@ export class ReviewShare {
     this.url = null;
     this.canvas.hidden = true;
     this.status.textContent = t('reviewSharePreparing');
+    this.paintComparison();
     try {
       const tags = this.app.pgnTags;
       const input = this.app.sessionInput;
@@ -199,7 +299,8 @@ export class ReviewShare {
           this.app.reviewResult.allMoves.findLast(move => move.isBookMove && move.openingName)?.openingName].filter(Boolean).join(' · '),
         source: [tags.link, tags.site, input.publicGameUrl].map(publicGameLink).find(Boolean)
       };
-      const snapshot = makeReviewSnapshot({ report: this.app.reviewResult, game, anonymize: this.anonymize.checked });
+      const snapshot = makeReviewSnapshot({ report: this.app.reviewResult, game, anonymize: this.anonymize.checked,
+        splits: this.ratingSplits() });
       const report = restoreReviewSnapshot(snapshot);
       let url = null;
       try { url = VIEWER + '#' + new URLSearchParams({ review: await encodeReviewSnapshot(snapshot), lang: getLang() }).toString(); }
@@ -214,7 +315,8 @@ export class ReviewShare {
         t('reviewShareSummaryScores', { white: scoreLabel(report.accuracy[0]), black: scoreLabel(report.accuracy[1]) }),
         [t('snapshotPlies', { count: report.plies.length }), t('snapshotMistakes', {
           count: report.plies.filter(move => ['inaccuracy', 'mistake', 'blunder'].includes(move.quality)).length
-        })].join(' · ')
+        })].join(' · '),
+        ...reviewStoryRows(report, getLang()).map(row => [row.title, row.text, row.note].filter(Boolean).join(' · '))
       ].join('\n');
       this.url = url;
       this.canvas.hidden = false;
