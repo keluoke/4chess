@@ -4,8 +4,8 @@ import { summarizeCheckupOverview } from './checkup-insights.js?v=20261124-check
 import { CHECKUP_CLOSE_LOG_GAP } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import { checkupChallengeUrl } from './challenge-link.js?v=20261124-checkup-cards-r2';
 import {
-  checkupFitBandLabel, checkupFitComparison, checkupFitScope, checkupFitStatusLabel, checkupRatingLine, checkupScoreSummary
-} from './checkup-fit-view.js?v=20261124-intuition-labels';
+  checkupFitBandLabel, checkupFitComparison, checkupFitScope, checkupFitStatusLabel, checkupHeadlineText, checkupRatingLine, checkupScoreSummary
+} from './checkup-fit-view.js?v=20261125-checkup-polish';
 import { checkupPercent, overviewSummary } from './checkup-overview.js?v=20261124-intuition-labels';
 import { canvasPng, CHECKUP_URL, copyPng, downloadPng, drawShareQr, shareQr, showCopyField, SHARE_PAPER } from './share-export.js?v=20261124-divergence-cards';
 
@@ -53,6 +53,7 @@ export function checkupCardData({ report, speedLabel = value => value, challenge
   const fit = intuition.fit;
   return {
     kind: 'profile', title: t('checkupShareProfileTitle'), name: report.playerName,
+    headlineCount: intuition.fitGameCount || report.gameCount || 0,
     band: checkupFitBandLabel(intuition),
     rating: checkupRatingLine(intuition, speedLabel),
     fitComparison: checkupFitComparison(intuition, speedLabel),
@@ -80,12 +81,13 @@ export function summarizeCheckupCard(data, anonymous) {
     return [scoreLine(data.overview) + name, [data.overview.scope, wdl(data.overview.total), data.overview.summary]
       .filter(Boolean).join(' · '), CHECKUP_URL].join('\n');
   }
-  const headline = data.band ? `${t('checkupSummaryIntuition')} ${data.band}*` : t('checkupNoEloFit');
+  const label = checkupHeadlineText({ name: data.name, count: data.headlineCount, anonymous });
+  const headline = data.band ? `${label}: ${data.band}*` : t('checkupNoEloFit') + name;
   const metrics = data.metrics.map(({ label, value, detail, type }) =>
     type === 'record' ? `${label} ${value} (${detail})` : `${label} ${value}`);
   const facts = [data.fitComparison || data.rating, data.scope, ...metrics, data.fitScope, data.fitStatus].filter(Boolean);
   if (data.band) facts.push(t('checkupFitFootnote'));
-  return [headline + name, facts.join(' · '), CHECKUP_URL].join('\n');
+  return [headline, facts.join(' · '), CHECKUP_URL].join('\n');
 }
 
 const { ink, muted, green, line, paper } = SHARE_PAPER;
@@ -188,23 +190,27 @@ function drawFooter(ctx, { url, label, subtitle = '4chess.cc', width, height, pa
 
 function drawProfile(ctx, data, { width, height, pad, portrait, anonymous }) {
   const content = width - 2 * pad;
-  const title = !anonymous && data.name ? data.name : data.title;
-  const headerSize = portrait ? 27 : 19;
+  const headerSize = portrait ? 26 : 19;
   type(ctx, 'Diverge', pad, portrait ? 43 : 24, 180, { size: headerSize, weight: 730, tone: green });
   ctx.textAlign = 'right';
-  type(ctx, title, width - pad, portrait ? 43 : 24, content * .7, { size: headerSize, tone: muted });
+  const header = !anonymous && data.name && !data.overview && !data.band ? data.name : data.title;
+  type(ctx, header, width - pad, portrait ? 43 : 24, content * .65, { size: headerSize, tone: muted });
   ctx.textAlign = 'left';
 
   if (data.overview) {
-    type(ctx, score(data.overview.total), pad, portrait ? 130 : 74, content, { size: portrait ? 98 : 63, weight: 730 });
+    const overviewTitle = !anonymous && data.name
+      ? t(data.overview.count === 1 ? 'checkupOverviewHeadlineNamedOne' : 'checkupOverviewHeadlineNamed', { name: data.name, count: data.overview.count })
+      : t('checkupOverviewRecord');
+    type(ctx, overviewTitle, pad, portrait ? 104 : 62, content, { size: portrait ? 30 : 21, minimum: 18, weight: 650, tone: muted });
+    type(ctx, score(data.overview.total), pad, portrait ? 150 : 92, content, { size: portrait ? 96 : 60, weight: 730 });
     drawOverview(ctx, data.overview, pad, portrait ? 300 : 176, content, !portrait, true);
     if (portrait) type(ctx, data.overview.summary, pad, 620, content, { size: 26, minimum: 20, tone: muted });
   } else {
-    const text = data.band ? t('checkupSummaryIntuition') : t('checkupNoEloFit');
-    const bandY = portrait ? 177 : 104;
-    type(ctx, text, pad, portrait ? 120 : 71, content, { size: portrait ? 34 : 24, weight: 620, tone: muted });
+    const text = data.band ? checkupHeadlineText({ name: data.name, count: data.headlineCount, anonymous }) : t('checkupNoEloFit');
+    const bandY = portrait ? 174 : 102;
+    type(ctx, text, pad, portrait ? 118 : 68, content, { size: portrait ? 33 : 23, minimum: portrait ? 22 : 17, weight: 650, tone: ink });
     if (data.band) {
-      const size = portrait ? 132 : 86;
+      const size = portrait ? 128 : 84;
       const bandWidth = content - (portrait ? 40 : 27);
       type(ctx, data.band, pad, bandY, bandWidth, { size, minimum: portrait ? 68 : 45, weight: 740 });
       // The number is the headline. The model is explained below the fit strip.
@@ -212,41 +218,52 @@ function drawProfile(ctx, data, { width, height, pad, portrait, anonymous }) {
       type(ctx, '*', right + 5, bandY + 6, portrait ? 32 : 24, { size: portrait ? 33 : 23, tone: muted });
     }
     if (data.fitComparison) {
-      const size = portrait ? 27 : 20;
-      const top = portrait ? 323 : 196;
+      const size = portrait ? 26 : 19;
+      const top = portrait ? 320 : 194;
       ctx.font = `650 ${size}px ${font}`;
       const badgeWidth = Math.min(content, Math.ceil(ctx.measureText(data.fitComparison).width) + 24);
-      panel(ctx, pad, top, badgeWidth, portrait ? 46 : 35, '#e1eee4');
-      type(ctx, data.fitComparison, pad + 12, top + (portrait ? 8 : 5), badgeWidth - 24, { size, minimum: 16, weight: 650, tone: green });
+      panel(ctx, pad, top, badgeWidth, portrait ? 46 : 34, '#e1eee4');
+      type(ctx, data.fitComparison, pad + 12, top + (portrait ? 9 : 6), badgeWidth - 24, { size, minimum: 16, weight: 650, tone: green });
     } else {
-      type(ctx, [data.rating, data.fitStatus].filter(Boolean).join(' · '), pad, portrait ? 333 : 203, content, { size: portrait ? 28 : 21, minimum: 17, tone: muted });
+      type(ctx, [data.rating, data.fitStatus].filter(Boolean).join(' · '), pad, portrait ? 328 : 200, content, { size: portrait ? 26 : 20, minimum: 17, tone: muted });
     }
-    const insightY = portrait ? 423 : 244;
-    type(ctx, data.story, pad, insightY, content, { size: portrait ? 42 : 29, minimum: portrait ? 27 : 21, weight: 680, tone: green });
-    type(ctx, [data.scope, data.fitScope].filter(Boolean).join(' · '), pad, insightY + (portrait ? 66 : 43), content,
-      { size: portrait ? 24 : 18, tone: muted });
+    const insightY = portrait ? 416 : 242;
+    type(ctx, data.story, pad, insightY, content, { size: portrait ? 34 : 24, minimum: portrait ? 23 : 17, weight: 670, tone: green });
+    type(ctx, [data.scope, data.fitScope].filter(Boolean).join(' · '), pad, insightY + (portrait ? 58 : 38), content,
+      { size: portrait ? 23 : 17, minimum: 15, tone: muted });
 
-    const y = portrait ? 605 : 327;
+    const y = portrait ? 595 : 325;
     const gap = portrait ? 16 : 10;
     const span = (content - gap * (data.metrics.length - 1)) / Math.max(1, data.metrics.length);
+    const inset = portrait ? 20 : 14;
+    const available = span - 2 * inset;
+    // Use one uniform value font size across all metric tiles so numbers never jump in size.
+    let valueSize = portrait ? 40 : 26;
+    const minValueSize = portrait ? 22 : 16;
+    for (const { value } of data.metrics) {
+      if (!value) continue;
+      ctx.font = `720 ${valueSize}px ${font}`;
+      while (ctx.measureText(String(value)).width > available && valueSize > minValueSize) {
+        valueSize -= 1;
+        ctx.font = `720 ${valueSize}px ${font}`;
+      }
+    }
     data.metrics.forEach(({ value, label, detail }, index) => {
       const x = pad + (span + gap) * index;
-      const inset = portrait ? 20 : 14;
-      const available = span - 2 * inset;
-      panel(ctx, x, y, span, portrait ? 190 : 111);
-      type(ctx, label, x + inset, y + (portrait ? 23 : 12), available, { size: portrait ? 25 : 17, minimum: 15, tone: muted });
-      type(ctx, value, x + inset, y + (portrait ? 65 : 40), available, { size: portrait ? 53 : 32, minimum: 18, weight: 720 });
-      type(ctx, detail, x + inset, y + (portrait ? 141 : 79), available, { size: portrait ? 21 : 15, tone: muted });
+      panel(ctx, x, y, span, portrait ? 186 : 110);
+      type(ctx, label, x + inset, y + (portrait ? 24 : 13), available, { size: portrait ? 23 : 16, minimum: 14, tone: muted });
+      type(ctx, value, x + inset, y + (portrait ? 72 : 42), available, { size: valueSize, minimum: minValueSize, weight: 720 });
+      type(ctx, detail, x + inset, y + (portrait ? 136 : 78), available, { size: portrait ? 21 : 15, minimum: 14, tone: muted });
     });
     if (data.weights.length) {
-      const top = portrait ? 855 : 457;
-      type(ctx, t('checkupFitWeights'), pad, top, content, { size: portrait ? 24 : 16, tone: muted });
-      fillBar(ctx, pad, top + (portrait ? 37 : 25), content, portrait ? 17 : 9,
+      const top = portrait ? 848 : 456;
+      type(ctx, t('checkupFitWeights'), pad, top, content, { size: portrait ? 23 : 16, tone: muted });
+      fillBar(ctx, pad, top + (portrait ? 36 : 25), content, portrait ? 17 : 9,
         data.weights.map((weight, index) => [weight, index === data.lead ? green : index % 2 ? '#93af9e' : '#b8cbbf']));
     }
     if (data.band) {
-      type(ctx, t('checkupFitFootnote'), pad, portrait ? 970 : 494, content,
-        { size: portrait ? 22 : 16, minimum: 15, tone: muted });
+      type(ctx, t('checkupFitFootnote'), pad, portrait ? 965 : 494, content,
+        { size: portrait ? 21 : 15, minimum: 14, tone: muted });
     }
   }
   drawFooter(ctx, { url: CHECKUP_URL + '&lang=' + getLang(), label: t('challengeSelfTest'), width, height, pad, portrait });

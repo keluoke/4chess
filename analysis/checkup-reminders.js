@@ -3,7 +3,7 @@ import {
   checkupSubscriptionKey, isCheckupReminderToken, markCheckupGames, mergeCheckupObservation, mergeCheckupSnapshot, pendingCheckupGameIds
 } from '../engine/checkup-watch.js?v=20261124-checkup-cards-r2';
 import { accountKey, checkupReportMatchesAccount, normalizeAccount } from './study-store.js?v=20261124-checkup-cards-r2';
-import { formatRelativeTime } from './checkup-runner.js?v=20261124-intuition-labels';
+import { formatRelativeTime } from './checkup-runner.js?v=20261125-checkup-polish';
 import { t } from './i18n.js?v=20261124-intuition-labels';
 
 const STALE_DIAGNOSIS_MS = 7 * 86400_000;

@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261125-position-poster">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261125-review-sidebar">
+  <link rel="stylesheet" href="workbench.css?v=20261125-checkup-polish">
   <link rel="stylesheet" href="./review-share.css?v=20261125-poster-focus">
 </head>
 <body class="diverge-ui">
@@ -566,7 +566,6 @@
     <div class="checkup-view-tabs" role="tablist" data-i18n-aria="checkupViews">
       <button type="button" class="btn-header" role="tab" id="checkup-tab-report" tabindex="-1" data-checkup-view="report" aria-controls="checkup-panel-report" aria-selected="false" data-i18n="checkupReportTab">报告</button>
       <button type="button" class="btn-header" role="tab" id="checkup-tab-settings" data-checkup-view="settings" aria-controls="checkup-panel-settings" aria-selected="true" data-i18n="checkupSettingsTab">诊断设置</button>
-      <button type="button" class="btn-header" role="tab" id="checkup-tab-overview" tabindex="-1" data-checkup-view="overview" aria-controls="checkup-panel-overview" aria-selected="false" data-i18n="checkupOverviewTab">对局概览</button>
     </div>
     <section id="checkup-panel-settings" role="tabpanel" aria-labelledby="checkup-tab-settings">
     <p id="checkup-reminder-note" class="checkup-reminder-note" hidden></p>
@@ -637,24 +636,27 @@
       <div id="checkup-history-hint" class="checkup-history-hint" hidden></div>
       <p id="checkup-report-empty" data-i18n="checkupReportEmpty" hidden>暂无可查看的报告。</p>
       <div id="checkup-report-box" class="checkup-report-box" tabindex="-1" hidden></div>
-    </section>
-    <section id="checkup-panel-overview" role="tabpanel" aria-labelledby="checkup-tab-overview" hidden>
-      <div class="checkup-overview-toolbar">
-        <select id="checkup-overview-account" class="btn-header" data-i18n-aria="checkupOverviewAccount"></select>
-        <div id="checkup-overview-speeds" hidden></div>
-        <button type="button" class="btn-header checkup-overview-share" id="btn-checkup-overview-share" data-i18n-aria="checkupShareProfile" hidden>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 15V3m-4 4 4-4 4 4M5 12v8h14v-8"></path>
-          </svg>
-        </button>
-        <button type="button" class="btn-header checkup-refresh" id="btn-checkup-overview" data-i18n-aria="checkupOverviewLoad">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20 11a8 8 0 1 0-2.1 6M20 5v6h-6"></path>
-          </svg>
-        </button>
-      </div>
-      <p id="checkup-overview-status" role="status"></p>
-      <div id="checkup-overview-body"></div>
+      <details id="checkup-overview-section" class="checkup-report-details checkup-overview-section">
+        <summary data-i18n="checkupOverviewSectionTitle">近 100 盘对局概览（战绩 · 开局 · 时间压力）</summary>
+        <div id="checkup-panel-overview" class="checkup-overview-embedded">
+          <div class="checkup-overview-toolbar">
+            <select id="checkup-overview-account" class="btn-header" data-i18n-aria="checkupOverviewAccount"></select>
+            <div id="checkup-overview-speeds" hidden></div>
+            <button type="button" class="btn-header checkup-overview-share" id="btn-checkup-overview-share" data-i18n-aria="checkupShareProfile" hidden>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 15V3m-4 4 4-4 4 4M5 12v8h14v-8"></path>
+              </svg>
+            </button>
+            <button type="button" class="btn-header checkup-refresh" id="btn-checkup-overview" data-i18n-aria="checkupOverviewLoad">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.1 6M20 5v6h-6"></path>
+              </svg>
+            </button>
+          </div>
+          <p id="checkup-overview-status" role="status"></p>
+          <div id="checkup-overview-body"></div>
+        </div>
+      </details>
     </section>
   </dialog>
 
@@ -732,11 +734,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261125-review-sidebar-r2"></script>
+  <script type="module" src="analysis.js?v=20261125-checkup-polish"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261125-review-sidebar-r2').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261125-checkup-polish').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

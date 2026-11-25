@@ -7,10 +7,10 @@ import { ReviewCommentary } from './review-commentary.js?v=20261124-intuition-la
 import { ConsequencePlayer } from './consequence-player.js?v=20261124-intuition-labels';
 import { MistakeBank } from './mistake-bank.js?v=20261124-intuition-labels';
 import { resolvePerspective } from './study-store.js?v=20261124-checkup-cards-r2';
-import { IntuitionCheckup } from './checkup-runner.js?v=20261124-intuition-labels';
+import { IntuitionCheckup } from './checkup-runner.js?v=20261125-checkup-polish';
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
 import { StudyProfileControls, inferProfileSide } from './study-profile-controls.js?v=20261125-review-sidebar';
-import { CheckupReminders } from './checkup-reminders.js?v=20261124-intuition-labels';
+import { CheckupReminders } from './checkup-reminders.js?v=20261125-checkup-polish';
 import { ReviewShare } from './review-share.js?v=20261125-poster-focus-r2';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
@@ -595,7 +595,7 @@ class AnalysisStudioApp {
       this.checkup.renderAccounts();
       this.checkup.renderSourceControls();
       this.checkup.renderReport(this.checkup.latestReport);
-      if (this.checkup.view === 'overview') this.checkup.renderOverview();
+      if (this.checkup.overviewSection?.open) this.checkup.renderOverview();
       if (this.checkup.share?.dialog.open) this.checkup.share.dialog.close();
     }
     if (this.shareCard?.dialog?.open) this.shareCard.renderPreview();

@@ -138,7 +138,8 @@ export function checkupFitComparison(report, speedLabel = value => value) {
   const gap = Math.max(range.low - rating.elo, rating.elo - range.high);
   if (gap < 150) return '';
   const label = t('checkupFitRatedSpeed', { elo: rating.elo, speed: speedLabel(timeClass) });
-  return t('checkupShareFitComparison', { rating: label, band: closestElo });
+  const key = range.low > rating.elo ? 'checkupShareFitComparisonHigher' : 'checkupShareFitComparison';
+  return t(key, { rating: label, band: closestElo });
 }
 
 export function checkupPositionView(move, trap, screenElo) {
@@ -178,18 +179,35 @@ export function renderCheckupMiniBoard(fen, playedUci) {
   return board;
 }
 
-export function renderCheckupFitSummary(report, speedLabel) {
+export function checkupHeadlineText({ name = '', count = 0, anonymous = false } = {}) {
+  const showName = !anonymous && !!name;
+  if (showName && count) {
+    return t('checkupHeadlineNamed', { name, count });
+  }
+  if (count) {
+    return t('checkupHeadlineAnon', { count });
+  }
+  return t('checkupSummaryIntuition');
+}
+
+export function renderCheckupFitSummary(report, speedLabel, { playerName = '', gameCount = 0 } = {}) {
   const section = node('section', '', 'checkup-fit-section');
   const band = checkupFitBandLabel(report);
-  const title = node('h3', band ? t('checkupSummaryIntuition') : t('checkupNoEloFit'), 'checkup-fit-title');
-  section.append(title);
-  if (!band) return section;
+  const count = gameCount || report.fitGameCount || report.gameCount || 0;
+  const headingText = band ? checkupHeadlineText({ name: playerName, count }) : t('checkupNoEloFit');
+  if (!band) {
+    section.append(node('h3', headingText, 'checkup-fit-title'));
+    return section;
+  }
+  const hero = node('div', '', 'checkup-fit-hero');
+  const title = node('h3', headingText, 'checkup-fit-title');
   const value = node('strong', band, /^\d+$/.test(band) ? 'checkup-fit-number' : 'checkup-fit-number checkup-fit-range');
   const mark = node('sup', '*');
   mark.setAttribute('aria-hidden', 'true');
   value.append(mark);
   value.setAttribute('aria-describedby', 'checkup-fit-footnote');
-  section.append(value);
+  hero.append(title, value);
+  section.append(hero);
   const ratings = checkupRatingLine(report, speedLabel);
   if (ratings) section.append(node('p', ratings, 'checkup-fit-rating'));
   const fit = report.fit;

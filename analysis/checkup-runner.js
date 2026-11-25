@@ -11,12 +11,12 @@ import {
   checkupFitForSpeed, checkupReportStability, checkupTrend, prepareCheckupOverview
 } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 import { renderCheckupOverview, renderOverviewSpeeds } from './checkup-overview.js?v=20261124-intuition-labels';
-import { CheckupShare, checkupCardData, checkupChallengeCard, overviewCardData } from './checkup-share.js?v=20261124-intuition-labels';
+import { CheckupShare, checkupCardData, checkupChallengeCard, overviewCardData } from './checkup-share.js?v=20261125-checkup-polish';
 import { checkupFitBands } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 import {
   checkupFitScope, checkupPositionView, checkupReportDateRange, checkupScoreSummary, renderCheckupFit,
   renderCheckupFitSummary, renderCheckupMiniBoard, renderCheckupStability, withCheckupFit
-} from './checkup-fit-view.js?v=20261124-intuition-labels';
+} from './checkup-fit-view.js?v=20261125-checkup-polish';
 
 // Keep the original module entry points available to existing callers.
 export {
@@ -128,6 +128,7 @@ export class IntuitionCheckup {
     this.reportTools = document.getElementById('checkup-report-tools');
     this.reportEmpty = document.getElementById('checkup-report-empty');
     this.replayBanner = document.getElementById('checkup-replay-banner');
+    this.overviewSection = document.getElementById('checkup-overview-section');
     this.overviewAccount = document.getElementById('checkup-overview-account');
     this.overviewButton = document.getElementById('btn-checkup-overview');
     this.overviewShare = document.getElementById('btn-checkup-overview-share');
@@ -176,22 +177,26 @@ export class IntuitionCheckup {
   }
 
   setView(view, focus = false) {
-    this.view = view;
+    const openOverview = view === 'overview';
+    const resolved = openOverview ? 'report' : view;
+    this.view = resolved;
     for (const tab of this.viewTabs) {
-      const selected = tab.dataset.checkupView === view;
+      const selected = tab.dataset.checkupView === resolved;
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
       document.getElementById(tab.getAttribute('aria-controls')).hidden = !selected;
     }
     if (this.dialog) {
-      this.dialog.dataset.view = view;
+      this.dialog.dataset.view = resolved;
       this.dialog.scrollTop = 0;
     }
-    if (view === 'overview') {
+    if (openOverview && !this.overviewSection.open) {
+      this.overviewSection.open = true;
+    } else if (resolved === 'report' && this.overviewSection.open) {
       this.refreshOverviewAccounts();
       this.activateOverview();
     }
-    if (focus && view === 'report' && this.latestReport) this.reportBox?.focus({ preventScroll: true });
+    if (focus && resolved === 'report' && this.latestReport) this.reportBox?.focus({ preventScroll: true });
   }
 
   bindEvents() {
@@ -212,6 +217,13 @@ export class IntuitionCheckup {
     }
     const replayBack = document.getElementById('btn-checkup-replay-back');
     if (replayBack) replayBack.onclick = () => this.open();
+    if (this.overviewSection) {
+      this.overviewSection.addEventListener('toggle', () => {
+        if (!this.overviewSection.open || this.view !== 'report' || !this.dialog.open || this.busy) return;
+        this.refreshOverviewAccounts();
+        this.activateOverview();
+      });
+    }
     if (this.overviewButton) this.overviewButton.onclick = () => this.loadOverview();
     if (this.overviewAccount) this.overviewAccount.onchange = () => this.activateOverview();
     if (this.closeBtn) this.closeBtn.onclick = () => this.requestStop({ close: true });
@@ -404,7 +416,10 @@ export class IntuitionCheckup {
       }
     }
     const opening = !this.dialog.open;
-    if (opening) this.dialog.showModal();
+    if (opening) {
+      if (this.overviewSection && !returnOverview && view !== 'overview') this.overviewSection.open = false;
+      this.dialog.showModal();
+    }
     if (view) {
       this.setView(view);
     } else if (returnOverview) {
@@ -444,7 +459,10 @@ export class IntuitionCheckup {
       this.updatingProfile = false;
       this.renderSourceControls();
       this.renderReport(this.latestReport);
-      if (this.view === 'overview' && this.dialog.open) this.activateOverview();
+      if (this.view === 'report' && this.overviewSection?.open && this.dialog.open) {
+        this.refreshOverviewAccounts();
+        this.activateOverview();
+      }
     }
   }
 
@@ -585,7 +603,7 @@ export class IntuitionCheckup {
       if (this.overviewController === controller) {
         this.overviewController = null;
         this.overviewPendingKey = null;
-        if (this.dialog.open && this.view === 'overview' && this.overviewKey() === key) this.renderOverview();
+        if (this.dialog.open && this.view === 'report' && this.overviewSection?.open && this.overviewKey() === key) this.renderOverview();
       }
     }
   }
@@ -839,6 +857,7 @@ export class IntuitionCheckup {
     if (this.reportBox) this.reportBox.hidden = busy || !this.latestReport;
     if (this.reportEmpty) this.reportEmpty.hidden = busy || !!this.latestReport || !!this.fallbackReport;
     if (this.reportTools) this.reportTools.hidden = busy;
+    if (this.overviewSection) this.overviewSection.hidden = busy;
     for (const button of this.reportTools?.querySelectorAll('button') || []) {
       button.disabled = busy || button.hasAttribute('aria-busy');
     }
@@ -1203,10 +1222,18 @@ export class IntuitionCheckup {
     const source = [formatSourceBadge(report.sourceLabel), speedLabel].filter(Boolean).join(' ');
     const coverage = rolling ? (report.isFullWindow ? 'checkupSummaryWindow' : 'checkupSummaryWindowPartial')
       : report.gameCount === 1 ? 'checkupSummaryBatchOne' : 'checkupSummaryBatch';
+    const appendMetaChips = (container, parts) => {
+      parts.filter(Boolean).forEach((part, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'checkup-meta-chip';
+        chip.textContent = index ? `· ${part}` : part;
+        if (index) container.append(' ');
+        container.append(chip);
+      });
+    };
     const title = document.createElement('strong');
     title.className = 'checkup-report-byline';
-    title.textContent = [report.playerName, source, t(coverage, { games: report.gameCount, moves: report.analyzedMoves })]
-      .filter(Boolean).join(' · ');
+    appendMetaChips(title, [report.playerName, source, t(coverage, { games: report.gameCount, moves: report.analyzedMoves })]);
     overview.append(title);
     const dateRange = checkupReportDateRange(report.games);
     const fitScope = fit.isFitWindow && fit.fitGameCount !== report.gameCount
@@ -1215,7 +1242,7 @@ export class IntuitionCheckup {
     if (extra.length) {
       const context = document.createElement('p');
       context.className = 'checkup-report-context-detail';
-      context.textContent = extra.join(' · ');
+      appendMetaChips(context, extra);
       overview.append(context);
     }
     metaRow.append(overview);
@@ -1242,7 +1269,10 @@ export class IntuitionCheckup {
       item.append(label, value);
       metrics.append(item);
     }
-    profile.append(renderCheckupFitSummary(fit, value => this.speedLabel(value)));
+    profile.append(renderCheckupFitSummary(fit, value => this.speedLabel(value), {
+      playerName: report.playerName,
+      gameCount: fit.fitGameCount || report.gameCount
+    }));
     if (metrics.children.length) profile.append(metrics);
     summary.append(profile);
     if (score.story || score.clock) {

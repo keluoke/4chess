@@ -188,7 +188,11 @@ try {
     };
   });
   const beforeOverview = archiveLookups;
-  await page.locator('#checkup-tab-overview').click();
+  const overviewSection = page.locator('#checkup-overview-section');
+  assert.equal(await dialog.getByRole('tab').count(), 2);
+  assert.equal(await overviewSection.getAttribute('open'), null);
+  assert.equal(await page.evaluate(() => window.clockParses), 0, 'A collapsed overview does not parse archived clocks');
+  await openDetails(overviewSection);
   const overview = page.locator('#checkup-overview-body');
   await overview.getByText('3 completed games', { exact: true }).waitFor();
   assert.match(await overview.locator('.checkup-result-total').innerText(), /67%[\s\S]*2 W[\s\S]*0 D[\s\S]*1 L/);
@@ -233,6 +237,7 @@ try {
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.checkupGame?.gameId), 'live:12345675');
   await backToOverview.click();
   await timeoutReplay.waitFor();
+  assert(await timeoutReplay.evaluate(button => button === document.activeElement), 'Returning restores focus to the replayed game');
   assert.equal(archiveLookups, beforeOverview + 1, 'Replaying and returning uses the original cached overview');
   failArchive = true;
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
@@ -244,7 +249,7 @@ try {
   await speeds.getByRole('button', { name: 'Blitz', pressed: true }).waitFor();
   assert.equal(await page.evaluate(() => window.checkupStarts), 2, 'The overview does not start an engine');
   const overviewFetches = archiveLookups;
-  await page.locator('#checkup-tab-report').click();
+  await overviewSection.locator('summary').first().click();
   assert.equal(await reportBox.locator('.checkup-fit-bar').count(), 4);
   assert.match(await reportBox.locator('.checkup-fit-rating').innerText(), /2180/);
   await openDetails(statistics);
@@ -576,7 +581,7 @@ try {
   await closeShare();
 
   await page.evaluate(async () => {
-    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261124-intuition-labels');
+    const { checkupCardData } = await import('/analysis/checkup-share.js?v=20261125-checkup-polish');
     const checkup = __maiaStudioApp.checkup;
     const games = [1600, 1650, 1700].map(playedRating => ({
       platform: 'lichess', timeClass: 'rapid', playedRating, fitSamples: [{ scores: [0] }]
@@ -594,6 +599,15 @@ try {
   });
   await readyToShare();
   assert.deepEqual(await page.evaluate(() => fitBadgeLabels), ['Playing rating 1650 (rapid) · Plays like Maia 1900']);
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /^3-game style score: 1900\*/);
+  await share.getByRole('checkbox', { name: 'Hide player names' }).uncheck();
+  await readyToShare();
+  await share.getByRole('button', { name: 'Copy text summary' }).click();
+  const named = await page.evaluate(async () => ({
+    text: await navigator.clipboard.readText(), player: __maiaStudioApp.checkup.latestReport.playerName
+  }));
+  assert(named.text.startsWith(`${named.player} · 3-game style score: 1900*`));
   await closeShare();
 
   await reportBox.getByRole('button', { name: 'Share a challenge' }).first().click();
@@ -833,9 +847,12 @@ try {
     checkup.renderReport(report);
   });
   assert.equal(await reportBox.locator('.checkup-fit-number').textContent(), '1900*');
+  assert.match(await reportBox.locator('.checkup-fit-section .checkup-fit-title').innerText(), /Altplayer · 10-game style score/);
   assert.match(await reportBox.locator('.checkup-fit-section').innerText(), /Playing rating 1409 \(Rapid\)/);
   assert.match(await reportBox.locator('.checkup-summary-record').innerText(), /Last 10 results/);
   assert.match(await reportBox.locator('.checkup-summary-metrics').innerText(), /1\.1 \/ game/);
+  const metricFontSizes = await reportBox.locator('.checkup-summary-metrics dd').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).fontSize));
+  assert(metricFontSizes.length === 3 && new Set(metricFontSizes).size === 1, `Metric values share one uniform font size: ${metricFontSizes.join(', ')}`);
   assert(await statistics.locator('.checkup-fit-status').isHidden());
   await openDetails(statistics);
   assert.match(await reportBox.locator('.checkup-fit-metadata').innerText(), /1500–2200/);
@@ -849,7 +866,7 @@ try {
   assert.match(await stability.innerText(), /5.6[\s\S]*About 1.1 traps per game/);
   assert.match(await summaryCard.innerText(), /10 of 11 traps came in the middlegame/);
   assert.deepEqual(await stability.locator('.checkup-stability-phase strong').allTextContents(), ['1', '10', '0']);
-  assert.match(await reportBox.locator('.checkup-report-byline').innerText(), /Altplayer · Chess.com Rapid · Last 10 games \(197 decisions\)/);
+  assert.match(await reportBox.locator('.checkup-report-byline').textContent(), /Altplayer ·\sChess.com Rapid ·\sLast 10 games \(197 decisions\)/);
   assert.match(await reportBox.locator('.checkup-report-context-detail').innerText(), /Nov 19/);
   await openDetails(more);
   const historyOptions = await more.locator('.checkup-history-select option').allTextContents();
@@ -862,9 +879,6 @@ try {
   if (process.env.TEST_CHECKUP_CARDS) {
     await reportBox.locator('.checkup-summary-card').screenshot({ path: process.env.TEST_CHECKUP_CARDS + '-report-layout.png' });
   }
-  await page.setViewportSize({ width: 390, height: 844 });
-  assert(await reportBox.evaluate(box => box.scrollWidth <= box.clientWidth));
-
   await page.evaluate(() => {
     const checkup = window.__maiaStudioApp.checkup;
     const report = checkup.latestReport;
@@ -876,7 +890,27 @@ try {
   });
   assert.match(await reportBox.locator('.checkup-report-context-detail').innerText(), /Long-term fit · Rapid · 12\/30 games/);
 
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+  await page.evaluate(() => {
+    const app = window.__maiaStudioApp;
+    const report = app.checkup.latestReport;
+    report.rolling.phaseTraps = { opening: 5, middlegame: 5, endgame: 5 };
+    report.playerName = 'AltplayerWithAnUnusuallyLongAccountName';
+    app.checkup.renderReport(report);
+  });
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const overflow = await reportBox.evaluate(box => box.scrollWidth <= box.clientWidth ? [] :
+      [...box.querySelectorAll('*')].filter(node => node.getBoundingClientRect().width &&
+        (node.getBoundingClientRect().right > box.getBoundingClientRect().right + 1 || node.scrollWidth > node.clientWidth + 1))
+        .slice(0, 12).map(node => [node.tagName, node.className, node.clientWidth, node.scrollWidth]));
+    assert.deepEqual(overflow, [], `The report fits at ${width}px`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+    const metrics = await reportBox.locator('.checkup-summary-metrics dd').evaluateAll(nodes => nodes.map(node => ({
+      font: getComputedStyle(node).fontSize, fits: node.scrollWidth <= node.clientWidth + 1
+    })));
+    assert(metrics.length === 3 && metrics.every(metric => metric.font === '17px' && metric.fits),
+      `All three metric values fit at ${width}px with the same font size`);
+  }
   assert.deepEqual(errors, []);
   console.log('PASS checkup workbench: incremental reports, overview cache and openings, profile isolation, reminders, safe cancellation, exact replay, topic practice, scoped share cards, PNG export and anonymous engine-free challenges.');
 } finally {

@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261125-review-sidebar-r2';
+const CACHE_NAME = '4chess-review-20261125-checkup-polish';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -25,9 +25,9 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261125-position-poster",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261125-review-sidebar",
+  "./workbench.css?v=20261125-checkup-polish",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261125-review-sidebar-r2",
+  "./analysis.js?v=20261125-checkup-polish",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
   "./commentary-text.js?v=20261118-recap-reset",
@@ -36,18 +36,18 @@ const STATIC_ASSETS = [
   "./study-store.js?v=20261124-checkup-cards-r2",
   "./consequence-player.js?v=20261124-intuition-labels",
   "./mistake-bank.js?v=20261124-intuition-labels",
-  "./checkup-runner.js?v=20261124-intuition-labels",
+  "./checkup-runner.js?v=20261125-checkup-polish",
   "./checkup-archives.js?v=20261124-checkup-cards-r2",
   "./checkup-analysis.js?v=20261124-checkup-cards-r2",
   "./checkup-insights.js?v=20261124-checkup-cards-r2",
   "./checkup-fit.js?v=20261124-checkup-cards-r2",
-  "./checkup-fit-view.js?v=20261124-intuition-labels",
+  "./checkup-fit-view.js?v=20261125-checkup-polish",
   "./checkup-overview.js?v=20261124-intuition-labels",
-  "./checkup-share.js?v=20261124-intuition-labels",
+  "./checkup-share.js?v=20261125-checkup-polish",
   "./share-export.js?v=20261124-divergence-cards",
   "./challenge-link.js?v=20261124-checkup-cards-r2",
   "./challenge.js?v=20261124-intuition-labels",
-  "./checkup-reminders.js?v=20261124-intuition-labels",
+  "./checkup-reminders.js?v=20261125-checkup-polish",
   "./study-profile-controls.js?v=20261125-review-sidebar",
   "../engine/checkup-watch.js?v=20261124-checkup-cards-r2",
   "./share-card.js?v=20261124-intuition-labels",
