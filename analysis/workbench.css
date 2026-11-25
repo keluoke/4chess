@@ -496,6 +496,7 @@ button,input,select,textarea { font-family:inherit; }
   .btn-header,.candidate-move,.btn-nav,.notation-move,.study-branch { min-height:44px; }
   .btn-nav { min-width:38px; }
   .candidate-variation { max-height:none; }
+  .desktop-interaction-help { display:none; }
 }
 @media(prefers-reduced-motion:reduce) {
   body.diverge-ui *,body.diverge-ui *::before,body.diverge-ui *::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; }

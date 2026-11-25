@@ -138,6 +138,10 @@ export function initScanView() {
     );
     $("scan-edit").textContent = text(editing ? "doneEdit" : "edit");
     $("scan-candidates").setAttribute("aria-label", text("candidates"));
+    $("scan-preview").setAttribute("aria-label", text("previewLabel"));
+    $("scan-turn").setAttribute("aria-label", text("turnLabel"));
+    $("scan-gauge").setAttribute("aria-label", text("gaugeLabel"));
+    $("scan-popover-close").setAttribute("aria-label", text("closeLabel"));
     if (lastStatus) $("scan-status").textContent = statusText(lastStatus);
     if (state?.fen)
       $("scan-source").textContent = text(state.recognition ? "image" : "dom");

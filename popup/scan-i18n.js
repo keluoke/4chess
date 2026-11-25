@@ -75,6 +75,10 @@ export const scanMessages = {
     orientation: "Orientation",
     help: "Click or drag to explore. Right-drag draws an arrow. Scores are from White’s view.",
     erase: "Remove piece",
+    previewLabel: "Screenshot selection",
+    turnLabel: "Side to move",
+    gaugeLabel: "White evaluation",
+    closeLabel: "Close",
   },
   zh: {
     perspective: "白方视角",
@@ -144,5 +148,9 @@ export const scanMessages = {
     orientation: "棋盘方向",
     help: "点击或拖动探索分支；右键拖动画箭头。评分始终为白方视角。",
     erase: "删除棋子",
+    previewLabel: "截图框选区域",
+    turnLabel: "行棋方",
+    gaugeLabel: "白方视角评估",
+    closeLabel: "关闭",
   },
 };

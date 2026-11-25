@@ -16,6 +16,8 @@ export class MaiaInBrowserEngine {
     this.allMovesDict = {};
     this.initPromise = null;
     this.modelSource = 'unknown';
+    this._scratch = null;
+    this._scratchInUse = false;
   }
 
   reset() {
@@ -24,6 +26,44 @@ export class MaiaInBrowserEngine {
     this.meta = null;
     this.tensors = {};
     this.modelSource = 'unknown';
+    this._scratch = null;
+    this._scratchInUse = false;
+  }
+
+  _acquireScratch({ D, numHeads, inputDim, ffDim, sm2OutDim, sm3OutDim, pDim }) {
+    const key = `${D}|${numHeads}|${inputDim}|${ffDim}|${sm2OutDim}|${sm3OutDim}|${pDim}`;
+    const create = (pooled) => ({
+      key,
+      pooled,
+      tokens: new Float32Array(64 * inputDim),
+      X: new Float32Array(64 * D),
+      Q: new Float32Array(64 * D),
+      K: new Float32Array(64 * D),
+      V: new Float32Array(64 * D),
+      y1: pDim ? new Float32Array(64 * pDim) : null,
+      xMean: new Float32Array(D),
+      sm2Out: new Float32Array(sm2OutDim),
+      sm3Out: new Float32Array(sm3OutDim),
+      gabBias: new Float32Array(numHeads * 4096),
+      saOut: new Float32Array(64 * D),
+      scores: new Float32Array(64),
+      ffMid: new Float32Array(ffDim),
+      sqFrom: new Float32Array(64 * D),
+      sqTo: new Float32Array(64 * D),
+      scoresBase: new Float32Array(4096),
+      promoBiases: new Float32Array(32),
+      promoLogits: new Float32Array(256),
+      allLogits: new Float32Array(4352),
+      squareWeights: new Float32Array(64)
+    });
+    if (this._scratchInUse) return create(false);
+    this._scratchInUse = true;
+    if (!this._scratch || this._scratch.key !== key) this._scratch = create(true);
+    return this._scratch;
+  }
+
+  _releaseScratch(pool) {
+    if (pool?.pooled && this._scratch === pool) this._scratchInUse = false;
   }
 
   async loadModel(urlOrBuffer = 'https://weights.4chess.cc/maia3_model.bin', onProgress = null, expected = null, options) {
@@ -279,7 +319,22 @@ export class MaiaInBrowserEngine {
 
     // Concatenate 8 history planes (64, 96) + 256 elo -> inputDim = 352
     const inputDim = 12 * 8 + 256; // 352
-    const tokens = new Float32Array(64 * inputDim);
+    const sm1B0 = this.tensors['transformer.layers.0.self_attn.sm1.bias'];
+    const pool = this._acquireScratch({
+      D,
+      numHeads,
+      inputDim,
+      ffDim: this.tensors['transformer.layers.0.linear1.bias'].length,
+      sm2OutDim: this.tensors['transformer.layers.0.self_attn.sm2.bias'].length,
+      sm3OutDim: this.tensors['transformer.layers.0.self_attn.sm3.bias'].length,
+      pDim: sm1B0 ? sm1B0.length : 0
+    });
+    const {
+      tokens, X, Q, K, V, y1, xMean, sm2Out, sm3Out, gabBias, saOut, scores, ffMid,
+      sqFrom, sqTo, scoresBase, promoBiases, promoLogits, allLogits, squareWeights
+    } = pool;
+
+    try {
     for (let sq = 0; sq < 64; sq++) {
       const sqOffset = sq * inputDim;
       for (let h = 0; h < 8; h++) {
@@ -303,7 +358,6 @@ export class MaiaInBrowserEngine {
     // 3. Token Projection: (64, 352) -> (64, D)
     const tpW = this.tensors['token_projection.weight']; // [D, 352]
     const tpB = this.tensors['token_projection.bias']; // [D]
-    let X = new Float32Array(64 * D);
 
     for (let i = 0; i < 64; i++) {
       for (let d = 0; d < D; d++) {
@@ -348,10 +402,6 @@ export class MaiaInBrowserEngine {
       const gabLayerWeight = this.tensors[`${pfx}.self_attn.gab_weight`] || gabSharedWeight;
 
       // Compute Q, K, V: [64, D] each
-      const Q = new Float32Array(64 * D);
-      const K = new Float32Array(64 * D);
-      const V = new Float32Array(64 * D);
-
       for (let i = 0; i < 64; i++) {
         const xOffset = i * D;
         for (let d = 0; d < D; d++) {
@@ -378,7 +428,6 @@ export class MaiaInBrowserEngine {
       if (sm1W && sm1B) {
         // Architecture with per-square GAB projection (23M, 79M)
         const p = sm1B.length;
-        const y1 = new Float32Array(64 * p);
         for (let i = 0; i < 64; i++) {
           const xOffset = i * D;
           const yOffset = i * p;
@@ -393,7 +442,7 @@ export class MaiaInBrowserEngine {
         sm2InDim = 64 * p;
       } else {
         // Mean pooling architecture (5M)
-        const xMean = new Float32Array(D);
+        xMean.fill(0);
         for (let i = 0; i < 64; i++) {
           for (let d = 0; d < D; d++) xMean[d] += X[i * D + d];
         }
@@ -404,7 +453,6 @@ export class MaiaInBrowserEngine {
 
       // 2. sm2 -> GELU -> LN1
       const sm2OutDim = sm2B.length;
-      const sm2Out = new Float32Array(sm2OutDim);
       for (let d = 0; d < sm2OutDim; d++) {
         let s = sm2B[d];
         const wOff = d * sm2InDim;
@@ -415,7 +463,6 @@ export class MaiaInBrowserEngine {
 
       // 3. sm3 -> GELU -> LN2
       const sm3OutDim = sm3B.length;
-      const sm3Out = new Float32Array(sm3OutDim);
       for (let d = 0; d < sm3OutDim; d++) {
         let s = sm3B[d];
         const wOff = d * sm2OutDim;
@@ -426,7 +473,6 @@ export class MaiaInBrowserEngine {
 
       // 4. bias = GAB_weight (4096, genSize) @ sm3Out -> [numHeads, 4096]
       const genSize = gabLayerWeight.length / 4096;
-      const gabBias = new Float32Array(numHeads * 4096);
       for (let h = 0; h < numHeads; h++) {
         const headVecOffset = h * genSize;
         const headBiasOffset = h * 4096;
@@ -441,7 +487,6 @@ export class MaiaInBrowserEngine {
       }
 
       // 5. Multi-head Scaled Dot-Product Attention
-      const saOut = new Float32Array(64 * D);
       const scale = 1.0 / Math.sqrt(headDim);
 
       for (let h = 0; h < numHeads; h++) {
@@ -451,7 +496,6 @@ export class MaiaInBrowserEngine {
         for (let i = 0; i < 64; i++) {
           const qiOffset = i * D + hOffset;
           // Compute scores for row i
-          const scores = new Float32Array(64);
           let maxScore = -1e9;
 
           for (let j = 0; j < 64; j++) {
@@ -509,7 +553,6 @@ export class MaiaInBrowserEngine {
 
         // FeedForward: Linear1 -> GELU -> Linear2 -> Residual -> RMSNorm2
         const ffDim = lin1B.length;
-        const ffMid = new Float32Array(ffDim);
         for (let m = 0; m < ffDim; m++) {
           let s = lin1B[m];
           const wOff = m * D;
@@ -544,9 +587,6 @@ export class MaiaInBrowserEngine {
     const toW = this.tensors['proj_sq_to.weight'];
     const promoW = this.tensors['promo_bias_proj.weight']; // [4, 256]
 
-    const sqFrom = new Float32Array(64 * D);
-    const sqTo = new Float32Array(64 * D);
-
     for (let i = 0; i < 64; i++) {
       for (let d = 0; d < D; d++) {
         let sf = 0, st = 0;
@@ -563,7 +603,6 @@ export class MaiaInBrowserEngine {
 
     // Base square-to-square scores: (64, 64) / sqrt(D)
     const pScale = 1.0 / Math.sqrt(D);
-    const scoresBase = new Float32Array(4096);
     for (let i = 0; i < 64; i++) {
       for (let j = 0; j < 64; j++) {
         let dot = 0;
@@ -575,7 +614,6 @@ export class MaiaInBrowserEngine {
     }
 
     // Promotions: 8 files from rank 7 (sq 48..55) to rank 8 (sq 56..63)
-    const promoBiases = new Float32Array(8 * 4);
     for (let f = 0; f < 8; f++) {
       const rank8Sq = 56 + f;
       for (let p = 0; p < 4; p++) {
@@ -588,7 +626,6 @@ export class MaiaInBrowserEngine {
       }
     }
 
-    const promoLogits = new Float32Array(256);
     let pIdx = 0;
     for (let fFrom = 0; fFrom < 8; fFrom++) {
       const fromSq = 48 + fFrom;
@@ -602,7 +639,6 @@ export class MaiaInBrowserEngine {
     }
 
     // Combined logits: [4096 + 256 = 4352]
-    const allLogits = new Float32Array(4352);
     allLogits.set(scoresBase, 0);
     allLogits.set(promoLogits, 4096);
 
@@ -630,7 +666,7 @@ export class MaiaInBrowserEngine {
     // Format scored moves & square heatmap
     // Square heatmap represents candidate move destination square probability aggregation (sum of move probabilities targeting each square)
     const scored = [];
-    const squareWeights = new Float32Array(64);
+    squareWeights.fill(0);
 
     for (let i = 0; i < validLegalMoves.length; i++) {
       const m = validLegalMoves[i];
@@ -662,6 +698,9 @@ export class MaiaInBrowserEngine {
       heatmap,
       latencyMs
     };
+    } finally {
+      this._releaseScratch(pool);
+    }
   }
 
   gelu(x) {

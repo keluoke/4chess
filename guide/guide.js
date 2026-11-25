@@ -81,6 +81,11 @@ for (const [label, file] of [['LICENSE', '../LICENSE'], ['THIRD-PARTY NOTICES', 
   });
 }
 
+const mobileToc = document.querySelector('.guide-toc-mobile');
+mobileToc?.addEventListener('click', event => {
+  if (event.target.closest('a[href^="#"]')) mobileToc.open = false;
+});
+
 const tocLinks = [...document.querySelectorAll('.guide-toc a[href^="#"]')];
 const tocTargets = tocLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
 if (tocLinks.length && tocTargets.length && 'IntersectionObserver' in window) {
