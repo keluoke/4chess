@@ -96,6 +96,8 @@ const measuredStory = await new GameAnalyzer(storySf, storyMaia).analyzeGame(sto
 assert.deepEqual(measuredStory.allMoves[10].narrowChoice, { narrow: true, found: true });
 assert.equal(measuredStory.allMoves[11].narrowChoice, undefined, 'A bound runner-up cannot establish a narrow choice');
 assert.deepEqual(measuredStory.allMoves[12].narrowChoice, { narrow: false, found: true });
+const confirmedBeyond = measuredStory.allMoves.find(m => m.divergenceType === 'beyond_intuition');
+if (confirmedBeyond) assert.equal(confirmedBeyond.verifiedBestUci, confirmedBeyond.uci);
 
 const model=new MaiaEngine(null,{isReady:true,initialize:async()=>true});
 const initialization=model.initialize(); await new Promise(r=>setImmediate(r));model.worker.onerror({message:'Injected crash'});

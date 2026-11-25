@@ -1,6 +1,6 @@
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
-import { t, initI18n, getLang } from './i18n.js?v=20261124-intuition-labels';
+import { t, initI18n, getLang, setLanguage } from './i18n.js?v=20261124-intuition-labels';
 import { decodeReviewSnapshot, reviewStoryRows } from './review-snapshot.js?v=20261125-poster-focus';
 import { STOCKFISH_VARIANTS, MAIA_VARIANTS } from '../engine/engine-variants.js?v=20261025-v115';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
@@ -65,9 +65,9 @@ function renderSnapshot(report) {
     const item = document.createElement('li');
     const el = button(moveLabel(move), () => show(move.ply));
     item.append(el);
-    notation.append(item);
-    return el;
+    return { item, el };
   });
+  notation.replaceChildren(...moveButtons.map(entry => entry.item));
   const turns = byId('snapshot-turns');
   turns.replaceChildren(...report.keyPlies.map(ply => button(moveLabel(report.plies[ply - 1]), () => show(ply - 1))));
   byId('snapshot-turning').hidden = !turns.children.length;
@@ -111,7 +111,7 @@ function renderSnapshot(report) {
     byId('snapshot-position').textContent = position;
     chart.setCursor(cursor);
     selected?.removeAttribute('aria-current');
-    selected = moveButtons[cursor - 1];
+    selected = moveButtons[cursor - 1]?.el;
     selected?.setAttribute('aria-current', 'step');
     analyzeAt(fen);
     const arrows = [];
@@ -157,31 +157,69 @@ function renderSnapshot(report) {
       }
     }
   }
+  const flipBtn = byId('snapshot-flip');
+  if (flipBtn) flipBtn.onclick = () => board.flip();
   range.oninput = () => show(Number(range.value));
   previous.onclick = () => show(cursor - 1);
   next.onclick = () => show(cursor + 1);
-  document.addEventListener('keydown', event => {
-    if (event.altKey || event.metaKey || event.ctrlKey || event.target.matches('input,textarea,select,button')) return;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      show(cursor + (event.key === 'ArrowLeft' ? -1 : 1));
-    }
-  });
+  if (!window.__snapshotKeysBound) {
+    window.__snapshotKeysBound = true;
+    document.addEventListener('keydown', event => {
+      if (event.altKey || event.metaKey || event.ctrlKey || event.target.matches('input,textarea,select,button')) return;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        window.__snapshotStep?.(event.key === 'ArrowLeft' ? -1 : 1);
+      }
+    });
+  }
+  window.__snapshotStep = delta => show(cursor + delta);
   byId('snapshot-report').hidden = false;
   show(report.keyPlies.length ? report.keyPlies[0] - 1 : 0);
 }
 
+const syncSnapshotHeader = () => {
+  const lang = getLang();
+  const langBtn = byId('snapshot-lang');
+  if (langBtn) {
+    langBtn.textContent = lang === 'zh' ? 'English' : '中文';
+    langBtn.setAttribute('aria-label', lang === 'zh' ? 'Switch to English' : '切换为中文');
+  }
+  document.title = 'Diverge · ' + t('snapshotProvenance');
+  const brand = document.querySelector('.snapshot-brand');
+  if (brand) brand.href = `./index.html?lang=${lang}`;
+  const recoveryLink = byId('snapshot-recovery-link');
+  if (recoveryLink) recoveryLink.href = `./index.html?lang=${lang}`;
+};
+
 window.addEventListener('hashchange', () => location.reload());
+const urlSearch = new URLSearchParams(location.search);
+const urlHash = new URLSearchParams(location.hash.slice(1));
+const explicitLang = urlHash.get('lang') || urlSearch.get('lang');
 initI18n();
-document.title = 'Diverge · ' + t('snapshotProvenance');
+if (explicitLang === 'zh' || explicitLang === 'en') setLanguage(explicitLang);
+syncSnapshotHeader();
+
+let loadedReport = null;
+const langBtn = byId('snapshot-lang');
+if (langBtn) {
+  langBtn.onclick = () => {
+    const next = getLang() === 'zh' ? 'en' : 'zh';
+    setLanguage(next);
+    syncSnapshotHeader();
+    if (loadedReport) renderSnapshot(loadedReport);
+    else status.textContent = t('snapshotInvalid');
+  };
+}
+
 const status = byId('snapshot-status');
 status.textContent = t('reviewSharePreparing');
 try {
-  const token = new URLSearchParams(location.hash.slice(1)).get('review');
-  const report = await decodeReviewSnapshot(token);
+  const token = urlHash.get('review');
+  loadedReport = await decodeReviewSnapshot(token);
   if (FairPlayGuard.isLiveGameInProgress()) throw new Error('Fair play lock');
-  renderSnapshot(report);
+  renderSnapshot(loadedReport);
   status.hidden = true;
 } catch {
   status.textContent = t('snapshotInvalid');
+  byId('snapshot-recovery')?.removeAttribute('hidden');
 }

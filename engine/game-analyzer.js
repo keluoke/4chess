@@ -1192,6 +1192,8 @@ export class GameAnalyzer {
             if (kind) {
               move.divergenceType = kind;
               move.divergenceStatus = 'confirmed';
+              move.verifiedBestSan = root.bestMove.san;
+              move.verifiedBestUci = root.bestMove.uci;
               if (kind === 'beyond_intuition') {
                 const previous = analyzedMoves[move.ply - 3];
                 move.isBeyondIntuition = true;

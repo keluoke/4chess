@@ -15,6 +15,8 @@ body.live-page, .live-page :is(button, select, a, .maia-chessboard, #event-moves
 .live-page [hidden] { display: none !important; }
 .event-nav { display: flex; align-items: center; gap: .65rem; padding: .35rem max(.8rem, calc((100% - 1136px) / 2)); border-bottom: 1px solid var(--line); white-space: nowrap; }
 .event-brand { color: var(--green); font-size: 1.1rem; font-weight: 800; }
+.event-nav-link { font-size: .83rem; font-weight: 600; text-decoration: none; padding: .2rem .5rem; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); }
+.event-nav-link:hover { border-color: var(--green); }
 .event-nav a, .event-source a { color: var(--green); }
 .event-main { max-width: 1160px; margin: 0 auto; padding: .45rem .8rem 1rem; }
 .event-nav h1 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; font-size: .98rem; font-weight: 720; line-height: 1.2; }
@@ -24,7 +26,7 @@ body.live-page, .live-page :is(button, select, a, .maia-chessboard, #event-moves
 .match-score { display: flex; gap: .38rem; align-items: center; margin-left: auto; color: var(--muted); font-size: .85rem; }
 .match-score strong { color: var(--ink); font-size: 1.08rem; font-variant-numeric: tabular-nums; }
 .match-score .score-short, #mobile-gauge-score, .toolbar-icon, #mobile-moment-slot { display: none; }
-.round-rail { display: flex; gap: .35rem; overflow-x: auto; padding: .18rem 2px .32rem; margin-bottom: .25rem; scrollbar-width: thin; }
+.round-rail { display: flex; gap: .35rem; overflow-x: auto; padding: .18rem 18px .32rem 2px; margin-bottom: .25rem; scrollbar-width: thin; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
 .round-rail:empty { display: none; }
 .live-page .round-rail button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .35rem; min-height: 28px; padding: .18rem .55rem; border-radius: 999px; font-variant-numeric: tabular-nums; }
 .round-rail button span { color: var(--muted); font-size: .75rem; }
@@ -129,7 +131,8 @@ body.live-page, .live-page :is(button, select, a, .maia-chessboard, #event-moves
 #share-card-canvas { display: block; max-width: 100%; max-height: 60dvh; width: auto; height: auto; animation: poster-reveal .28s ease-out; }
 @keyframes poster-reveal { from { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { #share-card-canvas, .poster-progress span { animation: none; transition: none; } }
-#trend-board { width: min(100%, 300px, 52dvh); margin: .5rem auto .75rem; --board-light: #e4e9da; --board-dark: #92ae94; touch-action: pan-y pinch-zoom; }
+#trend-board { width: min(100%, 300px, 52dvh); aspect-ratio: 1; margin: .5rem auto .75rem; --board-light: #e4e9da; --board-dark: #92ae94; box-shadow: none; border-radius: 6px; touch-action: pan-y pinch-zoom; }
+#trend-board .maia-chessboard { width: 100%; height: 100%; }
 .trend-subtitle { margin-bottom: .12rem; font-size: .95rem; }
 #trend-conclusion { margin-bottom: .55rem; font-size: .86rem; color: var(--green); }
 #trend-status { margin-top: .38rem; font-size: .8rem; }
@@ -159,6 +162,7 @@ body.live-page, .live-page :is(button, select, a, .maia-chessboard, #event-moves
   .live-page .board-column, .event-panel, .engine-pane { display: contents; }
   .event-nav { gap: .35rem; padding-inline: .6rem; }
   .event-nav h1 { font-size: .85rem; }
+  .event-nav-link { padding: .15rem .4rem; font-size: .75rem; }
   .event-brand { font-size: .92rem; }
   .settings-label, .match-score .score-full { display: none; }
   .match-score { gap: .25rem; font-size: .74rem; }

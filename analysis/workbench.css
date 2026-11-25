@@ -457,6 +457,9 @@ button,input,select,textarea { font-family:inherit; }
   .btn-header { padding:0 12px; }
   .btn-settings { padding:0; }
   .candidate-variation { max-height:none; }
+  .candidate-move { min-height:36px;display:inline-flex;align-items:center;padding:2px 6px; }
+  :is(.review-list-modes,.review-side-controls) button { min-height:36px;padding:6px 10px;font-size:12px; }
+  #review-clear-filter { min-height:34px;padding:4px 10px; }
   .board-with-evaluation { grid-template-columns:25px minmax(0,1fr);gap:10px; }
   .board-controls { padding:6px; }
   .study-branch { min-height:40px; }
@@ -576,7 +579,7 @@ button,input,select,textarea { font-family:inherit; }
 .review-observations h3,.review-observations p { margin:0;font-size:13px; }
 .review-observations > div { padding:10px;border:1px solid var(--dg-line);border-radius:8px; }
 .review-observations p { margin-top:6px; }
-.practice-active .insight-column,.practice-active .divider-insight { display:none!important; }
+.practice-active .insight-column,.practice-active .divider-insight,.practice-active .workspace-divider { display:none!important; }
 
 #review-summary {
   position:fixed;inset:0;margin:auto;height:fit-content;box-sizing:border-box;

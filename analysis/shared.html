@@ -15,9 +15,15 @@
   <main class="snapshot-wrap">
     <header class="snapshot-header">
       <a class="snapshot-brand" href="./index.html"><img src="../icons/icon48.png" alt="" width="32" height="32">Diverge</a>
-      <a id="snapshot-analyze" class="btn-header" hidden data-i18n="snapshotAnalyze">分析当前局面</a>
+      <div class="snapshot-header-actions">
+        <button id="snapshot-lang" class="btn-header" type="button" aria-label="Switch Language">English</button>
+        <a id="snapshot-analyze" class="btn-header" hidden data-i18n="snapshotAnalyze">分析当前局面</a>
+      </div>
     </header>
     <p id="snapshot-status" role="status"></p>
+    <div id="snapshot-recovery" class="snapshot-recovery" hidden>
+      <a id="snapshot-recovery-link" class="btn-header btn-primary" href="./index.html" data-i18n="snapshotOpenStudio">打开分析工作台</a>
+    </div>
     <article id="snapshot-report" hidden>
       <header class="snapshot-summary">
         <h1 id="snapshot-title"></h1>
@@ -32,6 +38,7 @@
             <button class="btn-header" id="snapshot-prev" type="button" data-i18n-aria="btnPrev" aria-label="上一步">‹</button>
             <input type="range" id="snapshot-range" min="0" value="0" data-i18n-aria="snapshotScrub" aria-label="棋局进度">
             <button class="btn-header" id="snapshot-next" type="button" data-i18n-aria="btnNext" aria-label="下一步">›</button>
+            <button class="btn-header snapshot-flip" id="snapshot-flip" type="button" data-i18n-aria="btnFlip" data-i18n-title="btnFlip" aria-label="翻转黑白视角" title="翻转黑白视角">⇅</button>
           </div>
           <output id="snapshot-position" for="snapshot-range"></output>
         </section>

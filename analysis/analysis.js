@@ -148,6 +148,7 @@ class AnalysisStudioApp {
     this.el = {
       btnLangToggle: document.getElementById('btn-lang-toggle'),
       metaWhite: document.getElementById('meta-white'),
+      metaVs: document.getElementById('meta-vs'),
       metaBlack: document.getElementById('meta-black'),
       metaResult: document.getElementById('meta-result'),
       eloSelector: document.getElementById('elo-selector'),
@@ -182,6 +183,7 @@ class AnalysisStudioApp {
       moveNotationTable: document.getElementById('move-notation-table'),
       pgnModal: document.getElementById('pgn-modal'),
       pgnInput: document.getElementById('pgn-input'),
+      pgnModalError: document.getElementById('pgn-modal-error'),
       btnCancelPgn: document.getElementById('btn-cancel-pgn'),
       btnSubmitPgn: document.getElementById('btn-submit-pgn'),
       sampleFischer: document.getElementById('sample-fischer'),
@@ -429,11 +431,27 @@ class AnalysisStudioApp {
       if (e.target === this.el.pgnModal) this.closePgnModal();
     });
 
+    this.el.pgnInput?.addEventListener('input', () => this.setPgnModalError(''));
     this.el.btnSubmitPgn.addEventListener('click', async () => {
       const input = this.el.pgnInput.value.trim();
-      if (!input) return;
-      this.closePgnModal();
-      await this.smartLoadInput(input);
+      if (!input) {
+        this.setPgnModalError(t('toastUnrecognizedInput'));
+        this.el.pgnInput?.focus();
+        return;
+      }
+      this.setPgnModalError('');
+      this.el.btnSubmitPgn.disabled = true;
+      try {
+        const loaded = await this.smartLoadInput(input);
+        if (loaded) {
+          this.closePgnModal();
+        } else {
+          this.setPgnModalError(this._lastLoadError || t('toastUnrecognizedInput'));
+          this.el.pgnInput?.focus();
+        }
+      } finally {
+        this.el.btnSubmitPgn.disabled = false;
+      }
     });
 
     // File Upload Button & Input
@@ -509,9 +527,15 @@ class AnalysisStudioApp {
     document.getElementById('btn-home-import').addEventListener('click', () => this.openPgnModal());
     document.getElementById('btn-home-checkup').addEventListener('click', () => this.checkup?.open());
     document.getElementById('btn-chip-fischer').addEventListener('click', () => {
-      this.smartLoadInput(SAMPLE_GAMES.fischer, '', { focusMove: this.getFischerSampleMove(), orientation: 'black' });
+      if (this.smartLoadInput(SAMPLE_GAMES.fischer, '', { focusMove: this.getFischerSampleMove(), orientation: 'black' })) {
+        window.scrollTo?.({ top: 0, behavior: 'instant' });
+      }
     });
-    document.getElementById('btn-chip-kasparov').addEventListener('click', () => this.smartLoadInput(SAMPLE_GAMES.kasparov));
+    document.getElementById('btn-chip-kasparov').addEventListener('click', () => {
+      if (this.smartLoadInput(SAMPLE_GAMES.kasparov)) {
+        window.scrollTo?.({ top: 0, behavior: 'instant' });
+      }
+    });
 
     // Reanalyze button
     this.el.btnReanalyze.addEventListener('click', () => {
@@ -666,6 +690,7 @@ class AnalysisStudioApp {
     // 4.2 Update control button tooltips
     if (this.el.btnPlay) {
       this.el.btnPlay.title = this.isPlaying ? t('btnPlayPause') : t('btnPlayStart');
+      this.el.btnPlay.setAttribute('aria-label', this.el.btnPlay.title);
     }
     this.updateSoundToggleUI();
 
@@ -694,12 +719,14 @@ class AnalysisStudioApp {
     if (this.isPlaying) {
       clearInterval(this.playTimer);
       this.isPlaying = false;
-      this.el.btnPlay.textContent = '▶';
+      this.el.btnPlay.textContent = '⏵';
       this.el.btnPlay.title = t('btnPlayStart');
+      this.el.btnPlay.setAttribute('aria-label', t('btnPlayStart'));
     } else {
       this.isPlaying = true;
       this.el.btnPlay.textContent = '⏸';
       this.el.btnPlay.title = t('btnPlayPause');
+      this.el.btnPlay.setAttribute('aria-label', t('btnPlayPause'));
       this.playTimer = setInterval(() => {
         if ((this.isBranching ? this.activeBranch.cursor : this.currentPly) < (this.isBranching ? this.activeBranch.moves.length : this.positions.length - 1)) {
           this.navigateStudy(1);
@@ -741,8 +768,16 @@ class AnalysisStudioApp {
     reader.readAsText(file);
   }
 
+  setPgnModalError(message = '') {
+    this._lastLoadError = message || '';
+    if (!this.el.pgnModalError) return;
+    this.el.pgnModalError.textContent = message;
+    this.el.pgnModalError.hidden = !message;
+  }
+
   openPgnModal() {
     if (this.el.pgnModal) {
+      this.setPgnModalError('');
       this.modalReturnFocus = document.activeElement;
       this.el.pgnModal.inert = false;
       this.el.pgnModal.setAttribute('aria-hidden', 'false');
@@ -755,6 +790,7 @@ class AnalysisStudioApp {
 
   closePgnModal() {
     if (this.el.pgnModal) {
+      this.setPgnModalError('');
       this.el.pgnModal.classList.remove('open');
       this.el.pgnModal.inert = true;
       this.el.pgnModal.setAttribute('aria-hidden', 'true');
@@ -779,8 +815,8 @@ class AnalysisStudioApp {
     if (fenParts.length >= 2 && fenParts[0].split('/').length === 8) {
       const ok = commit({
         fen: text,
-        white: t('freeAnalysisBoard'),
-        black: 'FEN',
+        white: t('fenPositionTitle'),
+        black: null,
         result: '*',
         positionInput: true,
         autoReview: false
@@ -797,7 +833,8 @@ class AnalysisStudioApp {
       const v = FairPlayGuard.verifyConcludedGame(text);
       if (!v.ok) {
         this.analyzer.cancel();
-        this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
+        this._lastLoadError = t('toastFairPlayReview', { reason: v.reason });
+        this.showToast(this._lastLoadError, 7000);
         return false;
       }
       const label = sourceName ? ` (${sourceName})` : '';
@@ -827,7 +864,8 @@ class AnalysisStudioApp {
           const v = FairPlayGuard.verifyConcludedGame(data);
           if (!v.ok) {
             this.analyzer.cancel();
-            this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
+            this._lastLoadError = t('toastFairPlayReview', { reason: v.reason });
+            this.showToast(this._lastLoadError, 7000);
             return false;
           }
           if (data.pgn && commit({ pgn: withPgnTermination(data.pgn, data.status), checkupSource: 'lichess', publicGameUrl: 'https://lichess.org/' + gameId, landAtEnd: true })) {
@@ -838,7 +876,8 @@ class AnalysisStudioApp {
       } catch (err) {
         console.warn('[Analysis Studio] Lichess export error:', err);
       }
-      this.showToast(t('toastFailedLichess'));
+      this._lastLoadError = t('toastFailedLichess');
+      this.showToast(this._lastLoadError);
       return false;
     }
 
@@ -908,7 +947,8 @@ class AnalysisStudioApp {
         const v = FairPlayGuard.verifyConcludedGame(gameObj);
         if (!v.ok) {
           this.analyzer.cancel();
-          this.showToast(t('toastFairPlayReview', { reason: v.reason }), 7000);
+          this._lastLoadError = t('toastFairPlayReview', { reason: v.reason });
+          this.showToast(this._lastLoadError, 7000);
           return false;
         }
 
@@ -951,11 +991,13 @@ class AnalysisStudioApp {
         }
       }
 
-      this.showToast(t('toastFailedChesscom'));
+      this._lastLoadError = t('toastFailedChesscom');
+      this.showToast(this._lastLoadError);
       return false;
     }
 
-    this.showToast(t('toastUnrecognizedInput'));
+    this._lastLoadError = t('toastUnrecognizedInput');
+    if (!this.el.pgnModal?.classList.contains('open')) this.showToast(this._lastLoadError);
     return false;
   }
 
@@ -1107,16 +1149,19 @@ class AnalysisStudioApp {
     } else {
       parsedMoves = moves?.length ? moves : GameAnalyzer.parsePgn(pgn);
       if (!parsedMoves?.length) {
-        alert(t('errorParseMove'));
+        if (this.el.pgnModal?.classList.contains('open')) this._lastLoadError = t('errorParseMove');
+        else alert(t('errorParseMove'));
         return false;
       }
       if (parsedMoves.startFen && !new ChessBoard().load(parsedMoves.startFen)) {
-        alert(t('errorIllegalFen'));
+        if (this.el.pgnModal?.classList.contains('open')) this._lastLoadError = t('errorIllegalFen');
+        else alert(t('errorIllegalFen'));
         return false;
       }
       positions = GameAnalyzer.buildPositionChain(parsedMoves);
       if (!positions || positions.length <= 1) {
-        alert(t('errorBuildChain'));
+        if (this.el.pgnModal?.classList.contains('open')) this._lastLoadError = t('errorBuildChain');
+        else alert(t('errorBuildChain'));
         return false;
       }
     }
@@ -1136,7 +1181,7 @@ class AnalysisStudioApp {
     });
     const profile = this.mistakeBank?.activeProfile;
     const inferredOrientation = positions?.isPartial ? null : inferProfileSide(game, profile);
-    const entryOrientation = this.sessionOrientationExplicit ? orientation : inferredOrientation || fallbackOrientation;
+    const entryOrientation = this.sessionOrientationExplicit ? orientation : inferredOrientation || (positionOnly ? (positionBoard.turn === 'b' ? 'black' : 'white') : fallbackOrientation);
     if (game) game.orientation = checkupOrientation || entryOrientation;
     this.boardUI.setOrientation(entryOrientation);
     document.getElementById('setting-orientation').value = this.boardUI.orientation;
@@ -1238,7 +1283,7 @@ class AnalysisStudioApp {
         moveEl: null
       }];
       this.currentGameKey = `fen_${fen.replace(/\s+/g, '_')}`;
-      this.renderGameMetadata({ white: white || (positionInput ? t('freeAnalysisBoard') : null), black: black || (positionInput ? 'FEN' : null), result });
+      this.renderGameMetadata({ white: white || (positionInput ? t('fenPositionTitle') : null), black: black || null, result, positionOnly: !!positionInput });
       this.el.moveCountBadge.textContent = '0';
       this.renderMoveList();
       this.goToPly(0, { silent: true });
@@ -1483,8 +1528,18 @@ class AnalysisStudioApp {
     }) : '';
   }
 
-  renderGameMetadata({ white, black, result } = {}) {
+  renderGameMetadata({ white, black, result, positionOnly } = {}) {
     const tags = this.pgnTags || {};
+    const isSinglePosition = !!positionOnly && !tags.white && !tags.black;
+    if (this.el.metaVs) this.el.metaVs.hidden = isSinglePosition;
+    if (this.el.metaBlack) this.el.metaBlack.hidden = isSinglePosition;
+    if (this.el.metaResult) this.el.metaResult.hidden = isSinglePosition;
+    if (isSinglePosition) {
+      this.el.metaWhite.textContent = white || t('fenPositionTitle');
+      this.el.metaBlack.textContent = '';
+      this.el.metaResult.textContent = result || '*';
+      return;
+    }
     const name = (tag, fallback, key) => tag && tag !== '?' ? tag : fallback || t(key).slice(3);
     this.el.metaWhite.textContent = `⚪ ${name(tags.white, white, 'whitePlayer')}${tags.whiteelo && tags.whiteelo !== '?' ? ` (${tags.whiteelo})` : ''}`;
     this.el.metaBlack.textContent = `⚫ ${name(tags.black, black, 'blackPlayer')}${tags.blackelo && tags.blackelo !== '?' ? ` (${tags.blackelo})` : ''}`;
@@ -2096,8 +2151,8 @@ class AnalysisStudioApp {
       } else if (m.divergenceType === 'intuition_trap' || m.isHumanTrap) {
         badge.textContent = '🫤';
         badge.className = 'annotation-badge annotation-trap';
-        const lossTxt = m.lossPawns || (m.lossCp ? (Math.abs(m.lossCp) / 100).toFixed(1) : '0');
-        badge.title = `🫤 ${t('trapText')} (-${lossTxt} ${t('pawnsUnit')})`;
+        const rawLoss = m.lossPawns ? String(m.lossPawns).replace(/^-+/, '') : (m.lossCp ? (Math.abs(m.lossCp) / 100).toFixed(2) : '0');
+        badge.title = `🫤 ${t('trapText')} (-${rawLoss} ${t('pawnsUnit')})`;
       } else if (m.severity === 'blunder') {
         badge.textContent = '??';
         badge.className = 'annotation-badge annotation-blunder';

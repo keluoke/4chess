@@ -41,6 +41,8 @@ const copy = {
     quickScore: 'Stockfish 快算评估',
     perspectiveDisabled: '启用 Maia 后查看各段直觉',
     schedule: '赛程与比分', game: '第 {n} 局', countdown: '距开赛 {time}', title: '2026 棋王战',
+    studioLink: '工作台', boardRegion: '转播棋盘', panelRegion: '着法和双引擎', board: '国际象棋棋盘',
+    cloudActive: '云端分析已就绪', localStandby: '本地待命',
     mobileTitle: '棋王战', loadMaia: '加载 · {size}', loadMaiaLabel: '加载 {model}，约 {size}', loadingMaia: '加载中…',
     settings: '设置', sfArrows: 'Stockfish 箭头', maiaArrows: 'Maia 箭头', whiteEvaluation: '白方视角评估',
     estimatedClock: '根据最近一次官方时钟估算', startPosition: '开局局面',
@@ -92,6 +94,8 @@ const copy = {
     quickScore: 'Quick Stockfish evaluation',
     perspectiveDisabled: 'Enable Maia to see rating trends',
     schedule: 'Schedule and results', game: 'Game {n}', countdown: 'Starts in {time}', title: '2026 World Championship',
+    studioLink: 'Studio', boardRegion: 'Broadcast chessboard', panelRegion: 'Moves and dual engines', board: 'Chessboard',
+    cloudActive: 'Cloud preview active', localStandby: 'Local standby',
     mobileTitle: 'World Championship', loadMaia: 'Load · {size}', loadMaiaLabel: 'Load {model}, about {size}', loadingMaia: 'Loading…',
     settings: 'Settings', sfArrows: 'Stockfish arrows', maiaArrows: 'Maia arrows', whiteEvaluation: 'Evaluation from White’s perspective',
     estimatedClock: 'Estimated from the latest official clock reading', startPosition: 'Starting position',
@@ -211,6 +215,8 @@ function paintLanguage() {
   $('btn-settings').title = t('settings');
   $('language').textContent = lang === 'en' ? '中文' : 'EN';
   $('round-rail').setAttribute('aria-label', t('schedule'));
+  const navStudio = $('nav-studio');
+  if (navStudio) navStudio.href = '/analysis/?lang=' + lang;
   paint();
 }
 
@@ -426,8 +432,10 @@ function paintControls() {
   const length = state.snapshot?.moves.length || 0;
   const round = currentRound();
   const status = $('event-status');
-  status.dataset.state = state.stale ? 'stale' : '';
-  status.textContent = t(state.stale ? (state.snapshot || state.event ? 'stale' : 'unavailable')
+  const finished = (state.snapshot?.status || round?.status) === 'finished';
+  const showStale = state.stale && !finished;
+  status.dataset.state = showStale ? 'stale' : '';
+  status.textContent = t(showStale ? (state.snapshot || state.event ? 'stale' : 'unavailable')
     : state.snapshot?.status || round?.status || 'loading');
   $('source').href = state.snapshot?.source || round?.source || state.event?.source || $('source').href;
   $('ply-note').textContent = state.branch ? t('branch')
@@ -600,7 +608,9 @@ function paintEvaluation(result) {
   gauge.classList.toggle('flipped', board.orientation === 'black');
   gauge.setAttribute('aria-label', t('whiteEvaluation') + ' ' + text);
   gauge.style.setProperty('--white-share', share + '%');
-  $('mobile-gauge-score').textContent = text;
+  const mobileGauge = $('mobile-gauge-score');
+  mobileGauge.textContent = evaluation ? text : '';
+  mobileGauge.hidden = !evaluation;
   $('gauge-white').style.height = share + '%';
   $('gauge-black').style.height = 100 - share + '%';
   $('gauge-score-white').textContent = !evaluation || evaluation.cp >= 0 ? text : '';
@@ -693,8 +703,9 @@ function paintEngineStatus() {
   const sfName = stockfishVariant === 'standard' ? (lang === 'zh' ? 'Stockfish 19 标准版' : 'Stockfish 19 Standard') : 'Stockfish 19 Lite';
   const maiaName = MAIA_VARIANTS[maiaVariant].name;
   const reached = state.analysis?.depth;
-  $('sf-edition').textContent = compactLayout.matches ? 'SF19' : `${sfName} · ${reached ? 'D' + reached : `${t('targetDepth')} D${depth}`}`;
-  $('maia-edition').textContent = compactLayout.matches ? 'Maia-3' : maiaName;
+  const cloudActive = Boolean(state.analysis?.cloud && state.analysis.maiaReady);
+  $('sf-edition').textContent = compactLayout.matches ? 'SF19' : `${cloudActive ? 'Stockfish 19' : sfName} · ${reached ? 'D' + reached : `${t('targetDepth')} D${depth}`}`;
+  $('maia-edition').textContent = compactLayout.matches ? 'Maia-3' : (cloudActive ? MAIA_VARIANTS['79m'].name : maiaName);
   $('engine-hint').textContent = engineExperienceHint(state.settings, lang);
   const status = state.engines?.status?.();
   for (const [slot, name] of [['sf', sfName], ['maia', maiaName]]) {
@@ -702,12 +713,14 @@ function paintEngineStatus() {
     const phase = health?.state;
     const label = phase === 'ready' ? 'engineReady' : phase === 'error' ? 'engineError' : phase === 'downloading' ? 'engineDownloading'
       : health?.stage === 'cache' ? 'engineCache' : health?.stage === 'preparing' ? 'enginePreparing'
-      : phase === 'starting' || phase === 'loading' ? 'engineStarting' : 'engineIdle';
+      : phase === 'starting' || phase === 'loading' ? 'engineStarting'
+      : cloudActive ? 'localStandby' : 'engineIdle';
     const source = health?.source === 'cache' ? t('engineCacheSource') : health?.source === 'cdn' ? 'Cloudflare CDN'
       : health?.source === 'bundled' ? t('engineBundled') : '';
     const percent = Number.isFinite(health?.percent) ? health.percent : null;
     const detail = phase === 'downloading' ? (percent === null ? health.loadedMB && `${health.loadedMB} MiB` : `${percent}%`) : '';
-    const text = [name, [t(label), detail].filter(Boolean).join(' '), phase !== 'idle' ? source : ''].filter(Boolean).join(' · ');
+    const cloudSuffix = phase === 'idle' && cloudActive ? t('cloudActive') : '';
+    const text = [name, [t(label), detail].filter(Boolean).join(' '), phase !== 'idle' ? source : cloudSuffix].filter(Boolean).join(' · ');
     if ($(slot + '-status').textContent !== text) $(slot + '-status').textContent = text;
     const progress = $(slot + '-progress');
     progress.hidden = phase !== 'downloading' || !state.engineEnabled;
@@ -971,7 +984,13 @@ async function pollEvent() {
           state.initialPly = null;
           state.initialVariation = null;
         }
-        chooseRound(state.event.activeRoundId || rounds.find(round => round.status === 'scheduled')?.id || rounds.at(-1)?.id);
+        chooseRound(
+          (state.event.activeRoundId && rounds.some(round => round.id === state.event.activeRoundId) && state.event.activeRoundId)
+          || rounds.find(round => round.status === 'live')?.id
+          || rounds.findLast(round => round.status === 'finished')?.id
+          || rounds.find(round => round.status === 'scheduled')?.id
+          || rounds.at(-1)?.id
+        );
       } else if (!state.snapshot && state.roundBusy !== state.roundKey) {
         void pollRound();
       }
@@ -1124,6 +1143,11 @@ $('flip-board').onclick = () => {
 };
 $('language').onclick = () => {
   lang = lang === 'zh' ? 'en' : 'zh';
+  try {
+    const url = new URL(location.href);
+    url.searchParams.set('lang', lang);
+    history.replaceState(history.state, '', url);
+  } catch {}
   paintLanguage();
 };
 $('event-elo').onchange = () => void savePreferences({ defaultElo: Number($('event-elo').value) });

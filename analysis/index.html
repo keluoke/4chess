@@ -53,7 +53,7 @@
     <div class="studio-header-center">
       <div class="game-meta-badge" id="game-meta-badge">
         <span id="meta-white">⚪ 白方</span>
-        <span style="color: var(--text-dim);">vs</span>
+        <span id="meta-vs" style="color: var(--text-dim);">vs</span>
         <span id="meta-black">⚫ 黑方</span>
         <span class="game-meta-result" id="meta-result">*</span>
       </div>
@@ -143,7 +143,7 @@
       </section>
     </section>
     <!-- Left: Chessboard Column -->
-    <section class="board-column" aria-label="棋盘与局面走势">
+    <section class="board-column" data-i18n-aria="boardRegionLabel" aria-label="棋盘与局面走势">
       <p id="practice-context" class="practice-context"></p>
       <div class="workspace-section-heading"><span data-i18n="boardHeading">棋盘</span></div>
       <div class="board-with-evaluation">
@@ -165,15 +165,15 @@
         <div class="btn-nav-group">
           <button type="button" class="btn-nav" id="btn-first" data-i18n-title="btnFirst" title="开局首步 (Home)">|◀</button>
           <button type="button" class="btn-nav" id="btn-prev" data-i18n-title="btnPrev" title="上一步 (Left Arrow)">◀</button>
-          <button type="button" class="btn-nav" id="btn-play" data-i18n-title="btnPlay" title="自动播放/暂停">▶</button>
-          <button type="button" class="btn-nav" id="btn-next" data-i18n-title="btnNext" title="下一步 (Right Arrow)">▶</button>
+          <button type="button" class="btn-nav" id="btn-play" data-i18n-title="btnPlayStart" data-i18n-aria="btnPlayStart" title="自动播放" aria-label="自动播放">⏵</button>
+          <button type="button" class="btn-nav" id="btn-next" data-i18n-title="btnNext" data-i18n-aria="btnNext" title="下一步 (Right Arrow)" aria-label="下一步 (Right Arrow)">›</button>
           <button type="button" class="btn-nav" id="btn-last" data-i18n-title="btnLast" title="终局末步 (End)">▶|</button>
           <button type="button" class="btn-nav" id="btn-flip" data-i18n-title="btnFlip" title="翻转黑白视角 (快捷键: F)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
               <use href="../ui/studio-controls.svg#flip"/>
             </svg>
           </button>
-          <button type="button" class="btn-nav" id="btn-clear-thought-arrows" data-i18n-title="clearThoughtArrows" aria-label="清除思考箭头"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="../ui/studio-controls.svg#clear"/></svg></button>
+          <button type="button" class="btn-nav" id="btn-clear-thought-arrows" data-i18n-title="clearThoughtArrows" data-i18n-aria="clearThoughtArrows" aria-label="清除思考箭头"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="../ui/studio-controls.svg#clear"/></svg></button>
           <button type="button" class="btn-nav" id="btn-sound" data-i18n-title="btnSound" title="行棋音效开关 (快捷键: M)" aria-label="行棋音效开关">
             <svg id="icon-sound-on" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
               <use href="../ui/studio-controls.svg#sound-on"/>
@@ -472,7 +472,7 @@
   </div>
 
   <!-- PGN Import Modal -->
-  <div class="modal-overlay" id="pgn-modal" inert aria-hidden="true" role="dialog" aria-modal="true" aria-label="导入已完赛对局">
+  <div class="modal-overlay" id="pgn-modal" inert aria-hidden="true" role="dialog" aria-modal="true" data-i18n-aria="modalTitle" aria-label="导入已完赛对局">
     <div class="modal-card">
       <div class="studio-eyebrow" data-i18n="modalEyebrow">A NEW PERSPECTIVE</div>
       <h3 class="modal-title" data-i18n="modalTitle">从一个局面或一盘棋开始</h3>
@@ -482,6 +482,7 @@
 2. Lichess 对局网址 (如 https://lichess.org/aBcDeFgH)
 3. Chess.com 对局网址 (如 https://www.chess.com/game/live/12345678)
 或直接将本地 .pgn 文件拖拽至窗口任意位置"></textarea>
+      <p id="pgn-modal-error" class="pgn-modal-error" role="alert" hidden></p>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
         <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
           <span data-i18n="modalSampleLabel">示例:</span>
@@ -718,7 +719,7 @@
     </div>
     <div class="share-card-toolbar">
       <div class="share-card-actions">
-        <button type="button" class="btn-header" id="btn-share-card-link" data-i18n="reviewShareCopy">复制链接</button>
+        <button type="button" class="btn-header" id="btn-share-card-link" data-i18n="shareCardCopyLink">复制局面链接</button>
         <button type="button" class="btn-header" id="btn-share-card-copy" data-i18n="shareCardCopy" disabled>复制图片</button>
         <button type="button" class="btn-header btn-primary" id="btn-share-card-download" data-i18n="shareCardDownload" disabled>下载 PNG</button>
         <button type="button" class="btn-header" id="position-poster-retry" data-i18n="maiaTrendRetry" hidden>重试</button>

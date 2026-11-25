@@ -57,6 +57,9 @@ function translate() {
   document.title = lang === 'en' ? 'Diverge · Chess Scanner & Analysis Guide' : '歧路 Diverge · 棋图扫描、分析指南与关于';
   document.querySelector('meta[name=description]').content = lang === 'en' ? 'Learn to scan webpage chess diagrams and compare Stockfish engine analysis with Maia human intuition. Position study, game review, settings and credits.' : '学习扫描网页棋图，对比 Stockfish 引擎分析与 Maia 人类直觉；了解局面探索、完赛复盘、设置、署名与许可。';
   document.getElementById('language-toggle').textContent = lang === 'en' ? '中文' : 'English';
+  document.querySelector('.guide-toc')?.setAttribute('aria-label', lang === 'en' ? 'Table of contents' : '目录');
+  const brand = document.querySelector('header .brand');
+  if (brand && /^https?:$/.test(location.protocol)) brand.href = lang === 'en' ? '../en/' : '../zh/';
   document.querySelectorAll('a[href^="../analysis/"]').forEach(link => { link.href = '../analysis/?lang=' + lang; });
   localStorage.setItem('diverge_guide_lang', lang);
 }

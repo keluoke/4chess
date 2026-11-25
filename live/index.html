@@ -14,7 +14,8 @@
   <header class="event-nav">
     <a class="event-brand" href="/">Diverge</a>
     <h1 id="title">2026 棋王战</h1>
-    <div class="match-score" id="match-score" role="group" aria-label="赛况总比分"></div>
+    <a id="nav-studio" class="event-nav-link" href="/analysis/" data-copy="studioLink">分析工作台</a>
+    <div class="match-score" id="match-score" role="group" data-label="score" aria-label="赛况总比分"></div>
     <button type="button" class="btn-header btn-settings" id="btn-settings" aria-label="设置" data-label="settings" aria-haspopup="dialog">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="../ui/studio-controls.svg#settings"/></svg>
     </button>
@@ -23,7 +24,7 @@
   <main class="event-main">
     <nav id="round-rail" class="round-rail" aria-label="赛程与比分"></nav>
     <div class="event-layout">
-      <section class="board-column" aria-label="转播棋盘">
+      <section class="board-column" data-label="boardRegion" aria-label="转播棋盘">
         <header class="round-strip">
           <h2 id="round-title" hidden></h2>
           <span class="event-status" id="event-status" role="status">正在连接 Lichess 转播</span>
@@ -32,12 +33,12 @@
         </header>
         <div class="seat" id="black-seat"><span id="black-name">黑方</span><time id="black-clock">–:––</time></div>
         <div class="board-with-evaluation" id="board-frame">
-          <div class="evaluation-gauge" id="evaluation-gauge" role="img" aria-label="白方视角评估">
+          <div class="evaluation-gauge" id="evaluation-gauge" role="img" data-label="whiteEvaluation" aria-label="白方视角评估">
             <div class="gauge-black" id="gauge-black"><span id="gauge-score-black"></span></div>
             <div class="gauge-white" id="gauge-white"><span id="gauge-score-white">—</span></div>
           </div>
           <span id="mobile-gauge-score" aria-hidden="true">—</span>
-          <div id="event-board" class="maia-board-wrapper" aria-label="国际象棋棋盘"></div>
+          <div id="event-board" class="maia-board-wrapper" data-label="board" aria-label="国际象棋棋盘"></div>
         </div>
         <div class="seat" id="white-seat"><span id="white-name">白方</span><time id="white-clock">–:––</time></div>
         <div class="board-controls round-controls">
@@ -68,7 +69,7 @@
         <p id="live-link-status" class="live-link-status" role="status"></p>
         <a id="workbench-game" class="workbench-game" target="_blank" rel="noopener" hidden></a>
       </section>
-      <section class="event-panel" aria-label="着法和双引擎">
+      <section class="event-panel" data-label="panelRegion" aria-label="着法和双引擎">
         <button type="button" id="new-move" class="update-button" hidden></button>
         <header class="moves-heading">
           <h2 data-copy="moves">实战着法</h2>
@@ -124,7 +125,7 @@
       <h2 id="trend-title" data-copy="trend">人类视角</h2>
       <form method="dialog"><button type="submit" data-copy="close">关闭</button></form>
     </header>
-    <div id="trend-board" aria-hidden="true"></div>
+    <div id="trend-board" class="maia-board-wrapper" aria-hidden="true"></div>
     <h3 class="trend-subtitle" data-copy="trendSubtitle">600–2600 Elo 怎么走</h3>
     <p id="trend-status" role="status"></p>
     <button id="trend-enable" type="button" hidden></button>
