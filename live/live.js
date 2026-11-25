@@ -4,7 +4,8 @@ import { soundEffects } from '../analysis/sound-effects.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { expectedScore, intuitionKind } from '../engine/review-policy.js';
-import { RATINGS, probabilities, renderMaiaTrendPlot } from '../analysis/maia-elo-trend.js?v=20261124-perspective';
+import { RATINGS, probabilities, highlightMaiaTrend, renderMaiaTrendLegend, renderMaiaTrendPlot
+} from '../analysis/maia-elo-trend.js?v=20261125-trend-lines';
 import { engineExperienceHint, getSavedPreferences, initializePreferences, savePreferences, subscribePreferences } from '../engine/engine-preferences.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
 import { ModelCache } from '../engine/model-cache.js';
@@ -19,6 +20,7 @@ const copy = {
     play: '自动播放', pausePlay: '暂停播放', clear: '清除思考箭头', moveSound: '行棋音效',
     mute: '关闭行棋音效', unmute: '开启行棋音效', threeLines: '3 条候选',
     trend: '人类视角', trendSubtitle: '600–2600 Elo 怎么走', chart: '曲线', trendData: '采样数据', targetDepth: '目标',
+    trendLegend: '着法图例。★ 为 Stockfish 首选，M 为 Maia 首选。',
     blindSpot: '全分段盲区：Maia 预测 600–2600 Elo 几乎无人想到 {move}',
     trendPeak: 'Stockfish 首选 {move} 在 {elo} Elo 的预测选着概率最高（{prob}%）。',
     posterStart: '正在请不同段位的棋手看看这步棋…', posterDrawing: '正在把从新手到大师的选择画成海报…',
@@ -66,6 +68,7 @@ const copy = {
     play: 'Autoplay', pausePlay: 'Pause playback', clear: 'Clear arrows', moveSound: 'Move sounds',
     mute: 'Mute move sounds', unmute: 'Unmute move sounds', threeLines: '3 lines',
     trend: 'Human perspective', trendSubtitle: 'How 600–2600 Elo players might move', chart: 'Chart', trendData: 'Samples', targetDepth: 'Target',
+    trendLegend: 'Move legend. ★ marks the Stockfish pick and M marks the Maia pick.',
     blindSpot: 'Across 600–2600 Elo, Maia predicts almost nobody would find {move}',
     trendPeak: 'Stockfish’s {move} is most likely at {elo} Elo ({prob}% predicted).',
     posterStart: 'Seeing how players across ratings read this move…', posterDrawing: 'Drawing the rating curve onto your card…',
@@ -510,17 +513,20 @@ function renderTrend(trend) {
   if (shareSession?.trend === trend) paintPosterProgress(shareSession, trend);
   if (!$('live-trend').open || state.trend !== trend) return;
   const { position, samples } = trend;
-  const count = RATINGS.filter(elo => samples.has(elo)).length;
+  const count = completeBands(trend);
   $('trend-status').textContent = t('trendProgress').replace('{count}', count).replace('{total}', RATINGS.length);
   $('trend-retry').hidden = Boolean(trend.pending) || count === RATINGS.length;
   const conclusion = trendConclusion(trend);
   $('trend-conclusion').textContent = conclusion;
   $('trend-conclusion').hidden = !conclusion;
   $('trend-chart').replaceChildren(renderMaiaTrendPlot($('trend-data').querySelector('table'), position.series, samples, position.elo));
+  highlightMaiaTrend($('live-trend'), trend.highlighted ?? null);
 }
 
+const engineTrendMove = series => series.find(move => move.role === 'sf' || move.role === 'consensus');
+
 function trendConclusion({ position, samples }, locale = lang) {
-  const best = position.series.find(move => move.role === 'sf');
+  const best = engineTrendMove(position.series);
   if (!best) return '';
   const points = RATINGS.map(elo => ({ elo, probability: samples.get(elo)?.get(best.uci) }));
   if (!points.every(point => Number.isFinite(point.probability))) return '';
@@ -771,7 +777,7 @@ async function analyzeMove() {
   const obsolete = () => state.requestVersion !== version || !foreground() || !analysisAllowed();
   try {
     if (!state.engines) {
-      const { LiveEngines } = await import('./engines.js?v=20261125-poster');
+      const { LiveEngines } = await import('./engines.js?v=20261125-trend-lines');
       if (obsolete()) return;
       const owner = new LiveEngines(state.settings, () => { if (state.engines === owner) paintEngineStatus(); }, state.reusableStockfish);
       state.engines = owner;
@@ -1107,12 +1113,10 @@ function updateTrendDialog(result) {
     stockfish?.uci && arrow(stockfish.uci, 'green', same ? 'consensus' : 'sf'),
     maia?.uci && !same && arrow(maia.uci, 'gold', 'maia')
   ].filter(Boolean));
-  $('trend-legend').replaceChildren(...position.series.map(move => {
-    const item = document.createElement('li');
-    item.className = 'trend-' + move.role;
-    item.textContent = move.san;
-    return item;
-  }));
+  renderMaiaTrendLegend($('trend-legend'), position.series, uci => {
+    trend.highlighted = trend.highlighted === uci ? null : uci;
+    highlightMaiaTrend($('live-trend'), trend.highlighted);
+  });
   void sampleTrend(trend);
 }
 $('trend-toggle').onclick = () => {
@@ -1126,7 +1130,7 @@ $('trend-toggle').onclick = () => {
 };
 $('trend-chart-view').onclick = () => showTrendView(false);
 $('trend-data-view').onclick = () => showTrendView(true);
-$('trend-retry').onclick = () => { if (state.trend) void sampleTrend(state.trend); };
+$('trend-retry').onclick = () => { if (state.trend) void sampleTrend(state.trend, true); };
 $('analyze').onclick = () => {
   if (!analysisAllowed()) return;
   const failed = state.requestedKey && !state.analysis && !state.analyzing;
@@ -1192,7 +1196,8 @@ function posterSpec(share, analysis, trend, moment) {
   const { stockfish: sf, maia, evaluation } = analysis;
   const chance = probabilities([maia]).get(maia.uci);
   const percent = Number.isFinite(chance) ? Math.round(chance) + '%' : '—';
-  const blind = Math.max(...RATINGS.map(elo => trend.samples.get(elo).get(sf.uci))) < 3;
+  const enginePick = engineTrendMove(trend.position.series);
+  const blind = !!enginePick && Math.max(...RATINGS.map(elo => trend.samples.get(elo).get(enginePick.uci))) < 3;
   const kind = !share.branch && moment && intuitionKind(moment);
   const score = analysis.maiaEvaluations?.get(maia.uci);
   const maiaScore = score ? (score.approximate ? '≈' : '') + score.text : '—';
@@ -1207,7 +1212,7 @@ function posterSpec(share, analysis, trend, moment) {
     ...share,
     move: { fen: share.fen, bestUci: sf.uci, bestSan: sf.san, maiaTopUci: maia.uci, maiaTopSan: maia.san },
     badge: blind ? t('posterBlindBadge', locale) : kind ? t(kind, locale) : '',
-    blind, blindNote: t('posterBlindNote', locale),
+    blind, blindUci: enginePick?.uci, blindNote: t('posterBlindNote', locale),
     subtitle: [share.players, outlook].filter(Boolean).join(' · '),
     chartTitle: t('posterChart', locale), chartNote: t('posterChartNote', locale),
     scan: t(share.qrLink === share.link ? 'posterScan' : 'posterScanGame', locale),
@@ -1248,7 +1253,7 @@ function updatePoster() {
     const [moment] = await Promise.all([momentTask, scoreTask]);
     if (!current()) return;
     if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
-    const { renderLivePoster } = await import('./poster.js?v=20261125-share-links');
+    const { renderLivePoster } = await import('./poster.js?v=20261125-trend-lines');
     const canvas = $('share-card-canvas');
     if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
     const blob = await canvasPng(canvas);

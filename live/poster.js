@@ -11,6 +11,13 @@ const theme = {
   light: '#e9ede0', dark: '#91ab94', frame: paper, coordinate: '#244134',
   stockfish: '#276a4b', maia: '#996119', played: '#a9453f'
 };
+const trendStyles = {
+  sf: { color: theme.stockfish, dash: [] },
+  consensus: { color: theme.stockfish, dash: [] },
+  maia: { color: theme.maia, dash: [12, 6] },
+  neutral: { color: '#555c70', dash: [2, 6] },
+  teal: { color: '#266f7a', dash: [10, 5, 2, 5] }
+};
 
 function box(ctx, x, y, width, height, radius, color) {
   ctx.fillStyle = color;
@@ -40,13 +47,13 @@ function drawLegend(ctx, lines) {
 }
 
 function drawChart(ctx, poster) {
-  box(ctx, 62, 1044, 956, 286, 21, '#f4f5ee');
+  box(ctx, 62, 1044, 956, 303, 21, '#f4f5ee');
   label(ctx, poster.chartTitle, 88, 1062, 28, 750, ink, 430);
   ctx.textAlign = 'right';
   label(ctx, poster.chartNote, 990, 1069, 19, 550, muted, 450);
   ctx.textAlign = 'left';
   const x = elo => 170 + (trendX(elo) - trendX(600)) * 2.03;
-  const y = probability => 1122 + (trendY(probability) - trendY(100)) * 1.35;
+  const y = probability => 1144 + (trendY(probability) - trendY(100)) * 1.2;
   ctx.strokeStyle = '#d4dfd2';
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 7]);
@@ -60,17 +67,19 @@ function drawChart(ctx, poster) {
   ctx.setLineDash([]);
   ctx.textAlign = 'center';
   for (const elo of RATINGS) label(ctx, String(elo), x(elo), 1296, 17, 550, muted);
-  const groups = poster.series.map(({ role, uci }) => ({
-    color: role === 'sf' ? theme.stockfish : theme.maia,
+  const groups = poster.series.map(move => ({
+    ...move, ...trendStyles[move.role],
     points: RATINGS.map(elo => {
-      const probability = poster.samples.get(elo).get(uci);
+      const probability = poster.samples.get(elo).get(move.uci);
       return { x: x(elo), y: y(probability), probability };
     })
   }));
-  for (const { color, points } of groups) {
+  for (const { color, dash, points } of groups) {
     ctx.beginPath();
     ctx.strokeStyle = color;
     ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.setLineDash(dash);
     ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length; i++) {
       const previous = points[i - 1], next = points[i];
@@ -78,6 +87,7 @@ function drawChart(ctx, poster) {
       ctx.bezierCurveTo(middle, previous.y, middle, next.y, next.x, next.y);
     }
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.fillStyle = color;
     for (const point of points) {
       ctx.beginPath();
@@ -85,16 +95,24 @@ function drawChart(ctx, poster) {
       ctx.fill();
     }
   }
-  for (const index of [0, RATINGS.length - 1]) {
-    const ends = groups.map(group => ({ ...group.points[index], color: group.color })).sort((a, b) => b.y - a.y);
-    ends.forEach((point, i) => {
-      const collision = i > 0 && ends[0].y - point.y < 23;
-      label(ctx, point.probability.toFixed(1) + '%', point.x, point.y - (collision ? 39 : 24), 17, 750, point.color);
-    });
-  }
   ctx.textAlign = 'left';
+  const legendWidth = 904 / groups.length;
+  for (const [index, group] of groups.entries()) {
+    const left = 88 + index * legendWidth;
+    ctx.beginPath();
+    ctx.strokeStyle = group.color;
+    ctx.lineWidth = 3;
+    ctx.setLineDash(group.dash);
+    ctx.moveTo(left, 1114);
+    ctx.lineTo(left + 27, 1114);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const start = group.points[0].probability.toFixed(1);
+    const end = group.points.at(-1).probability.toFixed(1);
+    label(ctx, `${group.label}  ${start}% → ${end}%`, left + 35, 1103, 18, 650, group.color, legendWidth - 41);
+  }
   if (poster.blind) {
-    const point = groups[0].points[2];
+    const point = groups.find(group => group.uci === poster.blindUci).points[2];
     const noteX = point.x - 64;
     const preferredY = point.y - 51;
     ctx.font = '700 17px system-ui, sans-serif';
@@ -105,8 +123,12 @@ function drawChart(ctx, poster) {
       if (right.x < noteX - 6 || left.x > noteX + noteWidth + 6) return [];
       return [{ top: Math.min(left.y, right.y), bottom: Math.max(left.y, right.y) }];
     }));
-    const overlaps = spans.some(({ top, bottom }) => top < preferredY + 23 && bottom > preferredY - 6);
-    const noteY = overlaps ? Math.min(...spans.map(span => span.top)) - 26 : preferredY;
+    const noteY = [preferredY, ...spans.map(span => span.top - 26)].sort((a, b) => Math.abs(a - preferredY) - Math.abs(b - preferredY))
+      .find(at => at > y(100) && !spans.some(({ top, bottom }) => top < at + 23 && bottom > at - 6));
+    if (noteY === undefined) {
+      label(ctx, poster.blindNote, 88, 1320, 17, 700, theme.stockfish, 260);
+      return;
+    }
     ctx.strokeStyle = theme.stockfish;
     ctx.lineWidth = 1;
     ctx.beginPath();

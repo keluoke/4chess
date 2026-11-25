@@ -50,6 +50,7 @@ async function mockEngines(context) {
   await context.route('**/live/engines.js?*', route => route.fulfill({
     contentType: 'application/javascript',
     body: `import { ChessBoard } from '/engine/chess-core.js';
+    import { maiaTrendSeries } from '/analysis/maia-elo-trend.js?v=20261125-trend-lines';
     export class LiveEngines {
       constructor({ maiaVariant, maiaMode, stockfishVariant, depth, elo }) {
         this.mode = maiaMode;
@@ -72,8 +73,10 @@ async function mockEngines(context) {
           window.heldTrendBand = null;
           await new Promise(resolve => { window.releaseTrendBand = resolve; });
         }
-        const moves = position.series.map((move, rank) => ({
-          uci: move.uci, rawProb: rank ? (window.lowCurve ? .24 : .55) : (window.nonBlind ? .2 : .01)
+        const moves = position.series.map(move => ({
+          uci: move.uci, rawProb: move.role === 'sf' ? (window.nonBlind ? .2 : .01)
+            : move.role === 'maia' || move.role === 'consensus' ? (window.lowCurve ? .24 : .55)
+              : move.role === 'neutral' ? .12 : .06
         }));
         if (elo === window.partialTrendBand) {
           window.partialTrendBand = null;
@@ -85,13 +88,19 @@ async function mockEngines(context) {
         const chess = new ChessBoard(position.fen);
         const legal = chess.getLegalMoves();
         const stockfish = legal.find(move => move.uci === (chess.turn === 'w' ? 'f1b5' : 'b8c6')) || legal[0];
-        const maia = { ...legal.find(move => move.uci !== stockfish.uci), rawProb: .55 };
         const evaluation = chess.turn === 'w' ? { cp: 35, text: '+0.35' } : { cp: -35, text: '-0.35' };
         const stockfishLines = [stockfish, ...legal.filter(move => move.uci !== stockfish.uci).slice(0, 2)]
           .map(move => ({ uci: move.uci, evaluation, variation: [{ san: move.san, label: move.san }] }));
-        const maiaLines = [maia, ...legal.filter(move => move.uci !== maia.uci).slice(0, 2).map(move => ({ ...move, rawProb: .12 }))];
-        const series = [[stockfish, 'sf'], [maia, 'maia']].map(([move, role]) => ({ uci: move.uci, san: move.san, label: move.san, role }));
-        const moves = [{ uci: stockfish.uci, rawProb: window.nonBlind ? .2 : .016 }, maia];
+        const maiaLines = legal.filter(move => move.uci !== stockfish.uci).slice(0, 3)
+          .map((move, index) => ({ ...move, rawProb: index ? .12 : .55 }));
+        if (Number.isInteger(window.sharedCandidateRank)) {
+          const index = window.sharedCandidateRank;
+          maiaLines[index] = { ...stockfish, rawProb: index ? .12 : .55 };
+        }
+        const maia = maiaLines[0];
+        const series = maiaTrendSeries(maiaLines, stockfish);
+        const moves = maiaLines.some(move => move.uci === stockfish.uci) ? maiaLines
+          : [...maiaLines, { uci: stockfish.uci, rawProb: window.nonBlind ? .2 : .016 }];
         (window.positionRequests ||= []).push(position.fen);
         if (window.holdAssessment) {
           window.holdAssessment = false;
@@ -399,10 +408,18 @@ try {
   await page.evaluate(() => { window.missingTrendSample = false; });
   await page.locator('#trend-retry').click();
   await page.locator('#trend-status').getByText('已完成 6/6 档', { exact: false }).waitFor();
-  assert.equal(await page.locator('#trend-chart circle').count(), 12);
+  assert.equal(await page.locator('#trend-chart circle').count(), 24);
+  assert.equal(await page.locator('#trend-legend button').count(), 4);
+  const sfLegend = page.locator('#trend-legend').getByRole('button', { name: '★ Bb5' });
+  await sfLegend.click();
+  assert.equal(await page.locator('#trend-legend button[aria-pressed="true"]').innerText(), '★ Bb5');
+  assert.equal(await page.locator('#trend-chart .trend-muted').count(), 3);
+  assert.equal(await page.locator('#trend-chart .trend-sf.trend-muted').count(), 0);
   await page.locator('#trend-data-view').click();
   assert.equal(await page.locator('#trend-data tbody tr').count(), 6);
-  assert.equal(await page.locator('#trend-data tbody tr:first-child td').first().innerText(), '1.0%');
+  assert.equal(await page.locator('#trend-data tbody tr:first-child td[data-uci="f1b5"]').innerText(), '1.0%');
+  assert.equal(await page.locator('#trend-data tbody tr:first-child td.trend-muted').count(), 3);
+  await sfLegend.click();
   assert.match(await page.locator('#trend-conclusion').innerText(), /全分段盲区.*Bb5/);
   await page.locator('#trend-chart-view').click();
   assert.equal(await page.locator('#trend-chart').isVisible(), true);
@@ -437,13 +454,17 @@ try {
   assert.ok(posterText.includes('Across-rating blind spot'));
   assert.ok(posterText.includes('Almost nobody finds it'));
   assert.ok(posterText.some(text => text.startsWith('Engine pick ')) && posterText.some(text => text.startsWith('Human instinct ')));
+  const chartLegend = posterText.filter(text => text.includes('% → '));
+  assert.equal(chartLegend.length, 4);
+  assert.ok(chartLegend.some(text => text.startsWith('★ Bb5  1.0% → ')));
+  assert.ok(chartLegend.some(text => text.startsWith('M ')));
   assert.ok(posterText.includes('What would each rating play?'));
   assert.equal(await page.evaluate(() => window.chartTitleInk), '#193129', 'Chart title has dark ink against the light chart card');
   assert.ok(posterText.includes('Scan to try this move on 4chess.cc'));
   assert.ok(!posterText.some(text => text.startsWith('At 2600 Elo')));
   assert.ok(await page.evaluate(() => window.cardText.includes('600') && window.cardText.includes('2600')));
   const noteY = await page.evaluate(() => window.cardNoteY);
-  const lowMaiaLineY = 1122 + (100 - 24) * 1.16 * 1.35;
+  const lowMaiaLineY = 1144 + (100 - 24) * 1.16 * 1.2;
   assert.ok(noteY !== null && noteY + 23 < lowMaiaLineY, 'Blind-spot note stays above the low Maia curve');
   if (process.env.LIVE_SCREENSHOTS) {
     mkdirSync(process.env.LIVE_SCREENSHOTS, { recursive: true });
@@ -636,10 +657,38 @@ try {
   assert.deepEqual(await phone.evaluate(() => window.liveEngineSettings),
     { maiaVariant: '23m', stockfishVariant: 'lite', depth: 18, elo: 2600 });
   assert.equal(await phone.locator('#load-maia').isVisible(), false);
+  for (const [rank, label, role] of [[0, '★ M Nc6', 'consensus'], [1, '★ Nc6', 'sf']]) {
+    const duplicate = await context.newPage();
+    await duplicate.addInitScript(rank => {
+      window.sharedCandidateRank = rank;
+      window.nonBlind = true;
+      window.posterMoves = [];
+      const original = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        if (String(text).includes('% → ')) window.posterMoves.push(String(text));
+        return original.call(this, text, ...args);
+      };
+    }, rank);
+    await duplicate.goto(origin + '/live/?lang=en&ply=3');
+    await duplicate.locator('#maia-line .candidate-probability').getByText('55.0%').waitFor();
+    await duplicate.locator('#trend-toggle').click();
+    await duplicate.locator('#trend-status').getByText('6/6 rating bands', { exact: false }).waitFor();
+    assert.equal(await duplicate.locator('#trend-chart g[data-uci]').count(), 3);
+    assert.equal(await duplicate.locator('#trend-chart g[data-uci="b8c6"]').count(), 1);
+    assert.equal(await duplicate.locator('#trend-chart g[data-uci="b8c6"].trend-' + role).count(), 1);
+    assert.equal(await duplicate.locator('#trend-legend button[data-uci="b8c6"]').innerText(), label);
+    await duplicate.locator('#live-trend form button').click();
+    await duplicate.locator('#moment').click();
+    await duplicate.locator('#share-card-canvas:visible').waitFor();
+    const labels = await duplicate.evaluate(() => window.posterMoves);
+    assert.equal(labels.length, 3);
+    assert.ok(labels.some(text => text.startsWith(label + ' ')));
+    await duplicate.close();
+  }
   assert.deepEqual(issues, []);
   console.log('390×710 mobile layout', JSON.stringify(phoneLayout));
 } finally {
   await browser.close();
   server.close();
 }
-console.log('PASS live browser: cold link sharing and Maia opt-in, poster classification and annotation, touch replay, narrow countdown, engines and PNG.');
+console.log('PASS live browser: cold link sharing and Maia opt-in, deduplicated trend and legend, poster classification and annotation, touch replay, narrow countdown, engines and PNG.');

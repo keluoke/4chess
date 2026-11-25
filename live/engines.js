@@ -3,6 +3,7 @@ import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
 import { engineLines, legalVariation, whiteEvaluation } from '../engine/position-lines.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';
+import { maiaTrendSeries } from '../analysis/maia-elo-trend.js?v=20261125-trend-lines';
 
 const VERIFIED_MIN_DEPTH = 18;
 const usable = (result, depth) => Number.isFinite(result?.scoreCp)
@@ -88,14 +89,8 @@ export class LiveEngines {
     const maiaLines = prediction?.isMaiaReady ? (prediction.moves || [])
       .filter(move => legal.has(move.uci)).slice(0, 3).map(move => ({ ...move, san: legal.get(move.uci) })) : [];
     const likely = maiaLines[0];
-    const series = new Map();
-    for (const [candidate, role] of [[result?.bestMove, 'sf'], [likely, 'maia']]) {
-      if (candidate?.uci && !series.has(candidate.uci)) {
-        series.set(candidate.uci, { uci: candidate.uci, label: candidate.san, san: candidate.san, role });
-      }
-    }
-    const trend = likely ? { ...position, series: [...series.values()], moves: prediction.moves } : null;
     const display = displayStockfish(result);
+    const trend = likely ? { ...position, series: maiaTrendSeries(maiaLines, display.stockfishLines[0]), moves: prediction.moves } : null;
     const matches = new Map(display.stockfishLines.map(line => [line.uci, line.evaluation]));
     const maiaEvaluations = new Map(maiaLines.flatMap(move => {
       const score = matches.get(move.uci) ?? entry.maiaEvaluations.get(move.uci);

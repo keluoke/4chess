@@ -14,14 +14,16 @@ const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
 const releaseModules = new Map([
  ...[
-  '/analysis/i18n.js', '/analysis/position-analysis.js', '/analysis/intuition-review.js',
+  '/analysis/i18n.js', '/analysis/intuition-review.js',
   '/analysis/review-explorer.js', '/analysis/share-card.js',
   '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
   '/analysis/challenge.js'
  ].map(path => [path, '20261124-intuition-labels']),
  ['/analysis/board-controls.js', '20261124-controls'],
  ['/engine/game-analyzer.js', '20261125-game-story'],
- ...['/analysis/analysis.js', '/analysis/review-share.js'].map(path => [path, '20261125-poster-focus-r2']),
+ ['/analysis/review-share.js', '20261125-poster-focus-r2'],
+ ...['/analysis/analysis.js', '/analysis/position-analysis.js', '/analysis/maia-elo-trend.js', '/analysis/review-practice.js']
+   .map(path => [path, '20261125-trend-lines']),
  ...['/analysis/review-snapshot.js', '/analysis/shared-review.js']
    .map(path => [path, '20261125-poster-focus']),
  ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',

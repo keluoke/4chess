@@ -21,6 +21,51 @@ export function probabilities(moves) {
   }));
 }
 
+export function maiaTrendSeries(moves, best) {
+  const candidates = new Map(moves.slice(0, 3).map((move, index) => [
+    move.uci, { uci: move.uci, san: move.san, role: ['maia', 'neutral', 'teal'][index] }
+  ]));
+  if (best?.uci) {
+    const sameFirst = best.uci === moves[0]?.uci;
+    candidates.set(best.uci, { uci: best.uci, san: best.variation?.[0]?.san ?? best.san,
+      role: sameFirst ? 'consensus' : 'sf' });
+  }
+  return [...candidates.values()].map(move => ({ ...move, label: (symbols[move.role] || '') + move.san }));
+}
+
+export function highlightMaiaTrend(dialog, uci) {
+  for (const button of dialog.querySelectorAll('.maia-trend-legend button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.uci === uci));
+  }
+  for (const element of dialog.querySelectorAll('.maia-trend-chart g[data-uci], .maia-trend-data [data-uci]')) {
+    element.classList.toggle('trend-muted', uci !== null && element.dataset.uci !== uci);
+  }
+}
+
+export function renderMaiaTrendLegend(legend, series, toggle) {
+  const remaining = new Map(Array.from(legend.children, item => [item.dataset.uci, item]));
+  for (const [index, move] of series.entries()) {
+    let item = remaining.get(move.uci);
+    remaining.delete(move.uci);
+    if (!item) {
+      item = document.createElement('li');
+      item.dataset.uci = move.uci;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.uci = move.uci;
+      const swatch = svgElement('svg', { viewBox: '0 0 30 12', width: 30, height: 12, 'aria-hidden': 'true' });
+      swatch.append(svgElement('path', { d: 'M2 6H28' }));
+      button.append(swatch, document.createElement('span'));
+      item.append(button);
+    }
+    item.className = `maia-trend-series trend-${move.role}`;
+    item.firstElementChild.onclick = () => toggle(move.uci);
+    item.querySelector('span').textContent = move.delta === undefined ? move.label : `${move.label} · Δ ${move.delta}`;
+    if (legend.children[index] !== item) legend.insertBefore(item, legend.children[index] || null);
+  }
+  for (const item of remaining.values()) item.remove();
+}
+
 function formatProbability(probability) {
   return Number.isFinite(probability) ? `${probability.toFixed(1)}%` : '—';
 }
@@ -273,15 +318,8 @@ export class MaiaEloTrend {
 
   series(request) {
     const best = this.lines[0];
-    const candidates = new Map(request.candidates.map((move, index) => [
-      move.uci, { uci: move.uci, san: move.san, role: ['maia', 'neutral', 'teal'][index] }
-    ]));
-    if (best) {
-      const sameFirst = best.uci === request.candidates[0].uci;
-      candidates.set(best.uci, { uci: best.uci, san: best.variation[0].san, role: sameFirst ? 'consensus' : 'sf' });
-    }
     const { entry, ctx } = request.snapshot;
-    return [...candidates.values()].map(candidate => {
+    return maiaTrendSeries(request.candidates, best).map(candidate => {
       const score = this.lines.find(line => line.uci === candidate.uci)?.evaluation || entry.maiaEvaluations.get(candidate.uci);
       let delta = '—';
       if (candidate.uci === best?.uci) delta = '0.00';
@@ -290,42 +328,13 @@ export class MaiaEloTrend {
         const loss = Math.max(0, (best.evaluation.cp - score.cp) * sign) / 100;
         delta = loss > 0 ? `−${loss.toFixed(2)}` : '0.00';
       }
-      return { ...candidate, label: (symbols[candidate.role] || '') + candidate.san, delta };
+      return { ...candidate, delta };
     });
   }
 
   highlight(uci) {
     this.highlighted = uci;
-    for (const button of this.legend.querySelectorAll('button')) {
-      button.setAttribute('aria-pressed', String(button.dataset.uci === uci));
-    }
-    for (const element of this.dialog.querySelectorAll('.maia-trend-chart g[data-uci], .maia-trend-data [data-uci]')) {
-      element.classList.toggle('trend-muted', uci !== null && element.dataset.uci !== uci);
-    }
-  }
-
-  renderLegend(series) {
-    const remaining = new Map(Array.from(this.legend.children, item => [item.dataset.uci, item]));
-    for (const [index, move] of series.entries()) {
-      let item = remaining.get(move.uci);
-      remaining.delete(move.uci);
-      if (!item) {
-        item = document.createElement('li');
-        item.dataset.uci = move.uci;
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.uci = move.uci;
-        button.onclick = () => this.highlight(this.highlighted === move.uci ? null : move.uci);
-        const swatch = svgElement('svg', { viewBox: '0 0 30 12', width: 30, height: 12, 'aria-hidden': 'true' });
-        swatch.append(svgElement('path', { d: 'M2 6H28' }));
-        button.append(swatch, document.createElement('span'));
-        item.append(button);
-      }
-      item.className = `maia-trend-series trend-${move.role}`;
-      item.querySelector('span').textContent = `${move.label} · Δ ${move.delta}`;
-      if (this.legend.children[index] !== item) this.legend.insertBefore(item, this.legend.children[index] || null);
-    }
-    for (const item of remaining.values()) item.remove();
+    highlightMaiaTrend(this.dialog, uci);
   }
 
   render(request) {
@@ -337,7 +346,7 @@ export class MaiaEloTrend {
     this.retry.textContent = t('maiaTrendRetry');
     this.retry.hidden = !incomplete;
     const series = this.series(request);
-    this.renderLegend(series);
+    renderMaiaTrendLegend(this.legend, series, uci => this.highlight(this.highlighted === uci ? null : uci));
     this.chart.replaceChildren(renderMaiaTrendPlot(this.table, series, samples, elo));
     this.caption.textContent = `${t('maiaTrendProbability')} · ${t('maiaTrendCurrent', { elo })}`;
     this.highlight(series.some(move => move.uci === this.highlighted) ? this.highlighted : null);

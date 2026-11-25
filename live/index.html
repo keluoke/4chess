@@ -8,7 +8,7 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/analysis/analysis.css?v=20261124-divergence-cards">
   <link rel="stylesheet" href="/ui/chessboard.css?v=20261025-v115">
-  <link rel="stylesheet" href="./live.css?v=20261125-live-fixes">
+  <link rel="stylesheet" href="./live.css?v=20261125-trend-lines">
 </head>
 <body class="live-page">
   <header class="event-nav">
@@ -135,7 +135,7 @@
         <button id="trend-data-view" type="button" data-copy="trendData" aria-pressed="false">采样数据</button>
         <button id="trend-retry" type="button" data-copy="trendRetry" hidden>重试缺失档位</button>
       </div>
-      <ul id="trend-legend"></ul>
+      <ul id="trend-legend" class="maia-trend-legend" data-label="trendLegend"></ul>
       <div id="trend-chart" class="maia-trend-chart"></div>
       <div id="trend-data" class="maia-trend-data" hidden><table></table></div>
     </div>
@@ -178,6 +178,6 @@
     <p id="share-card-copy-status" class="live-link-status" role="status"></p>
     <input id="share-card-link-field" class="live-link-field" type="url" readonly aria-label="分享链接" data-label="shareLink" hidden>
   </dialog>
-  <script type="module" src="./live.js?v=20261125-share-links"></script>
+  <script type="module" src="./live.js?v=20261125-trend-lines"></script>
 </body>
 </html>
