@@ -14,15 +14,16 @@ const fetchOriginal = globalThis.fetch;
 let finished = false, upstreamCalls = 0;
 const releaseModules = new Map([
  ...[
-  '/analysis/i18n.js', '/analysis/intuition-review.js',
-  '/analysis/review-explorer.js', '/analysis/share-card.js',
+  '/analysis/i18n.js', '/analysis/share-card.js',
   '/analysis/checkup-runner.js', '/analysis/checkup-overview.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js',
   '/analysis/challenge.js'
  ].map(path => [path, '20261124-intuition-labels']),
  ['/analysis/board-controls.js', '20261124-controls'],
  ['/engine/game-analyzer.js', '20261125-game-story'],
  ['/analysis/review-share.js', '20261125-poster-focus-r2'],
- ...['/analysis/analysis.js', '/analysis/position-analysis.js', '/analysis/maia-elo-trend.js', '/analysis/position-poster.js',
+ ...['/analysis/analysis.js', '/analysis/review-explorer.js', '/analysis/intuition-review.js', '/analysis/study-profile-controls.js']
+  .map(path => [path, '20261125-review-sidebar']),
+ ...['/analysis/position-analysis.js', '/analysis/maia-elo-trend.js', '/analysis/position-poster.js',
   '/analysis/position-poster-dialog.js'].map(path => [path, '20261125-position-poster']),
  ['/analysis/review-practice.js', '20261125-trend-lines'],
  ...['/analysis/review-snapshot.js', '/analysis/shared-review.js']

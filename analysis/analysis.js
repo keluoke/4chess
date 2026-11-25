@@ -1,7 +1,7 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-intuition-labels';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261124-intuition-labels';
-import { ReviewExplorer } from './review-explorer.js?v=20261124-intuition-labels';
+import { IntuitionReview } from './intuition-review.js?v=20261125-review-sidebar';
+import { ReviewExplorer } from './review-explorer.js?v=20261125-review-sidebar';
 import { ReviewOverview } from './review-overview.js?v=20261124-intuition-labels';
 import { ReviewCommentary } from './review-commentary.js?v=20261124-intuition-labels';
 import { ConsequencePlayer } from './consequence-player.js?v=20261124-intuition-labels';
@@ -9,7 +9,7 @@ import { MistakeBank } from './mistake-bank.js?v=20261124-intuition-labels';
 import { resolvePerspective } from './study-store.js?v=20261124-checkup-cards-r2';
 import { IntuitionCheckup } from './checkup-runner.js?v=20261124-intuition-labels';
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
-import { StudyProfileControls } from './study-profile-controls.js?v=20261124-intuition-labels';
+import { StudyProfileControls, inferProfileSide } from './study-profile-controls.js?v=20261125-review-sidebar';
 import { CheckupReminders } from './checkup-reminders.js?v=20261124-intuition-labels';
 import { ReviewShare } from './review-share.js?v=20261125-poster-focus-r2';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
@@ -303,6 +303,7 @@ class AnalysisStudioApp {
   }
 
   flipBoard() {
+    this.sessionOrientationExplicit = true;
     this.boardUI.flip();
     document.getElementById('setting-orientation').value = this.boardUI.orientation;
     this.positionAnalysis.render();
@@ -407,6 +408,7 @@ class AnalysisStudioApp {
       });
     }
     document.getElementById('setting-orientation').addEventListener('change', event => {
+      this.sessionOrientationExplicit = true;
       this.boardUI.setOrientation(event.target.value);
       if (this.sessionOrientation) {
         this.sessionOrientation = event.target.value;
@@ -1127,13 +1129,17 @@ class AnalysisStudioApp {
         positions?.[ply]?.uci !== uci || positions?.[ply - 1]?.fen !== fenBefore) return false;
     }
 
-    const entryOrientation = ['white', 'black'].includes(orientation) ? orientation : this.sessionOrientation || this.boardUI.orientation;
-    this.boardUI.setOrientation(entryOrientation);
-    document.getElementById('setting-orientation').value = this.boardUI.orientation;
+    this.sessionOrientationExplicit = ['white', 'black'].includes(orientation);
+    const fallbackOrientation = this.sessionOrientation || this.boardUI.orientation;
     const game = positionOnly ? null : checkupGameContext(pgn, {
-      source: checkupSource, publicGameUrl, orientation: checkupOrientation || this.boardUI.orientation, white, black
+      source: checkupSource, publicGameUrl, white, black
     });
     const profile = this.mistakeBank?.activeProfile;
+    const inferredOrientation = positions?.isPartial ? null : inferProfileSide(game, profile);
+    const entryOrientation = this.sessionOrientationExplicit ? orientation : inferredOrientation || fallbackOrientation;
+    if (game) game.orientation = checkupOrientation || entryOrientation;
+    this.boardUI.setOrientation(entryOrientation);
+    document.getElementById('setting-orientation').value = this.boardUI.orientation;
     const side = resolvePerspective(game, profile).side;
     const matchedElo = conclusion?.ok ? (side ? this.matchPgnElo(tags, side) : ratingMatch || this.matchPgnElo(tags)) : null;
     const explicitElo = !eloProfileId || eloProfileId === profile?.id ? parseStudioElo(elo) : null;
@@ -1338,6 +1344,13 @@ class AnalysisStudioApp {
 
   applyProfilePerspective() {
     if (!this.moves.length || this.moves.isPartial || this.practice?.inProgress || this.tempAnalysisFen || this.scanSourceLocked) return;
+    const inferred = inferProfileSide(this.checkupGame, this.mistakeBank.activeProfile);
+    if (inferred && !this.sessionOrientationExplicit && this.boardUI.orientation !== inferred) {
+      this.boardUI.setOrientation(inferred);
+      this.sessionOrientation = inferred;
+      document.getElementById('setting-orientation').value = inferred;
+      this.rememberSession();
+    }
     const matched = this.mistakeBank.getPerspective().side;
     if (matched === this.profilePerspective) return;
     this.profilePerspective = matched;

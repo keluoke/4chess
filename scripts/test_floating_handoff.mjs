@@ -204,7 +204,7 @@ try {
     await bank.store.saveProfile({ id: 'reminder-child', displayName: 'Child' });
     await bank.selectProfile('reminder-child');
   });
-  await reminders.locator('#study-link-guide').getByRole('button', { name: /Link .*BackgroundUser/ }).click();
+  await reminders.locator('#study-link-guide').getByRole('button', { name: /I played .*BackgroundUser/ }).click();
   await reminders.locator('#checkup-background-offer').waitFor();
   assert.equal(await worker.evaluate(async () =>
     (await chrome.storage.local.get('divergeCheckupBackground')).divergeCheckupBackground?.length || 0), 0,

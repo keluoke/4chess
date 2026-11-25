@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261125-touch-gestures';
+const CACHE_NAME = '4chess-review-20261125-review-sidebar';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -25,9 +25,9 @@ const STATIC_ASSETS = [
   "./analysis.css?v=20261125-position-poster",
   "../ui/chessboard.css?v=20261025-v115",
   "../ui/fonts/InterVariable.woff2?v=4.1",
-  "./workbench.css?v=20261125-touch-gestures",
+  "./workbench.css?v=20261125-review-sidebar",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261125-position-poster",
+  "./analysis.js?v=20261125-review-sidebar",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
   "./commentary-text.js?v=20261118-recap-reset",
@@ -48,7 +48,7 @@ const STATIC_ASSETS = [
   "./challenge-link.js?v=20261124-checkup-cards-r2",
   "./challenge.js?v=20261124-intuition-labels",
   "./checkup-reminders.js?v=20261124-intuition-labels",
-  "./study-profile-controls.js?v=20261124-intuition-labels",
+  "./study-profile-controls.js?v=20261125-review-sidebar",
   "../engine/checkup-watch.js?v=20261124-checkup-cards-r2",
   "./share-card.js?v=20261124-intuition-labels",
   "./position-poster.js?v=20261125-position-poster",
@@ -58,11 +58,11 @@ const STATIC_ASSETS = [
   "./chess-pieces.js",
   "./eval-chart.js?v=20261124-intuition-labels",
   "./i18n.js?v=20261124-intuition-labels",
-  "./intuition-review.js?v=20261124-intuition-labels",
+  "./intuition-review.js?v=20261125-review-sidebar",
   "./maia-elo-trend.js?v=20261125-position-poster",
   "./maia-trend-geometry.js",
   "./position-analysis.js?v=20261125-position-poster",
-  "./review-explorer.js?v=20261124-intuition-labels",
+  "./review-explorer.js?v=20261125-review-sidebar",
   "./review-practice.js?v=20261125-trend-lines",
   "./review-overview.js?v=20261124-intuition-labels",
   "./scan-authorization.js?v=20261121-study-reminders",

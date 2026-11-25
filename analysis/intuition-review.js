@@ -32,14 +32,15 @@ export class IntuitionReview {
       : t('intuitionLoading', { percent: progress.percent });
     else if (this.state === 'running' && this.progress) text = t(phaseLabels[this.progress.phase], this.progress);
     if (status.textContent !== text) status.textContent = text;
+    const fraction = downloading ? progress.percent / 100
+      : ['running', 'paused'].includes(this.state) && this.progress?.total > 0 ? this.progress.current / this.progress.total : NaN;
     if (this.state !== 'paused') {
-      const fraction = downloading ? progress.percent / 100
-        : this.state === 'running' && this.progress?.total > 0 ? this.progress.current / this.progress.total : NaN;
       this.meter.hidden = (downloading && progress.percent == null) || !Number.isFinite(fraction);
       if (!this.meter.hidden) this.meter.value = Math.max(0, Math.min(1, fraction));
     }
     const action = { running: 'intuitionPause', paused: 'intuitionResume', error: 'intuitionRetry', partial: 'intuitionRetry' };
-    this.button.textContent = t(action[this.state] || 'intuitionStart');
+    const label = t(action[this.state] || 'intuitionStart');
+    this.button.textContent = Number.isFinite(fraction) ? `${label} · ${Math.round(fraction * 100)}%` : label;
     this.button.disabled = !this.app.coreReview || !!this.app.scanSourceLocked;
   }
   pause() {

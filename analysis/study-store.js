@@ -438,10 +438,16 @@ export class StudyStore {
     const tx = this.db?.transaction('profiles', 'readwrite');
     const store = tx?.objectStore('profiles');
     const from = store ? await txRequest(store.get(moveFrom)) : this.memory.profiles.get(moveFrom);
-    if (id || !from?.accounts?.some(item => accountKey(item) === key)) throw new Error('Account is no longer linked');
-    const created = build();
+    if (!from?.accounts?.some(item => accountKey(item) === key)) throw new Error('Account is no longer linked');
+    const target = id && (store ? await txRequest(store.get(id)) : this.memory.profiles.get(id));
+    if (id && (!target || id === moveFrom || target.accounts?.some(item => item.platform === account.platform))) {
+      throw new Error('The destination profile cannot accept this account');
+    }
+    const created = target
+      ? { ...target, accounts: mergeAccounts(target.accounts, [account]), updatedAt: now }
+      : build();
     const checkupReminders = { ...from.checkupReminders };
-    if (checkupReminders[key]) created.checkupReminders = { [key]: checkupReminders[key] };
+    if (checkupReminders[key]) created.checkupReminders = { ...created.checkupReminders, [key]: checkupReminders[key] };
     delete checkupReminders[key];
     const updated = {
       ...from,
@@ -453,7 +459,8 @@ export class StudyStore {
     if (store) {
       const committed = transactionDone(tx);
       store.put(updated);
-      store.add(created);
+      if (target) store.put(created);
+      else store.add(created);
       await committed;
     } else {
       this.memory.profiles.set(updated.id, structuredClone(updated));

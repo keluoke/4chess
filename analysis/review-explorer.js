@@ -35,8 +35,15 @@ export class ReviewExplorer {
     this.toolbarObserver.observe(this.toolbar);
 
     this.root.addEventListener('click', event => {
+      const chip = event.target.closest('.review-intuition-kind');
+      if (!chip) return;
+      const category = chip.dataset.reviewCategory;
+      this.select(this.side, category);
+    });
+    this.details.addEventListener('click', event => {
       const button = event.target.closest('button[data-review-side]');
       if (!button) return;
+      this.app.reviewOverview.show('workbench');
       this.select(button.dataset.reviewSide, button.dataset.reviewCategory);
     });
     for (const button of this.modes) {
@@ -131,9 +138,8 @@ export class ReviewExplorer {
     return button;
   }
 
-  countButton(side, category, count, label, { showSide = false } = {}) {
+  countButton(side, category, count, label) {
     const button = this.filterButton(side, category, null, `${t(sideKeys[side])} · ${label} · ${count}`);
-    if (showSide) button.append(element('span', t(sideKeys[side])));
     button.append(element('strong', String(count), 'review-metric-value'));
     button.classList.toggle('review-count-positive', count > 0);
     return button;
@@ -149,45 +155,35 @@ export class ReviewExplorer {
     note.textContent = partial ? t('reviewIntuitionCoverage', { current: coverage, total: moves.length }) : '';
 
     const grid = byId('review-intuition-grid');
-    const categories = coverage ? intuitionOrder.filter(category => !partial || counts.w[category] + counts.b[category] > 0) : [];
-    const cards = categories.map(category => {
+    grid.title = note.textContent;
+    const chips = coverage ? intuitionOrder.map(category => {
       const label = filterLabel(category);
-      const total = counts.w[category] + counts.b[category];
-      const card = element('div', null, 'review-intuition-card');
-      card.dataset.kind = category;
-      const heading = this.filterButton('all', category, label, `${label} · ${t('reviewBoth')} · ${total}`, 'review-intuition-kind');
-      card.dataset.selected = String(this.app.currentDivergenceFilter === category);
-      const values = element('div', null, 'review-intuition-values');
-      for (const side of sides) {
-        const count = counts[side][category];
-        if (!partial || count > 0) values.append(this.countButton(side, category, count, label, { showSide: true }));
-      }
-      card.append(heading, values);
-      return card;
-    });
-    grid.hidden = !cards.length;
-    grid.replaceChildren(...cards);
+      const total = (this.side === 'b' ? 0 : counts.w[category]) + (this.side === 'w' ? 0 : counts.b[category]);
+      const count = partial && total === 0 ? '—' : String(total);
+      const button = this.filterButton(this.side, category, label, `${label} · ${t(sideKeys[this.side])} · ${count}`, 'review-intuition-kind');
+      button.dataset.kind = category;
+      button.append(element('strong', count, 'review-metric-value'));
+      return button;
+    }) : [];
+    grid.hidden = !chips.length;
+    grid.replaceChildren(...chips);
   }
 
-  renderEngineSummary(counts, result) {
-    const errorsLabel = filterLabel('mistakes');
-    const scores = [], totals = [];
-    for (const [index, side] of sides.entries()) {
-      const score = index ? result.accuracyBlack : result.accuracyWhite;
-      const coverage = index ? result.coverageRateBlack : result.coverageRateWhite;
+  renderEngineSummary(result) {
+    const scores = sides.map(side => {
+      const score = side === 'b' ? result.accuracyBlack : result.accuracyWhite;
+      const coverage = side === 'b' ? result.coverageRateBlack : result.coverageRateWhite;
       const value = element('span', null, 'review-engine-value');
       value.append(element('span', t(sideKeys[side])), element('strong', Number.isFinite(score) ? score.toFixed(1) : '—'));
       if (Number.isFinite(coverage) && coverage < 100) value.title = t('coverageTooltip', { pct: coverage });
-      scores.push(value);
-      totals.push(this.countButton(side, 'mistakes', counts[side].mistake + counts[side].blunder, errorsLabel, { showSide: true }));
-    }
+      return value;
+    });
     byId('review-engine-scores').replaceChildren(...scores);
-    byId('review-engine-errors').replaceChildren(...totals);
   }
 
   renderClassifications(counts) {
     const table = element('table', null, 'review-count-table');
-    table.setAttribute('aria-labelledby', 'review-explorer-title');
+    table.setAttribute('aria-label', t('reviewAllClassifications'));
     const head = table.createTHead().insertRow();
     for (const label of [t('reviewCategory'), this.app.el.metaWhite.textContent, this.app.el.metaBlack.textContent]) {
       const th = element('th', label);
@@ -217,15 +213,16 @@ export class ReviewExplorer {
     this.root.hidden = this.toolbar.hidden = !result;
     if (result) {
       const active = document.activeElement;
-      const focus = this.root.contains(active) ? { ...active.dataset } : {};
+      const focusRoot = this.details.contains(active) ? this.details : this.root;
+      const focus = focusRoot.contains(active) ? { ...active.dataset } : {};
       const counts = reviewCounts(available);
       this.renderIntuition(counts, available, result);
-      this.renderEngineSummary(counts, result);
+      this.renderEngineSummary(result);
       this.renderClassifications(counts);
       byId('review-partial-note').hidden = !result.isPartial;
       if (focus.reviewSide) {
         const category = focus.reviewCategory ? `[data-review-category="${focus.reviewCategory}"]` : ':not([data-review-category])';
-        this.root.querySelector(`button[data-review-side="${focus.reviewSide}"]${category}`)?.focus({ preventScroll: true });
+        focusRoot.querySelector(`button[data-review-side="${focus.reviewSide}"]${category}`)?.focus({ preventScroll: true });
       }
     }
     const side = t(sideKeys[this.side]);

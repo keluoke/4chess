@@ -1,5 +1,30 @@
-import { accountKey, normalizeAccount } from './study-store.js?v=20261124-checkup-cards-r2';
+import { accountKey, DEFAULT_PROFILE_ID, normalizeAccount, normalizeAlias } from './study-store.js?v=20261124-checkup-cards-r2';
 import { t } from './i18n.js?v=20261124-intuition-labels';
+
+function gameAccounts(game) {
+  return [game.white, game.black].flatMap((name, index) => {
+    const account = normalizeAccount(game.platform, name);
+    return account ? [{ account, side: index ? 'black' : 'white' }] : [];
+  });
+}
+
+export function inferProfileSide(game, profile) {
+  if (!game || !profile) return null;
+  const accounts = profile.accounts || [];
+  const candidates = gameAccounts(game);
+  const matches = names => candidates.filter(({ account }) => names.some(name =>
+    normalizeAlias(name) === account.username.toLowerCase()));
+  const samePlatform = accounts.filter(account => account.platform === game.platform);
+  if (samePlatform.length) {
+    const linked = matches(samePlatform.map(account => account.username));
+    return linked.length === 1 ? linked[0].side : null;
+  }
+  const crossPlatform = matches(accounts.map(account => account.username));
+  if (crossPlatform.length) return crossPlatform.length === 1 ? crossPlatform[0].side : null;
+  const name = profile.id === DEFAULT_PROFILE_ID && profile.displayName === 'Default' ? null : profile.displayName;
+  const named = matches([name, ...(profile.aliases || [])]);
+  return named.length === 1 ? named[0].side : null;
+}
 
 export class StudyProfileControls {
   busy = false;
@@ -120,44 +145,60 @@ export class StudyProfileControls {
     this.dismissKey = null;
     const game = this.app.checkupGame;
     if (!allowed || !game || this.app.moves?.isPartial) return;
-    const candidates = [game.white, game.black].map((name, index) => ({
-      account: normalizeAccount(game.platform, name), side: index ? 'blackPlayer' : 'whitePlayer'
-    })).filter(({ account }) => account);
+    const candidates = gameAccounts(game);
     const matches = (profile, account) => profile.accounts?.some(item => accountKey(item) === accountKey(account));
-    if (!candidates.length || candidates.some(({ account }) => matches(activeProfile, account))) return;
+    if (!candidates.length || activeProfile.accounts?.some(item => item.platform === game.platform)) return;
     const key = `diverge-link:${activeProfile.id}:${game.platform}:${game.gameRef}`;
     if (this.dismissed.has(key)) return;
     try { if (sessionStorage.getItem(key)) return; } catch {}
     this.dismissKey = key;
 
     const platform = game.platform === 'lichess' ? 'Lichess' : 'Chess.com';
-    this.title.textContent = t('studyLinkTitle', { platform, profile: this.bank.profileLabel(activeProfile) });
+    const inferred = inferProfileSide(game, activeProfile);
+    const claimed = this.claim?.game === game && this.claim?.profileId === activeProfile.id ? this.claim.side : null;
+    const preferred = inferred || claimed;
+    this.title.textContent = t('studyLinkTitle');
+    this.dismiss.textContent = t('studyLinkWatching');
     this.players.replaceChildren();
     for (const { account, side } of candidates) {
+      if (preferred && side !== preferred) continue;
       const owners = profiles.filter(profile => matches(profile, account));
+      const label = {
+        side: t(side === 'black' ? 'reviewBlack' : 'reviewWhite'),
+        player: account.username, platform, profile: this.bank.profileLabel(activeProfile)
+      };
+      if (preferred) {
+        if (owners.length === 1) label.from = this.bank.profileLabel(owners[0]);
+        this.title.textContent = t(owners.length === 1 ? 'studyLinkTransfer' : 'studyLinkConfirm', label);
+      }
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'btn-header';
       button.disabled = this.busy;
-      if (owners.length === 1) {
-        button.textContent = t('studyLinkSwitch', {
-          player: account.username, profile: this.bank.profileLabel(owners[0])
+      button.textContent = t(owners.length > 1 ? 'studyLinkChooseProfile' : !preferred ? 'studyLinkPlayer'
+        : owners.length ? 'studyLinkMove' : 'studyLinkConfirmAction', label);
+      button.onclick = () => {
+        if (this.app.checkupGame !== game || this.bank.activeProfile?.id !== activeProfile.id) return;
+        if (owners.length > 1) {
+          this.select.focus();
+          return;
+        }
+        if (owners.length && !preferred) {
+          this.claim = { game, profileId: activeProfile.id, side };
+          this.render();
+          this.players.querySelector('button')?.focus();
+          return;
+        }
+        return this.change(async () => {
+          if (owners.length) {
+            await this.bank.store.saveProfile({
+              id: activeProfile.id, displayName: activeProfile.displayName, account, moveFrom: owners[0].id
+            });
+            await this.bank.refreshState();
+          } else if (!await this.linkAccount(account)) return;
+          this.app.showToast(t('checkupAccountSaved', { account: `${platform} · ${account.username}` }));
         });
-        button.onclick = () => this.chooseProfile(owners[0].id);
-      } else if (owners.length > 1) {
-        button.textContent = t('studyLinkChooseProfile', { player: account.username });
-        button.onclick = () => this.select.focus();
-      } else {
-        button.textContent = t('studyLinkPlayer', { side: t(side), player: account.username });
-        button.onclick = () => {
-          if (this.app.checkupGame !== game || this.bank.activeProfile?.id !== activeProfile.id) return;
-          return this.change(async () => {
-            if (await this.linkAccount(account)) {
-              this.app.showToast(t('checkupAccountSaved', { account: `${platform} · ${account.username}` }));
-            }
-          });
-        };
-      }
+      };
       this.players.append(button);
     }
     this.guide.hidden = false;

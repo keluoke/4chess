@@ -39,9 +39,20 @@ try {
     window.syntheticReview = { allMoves, keyMoments: [], positionEvaluations: [], accuracyWhite: 86.3, accuracyBlack: 80.1, engineOnly: true, depth: 10, elo: 1500, engineKey: 'sf19lite', totalMoves: allMoves.length };
     app.applyReviewResult(syntheticReview, { refreshPosition: false });
   });
-  const count = (side, quality) => page.locator(`#review-overview button[data-review-side="${side}"][data-review-category="${quality}"]`);
+  const count = (side, quality) => page.locator(`button[data-review-side="${side}"][data-review-category="${quality}"]`);
+  const chip = kind => page.locator(`.review-intuition-kind[data-kind="${kind}"]`);
+  const openStatistics = async () => {
+    if (!(await overview.isVisible())) await page.locator('#btn-review-overview').click();
+    const details = page.locator('#review-classifications');
+    if (await details.getAttribute('open') === null) await details.locator('summary').click();
+  };
+  const filterStatistic = async (side, quality) => {
+    await openStatistics();
+    await count(side, quality).click();
+    assert.equal(await overview.isVisible(), false, 'Filtering from the statistics returns to the workbench');
+  };
   const overview = page.locator('#review-summary');
-  const reportEntry = page.locator('#review-engine-summary #review-report-entry');
+  const reportEntry = page.locator('#review-overview #review-report-entry');
   assert.equal(await overview.isVisible(), false, 'Completion leaves the board visible');
   assert.equal(await page.locator('#review-ready').count(), 0, 'The center column has no separate completion banner');
   assert.equal(await reportEntry.getAttribute('data-pending'), 'true');
@@ -131,7 +142,7 @@ try {
   assert.equal(await side('b').getAttribute('aria-pressed'), 'true', 'Initial selection follows the entry view');
   const metric = (side, quality) => count(side, quality).locator('.review-metric-value');
   const listMode = mode => page.locator(`.review-list-modes [data-filter="${mode}"]`);
-  assert.equal(await page.locator('.review-intuition-card').count(), 0, 'The scan prompt stands alone before results');
+  assert.equal(await page.locator('.review-intuition-kind').count(), 0, 'The scan prompt stands alone before results');
   assert(await page.locator('#review-overview #intuition-toggle').isVisible());
   await side('w').click();
   assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [5, 13]);
@@ -144,7 +155,7 @@ try {
   await side('b').click();
   assert.deepEqual(await page.locator('.review-engine-value strong').allTextContents(), ['86.3', '80.1']);
   assert.equal(await page.locator('.review-list-modes [data-filter]').count(), 2);
-  await classifications.locator('summary').click();
+  await openStatistics();
   await page.evaluate(() => {
     __maiaStudioApp.intuitionReview.state = 'partial';
     __maiaStudioApp.applyReviewResult({
@@ -157,8 +168,8 @@ try {
   assert.equal(await page.locator('#review-intuition-coverage').innerText(), 'Maia scanned 1/14 moves');
   assert.equal(await page.locator('#intuition-toggle').innerText(), 'Retry scan');
   assert.equal(await metric('b', 'trap').innerText(), '1');
-  assert.equal(await metric('w', 'trap').count(), 0, 'An incomplete scan only shows confirmed counts');
-  assert.equal(await page.locator('.review-intuition-card').count(), 1);
+  assert.equal(await metric('b', 'beyond').innerText(), '—', 'An incomplete scan does not claim zero');
+  assert.equal(await page.locator('.review-intuition-kind').count(), 3);
   assert.notEqual(await classifications.getAttribute('open'), null, 'Enrichment preserves disclosure state');
   await page.evaluate(() => {
     syntheticReview.engineOnly = false;
@@ -166,10 +177,9 @@ try {
     __maiaStudioApp.applyReviewResult(syntheticReview, { refreshPosition: false });
   });
   assert.equal(await metric('b', 'trap').innerText(), '1'); assert.equal(await metric('b', 'beyond').innerText(), '1');
-  assert.equal(await metric('w', 'trap').innerText(), '0');
   assert.equal(await page.locator('#review-overview #intuition-toggle').isHidden(), true);
   const intuitionTitles = page.locator('.review-intuition-kind');
-  assert.deepEqual(await intuitionTitles.allTextContents(), ['Intuition trap', 'Precise intuition', 'Beyond intuition']);
+  assert.deepEqual(await intuitionTitles.evaluateAll(nodes => nodes.map(node => node.firstChild.textContent)), ['Intuition trap', 'Precise intuition', 'Beyond intuition']);
   assert.equal(await count('b', 'quality:unknown').innerText(), '1'); assert.equal(await count('w', 'quality:forced').innerText(), '1');
   const appearance = button => button.evaluate(el => {
     const style = getComputedStyle(el);
@@ -182,6 +192,8 @@ try {
   assert.notEqual(mistakeStyle[0], blunderStyle[0]);
   assert.notEqual(mistakeStyle[1], blunderStyle[1]);
   assert.equal(blunderStyle[2], '700');
+  await page.locator('#review-report-workbench').click();
+  await side('w').click();
   assert.equal(await metric('w', 'precise').innerText(), '1');
   await count('w', 'precise').click();
   assert.equal(await count('w', 'precise').getAttribute('aria-pressed'), 'true');
@@ -205,19 +217,18 @@ try {
   assert(await page.locator('#current-insight').isVisible());
   await listMode('moves').click();
   assert.equal(await page.locator('.blunder-card').count(), 7, 'All moves preserves the selected side');
-  await count('all', 'precise').click();
+  await side('all').click();
+  await chip('precise').click();
   assert.equal(await page.locator('.blunder-card').count(), 1);
   assert.equal(await count('all', 'precise').getAttribute('aria-pressed'), 'true');
   await page.locator('#review-clear-filter').click();
   assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [4, 5, 8, 13]);
   assert.equal(await page.locator('.review-turning-point').count(), 3);
-  await count('b', 'mistakes').click();
-  assert.deepEqual(await page.locator('.blunder-card').evaluateAll(cards => cards.map(card => Number(card.dataset.ply))), [4, 12]);
-  await count('b', 'quality:blunder').click();
+  await filterStatistic('b', 'quality:blunder');
   assert.equal(await page.locator('.blunder-card').getAttribute('data-ply'), '12', 'The quality filter retains a non-key blunder');
   assert.equal(await count('b', 'quality:blunder').getAttribute('aria-pressed'), 'true');
   assert.notEqual((await appearance(count('b', 'quality:blunder')))[1], blunderStyle[1]);
-  await count('b', 'quality:mistake').click();
+  await filterStatistic('b', 'quality:mistake');
   assert.equal(await page.locator('.blunder-card').count(), 1);
   const tags = await page.locator('.blunder-card .blunder-type-tag').allTextContents();
   assert.deepEqual(tags, ['Mistake', 'Intuition trap']);
@@ -227,7 +238,7 @@ try {
   assert.equal(await page.evaluate(() => __maiaStudioApp.isReviewingMove), true);
   await page.locator('#btn-flip').click();
   assert.equal(await page.locator('.review-side-controls button[aria-pressed="true"]').getAttribute('data-review-side'), 'b', 'Flipping the board does not change selected player');
-  await count('b', 'quality:unknown').click();
+  await filterStatistic('b', 'quality:unknown');
   assert.equal(await page.locator('.blunder-card .practice-start').count(), 0, 'Unknown evaluations cannot become retry questions');
   await count('b', 'trap').click();
   await page.evaluate(() => { __maiaStudioApp.stockfish.evaluate = async (_fen, depth) => depth === 14 ? { scoreCp: 100, depth: 14, bestMove: { uci: __maiaStudioApp.practice.item.uci, san: __maiaStudioApp.practice.item.san } } : { scoreCp: -80, depth: 13 }; });
@@ -274,20 +285,18 @@ try {
   assert.deepEqual(await page.evaluate(() => readPracticeOrigin()), branchBefore, 'Leaving practice restores the exact personal branch');
   assert.equal(await page.evaluate(() => __maiaStudioApp.isBranching), true);
   await page.locator('#review-clear-filter').click();
-  await classifications.locator('summary').click();
   await page.evaluate(() => { __maiaStudioApp.el.blunderList.closest('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-en.png'), fullPage: true });
   await page.locator('#btn-settings').click();
   await page.locator('#review-settings #btn-lang-toggle').click();
   await page.keyboard.press('Escape');
-  assert.match(await page.locator('#review-overview h2').innerText(), /双方复盘总览/);
-  assert.deepEqual(await intuitionTitles.allTextContents(), ['直觉陷阱', '精准突破', '神之一手']);
+  assert.equal(await page.locator('#review-overview').getAttribute('aria-label'), '双方复盘总览');
+  assert.deepEqual(await intuitionTitles.evaluateAll(nodes => nodes.map(node => node.firstChild.textContent)), ['直觉陷阱', '精准突破', '神之一手']);
   assert.equal(await page.title(), '歧路 Diverge · 局面分析与棋局复盘');
   assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /对比 Stockfish/);
   await page.evaluate(() => { document.querySelector('.insight-column').scrollTop = 0; });
   await page.screenshot({ path: path.join(output, 'desktop-zh.png'), fullPage: true });
-  await classifications.locator('summary').click();
-  await count('b', 'quality:mistake').click();
+  await filterStatistic('b', 'quality:mistake');
   await page.locator('.blunder-card').screenshot({ path: path.join(output, 'quality-trap-card-zh.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#btn-review-overview').click();
@@ -304,10 +313,11 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No page-wide overflow on mobile');
   assert(await intuitionTitles.evaluateAll(titles => titles.length === 3 && titles.every(title => {
     const range = document.createRange();
-    range.selectNodeContents(title);
+    range.selectNode(title.firstChild);
     const [text, ...wraps] = range.getClientRects();
     const button = title.getBoundingClientRect();
-    return text && !wraps.length && text.left >= button.left && text.right <= button.right;
+    const count = title.querySelector('strong').getBoundingClientRect();
+    return text && !wraps.length && text.left >= button.left && count.right <= button.right && Math.abs(text.top - count.top) <= 2;
   })), 'All three Chinese labels fit on one line on a 390px screen');
   await page.screenshot({ path: path.join(output, 'mobile-zh.png'), fullPage: true });
   // End remains available while an engine request is pending; the late result is ignored.
@@ -775,8 +785,8 @@ try {
   const guide = checkup.locator('#study-link-guide');
   const dot = checkup.locator('#checkup-new-dot');
   await studioProfile.selectOption('child');
-  await guide.getByText(/Link a player.*Child/).waitFor();
-  await guide.getByRole('button', { name: /Link .*StudyPlayer/ }).click();
+  await guide.getByText(/played Black as StudyPlayer/).waitFor();
+  await guide.getByRole('button', { name: 'Link account' }).click();
   await guide.waitFor({ state: 'hidden' });
   await checkup.waitForFunction(() => __maiaStudioApp.checkupReminders.profile?.checkupReminders?.['chesscom:studyplayer']?.checkedAt > 0);
   assert.equal(await dot.isVisible(), false, 'First lookup seeds the baseline');
@@ -798,9 +808,9 @@ try {
 
   const ply = await checkup.evaluate(() => __maiaStudioApp.currentPly);
   await studioProfile.selectOption('default');
-  await guide.getByRole('button', { name: /StudyPlayer.*Switch to Child/ }).waitFor();
+  await guide.getByRole('button', { name: /I played .*StudyPlayer/ }).waitFor();
   assert.equal(await dot.isVisible(), false, 'The current profile owns its reminder');
-  await guide.getByRole('button', { name: /StudyPlayer.*Switch to Child/ }).click();
+  await studioProfile.selectOption('child');
   await dot.waitFor();
   assert.equal(await checkup.evaluate(() => __maiaStudioApp.currentPly), ply, 'Profile changes preserve the selected ply');
 
@@ -858,11 +868,42 @@ try {
     'Account cards and profile selector fit the mobile dialog');
   await checkup.locator('#btn-close-checkup').click();
   await studioProfile.selectOption('default');
-  await guide.getByRole('button', { name: /StudyPlayer.*Switch to Child/ }).waitFor();
+  await guide.getByRole('button', { name: /I played .*StudyPlayer/ }).waitFor();
   await checkup.locator('#study-link-dismiss').click();
   await checkup.reload();
   await checkup.waitForFunction(() => window.__maiaStudioApp?.checkupGame && __maiaStudioApp.mistakeBank.activeProfile?.id === 'default');
   assert.equal(await guide.isVisible(), false, 'Dismissing a game guide survives refresh');
+  await checkup.evaluate(async () => {
+    const app = __maiaStudioApp;
+    await app.mistakeBank.store.saveProfile({ id: 'default', displayName: 'studyplayer' });
+    await app.mistakeBank.refreshState();
+  });
+  await studioProfile.selectOption('child');
+  await studioProfile.selectOption('default');
+  await checkup.evaluate(pgn => {
+    const app = __maiaStudioApp;
+    sessionStorage.removeItem(`diverge-link:default:chesscom:${app.checkupGame.gameRef}`);
+    app.studyProfiles.dismissed.clear();
+    app.startNewSession({ pgn, autoReview: false });
+  }, accountPgn);
+  await guide.getByRole('button', { name: 'Move to this profile' }).waitFor();
+  assert.equal(await guide.locator('#study-link-players button').count(), 1, 'The inferred opponent is omitted');
+  assert.equal(await checkup.evaluate(() => __maiaStudioApp.boardUI.orientation), 'black');
+  await checkup.evaluate(pgn => __maiaStudioApp.startNewSession({ pgn, autoReview: false, orientation: 'white' }), accountPgn);
+  assert.equal(await checkup.evaluate(() => __maiaStudioApp.boardUI.orientation), 'white', 'A shared orientation wins over inference');
+  await guide.getByRole('button', { name: 'Move to this profile' }).click();
+  await guide.waitFor({ state: 'hidden' });
+  assert.deepEqual(await checkup.evaluate(async () => {
+    const { store } = __maiaStudioApp.mistakeBank;
+    const from = await store.get('profiles', 'child');
+    const to = await store.get('profiles', 'default');
+    return [from.accounts.length, to.accounts[0].username, !!to.checkupReminders['chesscom:studyplayer'],
+      (await store.listCheckups('child')).length, (await store.listCheckups('default')).length];
+  }), [0, 'StudyPlayer', true, 1, 0]);
+  await checkup.reload();
+  await checkup.waitForFunction(() => window.__maiaStudioApp?.checkupGame && window.__maiaStudioApp.mistakeBank.activeProfile?.accounts?.length === 1);
+  assert.equal(await guide.isVisible(), false, 'A known account is silent after reload');
+  assert.equal(await checkup.evaluate(() => __maiaStudioApp.boardUI.orientation), 'white', 'Migration and reload preserve the explicit orientation');
   await checkup.close();
   console.log('PASS conditional overview and multi-account checkup: profile switch and link guide, first lookup, new-game dot, transient failure, diagnosis clears processed games, profile isolation and IndexedDB reload.');
 

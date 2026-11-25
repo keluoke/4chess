@@ -474,46 +474,31 @@ button,input,select,textarea { font-family:inherit; }
 }
 
 /* Review explorer: quality is exclusive; opening and intuition are extra tags. */
-.review-overview { background:var(--dg-surface);padding:12px;border-radius:16px;margin-bottom:12px;box-shadow:var(--dg-shadow); }
-.review-overview h2 { font-size:15px;font-weight:650;margin:0 0 8px; }
-.review-intuition-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(70px,100%),1fr));gap:6px; }
-.review-intuition-grid[hidden] { display:none; }
-.review-intuition-card { --kind-ink:var(--dg-green);--kind-surface:var(--dg-green-soft);min-width:0;border-radius:10px;background:var(--kind-surface);border:1px solid transparent;padding:4px 3px 3px;display:flex;flex-direction:column; }
-.review-intuition-card[data-kind="trap"] { --kind-ink:color-mix(in srgb,var(--dg-red) 90%,var(--dg-ink));--kind-surface:var(--dg-red-soft); }
-.review-intuition-card[data-kind="beyond"] { --kind-ink:var(--dg-blue);--kind-surface:var(--dg-blue-soft);box-shadow:inset 0 2px var(--dg-gold); }
-.review-intuition-card[data-selected="true"] { border-color:var(--kind-ink); }
-.review-intuition-card button,.review-engine-summary button { border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer; }
-.review-intuition-card button:hover,.review-engine-summary button:hover { background:var(--dg-surface); }
-.review-intuition-card .review-intuition-kind { flex:1;width:100%;min-height:25px;padding:2px;color:var(--kind-ink);font-size:11px;font-weight:690;line-height:1.15;overflow-wrap:anywhere; }
-.review-intuition-values,.review-engine-values { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px; }
-.review-intuition-values button,.review-engine-value,.review-engine-values button { display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:0 3px;padding:3px 1px;color:var(--dg-muted);font-size:10px;font-variant-numeric:tabular-nums;line-height:1.45; }
-.review-intuition-values strong,.review-engine-values strong { font-weight:690;color:var(--dg-ink);font-size:14px; }
-.review-intuition-values button:only-child { grid-column:1/-1; }
-.review-intuition-card button[aria-pressed="true"],.review-engine-summary button[aria-pressed="true"] { background:var(--dg-surface);box-shadow:inset 0 0 0 1px currentColor;color:var(--kind-ink,var(--dg-green)); }
-.review-intuition-scan { position:relative;display:grid;align-items:center;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:9px;background:var(--dg-green-soft);border-radius:10px;overflow:hidden; }
-.review-intuition-scan[hidden] { display:none; }
-.review-intuition-scan:not([hidden]) + .review-intuition-grid:not([hidden]) { margin-top:6px; }
-.review-intuition-status { grid-area:1/1;min-width:0;color:var(--dg-muted);font-size:11px;line-height:1.4;overflow-wrap:anywhere; }
-.review-intuition-status p { margin:0; }
-.review-intuition-status p + p { margin-top:3px; }
-#intuition-toggle { grid-area:1/2;background:var(--dg-green);color:var(--dg-on-green);font-size:11px;height:auto;min-height:30px;padding:4px 8px; }
+.review-overview { background:var(--dg-surface);padding:8px;border-radius:12px;margin-bottom:8px;box-shadow:var(--dg-shadow); }
+.review-summary-strip { display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap; }
+.review-engine-values { display:flex;gap:6px; }
+.review-engine-value { display:inline-flex;align-items:baseline;gap:2px;color:var(--dg-muted);font-size:10px;white-space:nowrap;font-variant-numeric:tabular-nums; }
+.review-engine-value strong { color:var(--dg-ink);font-size:12px; }
+#review-report-entry { border:0;border-radius:6px;background:transparent;color:var(--dg-green);min-height:30px;padding:3px 4px;font:inherit;font-size:11px;font-weight:650;cursor:pointer; }
+#review-report-entry:hover { background:var(--dg-green-soft); }
+#review-report-entry[data-pending="true"] { background:var(--dg-green);color:var(--dg-on-green); }
+#review-report-entry[hidden],.review-intuition-scan[hidden],.review-intuition-grid[hidden] { display:none; }
+.review-intuition-scan { position:relative; }
+#intuition-toggle { border-radius:999px;border-color:var(--dg-line);background:var(--dg-paper);color:var(--dg-green);box-shadow:none;font-size:11px;height:auto;min-height:30px;padding:3px 7px; }
+.review-intuition-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px; }
+.review-intuition-kind { --kind-ink:var(--dg-green);--kind-surface:var(--dg-green-soft);border:1px solid transparent;border-radius:999px;background:var(--kind-surface);color:var(--kind-ink);font:inherit;font-size:10px;font-weight:650;line-height:1.25;min-height:30px;padding:3px 4px;cursor:pointer; }
+.review-intuition-kind[data-kind="trap"] { --kind-ink:color-mix(in srgb,var(--dg-red) 90%,var(--dg-ink));--kind-surface:var(--dg-red-soft); }
+.review-intuition-kind[data-kind="beyond"] { --kind-ink:var(--dg-blue);--kind-surface:var(--dg-blue-soft); }
+.review-intuition-kind[aria-pressed="true"],.review-intuition-kind:hover { border-color:var(--kind-ink); }
+.review-intuition-kind strong { margin-inline-start:3px;font-variant-numeric:tabular-nums; }
+.review-visually-hidden { position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
 #intuition-scan-meter { position:absolute;inset:auto 0 0;display:block;appearance:none;width:100%;height:2px;border:0;background:transparent; }
 #intuition-scan-meter[hidden] { display:none; }
 #intuition-scan-meter::-webkit-progress-bar { background:transparent; }
 #intuition-scan-meter::-webkit-progress-value { background:var(--dg-green); }
 #intuition-scan-meter::-moz-progress-bar { background:var(--dg-green); }
 @media(prefers-reduced-motion:no-preference) { #intuition-scan-meter::-webkit-progress-value { transition:width 180ms var(--studio-ease); } }
-.review-engine-summary { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;padding:5px 0;border-block:1px solid var(--dg-line); }
-.review-engine-metric { display:grid;grid-template-columns:minmax(0,auto) minmax(58px,1fr);align-items:center;gap:3px;min-width:0; }
-.review-engine-metric + .review-engine-metric { border-inline-start:1px solid var(--dg-line);padding-inline-start:7px; }
-.review-engine-label { color:var(--dg-muted);font-size:10px;font-weight:600;line-height:1.2; }
-.review-engine-values strong { font-size:12px; }
-.review-engine-values button.review-count-positive strong { color:var(--dg-red); }
-.review-engine-summary #review-report-entry { grid-column:1/-1;justify-self:start;min-height:24px;padding:3px 7px;font-size:11px;font-weight:650;color:var(--dg-green); }
-.review-engine-summary #review-report-entry:hover { background:var(--dg-green-soft); }
-.review-engine-summary #review-report-entry[data-pending="true"] { background:var(--dg-green);color:var(--dg-on-green); }
-.review-engine-summary #review-report-entry[hidden] { display:none; }
-.review-classifications summary { margin-top:6px;color:var(--dg-muted);font-size:11px;cursor:pointer; }
+.review-classifications summary { margin-top:8px;color:var(--dg-muted);font-size:12px;cursor:pointer; }
 .review-classifications[open] summary { margin-bottom:10px; }
 .review-count-table { width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;font-variant-numeric:tabular-nums; }
 .review-count-table th { text-align:left;font-weight:500; }
@@ -643,10 +628,13 @@ button,input,select,textarea { font-family:inherit; }
 .review-report-practice p:empty { display:none; }
 .review-report-actions button,.review-card-footer button { min-height:44px;font-size:14px;white-space:normal; }
 .review-card-footer {
-  display:flex;flex:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;
+  display:flex;flex:none;align-items:center;flex-wrap:wrap;gap:8px 14px;
   padding:11px clamp(14px,4vw,32px);border-top:1px solid var(--dg-line);background:var(--dg-green-soft);
 }
-.review-card-footer button { margin-inline-start:auto;border-color:var(--dg-line);box-shadow:none; }
+.review-card-secondary { display:flex;align-items:center;gap:6px; }
+.review-card-secondary:not(:has(button:not([hidden]))) { display:none; }
+.review-card-secondary button { border-color:var(--dg-line);box-shadow:none; }
+#review-report-workbench { margin-inline-start:auto; }
 #review-game-link-field {
   min-width:0;flex:1 1 180px;padding:8px;border:1px solid var(--dg-line);border-radius:8px;
   background:var(--dg-surface);color:var(--text-main);

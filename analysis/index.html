@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261125-position-poster">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261125-touch-gestures">
+  <link rel="stylesheet" href="workbench.css?v=20261125-review-sidebar">
   <link rel="stylesheet" href="./review-share.css?v=20261125-poster-focus">
 </head>
 <body class="diverge-ui">
@@ -209,7 +209,7 @@
       <section id="study-link-guide" class="study-link-guide" aria-labelledby="study-link-title" hidden>
         <div class="study-link-heading">
           <p id="study-link-title"></p>
-          <button type="button" id="study-link-dismiss" class="btn-header" data-i18n="studyLinkDismiss">稍后再说</button>
+          <button type="button" id="study-link-dismiss" class="btn-header" data-i18n="studyLinkWatching">我在观战</button>
         </div>
         <div id="study-link-players" class="study-link-players"></div>
       </section>
@@ -259,34 +259,20 @@
       </div>
     </section>
     <aside class="insight-column" id="insight-column" data-i18n-aria="gameReview" aria-label="棋局复盘">
-      <section id="review-overview" class="review-overview" aria-labelledby="review-explorer-title" hidden>
-        <h2 id="review-explorer-title" data-i18n="reviewOverview">双方复盘总览</h2>
-        <section class="review-intuition-scan" id="review-intuition-scan" data-i18n-aria="intuitionTitle" aria-label="Maia 直觉扫描" hidden>
-          <button id="intuition-toggle" class="btn-header" type="button" disabled>开始 Maia 直觉扫描</button>
-          <div class="review-intuition-status">
-            <p id="intuition-progress" role="status"></p>
-            <p id="review-intuition-coverage" hidden></p>
-          </div>
-          <progress id="intuition-scan-meter" max="1" value="0" aria-labelledby="intuition-progress" hidden></progress>
-        </section>
-        <div class="review-intuition-grid" id="review-intuition-grid" hidden></div>
-        <div class="review-engine-summary" id="review-engine-summary">
-          <div class="review-engine-metric">
-            <span class="review-engine-label" data-i18n="accuracyLabel">引擎精度</span>
-            <div class="review-engine-values" id="review-engine-scores"></div>
-            <button type="button" id="review-report-entry" aria-haspopup="dialog" aria-controls="review-summary" hidden>
-              <span data-i18n="reviewReportEntry">查看战报</span> <span aria-hidden="true">→</span>
-            </button>
-          </div>
-          <div class="review-engine-metric">
-            <span class="review-engine-label" data-i18n="reviewEngineErrors">失误 / 大漏着</span>
-            <div class="review-engine-values" id="review-engine-errors"></div>
+      <section id="review-overview" class="review-overview" data-i18n-aria="reviewOverview" aria-label="双方复盘总览" hidden>
+        <div class="review-summary-strip">
+          <span id="review-engine-scores" class="review-engine-values" data-i18n-aria="accuracyLabel" aria-label="引擎精度" role="group"></span>
+          <button type="button" id="review-report-entry" aria-haspopup="dialog" aria-controls="review-summary" hidden>
+            <span data-i18n="reviewReportEntry">查看战报</span> <span aria-hidden="true">→</span>
+          </button>
+          <div class="review-intuition-scan" id="review-intuition-scan" hidden>
+            <button id="intuition-toggle" class="btn-header" type="button" aria-describedby="intuition-progress" disabled></button>
+            <span id="intuition-progress" class="review-visually-hidden" role="status"></span>
+            <progress id="intuition-scan-meter" max="1" value="0" aria-labelledby="intuition-progress" hidden></progress>
           </div>
         </div>
-        <details class="review-classifications" id="review-classifications">
-          <summary data-i18n="reviewAllClassifications">查看全部着法分类</summary>
-          <div id="review-classification-table"></div>
-        </details>
+        <div class="review-intuition-grid" id="review-intuition-grid" aria-describedby="review-intuition-coverage" hidden></div>
+        <p id="review-intuition-coverage" class="review-visually-hidden" hidden></p>
         <p id="review-partial-note" class="review-count-note" data-i18n="reviewPartial" hidden></p>
       </section>
       <section class="current-insight review-studio-summary" id="review-studio-summary" hidden>
@@ -351,6 +337,10 @@
         <summary data-i18n="reviewScoreMethod">评分说明</summary>
         <p id="accuracy-analysis-detail" class="accuracy-provenance"></p>
       </details>
+      <details class="review-classifications" id="review-classifications">
+        <summary data-i18n="reviewMoreStats">更多统计</summary>
+        <div id="review-classification-table"></div>
+      </details>
       <div class="review-report-story">
         <p id="review-report-story"></p>
         <small id="review-report-source" hidden></small>
@@ -373,10 +363,12 @@
 
     </div>
     <footer class="review-card-footer">
-      <button type="button" class="btn-header" id="review-share-open" data-i18n="reviewShareTitle" hidden>分享整盘复盘</button>
-      <button type="button" class="btn-header" id="review-copy-game-link" data-i18n="reviewCopyGameLink" hidden>复制对局链接</button>
+      <div class="review-card-secondary">
+        <button type="button" class="btn-header" id="review-share-open" data-i18n="reviewShareTitle" hidden>分享整盘复盘</button>
+        <button type="button" class="btn-header" id="review-copy-game-link" data-i18n="reviewCopyGameLink" hidden>复制对局链接</button>
+      </div>
       <input id="review-game-link-field" type="url" readonly data-i18n-aria="reviewGameLink" hidden>
-      <button type="button" class="btn-header" id="review-report-workbench" data-i18n="reviewOpenScore">进入复盘工作台</button>
+      <button type="button" class="btn-header btn-primary" id="review-report-workbench" data-i18n="reviewOpenScore">进入复盘工作台</button>
     </footer>
   </dialog>
 
@@ -740,11 +732,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261125-position-poster"></script>
+  <script type="module" src="analysis.js?v=20261125-review-sidebar"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261125-touch-gestures').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261125-review-sidebar').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });
