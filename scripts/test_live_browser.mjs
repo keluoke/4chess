@@ -322,10 +322,12 @@ try {
   await page.evaluate(() => {
     window.cardText = [];
     window.cardNoteY = null;
+    window.chartTitleInk = null;
     const fillText = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
       window.cardText.push(String(text));
       if (text === 'Almost nobody finds it') window.cardNoteY = args[1];
+      if (text === 'What would each rating play?') window.chartTitleInk = this.fillStyle;
       return fillText.call(this, text, ...args);
     };
   });
@@ -348,6 +350,7 @@ try {
   assert.ok(posterText.includes('Almost nobody finds it'));
   assert.ok(posterText.some(text => text.startsWith('Engine pick ')) && posterText.some(text => text.startsWith('Human instinct ')));
   assert.ok(posterText.includes('What would each rating play?'));
+  assert.equal(await page.evaluate(() => window.chartTitleInk), '#193129', 'Chart title has dark ink against the light chart card');
   assert.ok(posterText.includes('Scan to try this move on 4chess.cc'));
   assert.ok(!posterText.some(text => text.startsWith('At 2600 Elo')));
   assert.ok(await page.evaluate(() => window.cardText.includes('600') && window.cardText.includes('2600')));

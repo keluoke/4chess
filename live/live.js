@@ -1220,7 +1220,7 @@ function updatePoster() {
     const [moment] = await Promise.all([momentTask, scoreTask]);
     if (!current()) return;
     if (completeBands(trend) !== RATINGS.length) throw new Error('Incomplete forecast');
-    const { renderLivePoster } = await import('./poster.js?v=20261125-game-story');
+    const { renderLivePoster } = await import('./poster.js?v=20261125-game-story-r2');
     const canvas = $('share-card-canvas');
     if (!await renderLivePoster(canvas, posterSpec(share, analysis, trend, moment), current) || !current()) return;
     const blob = await canvasPng(canvas);
