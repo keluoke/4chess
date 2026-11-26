@@ -8,9 +8,10 @@
  */
 
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261124-mobile';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261127-maia-simd';
 import { StockfishInBrowser } from './stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { MAIA_VARIANTS } from './engine-variants.js';
+import { ModelCache } from './model-cache.js';
 
 export { modelSourceCandidates } from './model-sources.js';
 import { modelSourceCandidates } from './model-sources.js';
@@ -86,7 +87,7 @@ export class MaiaEngine {
       const isExtension = typeof chrome !== 'undefined' && chrome.runtime?.getURL && window.location.protocol === 'chrome-extension:';
       const workerUrl = isExtension
         ? chrome.runtime.getURL('engine/maia-worker.js')
-        : new URL('./maia-worker.js?v=20261124-mobile', import.meta.url).href;
+        : new URL('./maia-worker.js?v=20261127-maia-simd', import.meta.url).href;
 
       this.worker = new Worker(workerUrl, { type: 'module' });
       this.backendName = '浏览器端 Web Worker + Stockfish WASM';
@@ -193,6 +194,11 @@ export class MaiaEngine {
     }
     this.maiaInBrowser.reset();
     return this.initialize(overrideUrl);
+  }
+
+  async isCachedLocally() {
+    if (this.isReady || this.isLoading) return true;
+    return ModelCache.hasModel(this.modelKey);
   }
 
   async initialize(overrideUrl = null) {

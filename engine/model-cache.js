@@ -88,6 +88,23 @@ export class ModelCache {
     }
   }
 
+  static async hasModel(key = 'maia3-5m') {
+    try {
+      const db = await this.openDB();
+      if (!db) return false;
+      return new Promise((resolve) => {
+        const done = value => { db.close(); resolve(value); };
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getKey(key);
+        req.onsuccess = () => done(req.result !== undefined);
+        req.onerror = () => done(false);
+      });
+    } catch {
+      return false;
+    }
+  }
+
   static async saveModel(key = 'maia3-5m', arrayBuffer) {
     try {
       const db = await this.openDB();

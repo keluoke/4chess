@@ -1,6 +1,6 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-intuition-labels';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261127-review-precision-ux';
+import { IntuitionReview } from './intuition-review.js?v=20261127-maia-simd';
 import { ReviewExplorer } from './review-explorer.js?v=20261125-review-sidebar';
 import { ReviewOverview } from './review-overview.js?v=20261127-review-precision-ux';
 import { ReviewCommentary } from './review-commentary.js?v=20261124-intuition-labels';
@@ -26,7 +26,7 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261127-maia-simd';
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
@@ -1692,6 +1692,7 @@ class AnalysisStudioApp {
     try {
       // Scores must never wait for Maia download or position prediction.
       this.positionAnalysis.refresh({ calculate: false });
+      void this.intuitionReview.prewarm(this.moves, targetElo);
       const canParallelizeLite = this.engineVariant === 'lite'
         && typeof Worker === 'function'
         && this.stockfish instanceof StockfishInBrowser

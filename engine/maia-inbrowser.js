@@ -7,8 +7,57 @@
 import { loadModelBytes } from './model-cache-client.js?v=20261124-mobile';
 import { ChessBoard } from './chess-core.js';
 
+const SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
+let cachedGemmModulePromise = null;
+
+async function loadGemmWasmModule() {
+  if (typeof WebAssembly === 'undefined' || !WebAssembly.validate(SIMD_PROBE)) return null;
+  if (!cachedGemmModulePromise) {
+    cachedGemmModulePromise = (async () => {
+      try {
+        const wasmUrl = new URL('./maia-gemm.wasm?v=20261127-maia-simd', import.meta.url);
+        let bytes;
+        if (wasmUrl.protocol === 'file:') {
+          const { readFileSync } = await import('node:fs');
+          bytes = readFileSync(new URL('./maia-gemm.wasm', import.meta.url));
+        } else {
+          const res = await fetch(wasmUrl);
+          if (!res.ok) return null;
+          bytes = await res.arrayBuffer();
+        }
+        return await WebAssembly.compile(bytes);
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return cachedGemmModulePromise;
+}
+
+function decodeFp16Into(u16Arr, out) {
+  if (typeof Float16Array !== 'undefined') {
+    out.set(new Float16Array(u16Arr.buffer, u16Arr.byteOffset, u16Arr.length));
+    return out;
+  }
+  const len = u16Arr.length;
+  for (let i = 0; i < len; i++) {
+    const h = u16Arr[i];
+    const sign = (h & 0x8000) >> 15;
+    const exp = (h & 0x7c00) >> 10;
+    const mant = h & 0x03ff;
+    if (exp === 0) {
+      out[i] = (sign ? -1 : 1) * Math.pow(2, -14) * (mant / 1024);
+    } else if (exp === 0x1f) {
+      out[i] = mant ? NaN : ((sign ? -1 : 1) * Infinity);
+    } else {
+      out[i] = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + mant / 1024);
+    }
+  }
+  return out;
+}
+
 export class MaiaInBrowserEngine {
-  constructor() {
+  constructor({ useWasm = true } = {}) {
     this.isReady = false;
     this.meta = null;
     this.tensors = {};
@@ -18,6 +67,9 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
     this._scratch = null;
     this._scratchInUse = false;
+    this._useWasm = useWasm;
+    this._wasm = null;
+    this.backend = 'js';
   }
 
   reset() {
@@ -28,6 +80,8 @@ export class MaiaInBrowserEngine {
     this.modelSource = 'unknown';
     this._scratch = null;
     this._scratchInUse = false;
+    this._wasm = null;
+    this.backend = 'js';
   }
 
   _acquireScratch({ D, numHeads, inputDim, ffDim, sm2OutDim, sm3OutDim, pDim }) {
@@ -103,56 +157,138 @@ export class MaiaInBrowserEngine {
 
         const payloadOffset = 8 + metaLen;
         const payloadBytes = new Uint8Array(arrayBuffer, payloadOffset);
+        const isFp16 = this.meta.dtype === 'float16';
+        const tensorEntries = Object.entries(this.meta.tensors || {});
+        const hasTransformer = tensorEntries.length > 0 &&
+          this.meta.dim_vit > 0 &&
+          this.meta.num_heads > 0 &&
+          !!this.meta.tensors['transformer.layers.0.linear1.bias'];
 
-        // Fast Float16 to Float32 conversion helper
-        function decodeFp16(u16Arr) {
-          const len = u16Arr.length;
-          const out = new Float32Array(len);
-          for (let i = 0; i < len; i++) {
-            const h = u16Arr[i];
-            const sign = (h & 0x8000) >> 15;
-            const exp = (h & 0x7c00) >> 10;
-            const mant = h & 0x03ff;
-            if (exp === 0) {
-              out[i] = (sign ? -1 : 1) * Math.pow(2, -14) * (mant / 1024);
-            } else if (exp === 0x1f) {
-              out[i] = mant ? NaN : ((sign ? -1 : 1) * Infinity);
-            } else {
-              out[i] = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + mant / 1024);
+        let wasmReady = false;
+        const wasmModule = this._useWasm && hasTransformer ? await loadGemmWasmModule() : null;
+        if (wasmModule) {
+          try {
+            const D = this.meta.dim_vit;
+            const numHeads = this.meta.num_heads;
+            const ffDim = this.meta.tensors['transformer.layers.0.linear1.bias'].shape[0];
+            const sm1Info = this.meta.tensors['transformer.layers.0.self_attn.sm1.bias'];
+            const pDim = sm1Info ? sm1Info.shape[0] : 0;
+            const sm2OutDim = this.meta.tensors['transformer.layers.0.self_attn.sm2.bias'].shape[0];
+            const sm3OutDim = this.meta.tensors['transformer.layers.0.self_attn.sm3.bias'].shape[0];
+
+            const align16 = n => (n + 15) & ~15;
+            let offset = 16;
+            const alloc = floats => {
+              const pos = offset;
+              offset = align16(offset + floats * 4);
+              return pos;
+            };
+
+            const scratchOffsets = {
+              tokens: alloc(64 * 352),
+              X: alloc(64 * D),
+              Q: alloc(64 * D),
+              K: alloc(64 * D),
+              V: alloc(64 * D),
+              saOut: alloc(64 * D),
+              sqFrom: alloc(64 * D),
+              sqTo: alloc(64 * D),
+              y1: pDim ? alloc(64 * pDim) : 0,
+              xMean: alloc(D),
+              sm2Out: alloc(sm2OutDim),
+              sm3Out: alloc(sm3OutDim),
+              gabBias: alloc(numHeads * 4096),
+              attnScores: alloc(4096),
+              ffMid: alloc(64 * ffDim),
+              scoresBase: alloc(4096)
+            };
+
+            const tensorOffsets = {};
+            for (const [name, info] of tensorEntries) {
+              tensorOffsets[name] = offset;
+              offset = align16(offset + info.numel * 4);
             }
+
+            const pages = Math.ceil(offset / 65536);
+            const memory = new WebAssembly.Memory({ initial: pages });
+            const instance = new WebAssembly.Instance(wasmModule, { env: { memory } });
+
+            const scratchViews = {
+              tokens: new Float32Array(memory.buffer, scratchOffsets.tokens, 64 * 352),
+              X: new Float32Array(memory.buffer, scratchOffsets.X, 64 * D),
+              Q: new Float32Array(memory.buffer, scratchOffsets.Q, 64 * D),
+              K: new Float32Array(memory.buffer, scratchOffsets.K, 64 * D),
+              V: new Float32Array(memory.buffer, scratchOffsets.V, 64 * D),
+              saOut: new Float32Array(memory.buffer, scratchOffsets.saOut, 64 * D),
+              sqFrom: new Float32Array(memory.buffer, scratchOffsets.sqFrom, 64 * D),
+              sqTo: new Float32Array(memory.buffer, scratchOffsets.sqTo, 64 * D),
+              y1: pDim ? new Float32Array(memory.buffer, scratchOffsets.y1, 64 * pDim) : null,
+              xMean: new Float32Array(memory.buffer, scratchOffsets.xMean, D),
+              sm2Out: new Float32Array(memory.buffer, scratchOffsets.sm2Out, sm2OutDim),
+              sm3Out: new Float32Array(memory.buffer, scratchOffsets.sm3Out, sm3OutDim),
+              gabBias: new Float32Array(memory.buffer, scratchOffsets.gabBias, numHeads * 4096),
+              attnScores: new Float32Array(memory.buffer, scratchOffsets.attnScores, 4096),
+              ffMid: new Float32Array(memory.buffer, scratchOffsets.ffMid, 64 * ffDim),
+              scoresBase: new Float32Array(memory.buffer, scratchOffsets.scoresBase, 4096)
+            };
+
+            for (const [name, info] of tensorEntries) {
+              const totalOffset = payloadBytes.byteOffset + info.offset;
+              const target = new Float32Array(memory.buffer, tensorOffsets[name], info.numel);
+              if (isFp16) {
+                const encoded = totalOffset % 2 === 0
+                  ? new Uint16Array(arrayBuffer, totalOffset, info.numel)
+                  : new Uint16Array(arrayBuffer.slice(totalOffset, totalOffset + info.numel * 2));
+                decodeFp16Into(encoded, target);
+              } else if (totalOffset % 4 === 0) {
+                target.set(new Float32Array(payloadBytes.buffer, totalOffset, info.numel));
+              } else {
+                target.set(new Float32Array(payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4)));
+              }
+            }
+
+            this._wasm = { memory, exports: instance.exports, tensorOffsets, scratchOffsets, scratchViews };
+            this.tensors = {};
+            for (const [name, info] of tensorEntries) {
+              this.tensors[name] = new Float32Array(memory.buffer, tensorOffsets[name], info.numel);
+            }
+            this.backend = 'wasm-simd';
+            wasmReady = true;
+          } catch (err) {
+            console.warn('[Maia-3 InBrowser] WASM SIMD setup failed, falling back to JS:', err);
+            this._wasm = null;
+            this.tensors = {};
+            this.backend = 'js';
           }
-          return out;
         }
 
-        const isFp16 = this.meta.dtype === 'float16';
-
-        // Map tensor buffers (zero-copy if 4-byte aligned, or decode float16)
-        for (const [name, info] of Object.entries(this.meta.tensors)) {
-          const totalOffset = payloadBytes.byteOffset + info.offset;
-          if (isFp16) {
-            const encoded = totalOffset % 2 === 0
-              ? new Uint16Array(arrayBuffer, totalOffset, info.numel)
-              : new Uint16Array(arrayBuffer.slice(totalOffset, totalOffset + info.numel * 2));
-            this.tensors[name] = typeof Float16Array !== 'undefined'
-              ? new Float32Array(new Float16Array(encoded.buffer, encoded.byteOffset, encoded.length))
-              : decodeFp16(encoded);
-          } else {
-            if (totalOffset % 4 === 0) {
-              this.tensors[name] = new Float32Array(
-                payloadBytes.buffer,
-                totalOffset,
-                info.numel
-              );
+        if (!wasmReady) {
+          this.backend = 'js';
+          for (const [name, info] of tensorEntries) {
+            const totalOffset = payloadBytes.byteOffset + info.offset;
+            if (isFp16) {
+              const encoded = totalOffset % 2 === 0
+                ? new Uint16Array(arrayBuffer, totalOffset, info.numel)
+                : new Uint16Array(arrayBuffer.slice(totalOffset, totalOffset + info.numel * 2));
+              this.tensors[name] = decodeFp16Into(encoded, new Float32Array(info.numel));
             } else {
-              const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
-              this.tensors[name] = new Float32Array(slice);
+              if (totalOffset % 4 === 0) {
+                this.tensors[name] = new Float32Array(
+                  payloadBytes.buffer,
+                  totalOffset,
+                  info.numel
+                );
+              } else {
+                const slice = payloadBytes.buffer.slice(totalOffset, totalOffset + info.numel * 4);
+                this.tensors[name] = new Float32Array(slice);
+              }
             }
           }
         }
 
         this.initVocab();
         this.isReady = true;
-        console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource})`);
+        console.log(`[Maia-3 InBrowser] ✅ 成功就绪! 参数量: ${this.meta.total_params.toLocaleString()} (来源: ${this.modelSource}, 后端: ${this.backend})`);
         return true;
       } catch (err) {
         this.initPromise = null;
@@ -320,19 +456,31 @@ export class MaiaInBrowserEngine {
     // Concatenate 8 history planes (64, 96) + 256 elo -> inputDim = 352
     const inputDim = 12 * 8 + 256; // 352
     const sm1B0 = this.tensors['transformer.layers.0.self_attn.sm1.bias'];
-    const pool = this._acquireScratch({
-      D,
-      numHeads,
-      inputDim,
-      ffDim: this.tensors['transformer.layers.0.linear1.bias'].length,
-      sm2OutDim: this.tensors['transformer.layers.0.self_attn.sm2.bias'].length,
-      sm3OutDim: this.tensors['transformer.layers.0.self_attn.sm3.bias'].length,
-      pDim: sm1B0 ? sm1B0.length : 0
-    });
-    const {
-      tokens, X, Q, K, V, y1, xMean, sm2Out, sm3Out, gabBias, saOut, scores, ffMid,
-      sqFrom, sqTo, scoresBase, promoBiases, promoLogits, allLogits, squareWeights
-    } = pool;
+    const ffDim = this.tensors['transformer.layers.0.linear1.bias'].length;
+    const sm2OutDim = this.tensors['transformer.layers.0.self_attn.sm2.bias'].length;
+    const sm3OutDim = this.tensors['transformer.layers.0.self_attn.sm3.bias'].length;
+    const useWasm = !!this._wasm && !this._scratchInUse;
+    let pool = null;
+    if (useWasm) {
+      this._scratchInUse = true;
+    } else {
+      pool = this._acquireScratch({
+        D,
+        numHeads,
+        inputDim,
+        ffDim,
+        sm2OutDim,
+        sm3OutDim,
+        pDim: sm1B0 ? sm1B0.length : 0
+      });
+    }
+    const tokens = useWasm ? this._wasm.scratchViews.tokens : pool.tokens;
+    const sqToView = useWasm ? this._wasm.scratchViews.sqTo : pool.sqTo;
+    const scoresBaseView = useWasm ? this._wasm.scratchViews.scoresBase : pool.scoresBase;
+    const promoBiases = useWasm ? (this._promoBiases ||= new Float32Array(32)) : pool.promoBiases;
+    const promoLogits = useWasm ? (this._promoLogits ||= new Float32Array(256)) : pool.promoLogits;
+    const allLogits = useWasm ? (this._allLogits ||= new Float32Array(4352)) : pool.allLogits;
+    const squareWeights = useWasm ? (this._squareWeights ||= new Float32Array(64)) : pool.squareWeights;
 
     try {
     for (let sq = 0; sq < 64; sq++) {
@@ -354,6 +502,125 @@ export class MaiaInBrowserEngine {
         tokens[sqOffset + 96 + 128 + i] = oppoEloEmb[i];
       }
     }
+
+    if (useWasm) {
+      const w = this._wasm.exports;
+      const to = this._wasm.tensorOffsets;
+      const so = this._wasm.scratchOffsets;
+      const sv = this._wasm.scratchViews;
+
+      // 3. Token Projection: (64, 352) -> (64, D)
+      w.sgemm_nt(so.X, so.tokens, to['token_projection.weight'], to['token_projection.bias'], 64, D, inputDim, 2);
+
+      // 4. Shared GAB Weight: [4096, genSize]
+      const gabSharedOff = to['gab_shared_weight'] || 0;
+      const gabSharedLen = this.tensors['gab_shared_weight']?.length || 0;
+      const scale = 1.0 / Math.sqrt(headDim);
+      const qkvStride = D * D * 4;
+
+      // 5. Transformer Blocks (0..7)
+      for (let b = 0; b < numBlocks; b++) {
+        if (b > 0 && b % 2 === 0) {
+          await new Promise(r => setTimeout(r, 0));
+        }
+        if (abortCheck?.()) return null;
+        const pfx = `transformer.layers.${b}`;
+        const inProjOff = to[`${pfx}.self_attn.mha.in_proj_weight`];
+
+        w.sgemm_nt(so.Q, so.X, inProjOff, 0, 64, D, D, 0);
+        w.sgemm_nt(so.K, so.X, inProjOff + qkvStride, 0, 64, D, D, 0);
+        w.sgemm_nt(so.V, so.X, inProjOff + 2 * qkvStride, 0, 64, D, D, 0);
+
+        const sm1W = to[`${pfx}.self_attn.sm1.weight`];
+        const sm1B = to[`${pfx}.self_attn.sm1.bias`];
+        let sm2InOff, sm2InDim;
+        if (sm1W && sm1B) {
+          const p = this.tensors[`${pfx}.self_attn.sm1.bias`].length;
+          w.sgemm_nt(so.y1, so.X, sm1W, sm1B, 64, p, D, 2);
+          sm2InOff = so.y1;
+          sm2InDim = 64 * p;
+        } else {
+          const X = sv.X, xMean = sv.xMean;
+          xMean.fill(0);
+          for (let i = 0; i < 64; i++) {
+            const xOff = i * D;
+            for (let d = 0; d < D; d++) xMean[d] += X[xOff + d];
+          }
+          for (let d = 0; d < D; d++) xMean[d] /= 64.0;
+          sm2InOff = so.xMean;
+          sm2InDim = D;
+        }
+
+        w.sgemm_nt(so.sm2Out, sm2InOff, to[`${pfx}.self_attn.sm2.weight`], to[`${pfx}.self_attn.sm2.bias`], 1, sm2OutDim, sm2InDim, 2);
+        const sm2Out = sv.sm2Out;
+        for (let d = 0; d < sm2OutDim; d++) sm2Out[d] = this.gelu(sm2Out[d]);
+        this.layerNormInPlace(sm2Out, this.tensors[`${pfx}.self_attn.ln1.weight`], this.tensors[`${pfx}.self_attn.ln1.bias`]);
+
+        w.sgemm_nt(so.sm3Out, so.sm2Out, to[`${pfx}.self_attn.sm3.weight`], to[`${pfx}.self_attn.sm3.bias`], 1, sm3OutDim, sm2OutDim, 2);
+        const sm3Out = sv.sm3Out;
+        for (let d = 0; d < sm3OutDim; d++) sm3Out[d] = this.gelu(sm3Out[d]);
+        this.layerNormInPlace(sm3Out, this.tensors[`${pfx}.self_attn.ln2.weight`], this.tensors[`${pfx}.self_attn.ln2.bias`]);
+
+        const gabLayerOff = to[`${pfx}.self_attn.gab_weight`] || gabSharedOff;
+        const gabLayerLen = this.tensors[`${pfx}.self_attn.gab_weight`]?.length || gabSharedLen;
+        const genSize = gabLayerLen / 4096;
+        w.sgemm_nt(so.gabBias, so.sm3Out, gabLayerOff, 0, numHeads, 4096, genSize, 0);
+
+        const attnScores = sv.attnScores;
+        for (let h = 0; h < numHeads; h++) {
+          const hOffset = h * headDim;
+          w.mha_head_qk(so.attnScores, so.Q, so.K, so.gabBias + h * 4096 * 4, D, hOffset, headDim, scale);
+          for (let i = 0; i < 64; i++) {
+            const rowOff = i * 64;
+            let maxScore = -1e9;
+            for (let j = 0; j < 64; j++) {
+              const s = attnScores[rowOff + j];
+              if (s > maxScore) maxScore = s;
+            }
+            let sumExp = 0;
+            for (let j = 0; j < 64; j++) {
+              const e = Math.exp(attnScores[rowOff + j] - maxScore);
+              attnScores[rowOff + j] = e;
+              sumExp += e;
+            }
+            const invSum = 1.0 / sumExp;
+            for (let j = 0; j < 64; j++) attnScores[rowOff + j] *= invSum;
+          }
+          w.mha_head_av(so.saOut, so.attnScores, so.V, D, hOffset, headDim);
+        }
+
+        w.sgemm_nt(so.X, so.saOut, to[`${pfx}.self_attn.mha.out_proj.weight`], 0, 64, D, D, 1);
+        const norm1W = this.tensors[`${pfx}.norm1.weight`];
+        for (let i = 0; i < 64; i++) this.rmsNormInPlace(sv.X, i * D, D, norm1W);
+
+        w.sgemm_nt(so.ffMid, so.X, to[`${pfx}.linear1.weight`], to[`${pfx}.linear1.bias`], 64, ffDim, D, 2);
+        const ffMid = sv.ffMid;
+        const totalFf = 64 * ffDim;
+        for (let m = 0; m < totalFf; m++) ffMid[m] = this.gelu(ffMid[m]);
+
+        w.sgemm_nt(so.X, so.ffMid, to[`${pfx}.linear2.weight`], to[`${pfx}.linear2.bias`], 64, D, ffDim, 3);
+        const norm2W = this.tensors[`${pfx}.norm2.weight`];
+        for (let i = 0; i < 64; i++) this.rmsNormInPlace(sv.X, i * D, D, norm2W);
+      }
+      if (abortCheck && abortCheck()) return null;
+
+      // Final Transformer LayerNorm
+      const tNormW = this.tensors['transformer.norm.weight'];
+      const tNormB = this.tensors['transformer.norm.bias'];
+      for (let i = 0; i < 64; i++) {
+        const xOff = i * D;
+        this.layerNormInPlace(sv.X.subarray(xOff, xOff + D), tNormW, tNormB);
+      }
+
+      // 6. Policy Head
+      w.sgemm_nt(so.sqFrom, so.X, to['proj_sq_from.weight'], 0, 64, D, D, 0);
+      w.sgemm_nt(so.sqTo, so.X, to['proj_sq_to.weight'], 0, 64, D, D, 0);
+      w.sgemm_nt_scale(so.scoresBase, so.sqFrom, so.sqTo, 64, 64, D, 1.0 / Math.sqrt(D));
+    } else {
+    const {
+      X, Q, K, V, y1, xMean, sm2Out, sm3Out, gabBias, saOut, scores, ffMid,
+      sqFrom, sqTo, scoresBase
+    } = pool;
 
     // 3. Token Projection: (64, 352) -> (64, D)
     const tpW = this.tensors['token_projection.weight']; // [D, 352]
@@ -452,7 +719,6 @@ export class MaiaInBrowserEngine {
       }
 
       // 2. sm2 -> GELU -> LN1
-      const sm2OutDim = sm2B.length;
       for (let d = 0; d < sm2OutDim; d++) {
         let s = sm2B[d];
         const wOff = d * sm2InDim;
@@ -462,7 +728,6 @@ export class MaiaInBrowserEngine {
       this.layerNormInPlace(sm2Out, ln1W, ln1B);
 
       // 3. sm3 -> GELU -> LN2
-      const sm3OutDim = sm3B.length;
       for (let d = 0; d < sm3OutDim; d++) {
         let s = sm3B[d];
         const wOff = d * sm2OutDim;
@@ -552,7 +817,6 @@ export class MaiaInBrowserEngine {
         this.rmsNormInPlace(X, xOff, D, norm1W);
 
         // FeedForward: Linear1 -> GELU -> Linear2 -> Residual -> RMSNorm2
-        const ffDim = lin1B.length;
         for (let m = 0; m < ffDim; m++) {
           let s = lin1B[m];
           const wOff = m * D;
@@ -585,7 +849,6 @@ export class MaiaInBrowserEngine {
     // proj_sq_from (256, 256), proj_sq_to (256, 256)
     const fromW = this.tensors['proj_sq_from.weight'];
     const toW = this.tensors['proj_sq_to.weight'];
-    const promoW = this.tensors['promo_bias_proj.weight']; // [4, 256]
 
     for (let i = 0; i < 64; i++) {
       for (let d = 0; d < D; d++) {
@@ -612,15 +875,17 @@ export class MaiaInBrowserEngine {
         scoresBase[i * 64 + j] = dot * pScale;
       }
     }
+    }
 
     // Promotions: 8 files from rank 7 (sq 48..55) to rank 8 (sq 56..63)
+    const promoW = this.tensors['promo_bias_proj.weight']; // [4, 256]
     for (let f = 0; f < 8; f++) {
       const rank8Sq = 56 + f;
       for (let p = 0; p < 4; p++) {
         let bSum = 0;
         const wOff = p * D;
         for (let k = 0; k < D; k++) {
-          bSum += promoW[wOff + k] * sqTo[rank8Sq * D + k];
+          bSum += promoW[wOff + k] * sqToView[rank8Sq * D + k];
         }
         promoBiases[f * 4 + p] = bSum * Math.sqrt(D);
       }
@@ -631,7 +896,7 @@ export class MaiaInBrowserEngine {
       const fromSq = 48 + fFrom;
       for (let fTo = 0; fTo < 8; fTo++) {
         const toSq = 56 + fTo;
-        const base = scoresBase[fromSq * 64 + toSq];
+        const base = scoresBaseView[fromSq * 64 + toSq];
         for (let p = 0; p < 4; p++) {
           promoLogits[pIdx++] = base + promoBiases[fTo * 4 + p];
         }
@@ -639,7 +904,7 @@ export class MaiaInBrowserEngine {
     }
 
     // Combined logits: [4096 + 256 = 4352]
-    allLogits.set(scoresBase, 0);
+    allLogits.set(scoresBaseView, 0);
     allLogits.set(promoLogits, 4096);
 
     // 7. Legal Moves Masking & Softmax
@@ -699,7 +964,8 @@ export class MaiaInBrowserEngine {
       latencyMs
     };
     } finally {
-      this._releaseScratch(pool);
+      if (useWasm) this._scratchInUse = false;
+      else this._releaseScratch(pool);
     }
   }
 

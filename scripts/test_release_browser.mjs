@@ -22,8 +22,9 @@ const releaseModules = new Map([
  ['/engine/game-analyzer.js', '20261127-review-precision-ux'],
  ['/analysis/review-share.js', '20261127-review-precision-ux'],
  ['/analysis/recent-games.js', '20261126-recent-games'],
- ...['/analysis/analysis.js', '/analysis/review-overview.js', '/analysis/intuition-review.js']
-  .map(path => [path, '20261127-review-precision-ux']),
+ ['/analysis/review-overview.js', '20261127-review-precision-ux'],
+ ...['/analysis/analysis.js', '/analysis/intuition-review.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js']
+  .map(path => [path, '20261127-maia-simd']),
  ...['/analysis/checkup-runner.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js', '/analysis/checkup-reminders.js']
   .map(path => [path, '20261125-checkup-polish']),
  ...['/analysis/review-explorer.js', '/analysis/study-profile-controls.js']
@@ -33,8 +34,7 @@ const releaseModules = new Map([
  ['/analysis/review-practice.js', '20261125-trend-lines'],
  ...['/analysis/review-snapshot.js', '/analysis/shared-review.js']
    .map(path => [path, '20261125-poster-focus']),
- ...['/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js',
-  '/engine/model-cache-client.js', '/engine/model-loader.js'].map(path => [path, '20261124-mobile']),
+ ...['/engine/model-cache-client.js', '/engine/model-loader.js'].map(path => [path, '20261124-mobile']),
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']
   .map(path => [path, '20261124-divergence-cards']),
  ...[
@@ -379,7 +379,7 @@ try {
  const offlineAssets = await offline.evaluate(async () => {
   const cache = await caches.open((await caches.keys()).find(name => name.startsWith('4chess-review-')));
   const requests = await cache.keys();
-  const paths = ['/engine/maia-worker.js', '/engine/maia-inbrowser.js', '/lib/stockfish-19.js', '/lib/stockfish.wasm', '/lib/stockfish-19-standard.js'];
+  const paths = ['/engine/maia-worker.js', '/engine/maia-inbrowser.js', '/engine/maia-gemm.wasm', '/lib/stockfish-19.js', '/lib/stockfish.wasm', '/lib/stockfish-19-standard.js'];
   return Promise.all(paths.map(async path => {
    const matches = requests.filter(request => new URL(request.url).pathname === path);
    return matches.length === 1 && (await fetch(matches[0].url)).ok;

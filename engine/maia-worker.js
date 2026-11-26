@@ -7,7 +7,7 @@
 
 import { setModelCachePort } from './model-cache-client.js?v=20261124-mobile';
 import { ChessBoard } from './chess-core.js';
-import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261124-mobile';
+import { MaiaInBrowserEngine } from './maia-inbrowser.js?v=20261127-maia-simd';
 
 const engine = new MaiaInBrowserEngine();
 let activeRequestId = 0;
@@ -25,7 +25,7 @@ self.onmessage = async (e) => {
           self.postMessage({ type: 'progress', data: prog });
         }, data?.expected, { cacheOnly: data?.cacheOnly });
         const { dim_vit, num_heads, num_blocks, total_params } = engine.meta;
-        self.postMessage({ type: 'loadModel_result', success: true, data: { dim_vit, num_heads, num_blocks, total_params } });
+        self.postMessage({ type: 'loadModel_result', success: true, data: { dim_vit, num_heads, num_blocks, total_params, backend: engine.backend } });
       } catch (err) {
         self.postMessage({
           type: 'loadModel_result',

@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261127-review-precision-ux';
+const CACHE_NAME = '4chess-review-20261127-maia-simd';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -27,7 +27,7 @@ const STATIC_ASSETS = [
   "../ui/fonts/InterVariable.woff2?v=4.1",
   "./workbench.css?v=20261127-review-precision-ux",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261127-review-precision-ux",
+  "./analysis.js?v=20261127-maia-simd",
   "./recent-games.js?v=20261126-recent-games",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
@@ -59,7 +59,7 @@ const STATIC_ASSETS = [
   "./chess-pieces.js",
   "./eval-chart.js?v=20261124-intuition-labels",
   "./i18n.js?v=20261124-intuition-labels",
-  "./intuition-review.js?v=20261127-review-precision-ux",
+  "./intuition-review.js?v=20261127-maia-simd",
   "./maia-elo-trend.js?v=20261125-position-poster",
   "./maia-trend-geometry.js",
   "./position-analysis.js?v=20261125-position-poster",
@@ -81,9 +81,10 @@ const STATIC_ASSETS = [
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
   "../engine/game-analyzer.js?v=20261127-review-precision-ux",
-  "../engine/maia-engine.js?v=20261124-mobile",
-  "../engine/maia-inbrowser.js?v=20261124-mobile",
-  "../engine/maia-worker.js?v=20261124-mobile",
+  "../engine/maia-engine.js?v=20261127-maia-simd",
+  "../engine/maia-inbrowser.js?v=20261127-maia-simd",
+  "../engine/maia-worker.js?v=20261127-maia-simd",
+  "../engine/maia-gemm.wasm?v=20261127-maia-simd",
   "../engine/model-cache.js",
   "../engine/model-cache-client.js?v=20261124-mobile",
   "../engine/model-loader.js?v=20261124-mobile",

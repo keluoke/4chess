@@ -1,4 +1,5 @@
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261127-maia-simd';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { t } from './i18n.js?v=20261124-intuition-labels';
@@ -77,6 +78,38 @@ export class IntuitionReview {
     this.state = 'idle';
     this.progress = null;
     this.render();
+  }
+  async prewarm(moves, elo) {
+    const app = this.app;
+    if (!moves?.length || app.scanSourceLocked || FairPlayGuard.isLiveGameInProgress() || this.state === 'running') return;
+    const maia = app.maiaEngine;
+    if (!maia) return;
+    const canPrewarm = maia.isReady || (maia.initialize === MaiaEngine.prototype.initialize && await maia.isCachedLocally());
+    if (!canPrewarm) return;
+    const generation = this.generation, epoch = app.gameEpoch;
+    const active = () => generation === this.generation && epoch === app.gameEpoch &&
+      maia === app.maiaEngine && elo === app.currentElo && this.state === 'idle' &&
+      !app.scanSourceLocked && !FairPlayGuard.isLiveGameInProgress();
+    try {
+      if (!maia.isReady) await maia.initialize();
+      if (!active() || !maia.isReady) return;
+      const positions = GameAnalyzer.buildPositionChain(moves);
+      for (let j = 0; j < positions.length - 1; j++) {
+        if (!active()) return;
+        while (active() && (app.positionAnalysis.foregroundBusy || app.practice?.active || app.isPlaying)) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (!active()) return;
+        const fenBefore = positions[j].fen;
+        const historyFens = positions.slice(Math.max(0, j - 7), j).map(p => p.fen);
+        const key = `${maia.modelKey}|${elo}|${fenBefore}|${historyFens.join(';')}`;
+        if (this.predictions.has(key)) continue;
+        const res = await app.positionAnalysis.predictMaia(maia, fenBefore, elo, null, () => !active(), historyFens, 2);
+        if (active() && res?.moves?.length) this.predictions.set(key, res);
+      }
+    } catch (error) {
+      console.debug('[Studio] Maia prewarm skipped:', error?.message || error);
+    }
   }
   async start() {
     const app = this.app, base = app.coreReview;
