@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261125-position-poster">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261126-recent-games">
+  <link rel="stylesheet" href="workbench.css?v=20261127-review-precision-ux">
   <link rel="stylesheet" href="./review-share.css?v=20261125-poster-focus">
 </head>
 <body class="diverge-ui">
@@ -295,13 +295,13 @@
         <div class="review-summary-strip">
           <span id="review-engine-scores" class="review-engine-values" data-i18n-aria="accuracyLabel" aria-label="引擎精度" role="group"></span>
           <button type="button" id="review-report-entry" aria-haspopup="dialog" aria-controls="review-summary" hidden>
-            <span data-i18n="reviewReportEntry">查看战报</span> <span aria-hidden="true">→</span>
+            <span id="review-report-entry-label" data-i18n="reviewReportEntry">查看战报</span> <span aria-hidden="true">→</span>
           </button>
-          <div class="review-intuition-scan" id="review-intuition-scan" hidden>
-            <button id="intuition-toggle" class="btn-header" type="button" aria-describedby="intuition-progress" disabled></button>
-            <span id="intuition-progress" class="review-visually-hidden" role="status"></span>
-            <progress id="intuition-scan-meter" max="1" value="0" aria-labelledby="intuition-progress" hidden></progress>
-          </div>
+        </div>
+        <div class="review-intuition-scan" id="review-intuition-scan" hidden>
+          <span id="intuition-progress" class="review-intuition-status" role="status"></span>
+          <button id="intuition-toggle" class="btn-header" type="button" aria-describedby="intuition-progress" disabled></button>
+          <progress id="intuition-scan-meter" max="1" value="0" aria-labelledby="intuition-progress" hidden></progress>
         </div>
         <div class="review-intuition-grid" id="review-intuition-grid" aria-describedby="review-intuition-coverage" hidden></div>
         <p id="review-intuition-coverage" class="review-visually-hidden" hidden></p>
@@ -366,8 +366,13 @@
       </div>
 
       <details class="review-score-details">
-        <summary data-i18n="reviewScoreMethod">评分说明</summary>
+        <summary id="review-score-summary" data-i18n="reviewScoreMethod">评分说明</summary>
         <p id="accuracy-analysis-detail" class="accuracy-provenance"></p>
+        <div id="review-accuracy-upgrade" class="review-accuracy-upgrade" hidden>
+          <button type="button" class="btn-header" id="btn-upgrade-deep" hidden></button>
+          <button type="button" class="btn-header" id="btn-upgrade-standard" hidden></button>
+          <span id="review-accuracy-max-note" class="review-accuracy-max-note" hidden></span>
+        </div>
       </details>
       <details class="review-classifications" id="review-classifications">
         <summary data-i18n="reviewMoreStats">更多统计</summary>
@@ -376,6 +381,14 @@
       <div class="review-report-story">
         <p id="review-report-story"></p>
         <small id="review-report-source" hidden></small>
+        <div id="review-report-intuition-status" class="review-report-intuition-status" hidden>
+          <div class="review-report-intuition-status-row">
+            <span id="review-report-intuition-status-text" role="status"></span>
+            <button type="button" class="btn-header" id="review-report-intuition-action" hidden></button>
+          </div>
+          <progress id="review-report-intuition-meter" max="1" value="0" hidden></progress>
+          <small id="review-report-intuition-hint"></small>
+        </div>
         <p id="review-report-intuition"></p>
         <button type="button" class="btn-header" id="review-report-turn" hidden></button>
       </div>
@@ -415,6 +428,7 @@
       <button type="button" class="btn-header" id="review-share-compare">比较 1500 / 1900 / 2600 Elo</button>
       <span id="review-share-compare-status" role="status"></span>
     </div>
+    <p id="review-share-intuition-note" class="review-share-intuition-note" role="status" hidden></p>
     <canvas id="review-share-preview" hidden data-i18n-aria="reviewShareTitle"></canvas>
     <p id="review-share-status" role="status"></p>
     <div class="review-share-actions">
@@ -472,7 +486,7 @@
       <p class="settings-model-note" id="extension-standard-note" hidden><a href="https://4chess.cc/analysis/" target="_blank" rel="noopener" data-i18n="standardWebOnly">本地扩展页面使用 SF19 Lite；标准版请打开网页版复盘</a></p>
       <label><span data-i18n="eloLabel">直觉 ELO</span><select id="elo-selector" class="btn-header"><option value="1100" data-i18n="eloBeginner">1100 (初学)</option><option value="1500" data-i18n="eloIntermediate">1500 (进阶)</option><option value="1900" selected data-i18n="eloClub">1900 (俱乐部)</option><option value="2200" data-i18n="eloMaster">2200 (大师)</option></select></label>
       <p class="settings-model-note" id="studio-elo-hint" aria-live="polite" hidden></p>
-      <label><span data-i18n="wholeReviewMode">整盘复盘方式</span><select id="review-mode" class="btn-header"><option value="quick" data-i18n="reviewModeQuick">快速复盘</option><option value="deep" data-i18n="reviewModeDeep">深度复盘 · 关键步最多算到 18 层</option></select></label>
+      <label><span data-i18n="wholeReviewMode">整盘复盘方式</span><select id="review-mode" class="btn-header"><option value="quick" data-i18n="reviewModeQuick">快速复盘</option><option value="deep" data-i18n="reviewModeDeep">深度复盘 · 全盘 14 层，关键步 18 层</option></select></label>
       <label><span data-i18n="positionDepthLimit">停步自动精算深度</span><select id="position-depth" class="btn-header"><option value="20">D20</option><option value="22">D22</option></select></label>
       <label><span data-i18n="showMaiaArrows">显示 Maia 候选箭头</span><input type="checkbox" id="setting-maia-arrows" checked></label>
       <label><span data-i18n="showStockfishArrows">显示 Stockfish 最佳着法箭头</span><input type="checkbox" id="setting-sf-arrows" checked></label>
@@ -798,11 +812,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261126-recent-games"></script>
+  <script type="module" src="analysis.js?v=20261127-review-precision-ux"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261126-recent-games').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261127-review-precision-ux').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

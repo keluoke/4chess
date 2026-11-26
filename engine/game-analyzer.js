@@ -20,6 +20,7 @@ export class GameAnalyzer {
     this.lastReviewResult = null;
     this._runCounter = 0;
     this._currentRunId = 0;
+    this._helperWorkers = [];
   }
 
   cancel() {
@@ -28,6 +29,9 @@ export class GameAnalyzer {
     this.isAnalyzing = false;
     if (this.stockfish?.stop) {
       try { this.stockfish.stop(); } catch (e) {}
+    }
+    for (const worker of this._helperWorkers) {
+      try { worker.stop?.(); } catch (e) {}
     }
   }
 
@@ -739,7 +743,9 @@ export class GameAnalyzer {
       engineOnly = false,
       baseReview = null,
       waitForTurn = null,
-      reviewMode = null
+      reviewMode = null,
+      concurrency = 1,
+      createWorker = null
     } = options;
 
     const engineGameKey = GameAnalyzer.getGameKey(moves, { depth, elo: 0, engineKey: this.stockfish.engineKey, modelKey: 'engine-only', reviewMode });
@@ -786,67 +792,152 @@ export class GameAnalyzer {
       const reusable = baseReview?.engineGameKey === engineGameKey &&
         baseReview?.schemaVersion === GameAnalyzer.SCHEMA_VERSION &&
         baseReview?.positionEvaluations?.length === totalPositions ? baseReview.positionEvaluations : null;
-      const evals = [];
+      const evals = new Array(totalPositions).fill(null);
       let evalFailures = 0;
       let consecutiveFailures = 0;
 
-      // Step 0: Pre-flight check - ensure Stockfish is initialized and ready
-      if (!reusable && this.stockfish && !this.stockfish.isReady) {
-        console.log('[GameAnalyzer] Awaiting Stockfish engine initialization before review...');
-        const ready = await this.stockfish.initialize();
-        if (invalid()) return null;
-        if (!ready || !this.stockfish.isReady) {
-          throw new Error('Stockfish WebAssembly 引擎初始化超时或未就绪，无法开始复盘分析');
-        }
-      }
-
       const scanPercent = engineOnly ? (reviewMode ? 85 : 100) : 50;
-      // Step 1: Evaluate each position with Stockfish 19
-      for (let i = 0; i < totalPositions; i++) {
-        if (invalid()) {
-          if (this._currentRunId === runId) this.isAnalyzing = false;
-          return null;
-        }
+      const useParallel = !reusable && typeof createWorker === 'function' && concurrency > 1 && totalPositions >= 8;
 
-        // Live game lockdown check
-        if (FairPlayGuard?.isLiveGameInProgress && FairPlayGuard.isLiveGameInProgress()) {
-          this.isCancelled = true;
-          this.isAnalyzing = false;
-          throw new Error('公平竞技保护生效中：检测到棋盘处于实时对局进行状态，已中止复盘分析');
-        }
-
-        if (onProgress) {
-          onProgress({
-            phase: 'evaluating',
-            current: i + 1,
-            total: totalPositions,
-            percent: Math.max(1, Math.round((i + 1) / totalPositions * scanPercent)),
-            currentMove: positions[i].san
-          });
-        }
-
-        // Full-game evaluation with the requested depth, bounded time and one principal variation.
-        let evalRes = reusable ? reusable[i] : await evaluate(positions[i].fen, depth, 3500, 1, null, reviewMode ? 3200 : null);
-        if (!Number.isFinite(evalRes?.scoreCp)) evalRes = null;
-        // A cancelled review must not stop a newer foreground position search.
-        if (invalid()) return null;
-        if (!evalRes) {
-          evalFailures++;
-          consecutiveFailures++;
-          // Reset engine state so timeout doesn't cascade to next move
-          if (this.stockfish?.stop) {
-            this.stockfish.stop();
+      if (useParallel) {
+        const workerCount = Math.max(1, Math.min(concurrency, Math.floor(totalPositions / 4)));
+        const helpers = Array.from({ length: Math.max(0, workerCount - 1) }, () => createWorker()).filter(Boolean);
+        this._helperWorkers = helpers;
+        try {
+          const allWorkers = [this.stockfish, ...helpers].filter(Boolean);
+          await Promise.allSettled(allWorkers.map(w => (w.isReady ? Promise.resolve(true) : w.initialize())));
+          if (invalid()) {
+            if (this._currentRunId === runId) this.isAnalyzing = false;
+            return null;
           }
-          await new Promise(r => setTimeout(r, 20));
-
-          // Early Circuit Breaker: Stop early if engine is permanently dead
-          if (consecutiveFailures >= 3) {
-            throw new Error(`Stockfish 引擎计算无响应 (已连续失败 ${consecutiveFailures} 步)，已触发熔断保护终止复盘。`);
+          if (!this.stockfish || !this.stockfish.isReady) {
+            throw new Error('Stockfish WebAssembly 引擎初始化超时或未就绪，无法开始复盘分析');
           }
-        } else {
-          consecutiveFailures = 0;
+          const readyWorkers = allWorkers.filter(w => w.isReady);
+          let nextIndex = 0;
+          let completed = 0;
+          let abortedError = null;
+          const stopAllWorkers = () => {
+            for (const w of readyWorkers) {
+              try { w.stop?.(); } catch {}
+            }
+          };
+
+          await Promise.all(readyWorkers.map(async (worker) => {
+            let workerConsecutiveFailures = 0;
+            while (!invalid() && !abortedError) {
+              const i = nextIndex++;
+              if (i >= totalPositions) break;
+              if (FairPlayGuard?.isLiveGameInProgress && FairPlayGuard.isLiveGameInProgress()) {
+                this.isCancelled = true;
+                this.isAnalyzing = false;
+                stopAllWorkers();
+                abortedError = new Error('公平竞技保护生效中：检测到棋盘处于实时对局进行状态，已中止复盘分析');
+                break;
+              }
+              if (waitForTurn) await waitForTurn(invalid);
+              if (invalid() || abortedError) break;
+
+              let evalRes = await worker.evaluate(positions[i].fen, depth, 3500, 1, reviewMode ? 3200 : null);
+              if (!Number.isFinite(evalRes?.scoreCp)) evalRes = null;
+              if (invalid() || abortedError) break;
+
+              if (!evalRes) {
+                evalFailures++;
+                workerConsecutiveFailures++;
+                try { worker.stop?.(); } catch {}
+                await new Promise(r => setTimeout(r, 20));
+                if (workerConsecutiveFailures >= 3 && evalFailures >= Math.max(3, readyWorkers.length * 2)) {
+                  stopAllWorkers();
+                  abortedError = new Error(`Stockfish 引擎计算无响应 (已连续失败 ${workerConsecutiveFailures} 步)，已触发熔断保护终止复盘。`);
+                  break;
+                }
+              } else {
+                workerConsecutiveFailures = 0;
+              }
+              evals[i] = evalRes;
+              completed++;
+              if (onProgress) {
+                onProgress({
+                  phase: 'evaluating',
+                  current: completed,
+                  total: totalPositions,
+                  percent: Math.max(1, Math.round(completed / totalPositions * scanPercent)),
+                  currentMove: positions[i].san
+                });
+              }
+            }
+          }));
+
+          if (abortedError) throw abortedError;
+          if (invalid()) {
+            if (this._currentRunId === runId) this.isAnalyzing = false;
+            return null;
+          }
+        } finally {
+          for (const helper of helpers) {
+            try { helper.reset?.(); } catch {}
+          }
+          this._helperWorkers = [];
         }
-        evals.push(evalRes);
+      } else {
+        // Step 0: Pre-flight check - ensure Stockfish is initialized and ready
+        if (!reusable && this.stockfish && !this.stockfish.isReady) {
+          console.log('[GameAnalyzer] Awaiting Stockfish engine initialization before review...');
+          const ready = await this.stockfish.initialize();
+          if (invalid()) return null;
+          if (!ready || !this.stockfish.isReady) {
+            throw new Error('Stockfish WebAssembly 引擎初始化超时或未就绪，无法开始复盘分析');
+          }
+        }
+
+        // Step 1: Evaluate each position with Stockfish 19
+        for (let i = 0; i < totalPositions; i++) {
+          if (invalid()) {
+            if (this._currentRunId === runId) this.isAnalyzing = false;
+            return null;
+          }
+
+          // Live game lockdown check
+          if (FairPlayGuard?.isLiveGameInProgress && FairPlayGuard.isLiveGameInProgress()) {
+            this.isCancelled = true;
+            this.isAnalyzing = false;
+            throw new Error('公平竞技保护生效中：检测到棋盘处于实时对局进行状态，已中止复盘分析');
+          }
+
+          if (onProgress) {
+            onProgress({
+              phase: 'evaluating',
+              current: i + 1,
+              total: totalPositions,
+              percent: Math.max(1, Math.round((i + 1) / totalPositions * scanPercent)),
+              currentMove: positions[i].san
+            });
+          }
+
+          // Full-game evaluation with the requested depth, bounded time and one principal variation.
+          let evalRes = reusable ? reusable[i] : await evaluate(positions[i].fen, depth, 3500, 1, null, reviewMode ? 3200 : null);
+          if (!Number.isFinite(evalRes?.scoreCp)) evalRes = null;
+          // A cancelled review must not stop a newer foreground position search.
+          if (invalid()) return null;
+          if (!evalRes) {
+            evalFailures++;
+            consecutiveFailures++;
+            // Reset engine state so timeout doesn't cascade to next move
+            if (this.stockfish?.stop) {
+              this.stockfish.stop();
+            }
+            await new Promise(r => setTimeout(r, 20));
+
+            // Early Circuit Breaker: Stop early if engine is permanently dead
+            if (consecutiveFailures >= 3) {
+              throw new Error(`Stockfish 引擎计算无响应 (已连续失败 ${consecutiveFailures} 步)，已触发熔断保护终止复盘。`);
+            }
+          } else {
+            consecutiveFailures = 0;
+          }
+          evals[i] = evalRes;
+        }
       }
 
       // If failure rate > 30%, fail cleanly instead of masquerading
@@ -976,11 +1067,11 @@ export class GameAnalyzer {
         const deep = reviewMode === 'deep';
         const depthCap = deep ? 18 : 16;
         const minimum = depthCap - 2;
-        const budget = { remaining: deep ? 10000 : 2200 };
+        const budget = { remaining: deep ? 15000 : 2200 };
         const candidates = analyzedMoves.filter(move => {
           if (move.isOnlyLegalMove || move.isBookMove || move.expectedScoreLoss == null) return false;
-          return !sameDecisiveAdvantage(move) && (move.expectedScoreLoss >= 6 || (move.evalBeforeIsMate && !move.evalAfterIsMate));
-        }).sort((a, b) => b.expectedScoreLoss - a.expectedScoreLoss || a.ply - b.ply).slice(0, deep ? 12 : 5);
+          return !sameDecisiveAdvantage(move) && (move.expectedScoreLoss >= (deep ? 3.5 : 6) || (move.evalBeforeIsMate && !move.evalAfterIsMate));
+        }).sort((a, b) => b.expectedScoreLoss - a.expectedScoreLoss || a.ply - b.ply).slice(0, deep ? 16 : 5);
 
         for (const [index, move] of candidates.entries()) {
           if (invalid()) return null;

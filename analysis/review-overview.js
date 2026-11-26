@@ -85,6 +85,7 @@ export class ReviewOverview {
 
   reset(side = this.app.reviewExplorer.side, { newGame = true } = {}) {
     this.received = this.pending = false;
+    this.viewedEngineOnly = this.viewedComplete = false;
     this.autoOpenRequested = false;
     if (newGame) {
       this.autoOpened = false;
@@ -117,6 +118,8 @@ export class ReviewOverview {
         view = 'overview';
       }
       this.autoOpenRequested = false;
+    } else if (!result.engineOnly && !this.viewedComplete) {
+      this.pending = true;
     }
     this.show(view);
   }
@@ -126,10 +129,15 @@ export class ReviewOverview {
     const available = this.received && !!this.app.reviewResult && !this.app.scanSourceLocked;
     const overview = available && view === 'overview' && !this.app.practice?.inProgress;
     this.view = overview ? 'overview' : 'workbench';
-    if (overview) this.pending = false;
+    if (overview) {
+      this.pending = false;
+      if (this.app.reviewResult?.engineOnly) this.viewedEngineOnly = true;
+      else this.viewedComplete = true;
+    }
     this.overviewButton.hidden = !available;
     this.reportEntry.hidden = !available;
     this.reportEntry.dataset.pending = String(this.pending);
+    this.syncIntuitionStatus();
     if (overview) {
       if (this.summary.open) return;
       this.opener = opener;
@@ -142,6 +150,76 @@ export class ReviewOverview {
         else if (available && document.activeElement === document.body) this.overviewButton.focus({ preventScroll: true });
         this.opener = null;
       }
+    }
+  }
+
+  syncIntuitionStatus() {
+    const result = this.app.reviewResult;
+    const scan = this.app.intuitionReview;
+    const state = scan?.state || 'idle';
+    const stage = !result ? 'none' : result.engineOnly ? (state === 'running' ? 'scanning' : 'engine') : 'complete';
+    this.reportEntry.dataset.stage = stage;
+    const entryLabel = byId('review-report-entry-label');
+    if (entryLabel) {
+      entryLabel.textContent = stage === 'scanning' || stage === 'engine'
+        ? t('reviewReportEntryEngine')
+        : stage === 'complete' && this.pending && this.viewedEngineOnly
+          ? t('reviewReportEntryReady')
+          : stage === 'complete'
+            ? t('reviewReportEntryComplete')
+            : t('reviewReportEntry');
+    }
+    this.reportEntry.title = stage === 'scanning' ? t('reviewReportEntryScanningTitle') : '';
+
+    const box = byId('review-report-intuition-status');
+    if (!box) return;
+    if (!result || !result.engineOnly) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const textEl = byId('review-report-intuition-status-text');
+    const actionBtn = byId('review-report-intuition-action');
+    const meter = byId('review-report-intuition-meter');
+    const hintEl = byId('review-report-intuition-hint');
+
+    let text = '';
+    let hint = '';
+    let actionKey = '';
+    let onAction = null;
+    if (state === 'running') {
+      text = `Maia ${this.app.currentElo} · ${scan.statusText()}`;
+      hint = t('reviewReportIntuitionRunningHint');
+      actionKey = 'intuitionPause';
+      onAction = () => scan.pause();
+    } else if (state === 'paused') {
+      text = t('reviewReportIntuitionPaused');
+      hint = t('reviewReportIntuitionPausedHint');
+      actionKey = 'intuitionResume';
+      onAction = () => scan.start();
+    } else if (state === 'error' || state === 'partial') {
+      text = t('reviewReportIntuitionError');
+      actionKey = 'intuitionRetry';
+      onAction = () => scan.start();
+    } else {
+      text = t('reviewReportIntuitionIdle');
+      hint = t('reviewReportIntuitionIdleHint');
+      actionKey = 'intuitionStart';
+      onAction = () => scan.start();
+    }
+
+    if (textEl) textEl.textContent = text;
+    if (hintEl) hintEl.textContent = hint;
+    if (meter) {
+      const fraction = state === 'running' ? scan.fraction() : NaN;
+      meter.hidden = !Number.isFinite(fraction);
+      if (!meter.hidden) meter.value = Math.max(0, Math.min(1, fraction));
+    }
+    if (actionBtn) {
+      actionBtn.hidden = !actionKey;
+      actionBtn.textContent = actionKey ? t(actionKey) : '';
+      actionBtn.disabled = !this.app.coreReview || !!this.app.scanSourceLocked;
+      actionBtn.onclick = onAction;
     }
   }
 
@@ -176,10 +254,16 @@ export class ReviewOverview {
     this.renderStory(result, score, scored, turningPoint, verified, observation);
     const beyond = selectReviewMoves(moves, 'all', 'beyond').length;
     const traps = selectReviewMoves(moves, 'all', 'trap').length;
-    byId('review-report-intuition').textContent = [
+    const intuitionSummary = [
       beyond ? t('reviewConfirmedBeyond', { count: beyond }) : '',
       traps ? t('reviewConfirmedTraps', { count: traps }) : ''
     ].filter(Boolean).join(' · ');
+    byId('review-report-intuition').textContent = intuitionSummary || (
+      !result.engineOnly && this.app.intuitionReview?.state === 'done'
+        ? t('reviewReportIntuitionClear', { elo: result.elo || this.app.currentElo })
+        : ''
+    );
+    this.syncIntuitionStatus();
     this.app.mistakeBank?.renderOverviewSave?.(byId('review-report-save-bank'), result);
   }
 

@@ -208,6 +208,7 @@ export class ReviewShare {
     this.compareStatus = byId('review-share-compare-status');
     this.details = byId('review-share-details');
     this.story = byId('review-share-story');
+    this.intuitionNote = byId('review-share-intuition-note');
     this.version = 0;
     this.button.onclick = () => { if (this.allowed()) { this.dialog.showModal(); void this.prepare(); } };
     byId('review-share-close').onclick = () => this.dialog.close();
@@ -237,10 +238,25 @@ export class ReviewShare {
       FairPlayGuard.verifyConcludedGame(sessionInput?.pgn || sessionInput).ok;
   }
 
+  syncIntuitionNote() {
+    if (!this.intuitionNote) return;
+    if (!this.dialog.open || !this.app.reviewResult?.engineOnly) {
+      this.intuitionNote.hidden = true;
+      this.intuitionNote.textContent = '';
+      return;
+    }
+    this.intuitionNote.hidden = false;
+    const scan = this.app.intuitionReview;
+    this.intuitionNote.textContent = scan?.state === 'running'
+      ? t('reviewShareIntuitionRunning', { status: scan.statusText() })
+      : t('reviewShareIntuitionMissing');
+  }
+
   sync() {
     this.button.hidden = !this.allowed();
     if (this.button.hidden && this.dialog.open) this.dialog.close();
     else if (this.dialog.open && this.preparedReport !== this.app.reviewResult) void this.prepare();
+    else this.syncIntuitionNote();
   }
 
   ratingSplits() {
@@ -319,6 +335,7 @@ export class ReviewShare {
     this.canvas.hidden = true;
     this.details.hidden = true;
     this.status.textContent = t('reviewSharePreparing');
+    this.syncIntuitionNote();
     this.paintComparison();
     try {
       const tags = this.app.pgnTags;

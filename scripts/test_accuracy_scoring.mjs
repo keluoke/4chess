@@ -73,3 +73,49 @@ const quick = await new G(verifier, maia).analyzeGame(criticalGame, { engineOnly
 assert.deepEqual(verificationCalls.slice(4).map(call => call.depth), [12, 12, 16, 15]);
 assert.notEqual(quick.gameKey, deep.gameKey);
 console.log('PASS adaptive accuracy: per-mode budget, paired D18/D16 verification, correction and cache isolation');
+
+// Deep mode verifies borderline moves (ESL >= 3.5) that Quick mode skips.
+const borderlineGame = G.parsePgn('[FEN "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"]\n[Result "1-0"]\n1. Ra2 Kd7 1-0');
+const borderlinePositions = G.buildPositionChain(borderlineGame);
+const borderlineSf = {
+  isReady: true, engineKey: 'borderline-fixture',
+  async evaluate(fen, depth) {
+    const isPly1After = fen === borderlinePositions[1].fen;
+    const scoreCp = isPly1After ? 48 : 0; // ply 1: evalBefore=0, evalAfter=+48 -> 48cp loss (~4.4% ESL)
+    return { depth, scoreCp, score: String(scoreCp / 100), bestMove: { uci: 'a1a8', san: 'Ra8+' } };
+  }
+};
+const borderlineQuick = await new G(borderlineSf, maia).analyzeGame(borderlineGame, { engineOnly: true, reviewMode: 'quick', forceRefresh: true });
+assert.equal(borderlineQuick.scoreVerifications.length, 0, 'Quick mode skips borderline < 6% ESL moves');
+const borderlineDeep = await new G(borderlineSf, maia).analyzeGame(borderlineGame, { engineOnly: true, reviewMode: 'deep', forceRefresh: true });
+assert(borderlineDeep.scoreVerifications.length >= 1, 'Deep mode verifies borderline >= 3.5% ESL moves');
+
+// Parallel Stockfish worker pool matches sequential accuracy and cleans up helpers.
+const longPgn = '[Result "1/2-1/2"]\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 1/2-1/2';
+const longMoves = G.parsePgn(longPgn);
+const makeDeterministicSf = (id, stats) => ({
+  isReady: false,
+  engineKey: 'parallel-fixture',
+  async initialize() { stats.inits++; this.isReady = true; return true; },
+  stop() { stats.stops++; },
+  reset() { stats.resets++; this.isReady = false; },
+  async evaluate(fen, depth) {
+    stats.evals++;
+    const hash = fen.length * 17 + fen.charCodeAt(0);
+    return { depth, scoreCp: (hash % 50) - 25, score: '0.00', bestMove: { uci: 'e2e4', san: 'e4' } };
+  }
+});
+const seqStats = { inits: 0, stops: 0, resets: 0, evals: 0 };
+const parStats = { inits: 0, stops: 0, resets: 0, evals: 0 };
+const seqResult = await new G(makeDeterministicSf(0, seqStats), maia).analyzeGame(longMoves, { engineOnly: true, forceRefresh: true });
+const progressCounts = [];
+const parResult = await new G(makeDeterministicSf(0, parStats), maia).analyzeGame(longMoves, {
+  engineOnly: true, forceRefresh: true, concurrency: 3,
+  createWorker: () => makeDeterministicSf(1, parStats),
+  onProgress: p => { if (p.phase === 'evaluating') progressCounts.push(p.current); }
+});
+assert.equal(parResult.accuracyWhite, seqResult.accuracyWhite);
+assert.equal(parResult.accuracyBlack, seqResult.accuracyBlack);
+assert.equal(parStats.resets, 2, 'Helper workers are always reset after parallel sweep');
+assert.deepEqual(progressCounts, Array.from({ length: 13 }, (_, i) => i + 1), 'Parallel sweep reports monotonic progress');
+console.log('PASS parallel Stockfish sweep & deep borderline verification');

@@ -180,6 +180,41 @@ try {
   });
   assert.equal(await metric('b', 'trap').innerText(), '1'); assert.equal(await metric('b', 'beyond').innerText(), '1');
   assert.equal(await page.locator('#review-overview #intuition-toggle').isHidden(), true);
+
+  // Two-stage report entry, in-modal Maia status, share note, and accuracy upgrade controls
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.reviewOverview.reset(undefined, { newGame: false });
+    app.intuitionReview.state = 'running';
+    app.intuitionReview.progress = { phase: 'intuition', current: 5, total: 14 };
+    app.applyReviewResult({ ...syntheticReview, engineOnly: true, reviewMode: 'quick', engineKey: 'sf19lite' }, { refreshPosition: false });
+  });
+  assert.equal(await page.locator('#intuition-progress').isVisible(), true, 'Sidebar intuition progress is visibly rendered');
+  assert.equal(await reportEntry.getAttribute('data-stage'), 'scanning');
+  assert.match(await reportEntry.innerText(), /Engine brief/);
+  await reportEntry.click();
+  assert.equal(await page.locator('#review-report-intuition-status').isVisible(), true);
+  assert.match(await page.locator('#review-report-intuition-status-text').innerText(), /Comparing intuition · 5\/14/);
+  await page.locator('#review-summary .review-score-details summary').click();
+  assert.equal(await page.locator('#btn-upgrade-deep').isVisible(), true);
+  assert.equal(await page.locator('#btn-upgrade-standard').isVisible(), true);
+  await page.locator('#review-summary .review-score-details summary').click();
+  await page.locator('#review-share-open').click();
+  assert.equal(await page.locator('#review-share-intuition-note').isVisible(), true);
+  await page.locator('#review-share-close').click();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.intuitionReview.state = 'done';
+    app.applyReviewResult({ ...syntheticReview, engineOnly: false }, { refreshPosition: false });
+  });
+  assert.equal(await reportEntry.getAttribute('data-stage'), 'complete');
+  assert.equal(await reportEntry.getAttribute('data-pending'), 'true', 'Completing Maia re-highlights the report entry');
+  assert.match(await reportEntry.innerText(), /Full report ready/);
+  await reportEntry.click();
+  assert.equal(await page.locator('#review-report-intuition-status').isHidden(), true);
+  await page.keyboard.press('Escape');
+  await openStatistics();
   const intuitionTitles = page.locator('.review-intuition-kind');
   assert.deepEqual(await intuitionTitles.evaluateAll(nodes => nodes.map(node => node.firstChild.textContent)), ['Intuition trap', 'Precise intuition', 'Beyond intuition']);
   assert.equal(await count('b', 'quality:unknown').innerText(), '1'); assert.equal(await count('w', 'quality:forced').innerText(), '1');

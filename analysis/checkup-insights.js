@@ -1,4 +1,4 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261125-game-story';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
 import { checkupReportMatchesAccount, normalizeAccount, normalizeAlias } from './study-store.js?v=20261124-checkup-cards-r2';
 import { CHECKUP_CLOSE_LOG_GAP, summarizeCheckupFit } from './checkup-fit.js?v=20261124-checkup-cards-r2';
 export { CHECKUP_ELOS, MAX_ELO_SAMPLES, planCheckupSamples } from './checkup-fit.js?v=20261124-checkup-cards-r2';

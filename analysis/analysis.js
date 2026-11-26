@@ -1,8 +1,8 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-intuition-labels';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261125-review-sidebar';
+import { IntuitionReview } from './intuition-review.js?v=20261127-review-precision-ux';
 import { ReviewExplorer } from './review-explorer.js?v=20261125-review-sidebar';
-import { ReviewOverview } from './review-overview.js?v=20261125-review-sidebar';
+import { ReviewOverview } from './review-overview.js?v=20261127-review-precision-ux';
 import { ReviewCommentary } from './review-commentary.js?v=20261124-intuition-labels';
 import { ConsequencePlayer } from './consequence-player.js?v=20261124-intuition-labels';
 import { MistakeBank } from './mistake-bank.js?v=20261124-intuition-labels';
@@ -11,7 +11,7 @@ import { IntuitionCheckup } from './checkup-runner.js?v=20261125-checkup-polish'
 import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
 import { StudyProfileControls, inferProfileSide } from './study-profile-controls.js?v=20261125-review-sidebar';
 import { CheckupReminders } from './checkup-reminders.js?v=20261125-checkup-polish';
-import { ReviewShare } from './review-share.js?v=20261125-poster-focus-r2';
+import { ReviewShare } from './review-share.js?v=20261127-review-precision-ux';
 import { RecentGamesPicker } from './recent-games.js?v=20261126-recent-games';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
@@ -27,7 +27,7 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { MaiaEngine } from '../engine/maia-engine.js?v=20261124-mobile';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261125-game-story';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
@@ -644,6 +644,9 @@ class AnalysisStudioApp {
     }
     if (this.shareCard?.dialog?.open) this.shareCard.renderPreview();
     if (this.reviewShare?.dialog?.open) void this.reviewShare.prepare();
+    this.reviewShare?.syncIntuitionNote?.();
+    this.renderAccuracyDetails();
+    if (this.reviewResult) this.reviewOverview?.render();
     if (!this.reviewResult) this.renderCurrentInsight();
     if (this.practice?.inProgress) this.practice.returnToWorkbench();
     if (!this.el) return;
@@ -1454,8 +1457,12 @@ class AnalysisStudioApp {
     });
   }
 
+  getReviewDepth() {
+    return this.reviewMode === 'deep' ? 14 : GameAnalyzer.DEFAULT_DEPTH;
+  }
+
   getReviewKey() {
-    return GameAnalyzer.getGameKey(this.moves, { depth: GameAnalyzer.DEFAULT_DEPTH, reviewMode: this.reviewMode, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
+    return GameAnalyzer.getGameKey(this.moves, { depth: this.getReviewDepth(), reviewMode: this.reviewMode, elo: this.currentElo, engineKey: this.stockfish.engineKey, modelKey: this.maiaEngine.modelKey });
   }
 
   changeEngineVersions({ persist = true, prioritizePosition = false } = {}) {
@@ -1685,12 +1692,21 @@ class AnalysisStudioApp {
     try {
       // Scores must never wait for Maia download or position prediction.
       this.positionAnalysis.refresh({ calculate: false });
+      const canParallelizeLite = this.engineVariant === 'lite'
+        && typeof Worker === 'function'
+        && this.stockfish instanceof StockfishInBrowser
+        && this.stockfish.evaluate === StockfishInBrowser.prototype.evaluate;
+      const concurrency = canParallelizeLite
+        ? Math.min(3, Math.max(1, Math.floor((navigator.hardwareConcurrency || 2) / 2)))
+        : 1;
       const result = await this.analyzer.analyzeGame(this.moves, {
-        depth: GameAnalyzer.DEFAULT_DEPTH,
+        depth: this.getReviewDepth(),
         reviewMode: this.reviewMode,
         engineOnly: true,
         elo: targetElo,
         forceRefresh,
+        concurrency,
+        ...(concurrency > 1 ? { createWorker: () => new StockfishInBrowser({ variant: this.engineVariant }) } : {}),
         onProgress: (prog) => {
           if (this.gameEpoch !== targetGameEpoch || this.reviewEpoch !== targetReviewEpoch) return;
           this.lastProgress = prog;
@@ -1791,13 +1807,56 @@ class AnalysisStudioApp {
     }
     const depth = result.depthMin == null ? t('accuracyTargetDepth', { depth: result.depth })
       : `D${result.depthMin}${result.depthMax > result.depthMin ? '–' + result.depthMax : ''}`;
+    const engine = result.engineKey?.startsWith('sf19standard') ? 'SF19 Standard' : 'SF19 Lite';
     const verified = result.scoreVerifications || [];
-    const detail = t('accuracyAnalysisDetail', {
-      engine: result.engineKey?.startsWith('sf19standard') ? 'SF19 Standard' : 'SF19 Lite', depth
-    });
+    const detail = t('accuracyAnalysisDetail', { engine, depth });
     document.getElementById('accuracy-analysis-detail').textContent = verified.length
       ? detail + ' · ' + t('accuracyVerifiedDepth', { count: verified.length, depth: Math.max(...verified.map(move => move.depth)) })
       : detail;
+    const summary = document.getElementById('review-score-summary');
+    if (summary) summary.textContent = t('reviewScoreSummaryBrief', { engine, depth });
+
+    const upgrade = document.getElementById('review-accuracy-upgrade');
+    if (!upgrade) return;
+    const btnDeep = document.getElementById('btn-upgrade-deep');
+    const btnStandard = document.getElementById('btn-upgrade-standard');
+    const maxNote = document.getElementById('review-accuracy-max-note');
+    const showDeep = !this.scanSourceLocked && result.reviewMode !== 'deep';
+    const showStandard = !this.scanSourceLocked && location.protocol !== 'chrome-extension:' && !result.engineKey?.startsWith('sf19standard');
+    if (btnDeep) {
+      btnDeep.hidden = !showDeep;
+      btnDeep.textContent = t('reviewUpgradeDeep');
+      btnDeep.onclick = () => this.upgradeReviewAccuracy({ reviewMode: 'deep' });
+    }
+    if (btnStandard) {
+      btnStandard.hidden = !showStandard;
+      btnStandard.textContent = t('reviewUpgradeStandard');
+      btnStandard.title = t('reviewUpgradeStandardTitle');
+      btnStandard.onclick = () => this.upgradeReviewAccuracy({ stockfishVariant: 'standard' });
+    }
+    const showMax = !this.scanSourceLocked && !showDeep && !showStandard && result.engineKey?.startsWith('sf19standard');
+    if (maxNote) {
+      maxNote.hidden = !showMax;
+      maxNote.textContent = showMax ? t('reviewUpgradeMaxNote') : '';
+    }
+    upgrade.hidden = !showDeep && !showStandard && !showMax;
+  }
+
+  upgradeReviewAccuracy({ reviewMode, stockfishVariant } = {}) {
+    if (this.scanSourceLocked || !this.moves?.length) return;
+    this.reviewOverview.show('workbench');
+    this.reviewOverview.autoOpened = false;
+    this.reviewOverview.requestAutoOpen();
+    if (stockfishVariant && stockfishVariant !== this.engineVariant && location.protocol !== 'chrome-extension:') {
+      document.getElementById('engine-edition').value = stockfishVariant;
+      this.changeEngineVersions({ persist: true });
+      return;
+    }
+    if (reviewMode && reviewMode !== this.reviewMode) {
+      void savePreferences({ studio_review_mode: reviewMode });
+      return;
+    }
+    this.runFullReview(true, { openOverview: true });
   }
 
   applyReviewResult(result, { refreshPosition = true } = {}) {
