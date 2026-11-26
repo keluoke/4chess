@@ -545,7 +545,7 @@ try {
     return new Response('', { headers: { 'content-type': 'application/x-ndjson' } });
   };
   await lichessProxy({ request: new Request('https://example.invalid/api/lichess?username=KidPlayer&max=100') });
-  assert.equal(requested.searchParams.get('max'), '10');
+  assert.equal(requested.searchParams.get('max'), '50');
   assert.equal(requested.searchParams.get('clocks'), 'false');
   await lichessProxy({ request: new Request('https://example.invalid/api/lichess?username=KidPlayer&max=900&clocks=true') });
   for (const [key, value] of Object.entries({ max: '100', clocks: 'true', opening: 'true', finished: 'true', ongoing: 'false' })) {

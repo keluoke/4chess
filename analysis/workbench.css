@@ -43,7 +43,7 @@ button,input,select,textarea { font-family:inherit; }
 .btn-header:hover { border-color:var(--brand-green); }
 .btn-header.btn-import-primary { border-color:var(--dg-line); }
 .btn-review-guide { display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;text-decoration:none;border-color:var(--dg-line);box-shadow:none; }
-.empty-study #btn-reanalyze,.empty-study .studio-header-center { display:none; }
+.empty-study #btn-reanalyze,.empty-study #btn-recent-games,.empty-study .studio-header-center { display:none; }
 .btn-header:disabled { box-shadow:none; }
 .btn-settings { width:38px;padding:0; }
 .settings-inline-actions { display:flex;gap:8px;padding-top:4px; }
@@ -1145,4 +1145,252 @@ button,input,select,textarea { font-family:inherit; }
   .checkup-overview-record,.checkup-overview-footer { grid-template-columns:minmax(0,1fr); }
   .checkup-overview-record { gap:6px; }
   .checkup-opening-score { width:min(124px,44%);gap:4px; }
+}
+
+/* Import Modal Tabs & Recent Games Picker */
+.import-modal-tabs {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.import-modal-tabs [role="tab"] {
+  height:32px;
+  padding:0 12px;
+  border:1px solid var(--dg-line);
+  box-shadow:none;
+  background:var(--dg-raised);
+  color:var(--dg-muted);
+}
+.import-modal-tabs [role="tab"][aria-selected="true"] {
+  background:var(--dg-green);
+  border-color:var(--dg-green);
+  color:var(--dg-on-green);
+}
+.import-paste-meta {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:6px;
+}
+.recent-games-panel {
+  display:grid;
+  gap:10px;
+}
+.recent-games-panel[hidden] { display:none; }
+.recent-games-chips {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+}
+.recent-games-chips[hidden] { display:none; }
+.recent-games-chips-label {
+  font-size:11.5px;
+  color:var(--dg-muted);
+}
+.recent-games-chip {
+  height:27px;
+  padding:0 10px;
+  font-size:11.5px;
+  border:1px solid var(--dg-line);
+  box-shadow:none;
+}
+.recent-games-chip[aria-pressed="true"] {
+  background:var(--dg-green-soft);
+  border-color:var(--dg-green);
+  color:var(--dg-green);
+}
+.recent-games-controls {
+  display:grid;
+  gap:8px;
+}
+.recent-games-platforms {
+  display:flex;
+  gap:6px;
+}
+.recent-games-platforms .btn-header {
+  height:32px;
+  padding:0 12px;
+  border:1px solid var(--dg-line);
+  box-shadow:none;
+}
+.recent-games-platforms .btn-header[aria-pressed="true"] {
+  background:var(--dg-green-soft);
+  border-color:var(--dg-green);
+  color:var(--dg-green);
+  font-weight:650;
+}
+.recent-games-search {
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.recent-games-search input {
+  flex:1;
+  min-width:0;
+  height:36px;
+  padding:0 12px;
+  border:1px solid var(--dg-line);
+  border-radius:10px;
+  background:var(--dg-paper);
+  color:var(--dg-ink);
+  font-size:13px;
+}
+.recent-games-search input:focus {
+  outline:2px solid var(--brand-blue);
+  outline-offset:1px;
+}
+.recent-games-search .btn-header {
+  height:36px;
+  flex-shrink:0;
+  box-shadow:none;
+  border:1px solid var(--dg-line);
+}
+#btn-recent-games-refresh {
+  width:36px;
+  padding:0;
+  justify-content:center;
+}
+.recent-games-subbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.recent-games-hint {
+  font-size:11.5px;
+  color:var(--dg-muted);
+}
+.recent-games-bind {
+  height:26px;
+  padding:0 10px;
+  font-size:11px;
+  border:1px solid var(--dg-line);
+  box-shadow:none;
+}
+.recent-games-status {
+  margin:0;
+  font-size:12px;
+  color:var(--dg-muted);
+}
+.recent-games-status[data-tone="error"] {
+  color:var(--dg-red);
+}
+.recent-games-filters {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:space-between;
+}
+.recent-games-filters[hidden] { display:none; }
+.recent-games-filter-group {
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+}
+.recent-games-filter-group .btn-header {
+  height:26px;
+  padding:0 9px;
+  font-size:11px;
+  border:1px solid var(--dg-line);
+  box-shadow:none;
+}
+.recent-games-filter-group .btn-header[aria-pressed="true"] {
+  background:var(--dg-green-soft);
+  border-color:var(--dg-green);
+  color:var(--dg-green);
+}
+.recent-games-list {
+  display:grid;
+  gap:6px;
+  max-height:280px;
+  overflow-y:auto;
+  padding-right:2px;
+}
+.recent-games-empty {
+  margin:8px 0;
+  font-size:12px;
+  color:var(--dg-muted);
+}
+.recent-game-item {
+  display:grid;
+  grid-template-columns:max-content minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  padding:9px 11px;
+  border:1px solid var(--dg-line);
+  border-radius:10px;
+  background:var(--dg-surface);
+  color:var(--dg-ink);
+  text-align:start;
+  cursor:pointer;
+  transition:border-color 140ms var(--studio-ease),background-color 140ms var(--studio-ease);
+}
+.recent-game-item:hover {
+  border-color:var(--dg-green);
+  background:var(--dg-raised);
+}
+.recent-game-item.is-current {
+  border-color:var(--dg-green);
+  background:var(--dg-green-soft);
+}
+.recent-game-outcome {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:26px;
+  height:24px;
+  padding:0 6px;
+  border-radius:6px;
+  font-size:11.5px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.recent-game-outcome-win { background:var(--dg-green-soft);color:var(--dg-green); }
+.recent-game-outcome-draw { background:var(--dg-raised);color:var(--dg-muted);border:1px solid var(--dg-line); }
+.recent-game-outcome-loss { background:var(--dg-red-soft);color:var(--dg-red); }
+.recent-game-outcome-neutral { background:var(--dg-raised);color:var(--dg-ink);border:1px solid var(--dg-line); }
+.recent-game-body {
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+.recent-game-title {
+  font-size:13px;
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.recent-game-meta {
+  font-size:11.5px;
+  color:var(--dg-muted);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.recent-game-action {
+  font-size:11.5px;
+  font-weight:600;
+  color:var(--dg-green);
+  white-space:nowrap;
+}
+.recent-games-footer {
+  justify-content:space-between;
+}
+@media(max-width:720px) {
+  .recent-games-search {
+    flex-wrap:wrap;
+  }
+  .recent-games-search input {
+    flex:1 1 100%;
+  }
+  .recent-game-item {
+    gap:8px;
+    padding:8px 9px;
+  }
 }

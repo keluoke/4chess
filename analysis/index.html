@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="analysis.css?v=20261125-position-poster">
   <link rel="stylesheet" href="../ui/chessboard.css?v=20261025-v115">
   <link rel="preload" href="../ui/fonts/InterVariable.woff2?v=4.1" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="workbench.css?v=20261125-checkup-polish">
+  <link rel="stylesheet" href="workbench.css?v=20261126-recent-games">
   <link rel="stylesheet" href="./review-share.css?v=20261125-poster-focus">
 </head>
 <body class="diverge-ui">
@@ -90,6 +90,7 @@
       <button type="button" class="btn-header" id="btn-mistake-bank" aria-controls="mistake-bank-dialog" aria-haspopup="dialog" hidden><span data-i18n="mistakeBankBtn">错题本</span><span class="bank-due-badge" id="mistake-bank-due-badge" hidden>0</span></button>
       <!-- Actions -->
       <button type="button" class="btn-header" id="btn-focus" data-i18n="focusMode" aria-controls="insight-column" aria-pressed="false">专注</button>
+      <button type="button" class="btn-header" id="btn-recent-games" data-i18n="btnRecentGames" aria-haspopup="dialog" aria-controls="pgn-modal">历史对局</button>
       <button type="button" class="btn-header btn-import-primary" id="btn-import-pgn" data-i18n="btnImportPgn">
         导入 PGN
       </button>
@@ -120,6 +121,14 @@
       </div>
 
       <div class="study-home-tools">
+        <button type="button" class="study-home-tool" id="btn-home-recent-games" aria-haspopup="dialog" aria-controls="pgn-modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+          <span class="study-home-tool-copy">
+            <strong data-i18n="homeRecentGamesTitle">平台历史对局</strong>
+            <span id="home-recent-games-summary" data-i18n="homeRecentGamesSummary">输入 Chess.com / Lichess 用户名，点选完赛对局复盘</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
         <button type="button" class="study-home-tool" id="btn-home-checkup" aria-haspopup="dialog" aria-controls="checkup-dialog">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v16h16M8 15l4-5 3 2 5-6"/></svg>
           <span class="study-home-tool-copy">
@@ -500,26 +509,57 @@
       <div class="studio-eyebrow" data-i18n="modalEyebrow">A NEW PERSPECTIVE</div>
       <h3 class="modal-title" data-i18n="modalTitle">从一个局面或一盘棋开始</h3>
       <p class="modal-description" data-i18n="modalDesc">导入 FEN 局面或已完赛棋谱，对比引擎与人类直觉。</p>
-      <textarea id="pgn-input" class="pgn-textarea" data-i18n-placeholder="modalPlaceholder" placeholder="在此粘贴：
+      <div class="import-modal-tabs" role="tablist">
+        <button type="button" class="btn-header" role="tab" id="import-tab-paste" aria-selected="true" aria-controls="import-panel-paste" tabindex="0" data-i18n="importTabPaste">粘贴棋谱 / FEN</button>
+        <button type="button" class="btn-header" role="tab" id="import-tab-account" aria-selected="false" aria-controls="import-panel-account" tabindex="-1" data-i18n="importTabAccount">平台历史对局</button>
+      </div>
+      <div id="import-panel-paste" role="tabpanel" aria-labelledby="import-tab-paste">
+        <textarea id="pgn-input" class="pgn-textarea" data-i18n-placeholder="modalPlaceholder" placeholder="在此粘贴：
 1. PGN 棋谱文本 或 FEN 局面
 2. Lichess 对局网址 (如 https://lichess.org/aBcDeFgH)
 3. Chess.com 对局网址 (如 https://www.chess.com/game/live/12345678)
 或直接将本地 .pgn 文件拖拽至窗口任意位置"></textarea>
-      <p id="pgn-modal-error" class="pgn-modal-error" role="alert" hidden></p>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-        <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
-          <span data-i18n="modalSampleLabel">示例:</span>
-          <button type="button" class="btn-header" id="sample-fischer" data-i18n="sampleFischerBtn" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
-          <button type="button" class="btn-header" id="sample-kasparov" data-i18n="sampleKasparovBtn" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫对局</button>
+        <p id="pgn-modal-error" class="pgn-modal-error" role="alert" hidden></p>
+        <div class="import-paste-meta">
+          <div style="display: flex; gap: 8px; font-size: 11.5px; color: var(--text-dim); align-items: center;">
+            <span data-i18n="modalSampleLabel">示例:</span>
+            <button type="button" class="btn-header" id="sample-fischer" data-i18n="sampleFischerBtn" style="height: 24px; padding: 0 8px; font-size: 11px;">菲舍尔世纪之局</button>
+            <button type="button" class="btn-header" id="sample-kasparov" data-i18n="sampleKasparovBtn" style="height: 24px; padding: 0 8px; font-size: 11px;">卡斯帕罗夫对局</button>
+          </div>
+          <div>
+            <input type="file" id="pgn-file-input" accept=".pgn,.txt" style="display: none;">
+            <button type="button" class="btn-header" id="btn-upload-file" data-i18n="btnUploadPgn" style="height: 24px; padding: 0 10px; font-size: 11px;">📁 选择 PGN 文件</button>
+          </div>
         </div>
-        <div>
-          <input type="file" id="pgn-file-input" accept=".pgn,.txt" style="display: none;">
-          <button type="button" class="btn-header" id="btn-upload-file" data-i18n="btnUploadPgn" style="height: 24px; padding: 0 10px; font-size: 11px;">📁 选择 PGN 文件</button>
+        <div class="modal-actions">
+          <button type="button" class="btn-header" id="btn-cancel-pgn" data-i18n="btnCancel">取消</button>
+          <button type="button" class="btn-header btn-primary" id="btn-submit-pgn" data-i18n="btnSubmitPgn">智能解析并载入</button>
         </div>
       </div>
-      <div class="modal-actions">
-        <button type="button" class="btn-header" id="btn-cancel-pgn" data-i18n="btnCancel">取消</button>
-        <button type="button" class="btn-header btn-primary" id="btn-submit-pgn" data-i18n="btnSubmitPgn">智能解析并载入</button>
+      <div id="import-panel-account" class="recent-games-panel" role="tabpanel" aria-labelledby="import-tab-account" hidden>
+        <div id="recent-games-chips" class="recent-games-chips" hidden></div>
+        <div class="recent-games-controls">
+          <div class="recent-games-platforms" role="group">
+            <button type="button" class="btn-header" data-recent-platform="lichess" aria-pressed="true">Lichess</button>
+            <button type="button" class="btn-header" data-recent-platform="chesscom" aria-pressed="false">Chess.com</button>
+          </div>
+          <div class="recent-games-search">
+            <input type="text" id="recent-games-username" data-i18n-placeholder="recentGamesUsernamePlaceholder" placeholder="输入平台用户名">
+            <button type="button" class="btn-header btn-primary" id="btn-recent-games-fetch" data-i18n="recentGamesFetch">读取对局</button>
+            <button type="button" class="btn-header" id="btn-recent-games-refresh" data-i18n-title="recentGamesRefresh" data-i18n-aria="recentGamesRefresh" title="刷新" aria-label="刷新">↻</button>
+          </div>
+        </div>
+        <div class="recent-games-subbar">
+          <span class="recent-games-hint" data-i18n="recentGamesOnlyFinishedHint">仅列出已完赛标准棋局，点击即可复盘。</span>
+          <button type="button" class="btn-header recent-games-bind" id="btn-recent-games-bind" data-i18n="recentGamesBind" hidden>绑定到当前档案</button>
+        </div>
+        <p id="recent-games-status" class="recent-games-status" role="status" hidden></p>
+        <div id="recent-games-filters" class="recent-games-filters" hidden></div>
+        <div id="recent-games-list" class="recent-games-list"></div>
+        <div class="modal-actions recent-games-footer">
+          <button type="button" class="btn-header" id="btn-recent-games-more" data-i18n="recentGamesLoadMore" hidden>加载更多</button>
+          <button type="button" class="btn-header" id="btn-cancel-recent-games" data-i18n="btnClose">关闭</button>
+        </div>
       </div>
     </div>
   </div>
@@ -758,11 +798,11 @@
   </dialog>
 
   <script type="module" src="../ui/theme.js?v=20261124-checkup-cards-r2"></script>
-  <script type="module" src="analysis.js?v=20261125-checkup-polish"></script>
+  <script type="module" src="analysis.js?v=20261126-recent-games"></script>
   <script>
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=20261125-checkup-polish').catch((e) => {
+        navigator.serviceWorker.register('sw.js?v=20261126-recent-games').catch((e) => {
           console.debug('[PWA] SW register skipped:', e);
         });
       });

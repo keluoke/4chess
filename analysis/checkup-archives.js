@@ -114,6 +114,11 @@ function chesscomOpeningName(link) {
   }
 }
 
+function parseArchiveRating(value) {
+  const num = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(num) && num > 0 && num < 5000 ? num : null;
+}
+
 function archivedCheckupGame(platform, item, pgn, result) {
   const tags = readPgnTags(pgn);
   const meta = parsePgnMeta(pgn);
@@ -131,7 +136,9 @@ function archivedCheckupGame(platform, item, pgn, result) {
       eco: item.opening?.eco || tags.eco || '',
       opening: explicitOpening || chesscomOpeningName(tags.ecourl),
       termination: item.status?.name || item.status || loser?.result || tags.termination || '',
-      initialSeconds: item.clock?.initial ?? meta.initialSeconds
+      initialSeconds: item.clock?.initial ?? meta.initialSeconds,
+      whiteRating: parseArchiveRating(item.players?.white?.rating ?? item.white?.rating ?? tags.whiteelo),
+      blackRating: parseArchiveRating(item.players?.black?.rating ?? item.black?.rating ?? tags.blackelo)
     }
   };
 }
@@ -150,15 +157,20 @@ function lichessCheckupGames(text, max) {
   return games;
 }
 
-export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIMIT, clocks = false, signal, fetchImpl = fetch } = {}) {
+export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIMIT, clocks = false, opening = clocks, until = null, signal, fetchImpl = fetch } = {}) {
   const clean = String(username || '').trim();
   if (!clean) throw new Error('Username is required');
   const query = new URLSearchParams({ max: String(max), pgnInJson: 'true', clocks: String(clocks),
-    opening: String(clocks), evals: 'false', finished: 'true', ongoing: 'false', perfType: LICHESS_CHECKUP_SPEEDS });
+    opening: String(opening), evals: 'false', finished: 'true', ongoing: 'false', perfType: LICHESS_CHECKUP_SPEEDS });
+  if (Number.isSafeInteger(until) && until > 0) query.set('until', String(until));
   const url = `https://lichess.org/api/games/user/${encodeURIComponent(clean)}?${query}`;
   const useBrowserProxy = fetchImpl === fetch && typeof location !== 'undefined' && location.protocol.startsWith('http');
   if (useBrowserProxy) {
-    const proxyUrl = `/api/lichess?username=${encodeURIComponent(clean)}&max=${max}${clocks ? '&clocks=true' : ''}`;
+    const proxyParams = new URLSearchParams({ username: clean, max: String(max) });
+    if (clocks) proxyParams.set('clocks', 'true');
+    else if (opening) proxyParams.set('opening', 'true');
+    if (Number.isSafeInteger(until) && until > 0) proxyParams.set('until', String(until));
+    const proxyUrl = `/api/lichess?${proxyParams}`;
     try {
       const resp = await fetchImpl(proxyUrl, { signal, cache: 'no-store' });
       const contentType = resp.headers?.get?.('content-type') || '';
@@ -197,6 +209,75 @@ export async function fetchChesscomRecentGames(username, { max = CHECKUP_GAME_LI
     }
   }
   return games;
+}
+
+export async function fetchRecentGamesPage(platform, username, { limit = 20, cursor = null, signal, fetchImpl = fetch } = {}) {
+  const clean = String(username || '').trim();
+  if (!clean) throw new Error('Username is required');
+  const pageSize = Math.max(1, Math.min(40, Number(limit) || 20));
+
+  if (platform === 'lichess') {
+    const fetched = await fetchLichessRecentGames(clean, {
+      max: pageSize + 1,
+      clocks: false,
+      opening: true,
+      until: cursor?.until ?? null,
+      signal,
+      fetchImpl
+    });
+    const hasMore = fetched.length > pageSize;
+    const games = hasMore ? fetched.slice(0, pageSize) : fetched;
+    const timestamps = games.map(g => g.meta?.playedAt).filter(Number.isFinite);
+    const oldest = timestamps.length ? Math.min(...timestamps) : null;
+    const nextCursor = hasMore && Number.isFinite(oldest) ? { until: oldest - 1 } : null;
+    return { games, hasMore: !!nextCursor, nextCursor };
+  }
+
+  if (platform === 'chesscom') {
+    const lower = clean.toLowerCase();
+    const archives = Array.isArray(cursor?.archives)
+      ? cursor.archives
+      : await chesscomCheckupArchives(lower, { signal, fetchImpl, limit: 12 });
+    let archiveIndex = Number.isInteger(cursor?.archiveIndex) ? cursor.archiveIndex : 0;
+    let offset = Number.isInteger(cursor?.offset) ? cursor.offset : 0;
+    const seen = new Set(Array.isArray(cursor?.seen) ? cursor.seen : []);
+    const games = [];
+    let nextCursor = null;
+
+    while (archiveIndex < archives.length) {
+      const archive = archives[archiveIndex];
+      const resp = await fetchImpl(archive.url, { signal });
+      if (!resp.ok) {
+        if (resp.status === 404 || resp.status === 429) throw new Error(`Chess.com HTTP ${resp.status}`);
+        archiveIndex++;
+        offset = 0;
+        continue;
+      }
+      const data = await resp.json();
+      const list = Array.isArray(data?.games) ? data.games.slice().reverse() : [];
+      for (let i = offset; i < list.length; i++) {
+        const item = list[i];
+        if (item.rules && item.rules !== 'chess') continue;
+        if (!item.pgn) continue;
+        const verdict = FairPlayGuard.verifyConcludedGame({ pgn: item.pgn, isFinished: true, status: 'finished' });
+        if (!verdict.ok) continue;
+        const game = archivedCheckupGame('chesscom', item, item.pgn, verdict.result);
+        if (game.gameId && seen.has(game.gameId)) continue;
+        if (games.length >= pageSize) {
+          nextCursor = { archives, archiveIndex, offset: i, seen: [...seen] };
+          return { games, hasMore: true, nextCursor };
+        }
+        if (game.gameId) seen.add(game.gameId);
+        games.push(game);
+      }
+      archiveIndex++;
+      offset = 0;
+    }
+
+    return { games, hasMore: false, nextCursor: null };
+  }
+
+  throw new Error(`Unsupported platform: ${platform}`);
 }
 
 export function checkupReplayUrl(platform, id) {

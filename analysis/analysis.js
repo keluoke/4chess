@@ -12,6 +12,7 @@ import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-car
 import { StudyProfileControls, inferProfileSide } from './study-profile-controls.js?v=20261125-review-sidebar';
 import { CheckupReminders } from './checkup-reminders.js?v=20261125-checkup-polish';
 import { ReviewShare } from './review-share.js?v=20261125-poster-focus-r2';
+import { RecentGamesPicker } from './recent-games.js?v=20261126-recent-games';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
 import { PositionPosterDialog } from './position-poster-dialog.js?v=20261125-position-poster';
@@ -118,6 +119,7 @@ class AnalysisStudioApp {
     this.checkup = new IntuitionCheckup(this);
     this.studyProfiles = new StudyProfileControls(this);
     this.checkupReminders = new CheckupReminders(this);
+    this.recentGames = new RecentGamesPicker(this);
     this.shareCard = new PositionPosterDialog(this);
     this.reviewShare = new ReviewShare(this);
     this.bindEvents();
@@ -433,7 +435,10 @@ class AnalysisStudioApp {
 
     // PGN Import Modal
     this.el.btnImportPgn.addEventListener('click', () => {
-      this.openPgnModal();
+      this.openPgnModal({ tab: 'paste' });
+    });
+    document.getElementById('btn-recent-games')?.addEventListener('click', () => {
+      this.openPgnModal({ tab: 'account' });
     });
     this.el.btnCancelPgn.addEventListener('click', () => {
       this.closePgnModal({ cancel: true });
@@ -537,7 +542,8 @@ class AnalysisStudioApp {
       this.el.pgnInput.value = SAMPLE_GAMES.kasparov;
     });
 
-    document.getElementById('btn-home-import').addEventListener('click', () => this.openPgnModal());
+    document.getElementById('btn-home-import').addEventListener('click', () => this.openPgnModal({ tab: 'paste' }));
+    document.getElementById('btn-home-recent-games')?.addEventListener('click', () => this.openPgnModal({ tab: 'account' }));
     document.getElementById('btn-home-checkup').addEventListener('click', () => this.checkup?.open());
     document.getElementById('btn-chip-fischer').addEventListener('click', () => {
       if (this.smartLoadInput(SAMPLE_GAMES.fischer, '', { focusMove: this.getFischerSampleMove(), orientation: 'black' })) {
@@ -626,6 +632,7 @@ class AnalysisStudioApp {
     this.reviewCommentary?.sync();
     this.studyProfiles?.render();
     this.checkupReminders?.render();
+    this.recentGames?.refreshAfterLanguageChange();
     this.mistakeBank?.refreshState?.();
     if (this.mistakeBank?.dialog?.open) this.mistakeBank.renderDialog();
     if (this.checkup?.dialog?.open) {
@@ -796,7 +803,7 @@ class AnalysisStudioApp {
     }
   }
 
-  openPgnModal() {
+  openPgnModal({ tab = 'paste' } = {}) {
     if (this.el.pgnModal) {
       this.setPgnModalError('');
       this.modalReturnFocus = document.activeElement;
@@ -805,7 +812,8 @@ class AnalysisStudioApp {
       document.querySelector('.studio-navbar').inert = true;
       document.querySelector('.studio-layout').inert = true;
       this.el.pgnModal.classList.add('open');
-      this.el.pgnInput?.focus();
+      if (this.recentGames) this.recentGames.onModalOpen(tab);
+      else this.el.pgnInput?.focus();
     }
   }
 
@@ -814,6 +822,7 @@ class AnalysisStudioApp {
       this.importGeneration = (this.importGeneration || 0) + 1;
       this.importController?.abort();
     }
+    this.recentGames?.cancelPending();
     if (this.el.pgnModal) {
       this.setPgnModalError('');
       this.el.pgnModal.classList.remove('open');
@@ -1111,6 +1120,7 @@ class AnalysisStudioApp {
     document.getElementById('empty-study-intro').hidden = false;
     document.body.classList.add('empty-study');
     document.getElementById('btn-home-checkup').hidden = !this.checkup?.allowed();
+    this.recentGames?.syncHomeEntry();
 
     const preview = document.getElementById('study-home-preview');
     if (preview.children.length) return;
@@ -1344,6 +1354,7 @@ class AnalysisStudioApp {
     this.renderGameMetadata({ white, black, result: conclusion.ok ? conclusion.result : result });
     this.applyProfilePerspective();
     this.studyProfiles.render();
+    this.recentGames?.syncCurrentGame();
 
     this.el.moveCountBadge.textContent = this.moves.isPartial
       ? t('errorTruncated', { count: this.moves.length })
@@ -1395,6 +1406,7 @@ class AnalysisStudioApp {
     this.studyProfiles?.render();
     this.checkup?.syncReplayBanner();
     this.checkupReminders?.profileChanged();
+    this.recentGames?.onProfileChanged();
     if (previousId && previousId !== this.mistakeBank.activeProfile?.id
       && this.checkup?.dialog?.open && !this.checkup.updatingProfile) this.checkup.close();
     const changedPerspective = this.applyProfilePerspective();

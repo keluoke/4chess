@@ -31,8 +31,22 @@ export async function onRequest(context) {
 
   const rawMax = Number.parseInt(url.searchParams.get('max') || '10', 10);
   const clocks = url.searchParams.get('clocks') === 'true';
-  const max = Number.isFinite(rawMax) ? Math.max(1, Math.min(clocks ? 100 : 10, rawMax)) : 10;
-  const targetUrl = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${max}&pgnInJson=true&clocks=${clocks}&opening=${clocks}&evals=false&finished=true&ongoing=false&perfType=bullet,blitz,rapid,classical`;
+  const opening = clocks || url.searchParams.get('opening') === 'true';
+  const max = Number.isFinite(rawMax) ? Math.max(1, Math.min(clocks ? 100 : 50, rawMax)) : 10;
+  const rawUntil = (url.searchParams.get('until') || '').trim();
+  if (rawUntil) {
+    const untilMs = Number(rawUntil);
+    if (!/^\d{10,15}$/.test(rawUntil) || !Number.isFinite(untilMs) || untilMs < 1262304000000 || untilMs > Date.now() + 86400000) {
+      return new Response(JSON.stringify({ ok: false, error: 'Invalid until timestamp' }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+  }
+  const targetUrl = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=${max}&pgnInJson=true&clocks=${clocks}&opening=${opening}&evals=false&finished=true&ongoing=false&perfType=bullet,blitz,rapid,classical${rawUntil ? `&until=${rawUntil}` : ''}`;
 
   try {
     const response = await fetch(targetUrl, {
