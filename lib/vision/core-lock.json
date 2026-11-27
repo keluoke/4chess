@@ -1,11 +1,11 @@
 {
-  "coreVersion": "2026.11.27.1",
+  "coreVersion": "2026.11.27.2",
   "protocolVersion": 1,
   "buildToolVersion": 3,
   "sourceProject": "chesspuzzle",
-  "sourceTreeHash": "1e1c82e00197d1c41facafaa303f080f2c2fc0498f87fd5a95aa2f969e0d6fb3",
+  "sourceTreeHash": "1bdfcb18b0362144a284203bf198eb03deabeac89cde03a0a0ddac00fdc6cf95",
   "sources": {
-    "recognizer-core": "72a42489277c722d721d1d560b25803d59a8e80780343de2605b018661c27f1e",
+    "recognizer-core": "1a0aaa2d5956d40fbb8b828d75e6c7e3abe586a05886a0e761af363fc9145803",
     "screenshot-recognition": "5d4e57143319ce4e1259d3e399ffb40d1e0a1b5f39638767a115d392752568c8",
     "task-controller": "b9b2084e905b9922bcfe4e57962402037f8dcae689b403c6676ba744ee658f90",
     "crypto-utils": "7026225e88a8a1466b90b4537ce951294325a777b7ac2bedb23c4fc2e9964b2e",
@@ -27,7 +27,7 @@
     "chess": "d9846dc03150a61cccf329e89c3f2103799482cd194e45103a19edf9f1e12e33"
   },
   "outputs": {
-    "lib/vision/core-generated.js": "8a03f3c062ab53cbd6aa6f877f955e95629b629b5ad8ad2e6d944c0a534f6e26",
+    "lib/vision/core-generated.js": "33c3e6574e9b51f045018ccba141339435774cc2ad1d416f6c74220a6b957059",
     "lib/vision/recognizer-core.js": "27057271a4c17c6b37292fad7a4ed13d1d23ce08647ac3235ddc78f4981b3d2e",
     "lib/vision/screenshot-recognition.js": "f61ff616906c260956c6b86b548da5bbd792a491dc2a48559e9863cee582e5ac",
     "lib/vision/task-controller.js": "0dc936596beb1c47c14cdb4cca748852fac9a2c5c8964997e6618237a2c993c9",
@@ -49,13 +49,13 @@
     "lib/vision/default-context.js": "13d74347b619d6a8f43efad5d925384dcb289ea86ecab2dc49b0df2c3b6a654a",
     "lib/vision/chess.js": "3513887e410ddc81511b1f2540b12c6fa0d36d6614f9198ed2e1d893593ac5ec",
     "models/chess-cnn.wasm": "cd54b2122ed679eb5f935785a3db425131591f253d1e961c82ce516b456fe169",
-    "models/chessimg2pos_weights.bin": "3911bad0cc0ec0e86b4688aab70e33ef59ddc77b805efbfa680dd02826059720"
+    "models/chessimg2pos_weights.bin": "1475b66a3146a14ecb56eae9624824e366153e2595beee4cffb50b0a34677ac1"
   },
   "fixtures": {
     "scripts/fixtures/vision/board-endgame.json": "ec01079b8400f247a8c0dc16e98822c02c2d52340939e554404da7586eb59cd3",
     "scripts/fixtures/vision/board-endgame.rgba.zlib": "d4fd8c183ca8c45452b426a6da03adefe7d9a179ad35fc9c7b5a1a93bbc6c86f",
     "scripts/fixtures/vision/black-coordinates.json": "4bfcab773daddd88a8b62d90547efbfc541ff1e349b1adc18b4b6b434bb460be",
     "scripts/fixtures/vision/black-coordinates.rgba.zlib": "f1981d4a2b1e263dc27e5a2159bc7daee5e8ec7ee947bb880323c74942d7f23f",
-    "scripts/fixtures/vision/scenes.cjs": "2cdfb77b995c8539bb242abb0608cb7cb031b983f49ef4710403d09ec3c7c614"
+    "scripts/fixtures/vision/scenes.cjs": "90fb81b781ec125be36dad87f4a39d29b403b8223479abdd7dc2d7585cae6fed"
   }
 }
