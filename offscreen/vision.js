@@ -1,5 +1,53 @@
+const IDLE_WORKER_TTL_MS = 60_000;
 let active = null;
 let generation = 0;
+let idleWorker = null;
+let idleTimer = null;
+let requestSeq = 0;
+
+function disposeIdleWorker() {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  const worker = idleWorker;
+  idleWorker = null;
+  if (worker) {
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.terminate();
+  }
+}
+
+function parkIdleWorker(worker) {
+  if (!worker) return;
+  disposeIdleWorker();
+  worker.onmessage = null;
+  worker.onerror = () => {
+    if (idleWorker === worker) disposeIdleWorker();
+  };
+  idleWorker = worker;
+  idleTimer = setTimeout(() => {
+    if (idleWorker === worker) disposeIdleWorker();
+  }, IDLE_WORKER_TTL_MS);
+  if (typeof idleTimer?.unref === "function") idleTimer.unref();
+}
+
+function acquireWorker() {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  const worker = idleWorker;
+  idleWorker = null;
+  if (worker) {
+    worker.onmessage = null;
+    worker.onerror = null;
+    return worker;
+  }
+  return new Worker("../lib/vision/vision-worker.js", { type: "module" });
+}
+
 function cancelActive() {
   generation++;
   const job = active;
@@ -72,6 +120,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg.type === "VISION_CLEAR") {
+    if (msg.terminateIdle === true) disposeIdleWorker();
     if (msg.id && msg.id !== capture?.id && msg.id !== active?.id) {
       reply({ ok: true });
       return;
@@ -88,13 +137,16 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       throw Error("Screenshot expired; scan again");
     const dataUrl = capture.dataUrl;
     cancelActive();
+    const requestId = ++requestSeq;
     const job = {
       id: msg.id,
+      requestId,
       generation: ++generation,
       worker: null,
       cancel: null,
     };
     active = job;
+    let reusable = false;
     const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
     try {
       if (active !== job || job.generation !== generation)
@@ -125,10 +177,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       ctx.drawImage(bitmap, x, y, w, h, 0, 0, canvas.width, canvas.height);
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const worker = (job.worker = new Worker(
-        "../lib/vision/vision-worker.js",
-        { type: "module" },
-      ));
+      const worker = (job.worker = acquireWorker());
       const result = await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           worker.terminate();
@@ -139,18 +188,24 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           reject(Error("Task cancelled"));
         };
         worker.onmessage = (e) => {
+          if (active !== job || job.generation !== generation) return;
+          if (e.data?.requestId !== undefined && e.data.requestId !== job.requestId) return;
+          if (e.data?.id !== undefined && e.data.id !== job.id) return;
+          reusable = true;
           clearTimeout(timeout);
           e.data.ok
             ? resolve(e.data.result)
             : reject(Error(e.data.error || "Recognition failed"));
         };
         worker.onerror = (e) => {
+          reusable = false;
           clearTimeout(timeout);
           reject(Error(e.message || "Recognition failed"));
         };
         worker.postMessage(
           {
             id: msg.id,
+            requestId: job.requestId,
             type: "RECOGNIZE",
             imageInfo: {
               data: data.data,
@@ -173,7 +228,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       reply({ ok: true, result, frame });
     } finally {
       bitmap.close();
-      job.worker?.terminate();
+      if (reusable && job.worker) {
+        parkIdleWorker(job.worker);
+      } else {
+        job.worker?.terminate();
+      }
       if (active === job) active = null;
     }
   })().catch((error) => reply({ ok: false, error: error.message }));

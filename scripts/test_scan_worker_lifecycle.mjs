@@ -37,6 +37,7 @@ globalThis.Worker = class {
   }
   postMessage(msg) {
     this.id = msg.id;
+    this.requestId = msg.requestId;
   }
   terminate() {
     this.terminated = true;
@@ -90,9 +91,10 @@ assert.deepEqual(secondReply.frame, {
   x: 0, y: 0, width: 8, height: 8, inputWidth: 8, inputHeight: 8,
   screenshotWidth: 8, screenshotHeight: 8,
 });
-assert.equal(workers[1].terminated, true);
+assert.equal(workers[1].terminated, false, "Healthy completed worker stays parked for reuse");
+assert.equal(workers[1].onmessage, null, "Parked idle worker detaches onmessage");
 console.log(
-  "PASS offscreen cancellation settles immediately, terminates computation, rejects late results and preserves a newer worker",
+  "PASS offscreen cancellation settles immediately, terminates computation, rejects late results and parks healthy worker",
 );
 // Mask preparation also belongs to its capture, even before a vision worker exists.
 let decoded;
@@ -141,35 +143,58 @@ globalThis.createImageBitmap = async () => ({
 });
 const current = message({ type: "VISION_RECOGNIZE", id: "new-mask" });
 await turn();
+assert.equal(workers.length, 2, "New recognition reuses parked idle worker");
 assert.equal(workers.at(-1).id, "new-mask");
+const req1 = workers.at(-1).requestId;
+// Mismatched requestId reply on reused worker must be ignored
 workers
   .at(-1)
-  .onmessage({ data: { ok: true, result: { maskedCapturePreserved: true } } });
-assert.equal((await current).ok, true);
-console.log("PASS asynchronous image masking cannot overwrite a newer capture");
+  .onmessage({ data: { id: "new-mask", requestId: req1 + 999, ok: true, result: { stale: true } } });
+workers
+  .at(-1)
+  .onmessage({ data: { id: "new-mask", requestId: req1, ok: true, result: { maskedCapturePreserved: true } } });
+assert.deepEqual((await current).result, { maskedCapturePreserved: true });
+console.log("PASS asynchronous image masking cannot overwrite a newer capture and ignores mismatched requestId");
 
 const failed = message({ type: "VISION_RECOGNIZE", id: "new-mask" });
 await turn();
-workers.at(-1).onmessage({ data: { ok: false, error: "No board" } });
+assert.equal(workers.length, 2, "Subsequent recognition still reuses healthy worker");
+workers.at(-1).onmessage({ data: { id: "new-mask", requestId: workers.at(-1).requestId, ok: false, error: "No board" } });
 assert.equal((await failed).ok, false);
+assert.equal(workers.at(-1).terminated, false, "Clean business error keeps worker parked for manual retry");
 const retried = message({
   type: "VISION_RECOGNIZE",
   id: "new-mask",
   crop: { x: 0, y: 0, width: 0.5, height: 0.5 },
 });
 await turn();
-workers.at(-1).onmessage({ data: { ok: true, result: { retry: true } } });
+assert.equal(workers.length, 2, "Manual crop retry reuses the same parked worker");
+workers.at(-1).onmessage({ data: { id: "new-mask", requestId: workers.at(-1).requestId, ok: true, result: { retry: true } } });
 assert.equal(
   (await retried).ok,
   true,
   "Failure preserves screenshot for a manual crop retry",
 );
-await message({ type: "VISION_CLEAR", id: "new-mask" });
+
+// Worker crash (onerror) must terminate worker and spawn a fresh one next time
+const crashing = message({ type: "VISION_RECOGNIZE", id: "new-mask" });
+await turn();
+workers.at(-1).onerror({ message: "WASM crashed" });
+assert.equal((await crashing).ok, false);
+assert.equal(workers.at(-1).terminated, true, "onerror must terminate broken worker");
+const recovered = message({ type: "VISION_RECOGNIZE", id: "new-mask" });
+await turn();
+assert.equal(workers.length, 3, "Fresh worker spawned after onerror");
+workers.at(-1).onmessage({ data: { id: "new-mask", requestId: workers.at(-1).requestId, ok: true, result: { recovered: true } } });
+assert.equal((await recovered).ok, true);
+
+await message({ type: "VISION_CLEAR", id: "new-mask", terminateIdle: true });
+assert.equal(workers.at(-1).terminated, true, "terminateIdle disposes parked worker");
 assert.equal(
   (await message({ type: "VISION_RECOGNIZE", id: "new-mask" })).ok,
   false,
   "Accepted results release the screenshot",
 );
 console.log(
-  "PASS failed automatic detection supports manual retry; acceptance releases screenshot",
+  "PASS failed automatic detection supports manual retry, idle worker reuse & onerror recovery work, and acceptance releases screenshot",
 );
