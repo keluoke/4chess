@@ -191,7 +191,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           if (active !== job || job.generation !== generation) return;
           if (e.data?.requestId !== undefined && e.data.requestId !== job.requestId) return;
           if (e.data?.id !== undefined && e.data.id !== job.id) return;
-          reusable = true;
+          const degraded =
+            e.data?.degraded === true ||
+            (e.data?.ok === true &&
+              e.data?.result?.metadata?.backend !== undefined &&
+              e.data.result.metadata.backend !== "wasm" &&
+              e.data.result.metadata.backend !== "native");
+          reusable = !e.data?.timeout && !e.data?.cancelled && !degraded;
           clearTimeout(timeout);
           e.data.ok
             ? resolve(e.data.result)
