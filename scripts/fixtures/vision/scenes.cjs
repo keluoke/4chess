@@ -90,7 +90,7 @@ function scanCases() {
       preprocessing: 'roundedCorners' },
     { name: 'rounded corners after resizing', image: resizeImage(rounded, 1200), boardFen: board.board,
       hasBoard: true, needsReview: false, preprocessing: 'roundedCorners' },
-    { name: 'angled board still needs review', image: angledBoard(board), boardFen: '1K6/2Q3r1/1P6/1p6/2pk4/3b4/8/7B',
+    { name: 'angled board still needs review', image: angledBoard(board), boardFen: '1K6/2Q3r1/1P6/1p6/2pk4/3p4/8/7B',
       hasBoard: true, needsReview: true },
     { name: 'blank', image: { width: 320, height: 320, data: new Uint8ClampedArray(320 * 320 * 4).fill(128) },
       boardFen: '', hasBoard: false, needsReview: true }
