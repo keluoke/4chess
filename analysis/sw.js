@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261127-maia-simd';
+const CACHE_NAME = '4chess-review-20261128-review-fixes';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -13,7 +13,7 @@ const STATIC_ASSETS = [
   "./challenge.html",
   "./shared-review.js?v=20261125-poster-focus",
   "./review-share.css?v=20261125-poster-focus",
-  "./review-share.js?v=20261127-review-precision-ux",
+  "./review-share.js?v=20261128-review-fixes",
   "./review-snapshot.js?v=20261125-poster-focus",
   "./manifest.webmanifest",
   "./favicon.svg?v=2",
@@ -27,8 +27,8 @@ const STATIC_ASSETS = [
   "../ui/fonts/InterVariable.woff2?v=4.1",
   "./workbench.css?v=20261127-review-precision-ux",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
-  "./analysis.js?v=20261127-maia-simd",
-  "./recent-games.js?v=20261126-recent-games",
+  "./analysis.js?v=20261128-review-fixes",
+  "./recent-games.js?v=20261128-review-fixes",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
   "./commentary-text.js?v=20261118-recap-reset",
@@ -38,7 +38,7 @@ const STATIC_ASSETS = [
   "./consequence-player.js?v=20261124-intuition-labels",
   "./mistake-bank.js?v=20261124-intuition-labels",
   "./checkup-runner.js?v=20261125-checkup-polish",
-  "./checkup-archives.js?v=20261124-checkup-cards-r2",
+  "./checkup-archives.js?v=20261128-review-fixes",
   "./checkup-analysis.js?v=20261124-checkup-cards-r2",
   "./checkup-insights.js?v=20261124-checkup-cards-r2",
   "./checkup-fit.js?v=20261124-checkup-cards-r2",
@@ -59,13 +59,13 @@ const STATIC_ASSETS = [
   "./chess-pieces.js",
   "./eval-chart.js?v=20261124-intuition-labels",
   "./i18n.js?v=20261124-intuition-labels",
-  "./intuition-review.js?v=20261127-maia-simd",
+  "./intuition-review.js?v=20261128-review-fixes",
   "./maia-elo-trend.js?v=20261125-position-poster",
   "./maia-trend-geometry.js",
   "./position-analysis.js?v=20261125-position-poster",
   "./review-explorer.js?v=20261125-review-sidebar",
   "./review-practice.js?v=20261125-trend-lines",
-  "./review-overview.js?v=20261127-review-precision-ux",
+  "./review-overview.js?v=20261128-review-fixes",
   "./scan-authorization.js?v=20261121-study-reminders",
   "./sound-effects.js?v=20261025-v115",
   "./workbench-layout.js?v=20261124-intuition-labels",
@@ -80,8 +80,8 @@ const STATIC_ASSETS = [
   "../engine/engine-preferences.js?v=20261124-checkup-cards-r2",
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
-  "../engine/game-analyzer.js?v=20261127-review-precision-ux",
-  "../engine/maia-engine.js?v=20261127-maia-simd",
+  "../engine/game-analyzer.js?v=20261128-review-fixes",
+  "../engine/maia-engine.js?v=20261128-review-fixes",
   "../engine/maia-inbrowser.js?v=20261127-maia-simd",
   "../engine/maia-worker.js?v=20261127-maia-simd",
   "../engine/maia-gemm.wasm?v=20261127-maia-simd",

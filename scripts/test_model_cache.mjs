@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { readModelBytes, getModelCacheKey } from '../engine/model-loader.js';
+import { readModelBytes, getModelCacheKey, modelCacheKeys } from '../engine/model-loader.js';
 import { MAIA_VARIANTS } from '../engine/engine-variants.js';
+import { ModelCache } from '../engine/model-cache.js';
+import { MaiaEngine } from '../engine/maia-engine.js';
 
 function fixture(variant) {
   const meta = new TextEncoder().encode(JSON.stringify({ ...MAIA_VARIANTS[variant].expected, tensors: {} }));
@@ -74,4 +76,51 @@ try {
     assert.ok(!saved.has(key));
   }
   console.log('PASS: all variants offline, legacy cache, corrupt-cache repair, CDN validation, CDN-only sources, persistence failures.');
+
+  // ModelCache.hasModel must be key-specific (never count() > 0) and MaiaEngine.isCachedLocally must check only the active variant.
+  const originalOpenDB = ModelCache.openDB;
+  const originalFindModelKeys = ModelCache.findModelKeys;
+  try {
+    const presentKeys = new Set(['sf19standard-v1', getModelCacheKey(MAIA_VARIANTS['5m'].url)]);
+    ModelCache.openDB = async () => ({
+      close() {},
+      transaction() {
+        return {
+          objectStore() {
+            return {
+              count() { throw new Error('ModelCache.hasModel must not use store.count()'); },
+              getKey(key) {
+                const req = { result: presentKeys.has(key) ? key : undefined };
+                queueMicrotask(() => req.onsuccess?.());
+                return req;
+              }
+            };
+          }
+        };
+      }
+    });
+    assert.equal(await ModelCache.hasModel('maia3-23m-fp32-v1'), false);
+    assert.equal(await ModelCache.hasModel(getModelCacheKey(MAIA_VARIANTS['5m'].url)), true);
+
+    const lookUps = [];
+    ModelCache.findModelKeys = async (keys) => {
+      lookUps.push(keys);
+      return keys.filter(key => presentKeys.has(key));
+    };
+    const stub5m = Object.assign(Object.create(MaiaEngine.prototype), { variant: '5m', isReady: false, isLoading: false });
+    const stub23m = Object.assign(Object.create(MaiaEngine.prototype), { variant: '23m', isReady: false, isLoading: false });
+    const stub79m = Object.assign(Object.create(MaiaEngine.prototype), { variant: '79m', isReady: false, isLoading: false });
+    assert.equal(await stub5m.isCachedLocally(), true);
+    assert.equal(await stub23m.isCachedLocally(), false);
+    assert.equal(await stub79m.isCachedLocally(), false);
+    assert.deepEqual(lookUps[0], modelCacheKeys(MAIA_VARIANTS['5m'].url));
+    presentKeys.clear();
+    presentKeys.add('maia3_model');
+    assert.equal(await stub5m.isCachedLocally(), true);
+    assert.equal(await stub23m.isCachedLocally(), false);
+    console.log('PASS: ModelCache.hasModel and MaiaEngine.isCachedLocally are strictly variant-key scoped.');
+  } finally {
+    ModelCache.openDB = originalOpenDB;
+    ModelCache.findModelKeys = originalFindModelKeys;
+  }
 } finally { globalThis.fetch = originalFetch; }

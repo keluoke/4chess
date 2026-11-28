@@ -16,6 +16,7 @@ import { ModelCache } from './model-cache.js';
 export { modelSourceCandidates } from './model-sources.js';
 import { modelSourceCandidates } from './model-sources.js';
 import { connectModelCache } from './model-cache-client.js?v=20261124-mobile';
+import { modelCacheKeys } from './model-loader.js?v=20261124-mobile';
 
 export class MaiaEngine {
   constructor(onStatusChange = null, stockfishInstance = null, { variant = '5m', cacheOnly = false } = {}) {
@@ -196,9 +197,18 @@ export class MaiaEngine {
     return this.initialize(overrideUrl);
   }
 
-  async isCachedLocally() {
+  async isCachedLocally(overrideUrl = null) {
     if (this.isReady || this.isLoading) return true;
-    return ModelCache.hasModel(this.modelKey);
+    let customCdn = overrideUrl || '';
+    if (!customCdn && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try {
+        const stored = await chrome.storage.local.get(['cloudflareCdnUrl']);
+        customCdn = stored?.cloudflareCdnUrl || '';
+      } catch {}
+    }
+    const keys = [...new Set(modelSourceCandidates(this.variant, customCdn).flatMap(modelCacheKeys))];
+    const found = await ModelCache.findModelKeys(keys);
+    return found.length > 0;
   }
 
   async initialize(overrideUrl = null) {

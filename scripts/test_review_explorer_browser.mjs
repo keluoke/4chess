@@ -214,6 +214,43 @@ try {
   await reportEntry.click();
   assert.equal(await page.locator('#review-report-intuition-status').isHidden(), true);
   await page.keyboard.press('Escape');
+
+  // P1 #2: Failed or partial Maia scan must never mark the report as complete.
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.intuitionReview.state = 'error';
+    app.applyReviewResult({ ...syntheticReview, engineOnly: true }, { refreshPosition: false });
+  });
+  assert.equal(await reportEntry.getAttribute('data-stage'), 'engine');
+  assert.doesNotMatch(await reportEntry.innerText(), /Full report ready/);
+  await reportEntry.click();
+  assert.equal(await page.locator('#review-report-intuition-status').isVisible(), true);
+  assert.equal(await page.locator('#review-report-intuition-action').isDisabled(), false);
+  await page.locator('#review-share-open').click();
+  assert.equal(await page.locator('#review-share-intuition-note').isVisible(), true);
+  await page.locator('#review-share-close').click();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.intuitionReview.state = 'partial';
+    app.applyReviewResult({
+      ...syntheticReview,
+      engineOnly: false,
+      allMoves: syntheticReview.allMoves.map((move, index) => ({
+        ...move,
+        _predMoves: index === 3 ? [{ uci: move.uci }] : []
+      }))
+    }, { refreshPosition: false });
+  });
+  assert.equal(await reportEntry.getAttribute('data-stage'), 'engine');
+  await reportEntry.click();
+  assert.equal(await page.locator('#review-report-intuition-status').isVisible(), true);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const app = __maiaStudioApp;
+    app.intuitionReview.state = 'done';
+    app.applyReviewResult({ ...syntheticReview, engineOnly: false }, { refreshPosition: false });
+  });
   await openStatistics();
   const intuitionTitles = page.locator('.review-intuition-kind');
   assert.deepEqual(await intuitionTitles.evaluateAll(nodes => nodes.map(node => node.firstChild.textContent)), ['Intuition trap', 'Precise intuition', 'Beyond intuition']);

@@ -93,7 +93,7 @@ assert(borderlineDeep.scoreVerifications.length >= 1, 'Deep mode verifies border
 // Parallel Stockfish worker pool matches sequential accuracy and cleans up helpers.
 const longPgn = '[Result "1/2-1/2"]\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 1/2-1/2';
 const longMoves = G.parsePgn(longPgn);
-const makeDeterministicSf = (id, stats) => ({
+const makeDeterministicSf = (id, stats, workerLog = null) => ({
   isReady: false,
   engineKey: 'parallel-fixture',
   async initialize() { stats.inits++; this.isReady = true; return true; },
@@ -101,6 +101,7 @@ const makeDeterministicSf = (id, stats) => ({
   reset() { stats.resets++; this.isReady = false; },
   async evaluate(fen, depth) {
     stats.evals++;
+    workerLog?.push({ id, fen });
     const hash = fen.length * 17 + fen.charCodeAt(0);
     return { depth, scoreCp: (hash % 50) - 25, score: '0.00', bestMove: { uci: 'e2e4', san: 'e4' } };
   }
@@ -109,13 +110,23 @@ const seqStats = { inits: 0, stops: 0, resets: 0, evals: 0 };
 const parStats = { inits: 0, stops: 0, resets: 0, evals: 0 };
 const seqResult = await new G(makeDeterministicSf(0, seqStats), maia).analyzeGame(longMoves, { engineOnly: true, forceRefresh: true });
 const progressCounts = [];
-const parResult = await new G(makeDeterministicSf(0, parStats), maia).analyzeGame(longMoves, {
+const workerLog = [];
+let nextWorkerId = 1;
+const longPositions = G.buildPositionChain(longMoves).map(p => p.fen);
+const parResult = await new G(makeDeterministicSf(0, parStats, workerLog), maia).analyzeGame(longMoves, {
   engineOnly: true, forceRefresh: true, concurrency: 3,
-  createWorker: () => makeDeterministicSf(1, parStats),
+  createWorker: () => makeDeterministicSf(nextWorkerId++, parStats, workerLog),
   onProgress: p => { if (p.phase === 'evaluating') progressCounts.push(p.current); }
 });
 assert.equal(parResult.accuracyWhite, seqResult.accuracyWhite);
 assert.equal(parResult.accuracyBlack, seqResult.accuracyBlack);
 assert.equal(parStats.resets, 2, 'Helper workers are always reset after parallel sweep');
 assert.deepEqual(progressCounts, Array.from({ length: 13 }, (_, i) => i + 1), 'Parallel sweep reports monotonic progress');
+for (const workerId of [0, 1, 2]) {
+  const indices = workerLog.filter(entry => entry.id === workerId).map(entry => longPositions.indexOf(entry.fen));
+  assert(indices.length > 0, `Worker ${workerId} receives a non-empty contiguous slice`);
+  for (let k = 1; k < indices.length; k++) {
+    assert.equal(indices[k], indices[k - 1] + 1, `Worker ${workerId} evaluates contiguous positions`);
+  }
+}
 console.log('PASS parallel Stockfish sweep & deep borderline verification');

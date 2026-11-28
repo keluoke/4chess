@@ -1,5 +1,5 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261128-review-fixes';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { CHECKUP_GAME_LIMIT, LICHESS_CHECKUP_SPEEDS, checkupGameId, chesscomCheckupArchives } from '../engine/checkup-watch.js?v=20261124-checkup-cards-r2';
 import { normalizeAlias, perspectiveNames } from './study-store.js?v=20261124-checkup-cards-r2';
@@ -143,21 +143,33 @@ function archivedCheckupGame(platform, item, pgn, result) {
   };
 }
 
-function lichessCheckupGames(text, max) {
+function parseLichessNdjson(text, max) {
   const games = [];
+  let rawCount = 0;
+  let oldestRawPlayedAt = null;
   for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
     let item;
     try { item = JSON.parse(line); } catch { continue; }
+    rawCount++;
+    if (Number.isFinite(item?.createdAt)) {
+      oldestRawPlayedAt = oldestRawPlayedAt == null ? item.createdAt : Math.min(oldestRawPlayedAt, item.createdAt);
+    }
     if (!item?.pgn || (item.variant && item.variant !== 'standard')) continue;
     const verdict = FairPlayGuard.verifyConcludedGame(item);
     if (!verdict.ok) continue;
-    games.push(archivedCheckupGame('lichess', item, item.pgn, verdict.result));
-    if (games.length >= max) break;
+    if (games.length < max) {
+      games.push(archivedCheckupGame('lichess', item, item.pgn, verdict.result));
+    }
   }
-  return games;
+  return { games, rawCount, oldestRawPlayedAt };
 }
 
-export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIMIT, clocks = false, opening = clocks, until = null, signal, fetchImpl = fetch } = {}) {
+function lichessCheckupGames(text, max) {
+  return parseLichessNdjson(text, max).games;
+}
+
+async function fetchLichessRecentGamesBatch(username, { max = CHECKUP_GAME_LIMIT, clocks = false, opening = clocks, until = null, signal, fetchImpl = fetch } = {}) {
   const clean = String(username || '').trim();
   if (!clean) throw new Error('Username is required');
   const query = new URLSearchParams({ max: String(max), pgnInJson: 'true', clocks: String(clocks),
@@ -174,15 +186,21 @@ export async function fetchLichessRecentGames(username, { max = CHECKUP_GAME_LIM
     try {
       const resp = await fetchImpl(proxyUrl, { signal, cache: 'no-store' });
       const contentType = resp.headers?.get?.('content-type') || '';
-      if (resp.ok) return lichessCheckupGames(await resp.text(), max);
+      if (resp.ok) return parseLichessNdjson(await resp.text(), max);
+      if (resp.status === 429) throw new Error('Lichess HTTP 429');
       if ((contentType.includes('ndjson') || contentType.includes('json')) && resp.status === 404) throw new Error('Lichess HTTP 404');
     } catch (err) {
-      if (err?.name === 'AbortError' || String(err?.message).includes('Lichess HTTP 404')) throw err;
+      if (err?.name === 'AbortError' || /Lichess HTTP (?:404|429)/.test(String(err?.message))) throw err;
     }
   }
   const resp = await fetchImpl(url, { headers: { Accept: 'application/x-ndjson' }, signal });
   if (!resp.ok) throw new Error(`Lichess HTTP ${resp.status}`);
-  return lichessCheckupGames(await resp.text(), max);
+  return parseLichessNdjson(await resp.text(), max);
+}
+
+export async function fetchLichessRecentGames(username, options = {}) {
+  const batch = await fetchLichessRecentGamesBatch(username, options);
+  return batch.games;
 }
 
 export async function fetchChesscomRecentGames(username, { max = CHECKUP_GAME_LIMIT, signal, fetchImpl = fetch } = {}) {
@@ -217,20 +235,47 @@ export async function fetchRecentGamesPage(platform, username, { limit = 20, cur
   const pageSize = Math.max(1, Math.min(40, Number(limit) || 20));
 
   if (platform === 'lichess') {
-    const fetched = await fetchLichessRecentGames(clean, {
-      max: pageSize + 1,
-      clocks: false,
-      opening: true,
-      until: cursor?.until ?? null,
-      signal,
-      fetchImpl
-    });
-    const hasMore = fetched.length > pageSize;
-    const games = hasMore ? fetched.slice(0, pageSize) : fetched;
-    const timestamps = games.map(g => g.meta?.playedAt).filter(Number.isFinite);
-    const oldest = timestamps.length ? Math.min(...timestamps) : null;
-    const nextCursor = hasMore && Number.isFinite(oldest) ? { until: oldest - 1 } : null;
-    return { games, hasMore: !!nextCursor, nextCursor };
+    const MAX_BATCHES = 3;
+    const requestMax = pageSize + 1;
+    let currentUntil = cursor?.until ?? null;
+    const games = [];
+    const seen = new Set();
+
+    for (let attempt = 0; attempt < MAX_BATCHES; attempt++) {
+      const batch = await fetchLichessRecentGamesBatch(clean, {
+        max: requestMax,
+        clocks: false,
+        opening: true,
+        until: currentUntil,
+        signal,
+        fetchImpl
+      });
+      for (const game of batch.games) {
+        const id = game.gameId || game.pgn;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        games.push(game);
+      }
+      if (games.length > pageSize) {
+        const pageGames = games.slice(0, pageSize);
+        const timestamps = pageGames.map(g => g.meta?.playedAt).filter(Number.isFinite);
+        const oldest = timestamps.length ? Math.min(...timestamps) : null;
+        const nextCursor = Number.isFinite(oldest) ? { until: oldest - 1 } : null;
+        return { games: pageGames, hasMore: !!nextCursor, nextCursor };
+      }
+      if (batch.rawCount < requestMax) {
+        return { games, hasMore: false, nextCursor: null };
+      }
+      const nextUntil = Number.isFinite(batch.oldestRawPlayedAt) ? batch.oldestRawPlayedAt - 1 : null;
+      if (!Number.isFinite(nextUntil) || (currentUntil !== null && nextUntil >= currentUntil)) {
+        return { games, hasMore: false, nextCursor: null };
+      }
+      if (games.length >= pageSize || attempt === MAX_BATCHES - 1) {
+        return { games, hasMore: true, nextCursor: { until: nextUntil } };
+      }
+      currentUntil = nextUntil;
+    }
+    return { games, hasMore: false, nextCursor: null };
   }
 
   if (platform === 'chesscom') {
@@ -248,10 +293,7 @@ export async function fetchRecentGamesPage(platform, username, { limit = 20, cur
       const archive = archives[archiveIndex];
       const resp = await fetchImpl(archive.url, { signal });
       if (!resp.ok) {
-        if (resp.status === 404 || resp.status === 429) throw new Error(`Chess.com HTTP ${resp.status}`);
-        archiveIndex++;
-        offset = 0;
-        continue;
+        throw new Error(`Chess.com HTTP ${resp.status}`);
       }
       const data = await resp.json();
       const list = Array.isArray(data?.games) ? data.games.slice().reverse() : [];

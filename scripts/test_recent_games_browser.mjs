@@ -209,6 +209,65 @@ try {
   await page.locator('#recent-games-list .recent-game-item[data-game-id="live:87654321"]').click();
   await page.waitForFunction(() => window.__maiaStudioApp?.checkupGame?.gameId === 'live:87654321');
   assert.equal(await page.evaluate(() => window.__maiaStudioApp.boardUI.orientation), 'white');
+
+  // 3. P1 #1: Paste PGN submit closes the modal on success & ArrowLeft/ArrowRight switches tabs
+  await page.locator('#btn-import-pgn').click();
+  await page.locator('#pgn-modal.open #import-tab-paste').waitFor();
+  await page.locator('#import-tab-paste').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.locator('#import-tab-account').getAttribute('aria-selected'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'import-tab-account');
+  assert.equal(await page.locator('#import-panel-account').isVisible(), true);
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await page.locator('#import-tab-paste').getAttribute('aria-selected'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'import-tab-paste');
+  await page.locator('#pgn-input').fill(pgnLichess1);
+  await page.locator('#btn-submit-pgn').click();
+  await page.waitForFunction(() => window.__maiaStudioApp?.checkupGame?.gameId === 'GameWin1');
+  assert.equal(await page.locator('#pgn-modal.open').count(), 0, 'Paste PGN modal must close after successful submit');
+
+  // 4. Stale cancelled recent-games request must not clear newer request loading state
+  let releaseSecondFetch;
+  let markSecondFetchStarted;
+  const secondFetchStarted = new Promise(resolve => { markSecondFetchStarted = resolve; });
+  await page.route('**/api/lichess?*', async (route) => {
+    const reqUrl = new URL(route.request().url());
+    const user = reqUrl.searchParams.get('username');
+    if (user === 'SlowUserOne') {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      await route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: '' });
+      return;
+    }
+    if (user === 'FastUserTwo') {
+      markSecondFetchStarted();
+      await new Promise(resolve => { releaseSecondFetch = resolve; });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/x-ndjson',
+        body: JSON.stringify({ id: 'GameWin1', variant: 'standard', status: 'mate', speed: 'blitz', createdAt: 1730000050000, pgn: pgnLichess1 })
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.locator('#btn-recent-games').click();
+  await page.locator('#pgn-modal.open #recent-games-username').waitFor();
+  await page.locator('#recent-games-username').fill('SlowUserOne');
+  await page.locator('#btn-recent-games-fetch').click();
+  await page.waitForFunction(() => window.__maiaStudioApp?.recentGames?.loading === true);
+  await page.evaluate(() => {
+    const picker = window.__maiaStudioApp.recentGames;
+    picker.usernameInput.value = 'FastUserTwo';
+    void picker.loadGames({ forceRefresh: true });
+  });
+  await secondFetchStarted;
+  await page.waitForTimeout(80);
+  assert.equal(await page.evaluate(() => window.__maiaStudioApp.recentGames.loading), true, 'Cancelled first request must not clear second request loading state');
+  assert.equal(await page.locator('#btn-recent-games-fetch').isDisabled(), true, 'Fetch button stays disabled while second request is pending');
+  releaseSecondFetch();
+  await page.waitForFunction(() => window.__maiaStudioApp?.recentGames?.loading === false);
+  assert.equal(await page.locator('#btn-recent-games-fetch').isDisabled(), false);
+
   assert.deepEqual(errors, []);
   console.log('🎉 All recent-games browser tests passed!');
 } finally {

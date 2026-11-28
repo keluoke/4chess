@@ -240,7 +240,8 @@ export class ReviewShare {
 
   syncIntuitionNote() {
     if (!this.intuitionNote) return;
-    if (!this.dialog.open || !this.app.reviewResult?.engineOnly) {
+    const complete = this.app.reviewOverview?.hasCompleteIntuition?.(this.app.reviewResult) ?? !this.app.reviewResult?.engineOnly;
+    if (!this.dialog.open || !this.app.reviewResult || complete) {
       this.intuitionNote.hidden = true;
       this.intuitionNote.textContent = '';
       return;

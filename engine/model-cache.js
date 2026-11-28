@@ -97,7 +97,7 @@ export class ModelCache {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
         const req = store.getKey(key);
-        req.onsuccess = () => done(req.result !== undefined);
+        req.onsuccess = () => done(req.result === key);
         req.onerror = () => done(false);
       });
     } catch {
@@ -156,22 +156,6 @@ export class ModelCache {
         };
         tx.oncomplete = () => { db.close(); resolve(true); };
         tx.onabort = tx.onerror = () => { db.close(); resolve(false); };
-      });
-    } catch (e) {
-      return false;
-    }
-  }
-
-  static async hasModel() {
-    try {
-      const db = await this.openDB();
-      if (!db) return false;
-      return new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.count();
-        req.onsuccess = () => { db.close(); resolve(req.result > 0); };
-        req.onerror = () => { db.close(); resolve(false); };
       });
     } catch (e) {
       return false;

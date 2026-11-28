@@ -1,5 +1,5 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
-import { checkupReplayUrl, fetchRecentGamesPage, suggestCheckupPlayer } from './checkup-archives.js?v=20261124-checkup-cards-r2';
+import { checkupReplayUrl, fetchRecentGamesPage, suggestCheckupPlayer } from './checkup-archives.js?v=20261128-review-fixes';
 import { accountKey, normalizeAccount, normalizeAlias } from './study-store.js?v=20261124-checkup-cards-r2';
 import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
 
@@ -129,6 +129,17 @@ export class RecentGamesPicker {
   bindEvents() {
     this.tabPaste?.addEventListener('click', () => this.setTab('paste'));
     this.tabAccount?.addEventListener('click', () => this.setTab('account', { autoLoad: true }));
+    for (const tabBtn of [this.tabPaste, this.tabAccount]) {
+      tabBtn?.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        const nextTab = e.key === 'Home' ? 'paste'
+          : e.key === 'End' ? 'account'
+          : (tabBtn === this.tabPaste ? 'account' : 'paste');
+        this.setTab(nextTab, { focus: false, autoLoad: nextTab === 'account' });
+        (nextTab === 'account' ? this.tabAccount : this.tabPaste)?.focus();
+      });
+    }
     for (const btn of this.platformButtons) {
       btn.addEventListener('click', () => this.setPlatform(btn.dataset.recentPlatform));
     }
@@ -333,14 +344,16 @@ export class RecentGamesPicker {
       this.syncHomeEntry();
       this.renderChips();
     } catch (error) {
-      if (error?.name === 'AbortError' || controller.signal.aborted) return;
+      if (error?.name === 'AbortError' || controller.signal.aborted || this.controller !== controller) return;
       this.statusMessage = describeFetchError(error, account.platform);
       this.statusTone = 'error';
     } finally {
-      if (this.controller === controller) this.controller = null;
-      this.loading = false;
-      this.syncButtons();
-      this.renderCurrentState();
+      if (this.controller === controller) {
+        this.controller = null;
+        this.loading = false;
+        this.syncButtons();
+        this.renderCurrentState();
+      }
     }
   }
 
@@ -376,15 +389,17 @@ export class RecentGamesPicker {
         fetchedAt: Date.now()
       });
     } catch (error) {
-      if (error?.name !== 'AbortError' && !controller.signal.aborted) {
+      if (error?.name !== 'AbortError' && !controller.signal.aborted && this.controller === controller) {
         this.statusMessage = describeFetchError(error, entry.platform);
         this.statusTone = 'error';
       }
     } finally {
-      if (this.controller === controller) this.controller = null;
-      this.loadingMore = false;
-      this.syncButtons();
-      this.renderCurrentState();
+      if (this.controller === controller) {
+        this.controller = null;
+        this.loadingMore = false;
+        this.syncButtons();
+        this.renderCurrentState();
+      }
     }
   }
 

@@ -143,6 +143,63 @@ console.log('--- 3. Testing fetchRecentGamesPage (Chess.com lazy monthly archive
   assert.equal(page2.hasMore, false);
 }
 
+console.log('--- 3b. Testing Lichess 429 proxy non-fallback, filtered pagination, and Chess.com 503 ---');
+{
+  const originalLocation = globalThis.location;
+  const originalFetch = globalThis.fetch;
+  globalThis.location = { protocol: 'https:' };
+  let proxyCalls = 0;
+  globalThis.fetch = async (url) => {
+    proxyCalls++;
+    assert.match(String(url), /^\/api\/lichess\?/);
+    return new Response('rate limited', { status: 429 });
+  };
+  try {
+    await assert.rejects(() => fetchRecentGamesPage('lichess', 'Alice', { limit: 2 }), /Lichess HTTP 429/);
+    assert.equal(proxyCalls, 1, '429 from /api/lichess must not fall back to direct lichess.org');
+  } finally {
+    globalThis.location = originalLocation;
+    globalThis.fetch = originalFetch;
+  }
+
+  // When 2 of limit+1 raw rows are filtered, Lichess pagination fetches a follow-up batch and still reports hasMore=true.
+  let batchCalls = 0;
+  const filteredPageFetch = async () => {
+    batchCalls++;
+    if (batchCalls === 1) {
+      return new Response([
+        JSON.stringify({ id: 'live99', variant: 'standard', status: 'started', pgn: '[Result "*"]\n1. e4 *', createdAt: 1730000005000 }),
+        JSON.stringify({ id: 'chess960', variant: 'chess960', status: 'mate', pgn: samplePgnWhite, createdAt: 1730000004500 }),
+        JSON.stringify({ id: 'AbCd1234', variant: 'standard', status: 'mate', speed: 'blitz', createdAt: 1730000004000, pgn: samplePgnWhite })
+      ].join('\n'), { status: 200 });
+    }
+    return new Response([
+      JSON.stringify({ id: 'EfGh5678', variant: 'standard', status: 'resign', speed: 'rapid', createdAt: 1730000003000, pgn: samplePgnBlack }),
+      JSON.stringify({ id: 'IjKl9012', variant: 'standard', status: 'draw', speed: 'blitz', createdAt: 1730000002000, pgn: samplePgnDraw })
+    ].join('\n'), { status: 200 });
+  };
+  const filteredPage = await fetchRecentGamesPage('lichess', 'Alice', { limit: 2, fetchImpl: filteredPageFetch });
+  assert.equal(batchCalls, 2);
+  assert.equal(filteredPage.games.length, 2);
+  assert.equal(filteredPage.hasMore, true);
+  assert.deepEqual(filteredPage.nextCursor, { until: 1730000003000 - 1 });
+
+  // Chess.com monthly archive 503 must throw instead of silently skipping the month.
+  const chesscom503Fetch = async (url) => {
+    if (String(url).endsWith('/games/archives')) {
+      return Response.json({
+        archives: [
+          'https://api.chess.com/pub/player/alice/games/2026/10',
+          'https://api.chess.com/pub/player/alice/games/2026/11'
+        ]
+      });
+    }
+    if (String(url).endsWith('/2026/11')) return new Response('Service Unavailable', { status: 503 });
+    return Response.json({ games: [] });
+  };
+  await assert.rejects(() => fetchRecentGamesPage('chesscom', 'Alice', { limit: 2, fetchImpl: chesscom503Fetch }), /Chess\.com HTTP 503/);
+}
+
 console.log('--- 4. Testing resolveRecentGamesTarget & gameOutcomeForPlayer ---');
 {
   const targetFromGame = resolveRecentGamesTarget({

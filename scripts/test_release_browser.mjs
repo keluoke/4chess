@@ -19,11 +19,11 @@ const releaseModules = new Map([
   '/analysis/challenge.js'
  ].map(path => [path, '20261124-intuition-labels']),
  ['/analysis/board-controls.js', '20261124-controls'],
- ['/engine/game-analyzer.js', '20261127-review-precision-ux'],
- ['/analysis/review-share.js', '20261127-review-precision-ux'],
- ['/analysis/recent-games.js', '20261126-recent-games'],
- ['/analysis/review-overview.js', '20261127-review-precision-ux'],
- ...['/analysis/analysis.js', '/analysis/intuition-review.js', '/engine/maia-engine.js', '/engine/maia-inbrowser.js', '/engine/maia-worker.js']
+ ...['/analysis/analysis.js', '/analysis/intuition-review.js', '/analysis/review-overview.js',
+   '/analysis/review-share.js', '/analysis/recent-games.js', '/analysis/checkup-archives.js',
+   '/engine/game-analyzer.js', '/engine/maia-engine.js']
+  .map(path => [path, '20261128-review-fixes']),
+ ...['/engine/maia-inbrowser.js', '/engine/maia-worker.js']
   .map(path => [path, '20261127-maia-simd']),
  ...['/analysis/checkup-runner.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js', '/analysis/checkup-reminders.js']
   .map(path => [path, '20261125-checkup-polish']),
@@ -38,7 +38,7 @@ const releaseModules = new Map([
  ...['/analysis/board-ui.js', '/ui/board-visuals.js', '/analysis/share-export.js']
   .map(path => [path, '20261124-divergence-cards']),
  ...[
-  '/ui/theme.js', '/analysis/checkup-archives.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/study-store.js',
+  '/ui/theme.js', '/analysis/checkup-analysis.js', '/analysis/checkup-insights.js', '/analysis/study-store.js',
   '/analysis/checkup-fit.js', '/analysis/challenge-link.js', '/engine/stockfish-inbrowser.js',
   '/engine/engine-preferences.js'
  ].map(path => [path, '20261124-checkup-cards-r2'])

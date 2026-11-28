@@ -1,5 +1,5 @@
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261127-maia-simd';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261128-review-fixes';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261128-review-fixes';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { t } from './i18n.js?v=20261124-intuition-labels';
@@ -165,6 +165,10 @@ export class IntuitionReview {
       this.yielded = false;
       const count = result.allMoves.filter(move => move._predMoves?.length).length;
       this.state = count === result.totalMoves ? 'done' : count ? 'partial' : 'error';
+      if (this.state === 'error') {
+        this.render();
+        return;
+      }
       const focusResult = this.state === 'done' && document.activeElement === this.button;
       // Refresh report labels only. Keep the current board and foreground work.
       app.applyReviewResult(result, { refreshPosition: false });

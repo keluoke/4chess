@@ -514,7 +514,7 @@ export class GameAnalyzer {
     const { depth = GameAnalyzer.DEFAULT_DEPTH, elo = 1900, engineKey = 'sf19lite', modelKey = 'maia3-5m' } = options;
     const startFen = moves?.startFen || 'start';
     const moveSans = (moves || []).map(m => m.san || '').join(',');
-    const policy = options.reviewMode ? '|adaptive-v1:' + options.reviewMode : '';
+    const policy = options.reviewMode ? '|adaptive-v2:' + options.reviewMode : '';
     const hash = GameAnalyzer.hashString(`${startFen}|${moveSans}|${depth}|${elo}|${engineKey}|${modelKey}${policy}`);
 
     if (typeof window !== 'undefined') {
@@ -814,7 +814,6 @@ export class GameAnalyzer {
             throw new Error('Stockfish WebAssembly 引擎初始化超时或未就绪，无法开始复盘分析');
           }
           const readyWorkers = allWorkers.filter(w => w.isReady);
-          let nextIndex = 0;
           let completed = 0;
           let abortedError = null;
           const stopAllWorkers = () => {
@@ -823,11 +822,12 @@ export class GameAnalyzer {
             }
           };
 
-          await Promise.all(readyWorkers.map(async (worker) => {
+          const sliceSize = Math.ceil(totalPositions / readyWorkers.length);
+          await Promise.all(readyWorkers.map(async (worker, workerIdx) => {
             let workerConsecutiveFailures = 0;
-            while (!invalid() && !abortedError) {
-              const i = nextIndex++;
-              if (i >= totalPositions) break;
+            const start = workerIdx * sliceSize;
+            const end = Math.min(totalPositions, start + sliceSize);
+            for (let i = start; i < end && !invalid() && !abortedError; i++) {
               if (FairPlayGuard?.isLiveGameInProgress && FairPlayGuard.isLiveGameInProgress()) {
                 this.isCancelled = true;
                 this.isAnalyzing = false;

@@ -1,18 +1,18 @@
 import { initWorkbenchLayout } from './workbench-layout.js?v=20261124-intuition-labels';
 import { animateStudy, cancelMotion, transitionLayout } from './workbench-motion.js?v=20261103-jade';
-import { IntuitionReview } from './intuition-review.js?v=20261127-maia-simd';
+import { IntuitionReview } from './intuition-review.js?v=20261128-review-fixes';
 import { ReviewExplorer } from './review-explorer.js?v=20261125-review-sidebar';
-import { ReviewOverview } from './review-overview.js?v=20261127-review-precision-ux';
+import { ReviewOverview } from './review-overview.js?v=20261128-review-fixes';
 import { ReviewCommentary } from './review-commentary.js?v=20261124-intuition-labels';
 import { ConsequencePlayer } from './consequence-player.js?v=20261124-intuition-labels';
 import { MistakeBank } from './mistake-bank.js?v=20261124-intuition-labels';
 import { resolvePerspective } from './study-store.js?v=20261124-checkup-cards-r2';
 import { IntuitionCheckup } from './checkup-runner.js?v=20261125-checkup-polish';
-import { checkupGameContext } from './checkup-archives.js?v=20261124-checkup-cards-r2';
+import { checkupGameContext } from './checkup-archives.js?v=20261128-review-fixes';
 import { StudyProfileControls, inferProfileSide } from './study-profile-controls.js?v=20261125-review-sidebar';
 import { CheckupReminders } from './checkup-reminders.js?v=20261125-checkup-polish';
-import { ReviewShare } from './review-share.js?v=20261127-review-precision-ux';
-import { RecentGamesPicker } from './recent-games.js?v=20261126-recent-games';
+import { ReviewShare } from './review-share.js?v=20261128-review-fixes';
+import { RecentGamesPicker } from './recent-games.js?v=20261128-review-fixes';
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { parseFenBoard } from './share-card.js?v=20261124-intuition-labels';
 import { PositionPosterDialog } from './position-poster-dialog.js?v=20261125-position-poster';
@@ -26,8 +26,8 @@ import { authorizeScan, setScanAvailability, showScanLock } from './scan-authori
 
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261127-maia-simd';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261128-review-fixes';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261128-review-fixes';
 import { BoardUI } from './board-ui.js?v=20261124-divergence-cards';
 import { EvalChart } from './eval-chart.js?v=20261124-intuition-labels';
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
@@ -457,18 +457,19 @@ class AnalysisStudioApp {
       }
       this.setPgnModalError('');
       this.el.btnSubmitPgn.disabled = true;
+      const submitToken = this.pgnSubmitToken = (this.pgnSubmitToken || 0) + 1;
       const expectedGen = (this.importGeneration || 0) + 1;
       try {
         const loaded = await this.smartLoadInput(input);
-        if (this.importGeneration !== expectedGen || !this.el.pgnModal.classList.contains('open')) return;
+        if (this.pgnSubmitToken !== submitToken || !this.el.pgnModal.classList.contains('open')) return;
         if (loaded) {
           this.closePgnModal();
-        } else {
+        } else if (this.importGeneration === expectedGen) {
           this.setPgnModalError(this._lastLoadError || t('toastUnrecognizedInput'));
           this.el.pgnInput?.focus();
         }
       } finally {
-        this.el.btnSubmitPgn.disabled = false;
+        if (this.pgnSubmitToken === submitToken) this.el.btnSubmitPgn.disabled = false;
       }
     });
 
@@ -569,7 +570,7 @@ class AnalysisStudioApp {
       if (this.el.pgnModal.classList.contains('open')) {
         if (e.key === 'Escape') { e.preventDefault(); this.closePgnModal({ cancel: true }); }
         if (e.key === 'Tab') {
-          const controls = [...this.el.pgnModal.querySelectorAll('button, textarea, input, select')].filter(el => !el.disabled && el.getClientRects().length);
+          const controls = [...this.el.pgnModal.querySelectorAll('button, textarea, input, select')].filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
           const first = controls[0], last = controls[controls.length - 1];
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -808,6 +809,8 @@ class AnalysisStudioApp {
 
   openPgnModal({ tab = 'paste' } = {}) {
     if (this.el.pgnModal) {
+      this.pgnSubmitToken = (this.pgnSubmitToken || 0) + 1;
+      if (this.el.btnSubmitPgn) this.el.btnSubmitPgn.disabled = false;
       this.setPgnModalError('');
       this.modalReturnFocus = document.activeElement;
       this.el.pgnModal.inert = false;
@@ -821,6 +824,8 @@ class AnalysisStudioApp {
   }
 
   closePgnModal({ cancel = false } = {}) {
+    this.pgnSubmitToken = (this.pgnSubmitToken || 0) + 1;
+    if (this.el.btnSubmitPgn) this.el.btnSubmitPgn.disabled = false;
     if (cancel) {
       this.importGeneration = (this.importGeneration || 0) + 1;
       this.importController?.abort();

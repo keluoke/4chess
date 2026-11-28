@@ -4,7 +4,7 @@ import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
 import {
   MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames,
   fetchLichessRecentGames, parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261124-checkup-cards-r2';
+} from './checkup-archives.js?v=20261128-review-fixes';
 import { checkupEvidenceBase, runIntuitionCheckup } from './checkup-analysis.js?v=20261124-checkup-cards-r2';
 import {
   CHECKUP_ELOS, OVERVIEW_GAME_LIMIT, buildCheckupFitWindow, buildCheckupWindow,
@@ -22,7 +22,7 @@ import {
 export {
   checkupGameContext, checkupSourceType, detectBatchPlayer, fetchChesscomRecentGames, fetchLichessRecentGames,
   parsePgnMeta, splitMultiPgn, suggestCheckupPlayer
-} from './checkup-archives.js?v=20261124-checkup-cards-r2';
+} from './checkup-archives.js?v=20261128-review-fixes';
 export { runIntuitionCheckup } from './checkup-analysis.js?v=20261124-checkup-cards-r2';
 export { CHECKUP_ELOS } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 

@@ -1,10 +1,10 @@
 import { FairPlayGuard } from '../content/fair-play-guard.js?v=20261025-v115';
 import { ChessBoard } from '../engine/chess-core.js?v=20261025-v115';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261128-review-fixes';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { expectedScore, isLessLikelyChoice, positiveIntuition } from '../engine/review-policy.js?v=20261120-review';
 import { buildTrapRecord, normalizeAlias } from './study-store.js?v=20261124-checkup-cards-r2';
-import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261124-checkup-cards-r2';
+import { MAX_LOCAL_GAMES, checkupReplayUrl, checkupSourceType, parsePgnMeta } from './checkup-archives.js?v=20261128-review-fixes';
 import { FEATURED_TRAPS, checkupClockSample, summarizeCheckupGames } from './checkup-insights.js?v=20261124-checkup-cards-r2';
 
 import { CHECKUP_ELOS, checkupFitBands, LOG_PROB_FLOOR, planCheckupSamples } from './checkup-fit.js?v=20261124-checkup-cards-r2';

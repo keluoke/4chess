@@ -1,6 +1,6 @@
 import { CHESS_PIECES_SVG } from './chess-pieces.js';
 import { parseFenBoard, parseUciSquares } from './share-card.js?v=20261124-intuition-labels';
-import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261127-review-precision-ux';
+import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261128-review-fixes';
 import { readPgnTags } from '../engine/chess-notation.js?v=20261120-import';
 import { getLang, t } from './i18n.js?v=20261124-intuition-labels';
 import { checkupPlayedAt, FIT_WINDOW_SIZE } from './checkup-insights.js?v=20261124-checkup-cards-r2';

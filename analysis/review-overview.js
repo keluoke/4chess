@@ -118,10 +118,21 @@ export class ReviewOverview {
         view = 'overview';
       }
       this.autoOpenRequested = false;
-    } else if (!result.engineOnly && !this.viewedComplete) {
+    } else if (this.hasCompleteIntuition(result) && !this.viewedComplete) {
       this.pending = true;
     }
     this.show(view);
+  }
+
+  hasCompleteIntuition(result = this.app.reviewResult) {
+    if (!result || result.engineOnly) return false;
+    const state = this.app.intuitionReview?.state || 'idle';
+    if (state === 'running' || state === 'paused' || state === 'error' || state === 'partial') return false;
+    const moves = result.allMoves || [];
+    if (moves.length > 0 && moves.some(move => Array.isArray(move._predMoves))) {
+      return moves.every(move => move._predMoves?.length > 0);
+    }
+    return true;
   }
 
   show(view, { opener } = {}) {
@@ -131,8 +142,8 @@ export class ReviewOverview {
     this.view = overview ? 'overview' : 'workbench';
     if (overview) {
       this.pending = false;
-      if (this.app.reviewResult?.engineOnly) this.viewedEngineOnly = true;
-      else this.viewedComplete = true;
+      if (this.hasCompleteIntuition()) this.viewedComplete = true;
+      else this.viewedEngineOnly = true;
     }
     this.overviewButton.hidden = !available;
     this.reportEntry.hidden = !available;
@@ -157,7 +168,8 @@ export class ReviewOverview {
     const result = this.app.reviewResult;
     const scan = this.app.intuitionReview;
     const state = scan?.state || 'idle';
-    const stage = !result ? 'none' : result.engineOnly ? (state === 'running' ? 'scanning' : 'engine') : 'complete';
+    const complete = this.hasCompleteIntuition(result);
+    const stage = !result ? 'none' : complete ? 'complete' : state === 'running' ? 'scanning' : 'engine';
     this.reportEntry.dataset.stage = stage;
     const entryLabel = byId('review-report-entry-label');
     if (entryLabel) {
@@ -173,7 +185,7 @@ export class ReviewOverview {
 
     const box = byId('review-report-intuition-status');
     if (!box) return;
-    if (!result || !result.engineOnly) {
+    if (!result || complete) {
       box.hidden = true;
       return;
     }
@@ -259,7 +271,7 @@ export class ReviewOverview {
       traps ? t('reviewConfirmedTraps', { count: traps }) : ''
     ].filter(Boolean).join(' · ');
     byId('review-report-intuition').textContent = intuitionSummary || (
-      !result.engineOnly && this.app.intuitionReview?.state === 'done'
+      this.hasCompleteIntuition(result) && this.app.intuitionReview?.state === 'done'
         ? t('reviewReportIntuitionClear', { elo: result.elo || this.app.currentElo })
         : ''
     );
