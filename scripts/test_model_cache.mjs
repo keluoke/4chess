@@ -114,11 +114,15 @@ try {
     assert.equal(await stub23m.isCachedLocally(), false);
     assert.equal(await stub79m.isCachedLocally(), false);
     assert.deepEqual(lookUps[0], modelCacheKeys(MAIA_VARIANTS['5m'].url));
+    // Custom CDN configured but not yet cached must NOT be treated as cached just because official CDN is cached.
+    assert.equal(await stub5m.isCachedLocally('https://mirror.example.test/'), false);
+    presentKeys.add(getModelCacheKey('https://mirror.example.test/maia3_model.bin'));
+    assert.equal(await stub5m.isCachedLocally('https://mirror.example.test/'), true);
     presentKeys.clear();
     presentKeys.add('maia3_model');
     assert.equal(await stub5m.isCachedLocally(), true);
     assert.equal(await stub23m.isCachedLocally(), false);
-    console.log('PASS: ModelCache.hasModel and MaiaEngine.isCachedLocally are strictly variant-key scoped.');
+    console.log('PASS: ModelCache.hasModel and MaiaEngine.isCachedLocally are strictly variant-key and primary-CDN scoped.');
   } finally {
     ModelCache.openDB = originalOpenDB;
     ModelCache.findModelKeys = originalFindModelKeys;

@@ -1,5 +1,5 @@
 import { GameAnalyzer } from '../engine/game-analyzer.js?v=20261128-review-fixes';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261128-review-fixes';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261128-v1215';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js?v=20261124-checkup-cards-r2';
 import { FairPlayGuard } from '../content/fair-play-guard.js';
 import { t } from './i18n.js?v=20261124-intuition-labels';

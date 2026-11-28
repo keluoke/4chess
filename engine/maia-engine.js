@@ -206,8 +206,8 @@ export class MaiaEngine {
         customCdn = stored?.cloudflareCdnUrl || '';
       } catch {}
     }
-    const keys = [...new Set(modelSourceCandidates(this.variant, customCdn).flatMap(modelCacheKeys))];
-    const found = await ModelCache.findModelKeys(keys);
+    const primaryUrl = modelSourceCandidates(this.variant, customCdn)[0];
+    const found = await ModelCache.findModelKeys(modelCacheKeys(primaryUrl));
     return found.length > 0;
   }
 

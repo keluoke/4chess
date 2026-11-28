@@ -1,5 +1,5 @@
 import { ChessBoard } from '../engine/chess-core.js';
-import { MaiaEngine } from '../engine/maia-engine.js?v=20261128-review-fixes';
+import { MaiaEngine } from '../engine/maia-engine.js?v=20261128-v1215';
 import { StockfishInBrowser } from '../engine/stockfish-inbrowser.js';
 import { engineLines, legalVariation, whiteEvaluation } from '../engine/position-lines.js';
 import { errorSeverity, expectedScore, positiveIntuition, qualifiesTrap } from '../engine/review-policy.js';

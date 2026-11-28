@@ -4,7 +4,7 @@
  * Implements Network-First for entry HTML and Cache-First for static assets.
  */
 
-const CACHE_NAME = '4chess-review-20261128-review-fixes';
+const CACHE_NAME = '4chess-review-20261128-v1215';
 
 // Exact URLs used by the workbench and its local workers. The Pages build validates this list.
 const STATIC_ASSETS = [
@@ -28,7 +28,7 @@ const STATIC_ASSETS = [
   "./workbench.css?v=20261127-review-precision-ux",
   "../ui/theme.js?v=20261124-checkup-cards-r2",
   "./analysis.js?v=20261128-review-fixes",
-  "./recent-games.js?v=20261128-review-fixes",
+  "./recent-games.js?v=20261128-v1215",
   "./board-controls.js?v=20261124-controls",
   "../ui/studio-controls.svg",
   "./commentary-text.js?v=20261118-recap-reset",
@@ -81,7 +81,7 @@ const STATIC_ASSETS = [
   "../engine/engine-variants.js",
   "../engine/engine-variants.js?v=20261025-v115",
   "../engine/game-analyzer.js?v=20261128-review-fixes",
-  "../engine/maia-engine.js?v=20261128-review-fixes",
+  "../engine/maia-engine.js?v=20261128-v1215",
   "../engine/maia-inbrowser.js?v=20261127-maia-simd",
   "../engine/maia-worker.js?v=20261127-maia-simd",
   "../engine/maia-gemm.wasm?v=20261127-maia-simd",

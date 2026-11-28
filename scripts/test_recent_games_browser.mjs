@@ -268,6 +268,30 @@ try {
   await page.waitForFunction(() => window.__maiaStudioApp?.recentGames?.loading === false);
   assert.equal(await page.locator('#btn-recent-games-fetch').isDisabled(), false);
 
+  // 5. Filtered empty page with hasMore=true must keep "Load more" visible and clickable
+  await page.evaluate(() => {
+    const picker = window.__maiaStudioApp.recentGames;
+    picker.setPlatform('lichess', { silent: true });
+    picker.usernameInput.value = 'FilteredEmptyUser';
+    picker.activeUsername = 'FilteredEmptyUser';
+    const key = picker.cacheKey('lichess', 'FilteredEmptyUser');
+    picker.cache.set(key, {
+      platform: 'lichess',
+      username: 'FilteredEmptyUser',
+      games: [],
+      hasMore: true,
+      nextCursor: { until: 1730000010000 },
+      fetchedAt: Date.now()
+    });
+    picker.statusMessage = 'No concluded standard games found';
+    picker.renderCurrentState();
+  });
+  assert.equal(await page.locator('#btn-recent-games-more').isVisible(), true, 'Load more stays visible on filtered empty page when hasMore=true');
+  await page.unroute('**/api/lichess?*');
+  await page.locator('#btn-recent-games-more').click();
+  await page.locator('#recent-games-list .recent-game-item[data-game-id="GameOld3"]').waitFor();
+  assert.equal(await page.locator('#recent-games-status').innerText(), 'Loaded 1 finished games');
+
   assert.deepEqual(errors, []);
   console.log('🎉 All recent-games browser tests passed!');
 } finally {

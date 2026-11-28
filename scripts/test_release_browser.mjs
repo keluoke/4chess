@@ -20,9 +20,11 @@ const releaseModules = new Map([
  ].map(path => [path, '20261124-intuition-labels']),
  ['/analysis/board-controls.js', '20261124-controls'],
  ...['/analysis/analysis.js', '/analysis/intuition-review.js', '/analysis/review-overview.js',
-   '/analysis/review-share.js', '/analysis/recent-games.js', '/analysis/checkup-archives.js',
-   '/engine/game-analyzer.js', '/engine/maia-engine.js']
+   '/analysis/review-share.js', '/analysis/checkup-archives.js',
+   '/engine/game-analyzer.js']
   .map(path => [path, '20261128-review-fixes']),
+ ...['/analysis/recent-games.js', '/engine/maia-engine.js']
+  .map(path => [path, '20261128-v1215']),
  ...['/engine/maia-inbrowser.js', '/engine/maia-worker.js']
   .map(path => [path, '20261127-maia-simd']),
  ...['/analysis/checkup-runner.js', '/analysis/checkup-fit-view.js', '/analysis/checkup-share.js', '/analysis/checkup-reminders.js']

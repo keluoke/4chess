@@ -1,13 +1,13 @@
 {
-  "coreVersion": "2026.11.28.2",
+  "coreVersion": "2026.11.28.3",
   "protocolVersion": 1,
   "buildToolVersion": 3,
   "sourceProject": "chesspuzzle",
-  "sourceTreeHash": "c9df22cadb7cd114dd5b2bea13179c7b39b6707d8f957eae476a8d80f6439e36",
+  "sourceTreeHash": "1b8ef0011246e0aff7133c6b662c9a0fdc90dd73dd78a60f47381f36d14a210c",
   "sources": {
     "recognizer-core": "394b3a4a52730bb99d85f30f5070b62af5f90c430bcd10dfc29e7235b9a9281c",
     "screenshot-recognition": "04efe9a76d7705f51f184084eb4bddc09edff9913a36b8389e32b97503a66a88",
-    "task-controller": "b9b2084e905b9922bcfe4e57962402037f8dcae689b403c6676ba744ee658f90",
+    "task-controller": "82f1f617bd8e01ed6c33a5a8eee5b68108ae2824ab6183b21c7da174638b0a88",
     "crypto-utils": "7026225e88a8a1466b90b4537ce951294325a777b7ac2bedb23c4fc2e9964b2e",
     "board-detector": "88b0b7c810138018d4a53242b8e79c5f110f252c37ac541ad30b132360c4cf32",
     "perspective": "891f2b1f7258ff35ac8080a30f5622aa254a37fddc3d2d8f0f804cda00336c01",
@@ -19,7 +19,7 @@
     "qimi-piece-templates": "f1a39b07a29b906fdfd55c2bbbb3aea8b61ea5e47e1974416399582f33a52416",
     "turn-detector": "44c23cbc951581be95b69271d46ad221f6dcf90b933810f540b70aa55c080c1f",
     "protocol": "5f3296e4be2a7a0636d31c0b33302305944c9b211879becf8e57ce6a3e244f13",
-    "piece-classifier": "be9cbd1e22e344dea8e2827202cc9d4202f9c0a5178dca1250b2c31e2b0acc36",
+    "piece-classifier": "c80b2df981ead1ce16218371f23c6a07320c37360d8f2315c391b02210ab6fe9",
     "fen-optimizer": "1ef35139b1c2a99d710d1f62fa94e0c6d1baa0046e89537ea2e9c6d416706b6f",
     "consensus-engine": "0b7875b7f220502c57db36341e251a5918e8c3d5569517ceaea815632a22fce6",
     "image-context": "b6e96c65a6a00e4d6f1e31fd0f1011f56ce48daa48148f97ec2e3707055a5203",
@@ -27,7 +27,7 @@
     "chess": "d9846dc03150a61cccf329e89c3f2103799482cd194e45103a19edf9f1e12e33"
   },
   "outputs": {
-    "lib/vision/core-generated.js": "3219e61b50e53d42af43ae370ad14e7190d2f05f237590e7d0ce39d21519298d",
+    "lib/vision/core-generated.js": "0597826879078752abc9d5a0ab586f5dfd9f6ba08ab8397493d18dee965748a2",
     "lib/vision/recognizer-core.js": "27057271a4c17c6b37292fad7a4ed13d1d23ce08647ac3235ddc78f4981b3d2e",
     "lib/vision/screenshot-recognition.js": "f61ff616906c260956c6b86b548da5bbd792a491dc2a48559e9863cee582e5ac",
     "lib/vision/task-controller.js": "0dc936596beb1c47c14cdb4cca748852fac9a2c5c8964997e6618237a2c993c9",

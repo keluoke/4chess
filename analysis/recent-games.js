@@ -388,6 +388,8 @@ export class RecentGamesPicker {
         nextCursor: page.nextCursor,
         fetchedAt: Date.now()
       });
+      this.statusMessage = merged.length ? '' : t('recentGamesEmpty');
+      this.statusTone = '';
     } catch (error) {
       if (error?.name !== 'AbortError' && !controller.signal.aborted && this.controller === controller) {
         this.statusMessage = describeFetchError(error, entry.platform);
@@ -512,7 +514,7 @@ export class RecentGamesPicker {
     if (!this.listEl) return;
     this.listEl.replaceChildren();
     if (!entry?.games?.length) {
-      if (this.moreBtn) this.moreBtn.hidden = true;
+      if (this.moreBtn) this.moreBtn.hidden = !entry?.hasMore;
       return;
     }
 
